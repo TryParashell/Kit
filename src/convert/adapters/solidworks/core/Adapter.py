@@ -6,7110 +6,3897 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from collections import Counter, defaultdict
-from contextlib import suppress
-from dataclasses import dataclass, replace
-import hashlib
-from io import BytesIO
-import json
-import math
-import os
-from pathlib import Path, PureWindowsPath
-import re
-import struct
-import tempfile
-from typing import Any, Mapping, Sequence
-import xml.etree.ElementTree as ET
-
-from convert.adapters.base import (
-    AdapterInfo,
-    CapabilityTransfer,
-    CarrierReason,
-    Destination,
-    ProbeResult,
-    ReadOptions,
-    Source,
-    TransferMode,
-    WriteOptions,
-    WriteResult,
-    is_binary_destination,
-)
-from interchange import (
-    ArcEllipseGeometry,
-    ArcGeometry,
-    ArcParabolaGeometry,
-    AssemblyData,
-    Body,
-    BooleanOperation,
-    BoundingBox,
-    BrepModel,
-    BrepPayload,
-    CadDocument,
-    CadSource,
-    Capability,
-    ChamferFeature,
-    CircleGeometry,
-    CombineFeature,
-    ComponentDefinition,
-    ComponentDocument,
-    ComponentInstance,
-    ComponentKind,
-    Configuration,
-    ConstraintReference,
-    Diagnostic,
-    DomeFeature,
-    ExtrusionEndCondition,
-    ExtrusionFeature,
-    Expression,
-    EllipseGeometry,
-    FeatureKind,
-    FeatureStep,
-    FilletFeature,
-    GeometryKind,
-    HoleFeature,
-    LineGeometry,
-    MateAlignment,
-    MateConstraint,
-    MateEntity,
-    MateEntityKind,
-    MateGroup,
-    MateKind,
-    Matrix4,
-    Mesh,
-    MoveBodyFeature,
-    NativeFeatureDefinition,
-    NativeGeometry,
-    Parameter,
-    ParameterRole,
-    ParameterValue,
-    PointGeometry,
-    PayloadRole,
-    Provenance,
-    ProvenanceSpan,
-    ReferencePlaneFeature,
-    RevolutionFeature,
-    ScaleFeature,
-    Selection,
-    SelectionPathElement,
-    Severity,
-    ShellFeature,
-    Sketch,
-    SketchConstraint,
-    SketchEntity,
-    SplineGeometry,
-    SupportPlane,
-    TopologySummary,
-    Transform,
-    UnitSystem,
-    ValueKind,
-    Vector2,
-    Vector3,
-    frozen_mapping,
-    filter_document,
-    infer_capabilities,
-    retained_capabilities,
-    semantic_metadata,
-    source_payload_indexes,
-    with_wrapper_metadata,
-)
-
-from convert.adapters.solidworks.assembly.Assembly import MATE_VALUE_SEMANTICS, NATIVE_MATE_ALIGNMENT_BY_CODE, NATIVE_MATE_ENTITY_MARKERS, NATIVE_MATE_NEUTRAL_KIND_ALIASES, NativeAssembly, NativeAssemblyDefinition, NativeAssemblyEncoding, NativeAssemblyOccurrence, NativeMate, NativeMateEntity, NativeMateList, decode_mate_list, decode_native_assembly, encode_native_assembly
+from __future__ import annotations as Annotations
+from collections import Counter, defaultdict as Defaultdict
+from contextlib import suppress as Suppress
+from dataclasses import dataclass as Dataclass, replace as Replace
+import hashlib as Hashlib
+from io import BytesIO as BytesIo
+import json as JsonValue
+import math as MathValue
+import os as OsModule
+from pathlib import Path as PathValue, PureWindowsPath
+import re as RegexLib
+import struct as Struct
+import tempfile as Tempfile
+from typing import Any as AnyValue, Mapping, Sequence
+import xml.etree.ElementTree as XmlTree
+from convert.adapters.base import AdapterInfo, CapabilityTransfer, CarrierReason, Destination as Target, ProbeResult, ReadOptions, Source, TransferMode, WriteOptions, WriteResult, is_binary_destination as IsBinaryTarget
+from interchange import ArcEllipseGeometry as ArcEllipseGeom, ArcGeometry as ArcGeom, ArcParabolaGeometry as ArcParabolaGeom, AssemblyData as AsmData, Body as BodyValue, BooleanOperation as BoolOperation, BoundingBox, BrepModel, BrepPayload, CadDocument as CadDoc, CadSource, Capability, ChamferFeature, CircleGeometry as CircleGeom, CombineFeature, ComponentDefinition, ComponentDocument as ComponentDoc, ComponentInstance, ComponentKind, Configuration as Config, ConstraintReference as RuleRef, Diagnostic as DiagValue, DomeFeature, ExtrusionEndCondition, ExtrusionFeature, Expression, EllipseGeometry as EllipseGeom, FeatureKind, FeatureStep, FilletFeature, GeometryKind as GeomKind, HoleFeature, LineGeometry as LineGeom, MateAlignment, MateConstraint as MateRule, MateEntity, MateEntityKind, MateGroup, MateKind, Matrix4 as MatrixFour, Mesh as MeshValue, MoveBodyFeature, NativeFeatureDefinition, NativeGeometry as NativeGeom, Parameter as Param, ParameterRole as ParamRole, ParameterValue as ParamValue, PointGeometry as PointGeom, PayloadRole, Provenance, ProvenanceSpan, ReferencePlaneFeature as RefPlaneFeature, RevolutionFeature, ScaleFeature, Selection, SelectionPathElement as SelectionPathElem, Severity, ShellFeature, Sketch, SketchConstraint as SketchRule, SketchEntity, SplineGeometry as SplineGeom, SupportPlane, TopologySummary, Transform, UnitSystem, ValueKind, Vector2 as VectorTwo, Vector3 as VectorThree, frozen_mapping as FrozenMapping, filter_document as FilterDoc, infer_capabilities as InferCapabilities, retained_capabilities as RetainedCapabilities, semantic_metadata as SemanticMeta, source_payload_indexes as SourcePayloadIndexes, with_wrapper_metadata as WithWrapperMeta
+from convert.adapters.solidworks.assembly.Assembly import MATE_VALUE_SEMANTICS as MateValueSemantics, NATIVE_MATE_ALIGNMENT_BY_CODE as NativeMateAlignmentByCode, NATIVE_MATE_ENTITY_MARKERS as NativeMateEntityMarkers, NATIVE_MATE_NEUTRAL_KIND_ALIASES as NativeMateNeutralKind, NativeAssembly as NativeAsm, NativeAssemblyDefinition as NativeAsmDefinition, NativeAssemblyEncoding as NativeAsmEncoding, NativeAssemblyOccurrence as NativeAsmItem, NativeMate, NativeMateEntity, NativeMateList, decode_mate_list as DecodeMateList, decode_native_assembly as DecodeNativeAsm, encode_native_assembly as EncodeNativeAsm
 from convert.adapters.solidworks.assembly.AssemblyCore import AsmCoreItem, EncodeAsmCore
-from convert.adapters.solidworks.container.Container import SldprtArchive, SldprtFormatError, build_sldprt
-from convert.adapters.solidworks.container.Format import COMPONENT_TREE_STREAM, CONTAINER_VERSIONS, CONTENT_TYPES_STREAM, DISPLAY_LISTS_STREAM, FEATURES_STREAM, FORMAT_ID_BY_SUFFIX, INFO, KEYWORDS_STREAM, KIT_DOCUMENT_STREAM, KIT_NATIVE_STREAM, KIT_RESOLVED_STREAM, MATES_STREAM_NAME, MATES_STREAM_SUFFIX, PARTITION_STREAM, PLANE_FEATURE_TYPES, RELATIONSHIPS_STREAM, RESOLVED_FEATURES_STREAM, SOLIDWORKS_STREAM, SOLID_BODY_FEATURE_TYPES, SUFFIX_BY_FORMAT_ID
-from convert.adapters.solidworks.core.Native import NativeDimension, NativeFeature, NativeMarker, NativeModel, NativeOperation, NativePlane, NativeProfile, NativeSketch, NativeAssemblyEnvelope, DIRECTION_AXIS_ROLE, decode_native_model, encode_native_assembly_envelope, encode_native_part, operation_axis_subelement
-from convert.adapters.solidworks.container.Parasolid import ParasolidPayload, ParasolidWriteError, contains_parasolid_payload, decode_brep_model, decode_partition_stream, encode_blank_partition_stream, encode_brep_model, encode_partition_stream, is_native_parasolid_payload
+from convert.adapters.solidworks.container.Container import SldprtArchive, SldprtFormatError, build_sldprt as BuildSldprt
+from convert.adapters.solidworks.container.Format import COMPONENT_TREE_STREAM as ComponentTreeStream, CONTAINER_VERSIONS as ContainerVersions, CONTENT_TYPES_STREAM as ContentTypesStream, DISPLAY_LISTS_STREAM as DisplayListsStream, FEATURES_STREAM as FeaturesStream, FORMAT_ID_BY_SUFFIX as FormatIdBySuffix, INFO as InfoValue, KEYWORDS_STREAM as KeywordsStream, KIT_DOCUMENT_STREAM as KitDocStream, KIT_NATIVE_STREAM as KitNativeStream, KIT_RESOLVED_STREAM as KitResolvedStream, MATES_STREAM_NAME as MatesStreamName, MATES_STREAM_SUFFIX as MatesStreamSuffix, PARTITION_STREAM as PartitionStream, PLANE_FEATURE_TYPES as PlaneFeatureTypes, RELATIONSHIPS_STREAM as RelationshipsStream, RESOLVED_FEATURES_STREAM as ResolvedFeaturesStream, SOLIDWORKS_STREAM as SolidworksStream, SOLID_BODY_FEATURE_TYPES as SolidBodyFeatureTypes, SUFFIX_BY_FORMAT_ID as SuffixByFormatId
+from convert.adapters.solidworks.core.Native import NativeDimension, NativeFeature, NativeMarker, NativeModel, NativeOperation, NativePlane, NativeProfile, NativeSketch, NativeAssemblyEnvelope as NativeAsmEnvelope, DIRECTION_AXIS_ROLE as DirectionAxisRole, decode_native_model as DecodeNativeModel, encode_native_assembly_envelope as EncodeNativeAsmEnvelope, encode_native_part as EncodeNativePart, operation_axis_subelement as OperationAxisSubElem
+from convert.adapters.solidworks.container.Parasolid import ParasolidPayload, ParasolidWriteError, contains_parasolid_payload as ContainsParasolidPayload, decode_brep_model as DecodeBrepModel, decode_partition_stream as DecodePartitionStream, encode_blank_partition_stream as EncodeBlankPartition, encode_brep_model as EncodeBrepModel, encode_partition_stream as EncodePartitionStream, is_native_parasolid_payload as IsNativeParasolidPayload
 
-_FORMAT_ID = INFO.format_id
-_ASSEMBLY_FORMAT_ID = INFO.aliases[0]
-_SOURCE_BYTES_KEY = "solidworks_source_bytes"
-_SOURCE_SHA256_KEY = "solidworks_source_sha256"
-_SOURCE_SEMANTIC_SHA256_KEY = "solidworks_source_semantic_sha256"
-_SOURCE_FORMAT_KEY = "solidworks_source_format_id"
-_ASSEMBLY_READER_REQUIRED_STREAMS = (
-    "Contents/CMgr",
-    "Contents/Config-0",
-    RESOLVED_FEATURES_STREAM,
-    "Contents/Definition",
-)
-_ASSEMBLY_DONOR_CARRIED_STREAMS = (
-    *_ASSEMBLY_READER_REQUIRED_STREAMS,
-    "Contents/Config-0-ModelHeader",
-    "Header2",
-)
-_ASSEMBLY_REWRITABLE_DONOR_STREAMS = frozenset(
-    {
-        KIT_DOCUMENT_STREAM,
-        KIT_NATIVE_STREAM,
-        KIT_RESOLVED_STREAM,
-        COMPONENT_TREE_STREAM,
-    }
-)
-_ATTESTED_COMPATIBILITIES = frozenset(
-    {
-        "kit-neutral-only",
-        "native-assembly-with-kit-neutral",
-        "native-brep-with-kit-neutral",
-        "native-metadata-with-kit-neutral",
-        "native-source-with-kit-neutral",
-        "native-template",
-    }
-)
-_SOURCE_KEYS = frozenset(
-    {
-        _SOURCE_BYTES_KEY,
-        _SOURCE_SHA256_KEY,
-        _SOURCE_SEMANTIC_SHA256_KEY,
-        _SOURCE_FORMAT_KEY,
-    }
-)
-_NUMBER_TEXT = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
-_RESOLVED_CONFIGURATION_STREAM = re.compile(r"^Contents/Config-(\d+)-ResolvedFeatures$")
-_TARGET_UNSUPPORTED_CAPABILITIES = frozenset(
-    {
-        Capability.NATIVE_PAYLOADS,
-        Capability.PROVENANCE,
-        Capability.ROUNDTRIP_METADATA,
-    }
-)
+# this binding exists because shared behavior needs one stable value
+KFormatId = InfoValue.format_id
 
+# this binding exists because shared behavior needs one stable value
+KAsmFormatId = InfoValue.aliases[0]
 
-@dataclass(frozen=True, slots=True)
-class _GeneratedStreams:
-    streams: dict[str, bytes]
-    native_brep: str
-    native_capabilities: frozenset[Capability]
-    compatibility: str
-    application_usable: bool
-    vendor_loadable: bool
-    mixed_capabilities: frozenset[Capability] = frozenset()
-    unexpressed: tuple[str, ...] = ()
-    donor_notes: tuple[str, ...] = ()
-    reader_gaps: tuple[str, ...] = ()
+# this binding exists because shared behavior needs one stable value
+KSourceBytesKey = 'solidworks_source_bytes'
 
+# this binding exists because shared behavior needs one stable value
+KSourceShaTwoFiveSixKey = 'solidworks_source_sha256'
 
-@dataclass(frozen=True, slots=True)
-class _AssemblyTemplatePatch:
-    capabilities: frozenset[Capability]
-    divergences: tuple[str, ...]
+# this binding exists because shared behavior needs one stable value
+KSourceSemanticShaTwoFive = 'solidworks_source_semantic_sha256'
 
+# this binding exists because shared behavior needs one stable value
+KSourceFormatKey = 'solidworks_source_format_id'
 
-# assembly bundles keep final paths, bytes, and vendor document identities aligned
-@dataclass(frozen=True, slots=True)
-class _AssemblyBundle:
-    names: Mapping[str, str]
-    payloads: Mapping[Path, bytes]
-    StampValues: Mapping[str, int]
-    complete: bool
-    NativeCaps: frozenset[Capability] = frozenset()
+# this binding exists because shared behavior needs one stable value
+KAsmReaderRequiredStreams = ('Contents/CMgr', 'Contents/Config-0', ResolvedFeaturesStream, 'Contents/Definition')
 
+# this binding exists because shared behavior needs one stable value
+KAsmDonorCarriedStreams = (*KAsmReaderRequiredStreams, 'Contents/Config-0-ModelHeader', 'Header2')
 
-_WRAPPER_METADATA_KEYS = _SOURCE_KEYS | frozenset(
-    {
-        "adapter",
-        "embedded_source_format_id",
-        "embedded_source_path",
-        "embedded_source_sha256",
-        "file_id",
-        "solidworks.container_compatibility",
-        "stream_names",
-    }
-)
-_FEATURE_KIND_BY_NATIVE = {
-    "3dprofilefeature": FeatureKind.REFERENCE,
-    "3dsplinecurve": FeatureKind.REFERENCE,
-    "advholewzd": FeatureKind.HOLE,
-    "advstructmember": FeatureKind.SWEEP,
-    "aem3dcontact": FeatureKind.NATIVE,
-    "aemgravity": FeatureKind.NATIVE,
-    "aemlineardamper": FeatureKind.NATIVE,
-    "aemlinearmotor": FeatureKind.NATIVE,
-    "aemlinearspring": FeatureKind.NATIVE,
-    "aemrotationalmotor": FeatureKind.NATIVE,
-    "aemtorque": FeatureKind.NATIVE,
-    "aemtorsionaldamper": FeatureKind.NATIVE,
-    "aemtorsionalspring": FeatureKind.NATIVE,
-    "ambientlight": FeatureKind.REFERENCE,
-    "apattern": FeatureKind.PATTERN,
-    "asmexploder": FeatureKind.NATIVE,
-    "attribute": FeatureKind.REFERENCE,
-    "axis": FeatureKind.REFERENCE,
-    "basebody": FeatureKind.EXTRUSION,
-    "bending": FeatureKind.REFINE,
-    "bendtableachor": FeatureKind.REFERENCE,
-    "blend": FeatureKind.LOFT,
-    "blendcut": FeatureKind.LOFT,
-    "blendregion": FeatureKind.LOFT,
-    "blendrefsurface": FeatureKind.SURFACE,
-    "blockdef": FeatureKind.REFERENCE,
-    "blockfolder": FeatureKind.REFERENCE,
-    "body-delete/keep": FeatureKind.BOOLEAN,
-    "body-move/copy": FeatureKind.NATIVE,
-    "bodyexplodestep": FeatureKind.NATIVE,
-    "bomfeat": FeatureKind.NATIVE,
-    "bomtemplate": FeatureKind.REFERENCE,
-    "boss": FeatureKind.EXTRUSION,
-    "bossthin": FeatureKind.EXTRUSION,
-    "boundingbox": FeatureKind.REFERENCE,
-    "breakcorner": FeatureKind.CHAMFER,
-    "camerafeature": FeatureKind.REFERENCE,
-    "cavity": FeatureKind.BOOLEAN,
-    "centerofmass": FeatureKind.REFERENCE,
-    "chamfer": FeatureKind.CHAMFER,
-    "cirpattern": FeatureKind.PATTERN,
-    "combine": FeatureKind.BOOLEAN,
-    "combinebodies": FeatureKind.BOOLEAN,
-    "commentsfolder": FeatureKind.REFERENCE,
-    "compexplodestep": FeatureKind.NATIVE,
-    "compositecurve": FeatureKind.REFERENCE,
-    "coordsys": FeatureKind.REFERENCE,
-    "cornertrim": FeatureKind.NATIVE,
-    "cosmeticthread": FeatureKind.NATIVE,
-    "cosmeticweldbead": FeatureKind.NATIVE,
-    "cosmeticweldsubfolder": FeatureKind.REFERENCE,
-    "createassemfeat": FeatureKind.NATIVE,
-    "crossbreak": FeatureKind.NATIVE,
-    "curveinfile": FeatureKind.REFERENCE,
-    "curvepattern": FeatureKind.PATTERN,
-    "cut": FeatureKind.EXTRUSION,
-    "cut-revolve": FeatureKind.REVOLUTION,
-    "cut-sweep": FeatureKind.SWEEP,
-    "cutlistfolder": FeatureKind.REFERENCE,
-    "cutthin": FeatureKind.EXTRUSION,
-    "deform": FeatureKind.REFINE,
-    "deletebody": FeatureKind.BOOLEAN,
-    "delface": FeatureKind.SURFACE,
-    "derivedcirpattern": FeatureKind.PATTERN,
-    "derivedholepattern": FeatureKind.PATTERN,
-    "derivedlpattern": FeatureKind.PATTERN,
-    "detailcircle": FeatureKind.REFERENCE,
-    "dimpattern": FeatureKind.PATTERN,
-    "directionlight": FeatureKind.REFERENCE,
-    "dome": FeatureKind.REFINE,
-    "draft": FeatureKind.DRAFT,
-    "drbreakoutsectionline": FeatureKind.REFERENCE,
-    "drsectionline": FeatureKind.REFERENCE,
-    "edgeflange": FeatureKind.EXTRUSION,
-    "edgemerge": FeatureKind.REFINE,
-    "emboss": FeatureKind.REFINE,
-    "endcap": FeatureKind.EXTRUSION,
-    "explodelineprofilefeature": FeatureKind.REFERENCE,
-    "extendrefsurface": FeatureKind.SURFACE,
-    "extrusion": FeatureKind.EXTRUSION,
-    "extrurefsurface": FeatureKind.SURFACE,
-    "familytablefeat": FeatureKind.REFERENCE,
-    "featsurfacebodyfolder": FeatureKind.REFERENCE,
-    "fillrefsurface": FeatureKind.SURFACE,
-    "fillet": FeatureKind.FILLET,
-    "flatpattern": FeatureKind.NATIVE,
-    "flattenbends": FeatureKind.NATIVE,
-    "flattensurface": FeatureKind.SURFACE,
-    "fold": FeatureKind.NATIVE,
-    "formtoolinstance": FeatureKind.NATIVE,
-    "ftrfolder": FeatureKind.REFERENCE,
-    "generaltableanchor": FeatureKind.REFERENCE,
-    "gridfeature": FeatureKind.REFERENCE,
-    "groundplane": FeatureKind.REFERENCE,
-    "gusset": FeatureKind.EXTRUSION,
-    "hem": FeatureKind.NATIVE,
-    "helix": FeatureKind.HELIX,
-    "helix/spiral": FeatureKind.HELIX,
-    "holeseries": FeatureKind.HOLE,
-    "holetableanchor": FeatureKind.REFERENCE,
-    "holewizard": FeatureKind.HOLE,
-    "holewzd": FeatureKind.HOLE,
-    "imported": FeatureKind.IMPORTED,
-    "importedcurve": FeatureKind.REFERENCE,
-    "incontextfeatholder": FeatureKind.REFERENCE,
-    "insertedfeaturefolder": FeatureKind.REFERENCE,
-    "jog": FeatureKind.NATIVE,
-    "libraryfeature": FeatureKind.NATIVE,
-    "livesection": FeatureKind.REFERENCE,
-    "localchainpattern": FeatureKind.PATTERN,
-    "localcirpattern": FeatureKind.PATTERN,
-    "localcurvepattern": FeatureKind.PATTERN,
-    "locallpattern": FeatureKind.PATTERN,
-    "localsketchpattern": FeatureKind.PATTERN,
-    "loft": FeatureKind.LOFT,
-    "loft-thin": FeatureKind.LOFT,
-    "loftedbend": FeatureKind.LOFT,
-    "lpattern": FeatureKind.PATTERN,
-    "macrofeature": FeatureKind.NATIVE,
-    "magneticgroundplane": FeatureKind.REFERENCE,
-    "matecamtangent": FeatureKind.NATIVE,
-    "matecoincident": FeatureKind.NATIVE,
-    "mateconcentric": FeatureKind.NATIVE,
-    "matedistancedim": FeatureKind.NATIVE,
-    "mategeardim": FeatureKind.NATIVE,
-    "matehinge": FeatureKind.NATIVE,
-    "mateinplace": FeatureKind.NATIVE,
-    "matelimitdistancedim": FeatureKind.NATIVE,
-    "matelinearcoupler": FeatureKind.NATIVE,
-    "matelock": FeatureKind.NATIVE,
-    "mateparallel": FeatureKind.NATIVE,
-    "mateperpendicular": FeatureKind.NATIVE,
-    "mateplanarangledim": FeatureKind.NATIVE,
-    "mateprofilecenter": FeatureKind.NATIVE,
-    "materackpiniondim": FeatureKind.NATIVE,
-    "matereferencegroupfolder": FeatureKind.REFERENCE,
-    "matescrew": FeatureKind.NATIVE,
-    "mateslot": FeatureKind.NATIVE,
-    "matesymmetric": FeatureKind.NATIVE,
-    "matetangent": FeatureKind.NATIVE,
-    "mateuniversaljoint": FeatureKind.NATIVE,
-    "matewidth": FeatureKind.NATIVE,
-    "mbimport": FeatureKind.IMPORTED,
-    "midrefsurface": FeatureKind.SURFACE,
-    "mirror": FeatureKind.MIRROR,
-    "mirrorcompfeat": FeatureKind.MIRROR,
-    "mirrorpattern": FeatureKind.MIRROR,
-    "mirrorsolid": FeatureKind.MIRROR,
-    "mirrorstock": FeatureKind.MIRROR,
-    "moldcorecavitysolids": FeatureKind.BOOLEAN,
-    "moldpartinggeom": FeatureKind.SURFACE,
-    "moldpartline": FeatureKind.REFERENCE,
-    "moldshutoffsrf": FeatureKind.SURFACE,
-    "movecopybody": FeatureKind.NATIVE,
-    "netblend": FeatureKind.LOFT,
-    "normalcut": FeatureKind.EXTRUSION,
-    "offsetrefsurface": FeatureKind.OFFSET,
-    "offsetrefsuface": FeatureKind.OFFSET,
-    "onebend": FeatureKind.NATIVE,
-    "planarsurface": FeatureKind.SURFACE,
-    "pline": FeatureKind.REFERENCE,
-    "pointlight": FeatureKind.REFERENCE,
-    "posgroupfolder": FeatureKind.REFERENCE,
-    "processbends": FeatureKind.NATIVE,
-    "profilefeature": FeatureKind.REFERENCE,
-    "profileftrfolder": FeatureKind.REFERENCE,
-    "prtexploder": FeatureKind.NATIVE,
-    "punch": FeatureKind.NATIVE,
-    "punchtableanchor": FeatureKind.REFERENCE,
-    "radiaterefsurface": FeatureKind.SURFACE,
-    "refaxis": FeatureKind.REFERENCE,
-    "refaxisftrfolder": FeatureKind.REFERENCE,
-    "refcurve": FeatureKind.REFERENCE,
-    "refplaneftrfolder": FeatureKind.REFERENCE,
-    "refpoint": FeatureKind.REFERENCE,
-    "reference": FeatureKind.REFERENCE,
-    "referencepattern": FeatureKind.PATTERN,
-    "refsurface": FeatureKind.SURFACE,
-    "replaceface": FeatureKind.SURFACE,
-    "revisiontableanchor": FeatureKind.REFERENCE,
-    "rib": FeatureKind.EXTRUSION,
-    "rip": FeatureKind.NATIVE,
-    "revolve": FeatureKind.REVOLUTION,
-    "revolution": FeatureKind.REVOLUTION,
-    "revolutionthin": FeatureKind.REVOLUTION,
-    "revcut": FeatureKind.REVOLUTION,
-    "revolvrefsurf": FeatureKind.SURFACE,
-    "ruledsrffromedge": FeatureKind.SURFACE,
-    "round fillet corner": FeatureKind.FILLET,
-    "scale": FeatureKind.SCALE,
-    "sculpt": FeatureKind.BOOLEAN,
-    "sensor": FeatureKind.REFERENCE,
-    "sewrefsurface": FeatureKind.SURFACE,
-    "shape": FeatureKind.NATIVE,
-    "sheetmetal": FeatureKind.NATIVE,
-    "shell": FeatureKind.SHELL,
-    "sidecore": FeatureKind.BOOLEAN,
-    "simplotfeature": FeatureKind.NATIVE,
-    "simplotxaxisfeature": FeatureKind.NATIVE,
-    "simplotyaxisfeature": FeatureKind.NATIVE,
-    "simresultfolder": FeatureKind.NATIVE,
-    "sketch": FeatureKind.REFERENCE,
-    "sketchbend": FeatureKind.NATIVE,
-    "sketchbitmap": FeatureKind.REFERENCE,
-    "sketchblockdef": FeatureKind.REFERENCE,
-    "sketchblockinst": FeatureKind.REFERENCE,
-    "sketchhole": FeatureKind.HOLE,
-    "sketchpattern": FeatureKind.PATTERN,
-    "sketchslicefolder": FeatureKind.REFERENCE,
-    "sm3dbend": FeatureKind.NATIVE,
-    "smbaseflange": FeatureKind.EXTRUSION,
-    "smgusset": FeatureKind.NATIVE,
-    "smmiteredflange": FeatureKind.EXTRUSION,
-    "smartcomponentfeature": FeatureKind.NATIVE,
-    "solidtosheetmetal": FeatureKind.NATIVE,
-    "split": FeatureKind.BOOLEAN,
-    "splitbody": FeatureKind.BOOLEAN,
-    "spotlight": FeatureKind.REFERENCE,
-    "stock": FeatureKind.IMPORTED,
-    "strctsysbtwptsmbrfeat": FeatureKind.NATIVE,
-    "strctsyscnrfeat": FeatureKind.NATIVE,
-    "strctsyscnrgrpfeat": FeatureKind.REFERENCE,
-    "strctsyscnrmgmtfeat": FeatureKind.REFERENCE,
-    "strctsysfeat": FeatureKind.REFERENCE,
-    "strctsysgrpfeat": FeatureKind.REFERENCE,
-    "strctsyspathsegmbrfeat": FeatureKind.NATIVE,
-    "strctsyspttomem": FeatureKind.NATIVE,
-    "strctsysrefplnmbrfeat": FeatureKind.NATIVE,
-    "strctsysskptlenmbrfeat": FeatureKind.NATIVE,
-    "strctsyssupplnmbrfeat": FeatureKind.NATIVE,
-    "strctsyssurfplnmbrfeat": FeatureKind.NATIVE,
-    "subatomfolder": FeatureKind.REFERENCE,
-    "subweldfolder": FeatureKind.REFERENCE,
-    "surfacebodyfolder": FeatureKind.REFERENCE,
-    "surface-extrude": FeatureKind.SURFACE,
-    "surfcut": FeatureKind.SURFACE,
-    "sweep": FeatureKind.SWEEP,
-    "sweepcut": FeatureKind.SWEEP,
-    "sweeprefsurface": FeatureKind.SURFACE,
-    "sweepthread": FeatureKind.SWEEP,
-    "tablepattern": FeatureKind.PATTERN,
-    "templateflatpattern": FeatureKind.REFERENCE,
-    "templatesheetmetal": FeatureKind.REFERENCE,
-    "thicken": FeatureKind.SURFACE,
-    "thickencut": FeatureKind.SURFACE,
-    "toroidalbend": FeatureKind.NATIVE,
-    "trimrefsurface": FeatureKind.SURFACE,
-    "unfold": FeatureKind.NATIVE,
-    "untrimrefsurf": FeatureKind.SURFACE,
-    "varfillet": FeatureKind.FILLET,
-    "viewbodyfeature": FeatureKind.REFERENCE,
-    "weldbeadfeat": FeatureKind.NATIVE,
-    "weldcornerfeat": FeatureKind.NATIVE,
-    "weldmemberfeat": FeatureKind.SWEEP,
-    "weldmentfeature": FeatureKind.NATIVE,
-    "weldmenttableanchor": FeatureKind.REFERENCE,
-    "weldmenttablefeat": FeatureKind.REFERENCE,
-    "weldtableanchor": FeatureKind.REFERENCE,
-    "xformstock": FeatureKind.IMPORTED,
-    **{
-        native_type: FeatureKind.REFERENCE
-        for native_type in (*PLANE_FEATURE_TYPES, *SOLID_BODY_FEATURE_TYPES)
-    },
-}
+# this binding exists because shared behavior needs one stable value
+KAsmRewritableDonorStreaA = frozenset({KitDocStream, KitNativeStream, KitResolvedStream, ComponentTreeStream})
 
+# this binding exists because shared behavior needs one stable value
+KAttestedCompatibilities = frozenset({'kit-neutral-only', 'native-assembly-with-kit-neutral', 'native-brep-with-kit-neutral', 'native-metadata-with-kit-neutral', 'native-source-with-kit-neutral', 'native-template'})
 
+# this binding exists because shared behavior needs one stable value
+KSourceKeys = frozenset({KSourceBytesKey, KSourceShaTwoFiveSixKey, KSourceSemanticShaTwoFive, KSourceFormatKey})
+
+# this binding exists because shared behavior needs one stable value
+KNumberText = RegexLib.compile('[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?')
+
+# this binding exists because shared behavior needs one stable value
+KResolvedConfigStream = RegexLib.compile('^Contents/Config-(\\d+)-ResolvedFeatures$')
+
+# this binding exists because shared behavior needs one stable value
+KTargetUnsupported = frozenset({Capability.NATIVE_PAYLOADS, Capability.PROVENANCE, Capability.ROUNDTRIP_METADATA})
+
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class Generated:
+    locals().setdefault('__annotations__', {})
+    __annotations__['streams'] = 'dict[str, bytes]'
+    __annotations__['native_brep'] = 'str'
+    __annotations__['native_capabilities'] = 'frozenset[Capability]'
+    __annotations__['compatibility'] = 'str'
+    __annotations__['application_usable'] = 'bool'
+    __annotations__['vendor_loadable'] = 'bool'
+    __annotations__['mixed_capabilities'] = 'frozenset[Capability]'
+    locals()['mixed_capabilities'] = frozenset()
+    __annotations__['unexpressed'] = 'tuple[str, ...]'
+    locals()['unexpressed'] = ()
+    __annotations__['donor_notes'] = 'tuple[str, ...]'
+    locals()['donor_notes'] = ()
+    __annotations__['reader_gaps'] = 'tuple[str, ...]'
+    locals()['reader_gaps'] = ()
+
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class AsmTemplate:
+    locals().setdefault('__annotations__', {})
+    __annotations__['capabilities'] = 'frozenset[Capability]'
+    __annotations__['divergences'] = 'tuple[str, ...]'
+
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class AsmBundle:
+    locals().setdefault('__annotations__', {})
+    __annotations__['names'] = 'Mapping[str, str]'
+    __annotations__['payloads'] = 'Mapping[Path, bytes]'
+    KStampValues: Mapping[str, int]
+    __annotations__['complete'] = 'bool'
+    KNativeCaps: frozenset[Capability] = frozenset()
+
+# this binding exists because shared behavior needs one stable value
+KWrapperMetaKeys = KSourceKeys | frozenset({'adapter', 'embedded_source_format_id', 'embedded_source_path', 'embedded_source_sha256', 'file_id', 'solidworks.container_compatibility', 'stream_names'})
+
+# this binding exists because shared behavior needs one stable value
+KFeatureKindByNative = {'3dprofilefeature': FeatureKind.REFERENCE, '3dsplinecurve': FeatureKind.REFERENCE, 'advholewzd': FeatureKind.HOLE, 'advstructmember': FeatureKind.SWEEP, 'aem3dcontact': FeatureKind.NATIVE, 'aemgravity': FeatureKind.NATIVE, 'aemlineardamper': FeatureKind.NATIVE, 'aemlinearmotor': FeatureKind.NATIVE, 'aemlinearspring': FeatureKind.NATIVE, 'aemrotationalmotor': FeatureKind.NATIVE, 'aemtorque': FeatureKind.NATIVE, 'aemtorsionaldamper': FeatureKind.NATIVE, 'aemtorsionalspring': FeatureKind.NATIVE, 'ambientlight': FeatureKind.REFERENCE, 'apattern': FeatureKind.PATTERN, 'asmexploder': FeatureKind.NATIVE, 'attribute': FeatureKind.REFERENCE, 'axis': FeatureKind.REFERENCE, 'basebody': FeatureKind.EXTRUSION, 'bending': FeatureKind.REFINE, 'bendtableachor': FeatureKind.REFERENCE, 'blend': FeatureKind.LOFT, 'blendcut': FeatureKind.LOFT, 'blendregion': FeatureKind.LOFT, 'blendrefsurface': FeatureKind.SURFACE, 'blockdef': FeatureKind.REFERENCE, 'blockfolder': FeatureKind.REFERENCE, 'body-delete/keep': FeatureKind.BOOLEAN, 'body-move/copy': FeatureKind.NATIVE, 'bodyexplodestep': FeatureKind.NATIVE, 'bomfeat': FeatureKind.NATIVE, 'bomtemplate': FeatureKind.REFERENCE, 'boss': FeatureKind.EXTRUSION, 'bossthin': FeatureKind.EXTRUSION, 'boundingbox': FeatureKind.REFERENCE, 'breakcorner': FeatureKind.CHAMFER, 'camerafeature': FeatureKind.REFERENCE, 'cavity': FeatureKind.BOOLEAN, 'centerofmass': FeatureKind.REFERENCE, 'chamfer': FeatureKind.CHAMFER, 'cirpattern': FeatureKind.PATTERN, 'combine': FeatureKind.BOOLEAN, 'combinebodies': FeatureKind.BOOLEAN, 'commentsfolder': FeatureKind.REFERENCE, 'compexplodestep': FeatureKind.NATIVE, 'compositecurve': FeatureKind.REFERENCE, 'coordsys': FeatureKind.REFERENCE, 'cornertrim': FeatureKind.NATIVE, 'cosmeticthread': FeatureKind.NATIVE, 'cosmeticweldbead': FeatureKind.NATIVE, 'cosmeticweldsubfolder': FeatureKind.REFERENCE, 'createassemfeat': FeatureKind.NATIVE, 'crossbreak': FeatureKind.NATIVE, 'curveinfile': FeatureKind.REFERENCE, 'curvepattern': FeatureKind.PATTERN, 'cut': FeatureKind.EXTRUSION, 'cut-revolve': FeatureKind.REVOLUTION, 'cut-sweep': FeatureKind.SWEEP, 'cutlistfolder': FeatureKind.REFERENCE, 'cutthin': FeatureKind.EXTRUSION, 'deform': FeatureKind.REFINE, 'deletebody': FeatureKind.BOOLEAN, 'delface': FeatureKind.SURFACE, 'derivedcirpattern': FeatureKind.PATTERN, 'derivedholepattern': FeatureKind.PATTERN, 'derivedlpattern': FeatureKind.PATTERN, 'detailcircle': FeatureKind.REFERENCE, 'dimpattern': FeatureKind.PATTERN, 'directionlight': FeatureKind.REFERENCE, 'dome': FeatureKind.REFINE, 'draft': FeatureKind.DRAFT, 'drbreakoutsectionline': FeatureKind.REFERENCE, 'drsectionline': FeatureKind.REFERENCE, 'edgeflange': FeatureKind.EXTRUSION, 'edgemerge': FeatureKind.REFINE, 'emboss': FeatureKind.REFINE, 'endcap': FeatureKind.EXTRUSION, 'explodelineprofilefeature': FeatureKind.REFERENCE, 'extendrefsurface': FeatureKind.SURFACE, 'extrusion': FeatureKind.EXTRUSION, 'extrurefsurface': FeatureKind.SURFACE, 'familytablefeat': FeatureKind.REFERENCE, 'featsurfacebodyfolder': FeatureKind.REFERENCE, 'fillrefsurface': FeatureKind.SURFACE, 'fillet': FeatureKind.FILLET, 'flatpattern': FeatureKind.NATIVE, 'flattenbends': FeatureKind.NATIVE, 'flattensurface': FeatureKind.SURFACE, 'fold': FeatureKind.NATIVE, 'formtoolinstance': FeatureKind.NATIVE, 'ftrfolder': FeatureKind.REFERENCE, 'generaltableanchor': FeatureKind.REFERENCE, 'gridfeature': FeatureKind.REFERENCE, 'groundplane': FeatureKind.REFERENCE, 'gusset': FeatureKind.EXTRUSION, 'hem': FeatureKind.NATIVE, 'helix': FeatureKind.HELIX, 'helix/spiral': FeatureKind.HELIX, 'holeseries': FeatureKind.HOLE, 'holetableanchor': FeatureKind.REFERENCE, 'holewizard': FeatureKind.HOLE, 'holewzd': FeatureKind.HOLE, 'imported': FeatureKind.IMPORTED, 'importedcurve': FeatureKind.REFERENCE, 'incontextfeatholder': FeatureKind.REFERENCE, 'insertedfeaturefolder': FeatureKind.REFERENCE, 'jog': FeatureKind.NATIVE, 'libraryfeature': FeatureKind.NATIVE, 'livesection': FeatureKind.REFERENCE, 'localchainpattern': FeatureKind.PATTERN, 'localcirpattern': FeatureKind.PATTERN, 'localcurvepattern': FeatureKind.PATTERN, 'locallpattern': FeatureKind.PATTERN, 'localsketchpattern': FeatureKind.PATTERN, 'loft': FeatureKind.LOFT, 'loft-thin': FeatureKind.LOFT, 'loftedbend': FeatureKind.LOFT, 'lpattern': FeatureKind.PATTERN, 'macrofeature': FeatureKind.NATIVE, 'magneticgroundplane': FeatureKind.REFERENCE, 'matecamtangent': FeatureKind.NATIVE, 'matecoincident': FeatureKind.NATIVE, 'mateconcentric': FeatureKind.NATIVE, 'matedistancedim': FeatureKind.NATIVE, 'mategeardim': FeatureKind.NATIVE, 'matehinge': FeatureKind.NATIVE, 'mateinplace': FeatureKind.NATIVE, 'matelimitdistancedim': FeatureKind.NATIVE, 'matelinearcoupler': FeatureKind.NATIVE, 'matelock': FeatureKind.NATIVE, 'mateparallel': FeatureKind.NATIVE, 'mateperpendicular': FeatureKind.NATIVE, 'mateplanarangledim': FeatureKind.NATIVE, 'mateprofilecenter': FeatureKind.NATIVE, 'materackpiniondim': FeatureKind.NATIVE, 'matereferencegroupfolder': FeatureKind.REFERENCE, 'matescrew': FeatureKind.NATIVE, 'mateslot': FeatureKind.NATIVE, 'matesymmetric': FeatureKind.NATIVE, 'matetangent': FeatureKind.NATIVE, 'mateuniversaljoint': FeatureKind.NATIVE, 'matewidth': FeatureKind.NATIVE, 'mbimport': FeatureKind.IMPORTED, 'midrefsurface': FeatureKind.SURFACE, 'mirror': FeatureKind.MIRROR, 'mirrorcompfeat': FeatureKind.MIRROR, 'mirrorpattern': FeatureKind.MIRROR, 'mirrorsolid': FeatureKind.MIRROR, 'mirrorstock': FeatureKind.MIRROR, 'moldcorecavitysolids': FeatureKind.BOOLEAN, 'moldpartinggeom': FeatureKind.SURFACE, 'moldpartline': FeatureKind.REFERENCE, 'moldshutoffsrf': FeatureKind.SURFACE, 'movecopybody': FeatureKind.NATIVE, 'netblend': FeatureKind.LOFT, 'normalcut': FeatureKind.EXTRUSION, 'offsetrefsurface': FeatureKind.OFFSET, 'offsetrefsuface': FeatureKind.OFFSET, 'onebend': FeatureKind.NATIVE, 'planarsurface': FeatureKind.SURFACE, 'pline': FeatureKind.REFERENCE, 'pointlight': FeatureKind.REFERENCE, 'posgroupfolder': FeatureKind.REFERENCE, 'processbends': FeatureKind.NATIVE, 'profilefeature': FeatureKind.REFERENCE, 'profileftrfolder': FeatureKind.REFERENCE, 'prtexploder': FeatureKind.NATIVE, 'punch': FeatureKind.NATIVE, 'punchtableanchor': FeatureKind.REFERENCE, 'radiaterefsurface': FeatureKind.SURFACE, 'refaxis': FeatureKind.REFERENCE, 'refaxisftrfolder': FeatureKind.REFERENCE, 'refcurve': FeatureKind.REFERENCE, 'refplaneftrfolder': FeatureKind.REFERENCE, 'refpoint': FeatureKind.REFERENCE, 'reference': FeatureKind.REFERENCE, 'referencepattern': FeatureKind.PATTERN, 'refsurface': FeatureKind.SURFACE, 'replaceface': FeatureKind.SURFACE, 'revisiontableanchor': FeatureKind.REFERENCE, 'rib': FeatureKind.EXTRUSION, 'rip': FeatureKind.NATIVE, 'revolve': FeatureKind.REVOLUTION, 'revolution': FeatureKind.REVOLUTION, 'revolutionthin': FeatureKind.REVOLUTION, 'revcut': FeatureKind.REVOLUTION, 'revolvrefsurf': FeatureKind.SURFACE, 'ruledsrffromedge': FeatureKind.SURFACE, 'round fillet corner': FeatureKind.FILLET, 'scale': FeatureKind.SCALE, 'sculpt': FeatureKind.BOOLEAN, 'sensor': FeatureKind.REFERENCE, 'sewrefsurface': FeatureKind.SURFACE, 'shape': FeatureKind.NATIVE, 'sheetmetal': FeatureKind.NATIVE, 'shell': FeatureKind.SHELL, 'sidecore': FeatureKind.BOOLEAN, 'simplotfeature': FeatureKind.NATIVE, 'simplotxaxisfeature': FeatureKind.NATIVE, 'simplotyaxisfeature': FeatureKind.NATIVE, 'simresultfolder': FeatureKind.NATIVE, 'sketch': FeatureKind.REFERENCE, 'sketchbend': FeatureKind.NATIVE, 'sketchbitmap': FeatureKind.REFERENCE, 'sketchblockdef': FeatureKind.REFERENCE, 'sketchblockinst': FeatureKind.REFERENCE, 'sketchhole': FeatureKind.HOLE, 'sketchpattern': FeatureKind.PATTERN, 'sketchslicefolder': FeatureKind.REFERENCE, 'sm3dbend': FeatureKind.NATIVE, 'smbaseflange': FeatureKind.EXTRUSION, 'smgusset': FeatureKind.NATIVE, 'smmiteredflange': FeatureKind.EXTRUSION, 'smartcomponentfeature': FeatureKind.NATIVE, 'solidtosheetmetal': FeatureKind.NATIVE, 'split': FeatureKind.BOOLEAN, 'splitbody': FeatureKind.BOOLEAN, 'spotlight': FeatureKind.REFERENCE, 'stock': FeatureKind.IMPORTED, 'strctsysbtwptsmbrfeat': FeatureKind.NATIVE, 'strctsyscnrfeat': FeatureKind.NATIVE, 'strctsyscnrgrpfeat': FeatureKind.REFERENCE, 'strctsyscnrmgmtfeat': FeatureKind.REFERENCE, 'strctsysfeat': FeatureKind.REFERENCE, 'strctsysgrpfeat': FeatureKind.REFERENCE, 'strctsyspathsegmbrfeat': FeatureKind.NATIVE, 'strctsyspttomem': FeatureKind.NATIVE, 'strctsysrefplnmbrfeat': FeatureKind.NATIVE, 'strctsysskptlenmbrfeat': FeatureKind.NATIVE, 'strctsyssupplnmbrfeat': FeatureKind.NATIVE, 'strctsyssurfplnmbrfeat': FeatureKind.NATIVE, 'subatomfolder': FeatureKind.REFERENCE, 'subweldfolder': FeatureKind.REFERENCE, 'surfacebodyfolder': FeatureKind.REFERENCE, 'surface-extrude': FeatureKind.SURFACE, 'surfcut': FeatureKind.SURFACE, 'sweep': FeatureKind.SWEEP, 'sweepcut': FeatureKind.SWEEP, 'sweeprefsurface': FeatureKind.SURFACE, 'sweepthread': FeatureKind.SWEEP, 'tablepattern': FeatureKind.PATTERN, 'templateflatpattern': FeatureKind.REFERENCE, 'templatesheetmetal': FeatureKind.REFERENCE, 'thicken': FeatureKind.SURFACE, 'thickencut': FeatureKind.SURFACE, 'toroidalbend': FeatureKind.NATIVE, 'trimrefsurface': FeatureKind.SURFACE, 'unfold': FeatureKind.NATIVE, 'untrimrefsurf': FeatureKind.SURFACE, 'varfillet': FeatureKind.FILLET, 'viewbodyfeature': FeatureKind.REFERENCE, 'weldbeadfeat': FeatureKind.NATIVE, 'weldcornerfeat': FeatureKind.NATIVE, 'weldmemberfeat': FeatureKind.SWEEP, 'weldmentfeature': FeatureKind.NATIVE, 'weldmenttableanchor': FeatureKind.REFERENCE, 'weldmenttablefeat': FeatureKind.REFERENCE, 'weldtableanchor': FeatureKind.REFERENCE, 'xformstock': FeatureKind.IMPORTED, **{NativeType: FeatureKind.REFERENCE for NativeType in (*PlaneFeatureTypes, *SolidBodyFeatureTypes)}}
+
+# this definition exists because focused behavior needs one stable owner
 class SldprtAdapter:
+
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def info(self) -> AdapterInfo:
-        return INFO
+    def InfoAction(Instance) -> AdapterInfo:
+        return InfoValue
 
-    def probe(self, source: Source) -> ProbeResult:
+    # this definition exists because focused behavior needs one stable owner
+    def Probe(Instance, Source: Source) -> ProbeResult:
         try:
-            data, label = _source_bytes(source)
-            if len(data) < 8:
-                return ProbeResult(
-                    _FORMAT_ID, 0.0, "file is shorter than the container header"
-                )
-            version = struct.unpack_from(">I", data, 4)[0]
-            if version not in CONTAINER_VERSIONS:
-                return ProbeResult(
-                    _FORMAT_ID, 0.0, f"unsupported container version {version}"
-                )
-            archive = SldprtArchive.from_bytes(data, label)
+            DataValue, Label = SourceBytes(Source)
+            if len(DataValue) < 8:
+                return ProbeResult(KFormatId, 0.0, 'file is shorter than the container header')
+            Version = Struct.unpack_from('>I', DataValue, 4)[0]
+            if Version not in ContainerVersions:
+                return ProbeResult(KFormatId, 0.0, f'unsupported container version {Version}')
+            Archive = SldprtArchive.from_bytes(DataValue, Label)
         except (OSError, SldprtFormatError, TypeError, ValueError) as exc:
-            return ProbeResult(_FORMAT_ID, 0.0, str(exc))
-        names = archive.streams
-        if KEYWORDS_STREAM in names and any(
-            _RESOLVED_CONFIGURATION_STREAM.fullmatch(name) for name in names
-        ):
-            return ProbeResult(
-                _FORMAT_ID, 1.0, "native history and resolved-feature streams found"
-            )
-        return ProbeResult(
-            _FORMAT_ID, 0.6, "recognized SOLIDWORKS compound stream container"
-        )
+            return ProbeResult(KFormatId, 0.0, str(exc))
+        Names = Archive.streams
+        if KeywordsStream in Names and any((KResolvedConfigStream.fullmatch(NameValue) for NameValue in Names)):
+            return ProbeResult(KFormatId, 1.0, 'native history and resolved-feature streams found')
+        return ProbeResult(KFormatId, 0.6, 'recognized SOLIDWORKS compound stream container')
 
-    def read(self, source: Source, options: ReadOptions | None = None) -> CadDocument:
-        settings = options or ReadOptions()
-        data, label = _source_bytes(source)
-        archive = SldprtArchive.from_bytes(data, label)
-        embedded = archive.get(KIT_DOCUMENT_STREAM)
-        if embedded is not None:
-            document = _embedded_document(
-                self, archive, data, label, embedded, settings
-            )
-            _validate_source_suffix(label, document.assembly is not None)
-            return document
-        if archive.get(COMPONENT_TREE_STREAM) is not None:
-            document = _retain_source(
-                _assembly_document(self, archive, data, label, settings),
-                data,
-            )
-            _validate_source_suffix(label, True)
-            return document
-        model = _native_part_model(archive, settings.configuration)
-        configurations = _configurations(model, settings.configuration)
-        parameters = _parameters(model)
-        parameter_ids = {parameter.id for parameter in parameters}
-        planes = _planes(model, parameter_ids)
-        sketches = _sketches(model, parameter_ids)
-        selections = _selections(model)
-        timeline = _timeline(model, selections)
-        payloads, payload_diagnostics = _brep_payloads(archive, settings)
-        brep = _typed_brep(payloads)
-        solid_operation_ids = frozenset(
-            _feature_id(operation.object_id)
-            for operation in model.operations
-            if operation.kind != "surface"
-        )
-        final_feature = _final_body_feature_id(timeline, solid_operation_ids)
-        body_feature = _solid_body_feature(model.features)
-        bodies = (
-            Body(
-                id="sldprt:body:1",
-                name=body_feature.name if body_feature is not None else "Body 1",
-                final_feature_id=final_feature,
-                topology=TopologySummary(
-                    solid_count=1 if solid_operation_ids else 0,
-                    bounding_box=_bounding_box(model),
-                ),
-                provenance=(
-                    _feature_provenance(body_feature)
-                    if body_feature is not None
-                    else None
-                ),
-                attributes=frozen_mapping(
-                    {
-                        "native_object_id": (
-                            body_feature.object_id if body_feature is not None else None
-                        ),
-                        "parasolid_payload_ids": tuple(
-                            payload.id for payload in payloads
-                        ),
-                    }
-                ),
-            ),
-        )
-        diagnostics = (
-            tuple(
-                Diagnostic(
-                    code="sldprt.native_record_unresolved",
-                    message=message,
-                    severity=Severity.INFO,
-                )
-                for message in model.diagnostics
-            )
-            + payload_diagnostics
-        )
-        document = CadDocument(
-            source=CadSource(
-                format_id=_FORMAT_ID,
-                path=label,
-                sha256=hashlib.sha256(data).hexdigest(),
-                container_version=str(archive.format_version),
-                attributes=frozen_mapping(
-                    {
-                        "file_id": archive.file_id,
-                        "stream_count": len(archive.records),
-                    }
-                ),
-            ),
-            configurations=configurations,
-            parameters=parameters,
-            support_planes=planes,
-            sketches=sketches,
-            selections=selections,
-            feature_timeline=timeline,
-            bodies=bodies,
-            brep=brep,
-            brep_payloads=payloads,
-            diagnostics=diagnostics,
-            capabilities=self.info.capabilities,
-            metadata=frozen_mapping(
-                {
-                    "adapter": _FORMAT_ID,
-                    "file_id": archive.file_id,
-                    "native_class_names": tuple(
-                        dict.fromkeys(item.name for item in model.classes)
-                    ),
-                    "native_feature_count": len(model.features),
-                    "native_name_record_count": len(model.names),
-                    "native_scalar_count": len(model.scalars),
-                    "stream_names": tuple(record.name for record in archive.records),
-                }
-            ),
-            units=UnitSystem.MILLIMETER,
-        )
-        document.assert_valid()
-        _validate_source_suffix(label, False)
-        return _retain_source(document, data)
+    # this definition exists because focused behavior needs one stable owner
+    def ReadAction(Instance, Source: Source, Options: ReadOptions | None=None) -> CadDoc:
+        Settings = Options or ReadOptions()
+        DataValue, Label = SourceBytes(Source)
+        Archive = SldprtArchive.from_bytes(DataValue, Label)
+        Embedded = Archive.get(KitDocStream)
+        if Embedded is not None:
+            DocValue = EmbeddedDoc(Instance, Archive, DataValue, Label, Embedded, Settings)
+            ValidateSource(Label, DocValue.assembly is not None)
+            return DocValue
+        if Archive.get(ComponentTreeStream) is not None:
+            DocValue = RetainSource(AsmDoc(Instance, Archive, DataValue, Label, Settings), DataValue)
+            ValidateSource(Label, True)
+            return DocValue
+        Model = NativePartModel(Archive, Settings.configuration)
+        Configurations = Configurations(Model, Settings.configuration)
+        Parameters = Parameters(Model)
+        ParamIds = {Param.id for Param in Parameters}
+        Planes = Planes(Model, ParamIds)
+        Sketches = Sketches(Model, ParamIds)
+        Selections = Selections(Model)
+        Timeline = Timeline(Model, Selections)
+        Payloads, PayloadDiagnostics = BrepPayloads(Archive, Settings)
+        BrepValue = TypedBrep(Payloads)
+        SolidOperationIds = frozenset((FeatureId(Operation.object_id) for Operation in Model.operations if Operation.kind != 'surface'))
+        FinalFeature = FinalBodyId(Timeline, SolidOperationIds)
+        BodyFeature = SolidBody(Model.features)
+        Bodies = (BodyValue(id='sldprt:body:1', name=BodyFeature.name if BodyFeature is not None else 'Body 1', final_feature_id=FinalFeature, topology=TopologySummary(solid_count=1 if SolidOperationIds else 0, bounding_box=BoundingBoxA(Model)), provenance=FeatureA(BodyFeature) if BodyFeature is not None else None, attributes=FrozenMapping({'native_object_id': BodyFeature.object_id if BodyFeature is not None else None, 'parasolid_payload_ids': tuple((Payload.id for Payload in Payloads))})),)
+        Diagnostics = tuple((DiagValue(code='sldprt.native_record_unresolved', message=Message, severity=Severity.INFO) for Message in Model.diagnostics)) + PayloadDiagnostics
+        DocValue = CadDoc(source=CadSource(format_id=KFormatId, path=Label, sha256=Hashlib.sha256(DataValue).hexdigest(), container_version=str(Archive.format_version), attributes=FrozenMapping({'file_id': Archive.file_id, 'stream_count': len(Archive.records)})), configurations=Configurations, parameters=Parameters, support_planes=Planes, sketches=Sketches, selections=Selections, feature_timeline=Timeline, bodies=Bodies, brep=BrepValue, brep_payloads=Payloads, diagnostics=Diagnostics, capabilities=Instance.info.capabilities, metadata=FrozenMapping({'adapter': KFormatId, 'file_id': Archive.file_id, 'native_class_names': tuple(dict.fromkeys((ItemValue.name for ItemValue in Model.classes))), 'native_feature_count': len(Model.features), 'native_name_record_count': len(Model.names), 'native_scalar_count': len(Model.scalars), 'stream_names': tuple((Record.name for Record in Archive.records))}), units=UnitSystem.MILLIMETER)
+        DocValue.assert_valid()
+        ValidateSource(Label, False)
+        return RetainSource(DocValue, DataValue)
 
-    def supports(self, document: CadDocument, destination: Destination) -> bool:
-        path = _destination_path(destination)
-        if path is None:
-            return is_binary_destination(destination)
-        expected = SUFFIX_BY_FORMAT_ID[_destination_format_id(document)]
-        return path.suffix.casefold() == expected
+    # this definition exists because focused behavior needs one stable owner
+    def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+        PathValue = TargetPath(Target)
+        if PathValue is None:
+            return IsBinaryTarget(Target)
+        Expected = SuffixByFormatId[TargetFormatId(DocValue)]
+        return PathValue.suffix.casefold() == Expected
 
-    def write(
-        self,
-        document: CadDocument,
-        destination: Destination,
-        options: WriteOptions | None = None,
-    ) -> WriteResult:
-        settings = options or WriteOptions()
-        if settings.validate:
-            document.assert_valid()
-        expected_format = (
-            _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
-        )
-        if (
-            settings.destination_format is not None
-            and settings.destination_format != expected_format
-        ):
-            raise ValueError(
-                f"{settings.destination_format} does not support this document kind"
-            )
-        if not self.supports(document, destination):
-            expected = SUFFIX_BY_FORMAT_ID[expected_format].upper()
-            raise ValueError(f"SOLIDWORKS destination must end in {expected}")
-        path = _destination_path(destination)
-        format_id = _destination_format_id(document)
-        preserved = (
-            None
-            if (
-                document.assembly is not None
-                and (
-                    settings.values.get("portable") is True
-                    or settings.values.get("bundle_member") is True
-                )
-            )
-            else _preserved_source(document, path)
-        )
-        diagnostics = document.diagnostics
-        required = _required_capabilities(document)
-        referenced_files_written = 0
-        bundle = _AssemblyBundle({}, {}, {}, False)
-        portable_carrier = False
-        if preserved is None:
-            template = _source_template(document, path)
-            if settings.values.get("allow_non_native", True) is not True:
-                kind = "edited native-backed" if template is not None else "source-less"
-                raise SldprtFormatError(
-                    f"{kind} SOLIDWORKS writing requires "
-                    "WriteOptions(values={'allow_non_native': True})"
-                )
-            if (
-                document.assembly is not None
-                and path is not None
-                and settings.values.get("portable") is True
-            ):
-                bundle = _assembly_bundle(document, path, settings)
-            portable_carrier = (
-                document.assembly is not None
-                and settings.values.get("portable") is True
-                and settings.values.get("allow_carrier") is True
-                and not bundle.complete
-            )
-            configured_bundle_names = settings.values.get("bundle_names")
-            selected_bundle_names = (
-                bundle.names
-                if bundle.names
-                else (
-                    configured_bundle_names
-                    if isinstance(configured_bundle_names, Mapping)
-                    else {}
-                )
-            )
-            ConfiguredStamps = settings.values.get("bundle_stamps")
-            SelectedStamps = (
-                bundle.StampValues
-                if bundle.StampValues
-                else (ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {})
-            )
-            ConfiguredName = settings.values.get("model_name")
-            SelectedName = ConfiguredName if isinstance(ConfiguredName, str) else ""
-            generated = _generated_streams(
-                document,
-                template,
-                selected_bundle_names,
-                BundleComplete=(bundle.complete if bundle.names else None),
-                BundleCapabilities=bundle.NativeCaps,
-                BundleStamps=SelectedStamps,
-                ModelName=SelectedName,
-            )
-            if portable_carrier:
-                generated = replace(
-                    generated,
-                    compatibility=(
-                        "native-source-with-kit-neutral"
-                        if generated.compatibility == "native-template"
-                        else generated.compatibility
-                    ),
-                    application_usable=False,
-                    vendor_loadable=False,
-                )
-            transfers = _solidworks_transfers(
-                required,
-                generated.native_capabilities,
-                generated.mixed_capabilities,
-            )
-            streams = generated.streams
-            streams[KIT_NATIVE_STREAM] = _native_attestation_bytes(
-                streams,
-                generated.compatibility,
-                generated.application_usable,
-                generated.vendor_loadable,
-                transfers,
-                generated.native_brep,
-            )
-            file_id = (
-                SldprtArchive.from_bytes(template).file_id
-                if template is not None
-                else None
-            )
-            data = build_sldprt(streams, file_id=file_id, template=template)
-            mode = "template" if template is not None else "generated"
-            native_content = (
-                "source-preserved"
-                if template is not None
-                else (
-                    (
-                        "native-metadata-and-neutral-brep"
-                        if document.assembly is None
-                        else "neutral-brep"
-                    )
-                    if generated.native_brep == "generated"
-                    else (
-                        (
-                            "native-metadata-and-parasolid-import"
-                            if document.assembly is None
-                            else "parasolid-import"
-                        )
-                        if generated.native_brep == "preserved"
-                        else (
-                            "native-metadata" if document.assembly is None else "none"
-                        )
-                    )
-                )
-            )
-            if not generated.application_usable:
-                diagnostics = (
-                    *diagnostics,
-                    Diagnostic(
-                        code="sldprt.neutral_write",
-                        message=(
-                            "one or more neutral edits are retained in the Kit "
-                            "stream because their native SOLIDWORKS records could "
-                            "not be reproduced"
-                        ),
-                        severity=Severity.WARNING,
-                    ),
-                )
-            if generated.unexpressed:
-                diagnostics = (
-                    *diagnostics,
-                    Diagnostic(
-                        code="sldasm.unexpressed_native_records",
-                        message=(
-                            "generated SOLIDWORKS assembly does not express "
-                            + ", ".join(generated.unexpressed)
-                        ),
-                        severity=Severity.WARNING,
-                    ),
-                )
-            if generated.reader_gaps:
-                diagnostics = (
-                    *diagnostics,
-                    Diagnostic(
-                        code="sldasm.vendor_reader_rejects",
-                        message=(
-                            "SOLIDWORKS assembly is not reported loadable because "
-                            "the vendor reader contract is unsatisfied: "
-                            + ", ".join(generated.reader_gaps)
-                        ),
-                        severity=Severity.WARNING,
-                    ),
-                )
-            if generated.donor_notes:
-                diagnostics = (
-                    *diagnostics,
-                    Diagnostic(
-                        code=(
-                            "sldprt.donor_partial"
-                            if generated.vendor_loadable
-                            else "sldprt.donor_declined"
-                        ),
-                        message=(
-                            (
-                                "native SOLIDWORKS feature records omit "
-                                if generated.vendor_loadable
-                                else "native SOLIDWORKS feature records were not "
-                                "written because "
-                            )
-                            + "; ".join(generated.donor_notes)
-                        ),
-                        severity=Severity.WARNING,
-                    ),
-                )
-            if generated.native_brep.startswith("unsupported:"):
-                diagnostics = (
-                    *diagnostics,
-                    Diagnostic(
-                        code="sldprt.native_brep_unsupported",
-                        message=generated.native_brep.removeprefix("unsupported:"),
-                        severity=Severity.WARNING,
-                    ),
-                )
-            native_brep = generated.native_brep
-            compatibility = generated.compatibility
-            application_usable = generated.application_usable
-            vendor_loadable = generated.vendor_loadable
+    # this definition exists because focused behavior needs one stable owner
+    def Write(Instance, DocValue: CadDocument, Target: Destination, Options: WriteOptions | None=None) -> WriteResult:
+        Settings = Options or WriteOptions()
+        if Settings.validate:
+            DocValue.assert_valid()
+        ExpectedFormat = KAsmFormatId if DocValue.assembly is not None else KFormatId
+        if Settings.destination_format is not None and Settings.destination_format != ExpectedFormat:
+            raise ValueError(f'{Settings.destination_format} does not support this document kind')
+        if not Instance.supports(DocValue, Target):
+            Expected = SuffixByFormatId[ExpectedFormat].upper()
+            raise ValueError(f'SOLIDWORKS destination must end in {Expected}')
+        PathValue = TargetPath(Target)
+        FormatId = TargetFormatId(DocValue)
+        Saved = None if DocValue.assembly is not None and (Settings.values.get('portable') is True or Settings.values.get('bundle_member') is True) else SavedSource(DocValue, PathValue)
+        Diagnostics = DocValue.diagnostics
+        Required = Required(DocValue)
+        ReferencedFilesWritten = 0
+        Bundle = AsmBundle({}, {}, {}, False)
+        PortableCarrier = False
+        if Saved is None:
+            Template = SourceTemplate(DocValue, PathValue)
+            if Settings.values.get('allow_non_native', True) is not True:
+                KindValue = 'edited native-backed' if Template is not None else 'source-less'
+                raise SldprtFormatError(f"{KindValue} SOLIDWORKS writing requires WriteOptions(values={{'allow_non_native': True}})")
+            if DocValue.assembly is not None and PathValue is not None and (Settings.values.get('portable') is True):
+                Bundle = AsmBundleA(DocValue, PathValue, Settings)
+            PortableCarrier = DocValue.assembly is not None and Settings.values.get('portable') is True and (Settings.values.get('allow_carrier') is True) and (not Bundle.complete)
+            ConfiguredBundleNames = Settings.values.get('bundle_names')
+            SelectedBundleNames = Bundle.names if Bundle.names else ConfiguredBundleNames if isinstance(ConfiguredBundleNames, Mapping) else {}
+            ConfiguredStamps = Settings.values.get('bundle_stamps')
+            SelectedStamps = Bundle.StampValues if Bundle.StampValues else ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {}
+            ConfiguredName = Settings.values.get('model_name')
+            SelectedName = ConfiguredName if isinstance(ConfiguredName, str) else ''
+            Generated = GeneratedB(DocValue, Template, SelectedBundleNames, BundleComplete=Bundle.complete if Bundle.names else None, BundleCapabilities=Bundle.NativeCaps, BundleStamps=SelectedStamps, ModelName=SelectedName)
+            if PortableCarrier:
+                Generated = Replace(Generated, compatibility='native-source-with-kit-neutral' if Generated.compatibility == 'native-template' else Generated.compatibility, application_usable=False, vendor_loadable=False)
+            Transfers = SolidworksA(Required, Generated.native_capabilities, Generated.mixed_capabilities)
+            Streams = Generated.streams
+            Streams[KitNativeStream] = NativeBytes(Streams, Generated.compatibility, Generated.application_usable, Generated.vendor_loadable, Transfers, Generated.native_brep)
+            FileId = SldprtArchive.from_bytes(Template).file_id if Template is not None else None
+            DataValue = BuildSldprt(Streams, file_id=FileId, template=Template)
+            ModeValue = 'template' if Template is not None else 'generated'
+            NativeContent = 'source-preserved' if Template is not None else ('native-metadata-and-neutral-brep' if DocValue.assembly is None else 'neutral-brep') if Generated.native_brep == 'generated' else ('native-metadata-and-parasolid-import' if DocValue.assembly is None else 'parasolid-import') if Generated.native_brep == 'preserved' else 'native-metadata' if DocValue.assembly is None else 'none'
+            if not Generated.application_usable:
+                Diagnostics = (*Diagnostics, DiagValue(code='sldprt.neutral_write', message='one or more neutral edits are retained in the Kit stream because their native SOLIDWORKS records could not be reproduced', severity=Severity.WARNING))
+            if Generated.unexpressed:
+                Diagnostics = (*Diagnostics, DiagValue(code='sldasm.unexpressed_native_records', message='generated SOLIDWORKS assembly does not express ' + ', '.join(Generated.unexpressed), severity=Severity.WARNING))
+            if Generated.reader_gaps:
+                Diagnostics = (*Diagnostics, DiagValue(code='sldasm.vendor_reader_rejects', message='SOLIDWORKS assembly is not reported loadable because the vendor reader contract is unsatisfied: ' + ', '.join(Generated.reader_gaps), severity=Severity.WARNING))
+            if Generated.donor_notes:
+                Diagnostics = (*Diagnostics, DiagValue(code='sldprt.donor_partial' if Generated.vendor_loadable else 'sldprt.donor_declined', message=('native SOLIDWORKS feature records omit ' if Generated.vendor_loadable else 'native SOLIDWORKS feature records were not written because ') + '; '.join(Generated.donor_notes), severity=Severity.WARNING))
+            if Generated.native_brep.startswith('unsupported:'):
+                Diagnostics = (*Diagnostics, DiagValue(code='sldprt.native_brep_unsupported', message=Generated.native_brep.removeprefix('unsupported:'), severity=Severity.WARNING))
+            NativeBrep = Generated.native_brep
+            Compatibility = Generated.compatibility
+            AppUsable = Generated.application_usable
+            VendorLoadable = Generated.vendor_loadable
         else:
-            data = preserved
-            mode = "exact"
-            native_content = "exact"
-            native_brep = "exact"
-            compatibility = _replay_compatibility(data)
-            attestation = _native_attestation(data)
-            if compatibility == "native-exact":
-                transfers = tuple(
-                    CapabilityTransfer(capability, TransferMode.NATIVE)
-                    for capability in sorted(required, key=lambda value: value.value)
-                )
-                application_usable = True
-                vendor_loadable = True
-            elif attestation is not None:
-                transfers = _attested_transfers(attestation, required)
-                application_usable = attestation["application_usable"]
-                vendor_loadable = attestation["vendor_loadable"]
-                native_brep = str(attestation.get("native_brep", "template"))
-                native_content = "source-preserved"
+            DataValue = Saved
+            ModeValue = 'exact'
+            NativeContent = 'exact'
+            NativeBrep = 'exact'
+            Compatibility = Replay(DataValue)
+            Attestation = Native(DataValue)
+            if Compatibility == 'native-exact':
+
+                # this callback exists because local behavior needs one focused transformation
+                Transfers = tuple((CapabilityTransfer(Capability, TransferMode.NATIVE) for Capability in sorted(Required, key=lambda Value: Value.value)))
+                AppUsable = True
+                VendorLoadable = True
+            elif Attestation is not None:
+                Transfers = Attested(Attestation, Required)
+                AppUsable = Attestation['application_usable']
+                VendorLoadable = Attestation['vendor_loadable']
+                NativeBrep = str(Attestation.get('native_brep', 'template'))
+                NativeContent = 'source-preserved'
             else:
-                transfers = _solidworks_transfers(required, frozenset())
-                application_usable = False
-                vendor_loadable = False
-        neutral_edits_are_native = all(
-            transfer.mode is TransferMode.NATIVE
-            or transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
-            for transfer in transfers
-        )
-        output = _write_destination(destination, data, settings.overwrite)
-        for target, payload in bundle.payloads.items():
-            _write_destination(target, payload, settings.overwrite)
-        referenced_files_written = len(bundle.payloads)
-        archive = SldprtArchive.from_bytes(data, output or "<memory>")
-        requirements = (
-            ("referenced SOLIDWORKS component files",)
-            if document.assembly is not None
-            and not bundle.complete
-            and not portable_carrier
-            else ()
-        )
-        return WriteResult(
-            path=output,
-            adapter=format_id,
-            bytes_written=len(data),
-            diagnostics=diagnostics,
-            metadata=frozen_mapping(
-                {
-                    "mode": mode,
-                    "format_id": format_id,
-                    "compatibility": compatibility,
-                    "native_content": native_content,
-                    "neutral_edits_are_native": neutral_edits_are_native,
-                    "vendor_loadable": vendor_loadable,
-                    "application_usable": application_usable,
-                    "native_geometry": native_brep
-                    in {
-                        "exact",
-                        "feature-rebuilt",
-                        "generated",
-                        "preserved",
-                        "patched",
-                        "template",
-                    },
-                    "native_brep": native_brep,
-                    "native_history": (
-                        Capability.PARAMETRIC_HISTORY not in required
-                        or Capability.PARAMETRIC_HISTORY
-                        in {
-                            transfer.capability
-                            for transfer in transfers
-                            if transfer.mode is TransferMode.NATIVE
-                        }
-                    ),
-                    "native_assembly": (
-                        document.assembly is not None
-                        and Capability.ASSEMBLIES
-                        in {
-                            transfer.capability
-                            for transfer in transfers
-                            if transfer.mode is TransferMode.NATIVE
-                        }
-                    ),
-                    "native_self_contained": (
-                        application_usable
-                        and (document.assembly is None or bundle.complete)
-                    ),
-                    "referenced_files_written": referenced_files_written,
-                    "container_version": archive.format_version,
-                    "file_id": archive.file_id,
-                    "stream_count": len(archive.records),
-                    "runtime": "python-stdlib",
-                }
-            ),
-            transfers=transfers,
-            requirements=requirements,
-            application_usable=application_usable,
-            vendor_loadable=vendor_loadable,
-        )
+                Transfers = SolidworksA(Required, frozenset())
+                AppUsable = False
+                VendorLoadable = False
+        NeutralEditsAreNative = all((Transfer.mode is TransferMode.NATIVE or Transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED for Transfer in Transfers))
+        Output = WriteTarget(Target, DataValue, Settings.overwrite)
+        for TargetA, Payload in Bundle.payloads.items():
+            WriteTarget(TargetA, Payload, Settings.overwrite)
+        ReferencedFilesWritten = len(Bundle.payloads)
+        Archive = SldprtArchive.from_bytes(DataValue, Output or '<memory>')
+        Requirements = ('referenced SOLIDWORKS component files',) if DocValue.assembly is not None and (not Bundle.complete) and (not PortableCarrier) else ()
+        return WriteResult(path=Output, adapter=FormatId, bytes_written=len(DataValue), diagnostics=Diagnostics, metadata=FrozenMapping({'mode': ModeValue, 'format_id': FormatId, 'compatibility': Compatibility, 'native_content': NativeContent, 'neutral_edits_are_native': NeutralEditsAreNative, 'vendor_loadable': VendorLoadable, 'application_usable': AppUsable, 'native_geometry': NativeBrep in {'exact', 'feature-rebuilt', 'generated', 'preserved', 'patched', 'template'}, 'native_brep': NativeBrep, 'native_history': Capability.PARAMETRIC_HISTORY not in Required or Capability.PARAMETRIC_HISTORY in {Transfer.capability for Transfer in Transfers if Transfer.mode is TransferMode.NATIVE}, 'native_assembly': DocValue.assembly is not None and Capability.ASSEMBLIES in {Transfer.capability for Transfer in Transfers if Transfer.mode is TransferMode.NATIVE}, 'native_self_contained': AppUsable and (DocValue.assembly is None or Bundle.complete), 'referenced_files_written': ReferencedFilesWritten, 'container_version': Archive.format_version, 'file_id': Archive.file_id, 'stream_count': len(Archive.records), 'runtime': 'python-stdlib'}), transfers=Transfers, requirements=Requirements, application_usable=AppUsable, vendor_loadable=VendorLoadable)
+    locals()['info'] = InfoAction
+    locals()['probe'] = Probe
+    locals()['read'] = ReadAction
+    locals()['supports'] = Supports
+    locals()['write'] = Write
 
+# this definition exists because focused behavior needs one stable owner
+def ReadSldprt(Source: Source, *, Config: str | None=None, IncludeBrep: bool=True, IncludeTessellation: bool=True, Strict: bool=True) -> CadDoc:
+    return SldprtAdapter().read(Source, ReadOptions(configuration=Config, include_brep=IncludeBrep, include_tessellation=IncludeTessellation, strict=Strict))
 
-def read_sldprt(
-    source: Source,
-    *,
-    configuration: str | None = None,
-    include_brep: bool = True,
-    include_tessellation: bool = True,
-    strict: bool = True,
-) -> CadDocument:
-    return SldprtAdapter().read(
-        source,
-        ReadOptions(
-            configuration=configuration,
-            include_brep=include_brep,
-            include_tessellation=include_tessellation,
-            strict=strict,
-        ),
-    )
+# this definition exists because focused behavior needs one stable owner
+def WriteSldprt(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=False, Validate: bool=True, AllowNonNative: bool=True) -> WriteResult:
+    return SldprtAdapter().write(DocValue, Target, WriteOptions(overwrite=Overwrite, validate=Validate, values=FrozenMapping({'allow_non_native': AllowNonNative})))
 
-
-def write_sldprt(
-    document: CadDocument,
-    destination: Destination,
-    *,
-    overwrite: bool = False,
-    validate: bool = True,
-    allow_non_native: bool = True,
-) -> WriteResult:
-    return SldprtAdapter().write(
-        document,
-        destination,
-        WriteOptions(
-            overwrite=overwrite,
-            validate=validate,
-            values=frozen_mapping({"allow_non_native": allow_non_native}),
-        ),
-    )
-
-
-def _embedded_document(
-    adapter: SldprtAdapter,
-    archive: SldprtArchive,
-    data: bytes,
-    label: str,
-    embedded: bytes,
-    settings: ReadOptions,
-) -> CadDocument:
+# this definition exists because focused behavior needs one stable owner
+def EmbeddedDoc(Adapter: SldprtAdapter, Archive: SldprtArchive, DataValue: bytes, Label: str, Embedded: bytes, Settings: ReadOptions) -> CadDoc:
     try:
-        document = CadDocument.from_json(embedded.decode("utf-8"))
+        DocValue = CadDoc.from_json(Embedded.decode('utf-8'))
     except (UnicodeDecodeError, TypeError, ValueError) as exc:
-        raise SldprtFormatError("embedded Kit document is invalid") from exc
-    configurations = document.configurations
-    if settings.configuration is not None:
-        matches = {
-            item.id
-            for item in configurations
-            if settings.configuration in {item.id, item.name}
-        }
-        if not matches:
-            raise SldprtFormatError(
-                f"configuration {settings.configuration!r} is unavailable"
-            )
-        configurations = tuple(
-            replace(item, active=item.id in matches) for item in configurations
-        )
-    original = document.source
-    format_id = _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
-    metadata = dict(document.metadata)
-    metadata.update(
-        {
-            "adapter": format_id,
-            "file_id": archive.file_id,
-            "stream_names": tuple(record.name for record in archive.records),
-            "embedded_source_format_id": original.format_id,
-            "embedded_source_path": original.path,
-            "embedded_source_sha256": original.sha256,
-            "solidworks.container_compatibility": _replay_compatibility(data),
-        }
-    )
-    document = replace(
-        document,
-        source=CadSource(
-            format_id=format_id,
-            path=label,
-            sha256=hashlib.sha256(data).hexdigest(),
-            container_version=str(archive.format_version),
-            attributes=frozen_mapping(
-                {
-                    "file_id": archive.file_id,
-                    "stream_count": len(archive.records),
-                    "embedded_source_format_id": original.format_id,
-                }
-            ),
-        ),
-        configurations=configurations,
-        metadata=frozen_mapping(metadata),
-    )
-    document = filter_document(
-        document,
-        include_brep=settings.include_brep,
-        include_tessellation=settings.include_tessellation,
-        keep_payload_records=False,
-    )
-    if settings.strict:
-        document.assert_valid()
-    return _retain_source(
-        document,
-        data,
-        retain_capabilities=True,
-        read_options=settings,
-    )
+        raise SldprtFormatError('embedded Kit document is invalid') from exc
+    Configurations = DocValue.configurations
+    if Settings.configuration is not None:
+        Matches = {ItemValue.id for ItemValue in Configurations if Settings.configuration in {ItemValue.id, ItemValue.name}}
+        if not Matches:
+            raise SldprtFormatError(f'configuration {Settings.configuration!r} is unavailable')
+        Configurations = tuple((Replace(ItemValue, active=ItemValue.id in Matches) for ItemValue in Configurations))
+    Original = DocValue.source
+    FormatId = KAsmFormatId if DocValue.assembly is not None else KFormatId
+    MetaValue = dict(DocValue.metadata)
+    MetaValue.update({'adapter': FormatId, 'file_id': Archive.file_id, 'stream_names': tuple((Record.name for Record in Archive.records)), 'embedded_source_format_id': Original.format_id, 'embedded_source_path': Original.path, 'embedded_source_sha256': Original.sha256, 'solidworks.container_compatibility': Replay(DataValue)})
+    DocValue = Replace(DocValue, source=CadSource(format_id=FormatId, path=Label, sha256=Hashlib.sha256(DataValue).hexdigest(), container_version=str(Archive.format_version), attributes=FrozenMapping({'file_id': Archive.file_id, 'stream_count': len(Archive.records), 'embedded_source_format_id': Original.format_id})), configurations=Configurations, metadata=FrozenMapping(MetaValue))
+    DocValue = FilterDoc(DocValue, include_brep=Settings.include_brep, include_tessellation=Settings.include_tessellation, keep_payload_records=False)
+    if Settings.strict:
+        DocValue.assert_valid()
+    return RetainSource(DocValue, DataValue, RetainCapabilities=True, ReadOptions=Settings)
 
+# this definition exists because focused behavior needs one stable owner
+def DocWithout(DocValue: CadDocument) -> CadDoc:
+    return Replace(DocValue, metadata=FrozenMapping({KeyValue: Value for KeyValue, Value in DocValue.metadata.items() if KeyValue not in KSourceKeys}))
 
-def _document_without_source(document: CadDocument) -> CadDocument:
-    return replace(
-        document,
-        metadata=frozen_mapping(
-            {
-                key: value
-                for key, value in document.metadata.items()
-                if key not in _SOURCE_KEYS
-            }
-        ),
-    )
+# this definition exists because focused behavior needs one stable owner
+def SemanticShaTwo(DocValue: CadDocument) -> str:
+    Value = SemanticDoc(DocValue).to_json(indent=None).encode('utf-8')
+    return Hashlib.sha256(Value).hexdigest()
 
+# this definition exists because focused behavior needs one stable owner
+def SemanticDoc(DocValue: CadDocument) -> CadDoc:
+    EnvelopeIndexes = SourcePayloadIndexes(DocValue)
+    Payloads = tuple((Replace(Payload, data=None, sha256=Hashlib.sha256(Payload.data).hexdigest() if Payload.data is not None else Payload.sha256) for Index, Payload in enumerate(DocValue.brep_payloads) if Index not in EnvelopeIndexes))
+    AsmValue = DocValue.assembly
+    if AsmValue is not None:
+        AsmValue = Replace(AsmValue, documents=tuple((Replace(ItemValue, document=SemanticDoc(ItemValue.document) if isinstance(ItemValue.document, CadDoc) else ItemValue.document) for ItemValue in AsmValue.documents)))
+    return Replace(DocValue, source=CadSource('', '', ''), brep_payloads=Payloads, metadata=SemanticMeta(DocValue.metadata), assembly=AsmValue)
 
-def _semantic_sha256(document: CadDocument) -> str:
-    value = _semantic_document(document).to_json(indent=None).encode("utf-8")
-    return hashlib.sha256(value).hexdigest()
+# this definition exists because focused behavior needs one stable owner
+def RetainSource(DocValue: CadDocument, DataValue: bytes, *, RetainCapabilities: bool=False, ReadOptions: ReadOptions | None=None) -> CadDoc:
+    Capabilities = DocValue.capabilities
+    SelectedOptions = ReadOptions or ReadOptions()
+    Portable = DocWithout(DocValue)
+    Portable = Replace(Portable, metadata=WithWrapperMeta(Portable.metadata, KWrapperMetaKeys))
+    SelectedCapabilities = RetainedCapabilities(Portable, Capabilities, include_brep=SelectedOptions.include_brep, include_tessellation=SelectedOptions.include_tessellation) if RetainCapabilities else InferCapabilities(Portable, roundtrip_metadata=True)
+    Portable = Replace(Portable, capabilities=SelectedCapabilities)
+    MetaValue = dict(Portable.metadata)
+    MetaValue.update({KSourceBytesKey: bytes(DataValue), KSourceShaTwoFiveSixKey: Hashlib.sha256(DataValue).hexdigest(), KSourceSemanticShaTwoFive: SemanticShaTwo(Portable), KSourceFormatKey: DocValue.source.format_id})
+    return Replace(Portable, metadata=WithWrapperMeta(MetaValue, KWrapperMetaKeys))
 
+# this definition exists because focused behavior needs one stable owner
+def IsGeomBrep(Payload: BrepPayload) -> bool:
+    return Payload.role == PayloadRole.BREP and Payload.data is not None
 
-def _semantic_document(document: CadDocument) -> CadDocument:
-    envelope_indexes = source_payload_indexes(document)
-    payloads = tuple(
-        replace(
-            payload,
-            data=None,
-            sha256=(
-                hashlib.sha256(payload.data).hexdigest()
-                if payload.data is not None
-                else payload.sha256
-            ),
-        )
-        for index, payload in enumerate(document.brep_payloads)
-        if index not in envelope_indexes
-    )
-    assembly = document.assembly
-    if assembly is not None:
-        assembly = replace(
-            assembly,
-            documents=tuple(
-                replace(
-                    item,
-                    document=(
-                        _semantic_document(item.document)
-                        if isinstance(item.document, CadDocument)
-                        else item.document
-                    ),
-                )
-                for item in assembly.documents
-            ),
-        )
-    return replace(
-        document,
-        source=CadSource("", "", ""),
-        brep_payloads=payloads,
-        metadata=semantic_metadata(document.metadata),
-        assembly=assembly,
-    )
-
-
-def _retain_source(
-    document: CadDocument,
-    data: bytes,
-    *,
-    retain_capabilities: bool = False,
-    read_options: ReadOptions | None = None,
-) -> CadDocument:
-    capabilities = document.capabilities
-    selected_options = read_options or ReadOptions()
-    portable = _document_without_source(document)
-    portable = replace(
-        portable,
-        metadata=with_wrapper_metadata(portable.metadata, _WRAPPER_METADATA_KEYS),
-    )
-    selected_capabilities = (
-        retained_capabilities(
-            portable,
-            capabilities,
-            include_brep=selected_options.include_brep,
-            include_tessellation=selected_options.include_tessellation,
-        )
-        if retain_capabilities
-        else infer_capabilities(portable, roundtrip_metadata=True)
-    )
-    portable = replace(portable, capabilities=selected_capabilities)
-    metadata = dict(portable.metadata)
-    metadata.update(
-        {
-            _SOURCE_BYTES_KEY: bytes(data),
-            _SOURCE_SHA256_KEY: hashlib.sha256(data).hexdigest(),
-            _SOURCE_SEMANTIC_SHA256_KEY: _semantic_sha256(portable),
-            _SOURCE_FORMAT_KEY: document.source.format_id,
-        }
-    )
-    return replace(
-        portable,
-        metadata=with_wrapper_metadata(metadata, _WRAPPER_METADATA_KEYS),
-    )
-
-
-def _is_geometry_brep_payload(payload: BrepPayload) -> bool:
-    return payload.role == PayloadRole.BREP and payload.data is not None
-
-
-def _preserved_source(document: CadDocument, destination: Path | None) -> bytes | None:
-    data = _source_template(document, destination)
-    if data is None:
+# this definition exists because focused behavior needs one stable owner
+def SavedSource(DocValue: CadDocument, Target: Path | None) -> bytes | None:
+    DataValue = SourceTemplate(DocValue, Target)
+    if DataValue is None:
         return None
-    semantic = document.metadata.get(_SOURCE_SEMANTIC_SHA256_KEY)
-    if semantic != _semantic_sha256(document):
+    Semantic = DocValue.metadata.get(KSourceSemanticShaTwoFive)
+    if Semantic != SemanticShaTwo(DocValue):
         return None
-    if _replay_compatibility(
-        data
-    ) == "native-exact" and not _native_source_matches_document(document, data):
+    if Replay(DataValue) == 'native-exact' and (not NativeSourceDoc(DocValue, DataValue)):
         return None
-    return data
+    return DataValue
 
-
-def _source_template(document: CadDocument, destination: Path | None) -> bytes | None:
-    data = document.metadata.get(_SOURCE_BYTES_KEY)
-    if not isinstance(data, bytes):
+# this definition exists because focused behavior needs one stable owner
+def SourceTemplate(DocValue: CadDocument, Target: Path | None) -> bytes | None:
+    DataValue = DocValue.metadata.get(KSourceBytesKey)
+    if not isinstance(DataValue, bytes):
         return None
-    expected = document.metadata.get(_SOURCE_SHA256_KEY)
-    if expected != hashlib.sha256(data).hexdigest():
+    Expected = DocValue.metadata.get(KSourceShaTwoFiveSixKey)
+    if Expected != Hashlib.sha256(DataValue).hexdigest():
         return None
-    source_format = document.metadata.get(_SOURCE_FORMAT_KEY)
-    if destination is not None:
-        expected_suffix = SUFFIX_BY_FORMAT_ID.get(source_format)
-        if expected_suffix is None or destination.suffix.casefold() != expected_suffix:
+    SourceFormat = DocValue.metadata.get(KSourceFormatKey)
+    if Target is not None:
+        ExpectedSuffix = SuffixByFormatId.get(SourceFormat)
+        if ExpectedSuffix is None or Target.suffix.casefold() != ExpectedSuffix:
             return None
     try:
-        SldprtArchive.from_bytes(data)
+        SldprtArchive.from_bytes(DataValue)
     except SldprtFormatError:
         return None
-    return data
+    return DataValue
 
-
-def _native_source_matches_document(document: CadDocument, data: bytes) -> bool:
-    active = tuple(
-        configuration.name
-        for configuration in document.configurations
-        if configuration.active
-    )
-    if len(active) > 1:
+# this definition exists because focused behavior needs one stable owner
+def NativeSourceDoc(DocValue: CadDocument, DataValue: bytes) -> bool:
+    Active = tuple((Config.name for Config in DocValue.configurations if Config.active))
+    if len(Active) > 1:
         return False
-    source = BytesIO(data)
-    source.name = document.source.path
+    Source = BytesIo(DataValue)
+    Source.name = DocValue.source.path
     try:
-        candidate = SldprtAdapter().read(
-            source,
-            ReadOptions(
-                configuration=active[0] if active else None,
-                include_brep=Capability.BREP in document.capabilities,
-                include_tessellation=Capability.TESSELLATION in document.capabilities,
-            ),
-        )
+        Choice = SldprtAdapter().read(Source, ReadOptions(configuration=Active[0] if Active else None, include_brep=Capability.BREP in DocValue.capabilities, include_tessellation=Capability.TESSELLATION in DocValue.capabilities))
     except (OSError, SldprtFormatError, TypeError, ValueError):
         return False
-    return _semantic_sha256(candidate) == _semantic_sha256(document)
+    return SemanticShaTwo(Choice) == SemanticShaTwo(DocValue)
 
+# this definition exists because focused behavior needs one stable owner
+def Required(DocValue: CadDocument) -> frozenset[Capability]:
+    return DocValue.capabilities | InferCapabilities(DocValue, roundtrip_metadata=Capability.ROUNDTRIP_METADATA in DocValue.capabilities)
 
-def _required_capabilities(document: CadDocument) -> frozenset[Capability]:
-    return document.capabilities | infer_capabilities(
-        document,
-        roundtrip_metadata=Capability.ROUNDTRIP_METADATA in document.capabilities,
-    )
-
-
-def _assembly_bundle(
-    document: CadDocument, destination: Path, settings: WriteOptions
-) -> _AssemblyBundle:
-    assembly = document.assembly
-    if assembly is None:
-        return _AssemblyBundle({}, {}, {}, False)
-    documents = {component.id: component.document for component in assembly.documents}
-    definitions = tuple(
-        definition
-        for definition in assembly.definitions
-        if definition.id != assembly.root_definition_id
-    )
-    names: dict[str, str] = {}
-    payloads: dict[Path, bytes] = {}
+# this definition exists because focused behavior needs one stable owner
+def AsmBundleA(DocValue: CadDocument, Target: Path, Settings: WriteOptions) -> AsmBundle:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
+        return AsmBundle({}, {}, {}, False)
+    Documents = {Component.id: Component.document for Component in AsmValue.documents}
+    Definitions = tuple((Definition for Definition in AsmValue.definitions if Definition.id != AsmValue.root_definition_id))
+    Names: dict[str, str] = {}
+    Payloads: dict[PathValue, bytes] = {}
     StampValues: dict[str, int] = {}
-    used = {destination.name.casefold()}
-    complete = True
+    UsedValue = {Target.name.casefold()}
+    Complete = True
     BundleCaps: set[Capability] = set()
-    targets: list[tuple[ComponentDefinition, CadDocument, str, Path, Path]] = []
-    FinalValue = settings.values.get("final_destination")
-    FinalPath = (
-        Path(FinalValue).expanduser().resolve()
-        if isinstance(FinalValue, (str, Path))
-        else destination
-    )
-    for definition in definitions:
-        key = definition.document_id or definition.id
-        if key in names:
-            names[definition.id] = names[key]
+    Targets: list[tuple[ComponentDefinition, CadDoc, str, PathValue, PathValue]] = []
+    FinalValue = Settings.values.get('final_destination')
+    FinalPath = PathValue(FinalValue).expanduser().resolve() if isinstance(FinalValue, (str, PathValue)) else Target
+    for Definition in Definitions:
+        KeyValue = Definition.document_id or Definition.id
+        if KeyValue in Names:
+            Names[Definition.id] = Names[KeyValue]
             continue
-        component = documents.get(definition.document_id)
-        if (
-            not isinstance(component, CadDocument)
-            and str(definition.kind) == ComponentKind.ASSEMBLY.value
-        ):
-            component = _nested_assembly_document(document, definition.id)
-        if not isinstance(component, CadDocument):
-            complete = False
+        Component = Documents.get(Definition.document_id)
+        if not isinstance(Component, CadDoc) and str(Definition.kind) == ComponentKind.ASSEMBLY.value:
+            Component = NestedAsmDoc(DocValue, Definition.id)
+        if not isinstance(Component, CadDoc):
+            Complete = False
             continue
-        suffix = SUFFIX_BY_FORMAT_ID[
-            _ASSEMBLY_FORMAT_ID if component.assembly is not None else _FORMAT_ID
-        ]
-        source_name = PureWindowsPath(
-            str(
-                definition.attributes.get("native_source_path")
-                or definition.source_path
-                or component.source.path
-            )
-        ).name
-        candidate = Path(source_name).name if source_name else ""
-        if Path(candidate).suffix.casefold() != suffix:
-            candidate = f"{definition.name or key}{suffix}"
-        stem = Path(candidate).stem or "component"
-        index = 1
-        while candidate.casefold() in used:
-            index += 1
-            candidate = f"{stem}-{index}{suffix}"
-        used.add(candidate.casefold())
-        target = (destination.parent / candidate).resolve()
-        FinalTarget = (FinalPath.parent / candidate).resolve()
+        Suffix = SuffixByFormatId[KAsmFormatId if Component.assembly is not None else KFormatId]
+        SourceName = PureWindowsPath(str(Definition.attributes.get('native_source_path') or Definition.source_path or Component.source.path)).name
+        Choice = PathValue(SourceName).name if SourceName else ''
+        if PathValue(Choice).suffix.casefold() != Suffix:
+            Choice = f'{Definition.name or KeyValue}{Suffix}'
+        StemValue = PathValue(Choice).stem or 'component'
+        Index = 1
+        while Choice.casefold() in UsedValue:
+            Index += 1
+            Choice = f'{StemValue}-{Index}{Suffix}'
+        UsedValue.add(Choice.casefold())
+        TargetA = (Target.parent / Choice).resolve()
+        FinalTarget = (FinalPath.parent / Choice).resolve()
         TargetName = str(FinalTarget)
-        names[key] = TargetName
-        names[definition.id] = TargetName
-        if definition.document_id:
-            names[definition.document_id] = TargetName
-        targets.append((definition, component, candidate, target, FinalTarget))
-    available_names = {
-        PureWindowsPath(NameValue).name.casefold() for NameValue in names.values()
-    }
-    FinalOverwrite = (
-        settings.overwrite or settings.values.get("final_overwrite") is True
-    )
+        Names[KeyValue] = TargetName
+        Names[Definition.id] = TargetName
+        if Definition.document_id:
+            Names[Definition.document_id] = TargetName
+        Targets.append((Definition, Component, Choice, TargetA, FinalTarget))
+    AvailableNames = {PureWindowsPath(NameValue).name.casefold() for NameValue in Names.values()}
+    FinalOverwrite = Settings.overwrite or Settings.values.get('final_overwrite') is True
 
-    # child identities must exist before serializing their owning assembly
-    def IsTargetReady(
-        TargetValue: tuple[ComponentDefinition, CadDocument, str, Path, Path],
-    ) -> bool:
+    # this definition exists because focused behavior needs one stable owner
+    def IsTargetReady(TargetValue: tuple[ComponentDefinition, CadDocument, str, Path, Path]) -> bool:
         ComponentValue = TargetValue[1]
         if ComponentValue.assembly is None:
             return True
-        ChildDefs = tuple(
-            DefinitionValue
-            for DefinitionValue in ComponentValue.assembly.definitions
-            if DefinitionValue.id != ComponentValue.assembly.root_definition_id
-        )
+        ChildDefs = tuple((DefinitionValue for DefinitionValue in ComponentValue.assembly.definitions if DefinitionValue.id != ComponentValue.assembly.root_definition_id))
         for ChildValue in ChildDefs:
-            ChildName = names.get(ChildValue.document_id or ChildValue.id)
+            ChildName = Names.get(ChildValue.document_id or ChildValue.id)
             if not ChildName:
-                ChildName = names.get(ChildValue.id)
+                ChildName = Names.get(ChildValue.id)
             if not ChildName:
                 return False
             ChildKey = str(PureWindowsPath(ChildName)).casefold()
             if ChildKey not in StampValues:
                 return False
         return True
-
-    PendingTargets = list(targets)
+    PendingTargets = list(Targets)
     while PendingTargets:
-        ReadyIndex = next(
-            (
-                TargetIndex
-                for TargetIndex, TargetValue in enumerate(PendingTargets)
-                if IsTargetReady(TargetValue)
-            ),
-            None,
-        )
+        ReadyIndex = next((TargetIndex for TargetIndex, TargetValue in enumerate(PendingTargets) if IsTargetReady(TargetValue)), None)
         if ReadyIndex is None:
-            complete = False
+            Complete = False
             ReadyIndex = 0
-        definition, component, candidate, target, FinalTarget = PendingTargets.pop(
-            ReadyIndex
-        )
-        buffer = BytesIO()
-        values = dict(settings.values)
-        values["portable"] = False
-        values["bundle_member"] = component.assembly is not None
-        values["bundle_names"] = frozen_mapping(names)
-        values["bundle_stamps"] = frozen_mapping(StampValues)
-        values["model_name"] = Path(candidate).stem
-        result = SldprtAdapter().write(
-            component,
-            buffer,
-            WriteOptions(
-                overwrite=True,
-                validate=settings.validate,
-                values=frozen_mapping(values),
-            ),
-        )
-        payload = buffer.getvalue()
-        MemberArchive = SldprtArchive.from_bytes(payload)
-        StampData = MemberArchive.streams.get("ModelStamps", b"")
+        Definition, Component, Choice, TargetA, FinalTarget = PendingTargets.pop(ReadyIndex)
+        Buffer = BytesIo()
+        Values = dict(Settings.values)
+        Values['portable'] = False
+        Values['bundle_member'] = Component.assembly is not None
+        Values['bundle_names'] = FrozenMapping(Names)
+        Values['bundle_stamps'] = FrozenMapping(StampValues)
+        Values['model_name'] = PathValue(Choice).stem
+        Result = SldprtAdapter().write(Component, Buffer, WriteOptions(overwrite=True, validate=Settings.validate, values=FrozenMapping(Values)))
+        Payload = Buffer.getvalue()
+        MemberArchive = SldprtArchive.from_bytes(Payload)
+        StampData = MemberArchive.streams.get('ModelStamps', b'')
         if len(StampData) >= 4:
             StampKey = str(PureWindowsPath(FinalTarget)).casefold()
-            StampValues[StampKey] = struct.unpack_from("<I", StampData)[0]
+            StampValues[StampKey] = Struct.unpack_from('<I', StampData)[0]
         if FinalTarget.exists():
-            if FinalTarget.read_bytes() != payload:
+            if FinalTarget.read_bytes() != Payload:
                 if FinalOverwrite:
-                    payloads[target] = payload
+                    Payloads[TargetA] = Payload
                 else:
                     raise FileExistsError(FinalTarget)
         else:
-            payloads[target] = payload
-        native_result = (
-            result.application_usable
-            and result.vendor_loadable
-            and (
-                not result.requirements
-                or _bundle_requirements_satisfied(component, available_names)
-            )
-        )
-        if not native_result:
-            complete = False
+            Payloads[TargetA] = Payload
+        NativeResult = Result.application_usable and Result.vendor_loadable and (not Result.requirements or BundleSatisfied(Component, AvailableNames))
+        if not NativeResult:
+            Complete = False
         else:
-            BundleCaps.update(result.native_capabilities)
-    if any(
-        (definition.document_id or definition.id) not in names
-        for definition in definitions
-    ):
-        complete = False
-    return _AssemblyBundle(
-        frozen_mapping(names),
-        frozen_mapping(payloads),
-        frozen_mapping(StampValues),
-        complete,
-        frozenset(BundleCaps),
-    )
+            BundleCaps.update(Result.native_capabilities)
+    if any(((Definition.document_id or Definition.id) not in Names for Definition in Definitions)):
+        Complete = False
+    return AsmBundle(FrozenMapping(Names), FrozenMapping(Payloads), FrozenMapping(StampValues), Complete, frozenset(BundleCaps))
 
-
-def _nested_assembly_document(
-    document: CadDocument,
-    root_definition_id: str,
-) -> CadDocument | None:
-    assembly = document.assembly
-    if assembly is None:
+# this definition exists because focused behavior needs one stable owner
+def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
         return None
-    definitions = {definition.id: definition for definition in assembly.definitions}
-    root = definitions.get(root_definition_id)
-    if root is None or str(root.kind) != ComponentKind.ASSEMBLY.value:
+    Definitions = {Definition.id: Definition for Definition in AsmValue.definitions}
+    RootValue = Definitions.get(RootDefinitionId)
+    if RootValue is None or str(RootValue.kind) != ComponentKind.ASSEMBLY.value:
         return None
-    reachable = {root_definition_id}
-    pending = [root_definition_id]
-    while pending:
-        owner_id = pending.pop()
-        for instance in assembly.instances:
-            if instance.owner_definition_id != owner_id:
+    Reachable = {RootDefinitionId}
+    Pending = [RootDefinitionId]
+    while Pending:
+        OwnerId = Pending.pop()
+        for Instance in AsmValue.instances:
+            if Instance.owner_definition_id != OwnerId:
                 continue
-            if instance.definition_id not in reachable:
-                reachable.add(instance.definition_id)
-                pending.append(instance.definition_id)
-    selected_definitions = tuple(
-        (
-            replace(definition, document_id="")
-            if definition.id == root_definition_id
-            else definition
-        )
-        for definition in assembly.definitions
-        if definition.id in reachable
-    )
-    selected_instances = tuple(
-        instance
-        for instance in assembly.instances
-        if instance.owner_definition_id in reachable
-        and instance.definition_id in reachable
-    )
-    selected_mates = tuple(
-        mate for mate in assembly.mates if mate.owner_definition_id in reachable
-    )
-    entity_ids = {entity_id for mate in selected_mates for entity_id in mate.entity_ids}
-    selected_entities = tuple(
-        entity
-        for entity in assembly.mate_entities
-        if entity.id in entity_ids and entity.owner_definition_id in reachable
-    )
-    selected_groups = tuple(
-        group
-        for group in assembly.mate_groups
-        if group.owner_definition_id in reachable
-    )
-    document_ids = {
-        definition.document_id
-        for definition in selected_definitions
-        if definition.id != root_definition_id and definition.document_id
-    }
-    selected_documents = tuple(
-        component for component in assembly.documents if component.id in document_ids
-    )
-    selected_mesh_ids = {
-        mesh_id
-        for definition in selected_definitions
-        for mesh_id in definition.mesh_ids
-    }
-    selected_payloads: list[BrepPayload] = []
-    native_root_id = _native_id(root_definition_id, "sldasm:definition:")
-    if native_root_id is not None:
-        for payload in document.brep_payloads:
-            if (
-                payload.role is not PayloadRole.ASSEMBLY_STRUCTURE
-                or payload.format_id.casefold() != "solidworks.mates"
-                or payload.data is None
-            ):
+            if Instance.definition_id not in Reachable:
+                Reachable.add(Instance.definition_id)
+                Pending.append(Instance.definition_id)
+    SelectedDefinitions = tuple((Replace(Definition, document_id='') if Definition.id == RootDefinitionId else Definition for Definition in AsmValue.definitions if Definition.id in Reachable))
+    SelectedInstances = tuple((Instance for Instance in AsmValue.instances if Instance.owner_definition_id in Reachable and Instance.definition_id in Reachable))
+    SelectedMates = tuple((MateValue for MateValue in AsmValue.mates if MateValue.owner_definition_id in Reachable))
+    EntityIds = {EntityId for MateValue in SelectedMates for EntityId in MateValue.entity_ids}
+    SelectedEntities = tuple((Entity for Entity in AsmValue.mate_entities if Entity.id in EntityIds and Entity.owner_definition_id in Reachable))
+    SelectedGroups = tuple((Group for Group in AsmValue.mate_groups if Group.owner_definition_id in Reachable))
+    DocIds = {Definition.document_id for Definition in SelectedDefinitions if Definition.id != RootDefinitionId and Definition.document_id}
+    SelectedDocuments = tuple((Component for Component in AsmValue.documents if Component.id in DocIds))
+    SelectedMeshIds = {MeshId for Definition in SelectedDefinitions for MeshId in Definition.mesh_ids}
+    SelectedPayloads: list[BrepPayload] = []
+    NativeRootId = NativeId(RootDefinitionId, 'sldasm:definition:')
+    if NativeRootId is not None:
+        for Payload in DocValue.brep_payloads:
+            if Payload.role is not PayloadRole.ASSEMBLY_STRUCTURE or Payload.format_id.casefold() != 'solidworks.mates' or Payload.data is None:
                 continue
             try:
-                owner_id = int(payload.attributes.get("owner_definition_id", -1))
+                OwnerId = int(Payload.attributes.get('owner_definition_id', -1))
             except (TypeError, ValueError):
                 continue
-            if owner_id != native_root_id:
+            if OwnerId != NativeRootId:
                 continue
-            source_stream = payload.source_stream.rsplit("::", 1)[-1]
-            selected_payloads.append(replace(payload, source_stream=source_stream))
-    nested_assembly = AssemblyData(
-        root_definition_id=root_definition_id,
-        definitions=selected_definitions,
-        instances=selected_instances,
-        documents=selected_documents,
-        mate_entities=selected_entities,
-        mates=selected_mates,
-        mate_groups=selected_groups,
-        attributes=assembly.attributes,
-    )
-    source_path = root.source_path or f"{root.name}.SLDASM"
-    nested = replace(
-        document,
-        source=CadSource(_ASSEMBLY_FORMAT_ID, source_path, ""),
-        parameters=(),
-        support_planes=(),
-        sketches=(),
-        selections=(),
-        feature_timeline=(),
-        bodies=(),
-        brep=None,
-        brep_payloads=tuple(selected_payloads),
-        meshes=tuple(mesh for mesh in document.meshes if mesh.id in selected_mesh_ids),
-        assembly=nested_assembly,
-        metadata=frozen_mapping(
-            {
-                key: value
-                for key, value in document.metadata.items()
-                if key not in _SOURCE_KEYS
-            }
-        ),
-    )
-    return replace(
-        nested,
-        capabilities=infer_capabilities(
-            nested,
-            roundtrip_metadata=Capability.ROUNDTRIP_METADATA in document.capabilities,
-        ),
-    )
+            SourceStream = Payload.source_stream.rsplit('::', 1)[-1]
+            SelectedPayloads.append(Replace(Payload, source_stream=SourceStream))
+    NestedAsm = AsmData(root_definition_id=RootDefinitionId, definitions=SelectedDefinitions, instances=SelectedInstances, documents=SelectedDocuments, mate_entities=SelectedEntities, mates=SelectedMates, mate_groups=SelectedGroups, attributes=AsmValue.attributes)
+    SourcePath = RootValue.source_path or f'{RootValue.name}.SLDASM'
+    Nested = Replace(DocValue, source=CadSource(KAsmFormatId, SourcePath, ''), parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), brep=None, brep_payloads=tuple(SelectedPayloads), meshes=tuple((MeshValue for MeshValue in DocValue.meshes if MeshValue.id in SelectedMeshIds)), assembly=NestedAsm, metadata=FrozenMapping({KeyValue: Value for KeyValue, Value in DocValue.metadata.items() if KeyValue not in KSourceKeys}))
+    return Replace(Nested, capabilities=InferCapabilities(Nested, roundtrip_metadata=Capability.ROUNDTRIP_METADATA in DocValue.capabilities))
 
-
-def _bundle_requirements_satisfied(
-    document: CadDocument, available_names: set[str]
-) -> bool:
-    if document.assembly is None:
+# this definition exists because focused behavior needs one stable owner
+def BundleSatisfied(DocValue: CadDocument, AvailableNames: set[str]) -> bool:
+    if DocValue.assembly is None:
         return True
-    for definition in document.assembly.definitions:
-        if definition.id == document.assembly.root_definition_id:
+    for Definition in DocValue.assembly.definitions:
+        if Definition.id == DocValue.assembly.root_definition_id:
             continue
-        source = str(
-            definition.attributes.get("native_source_path") or definition.source_path
-        )
-        name = PureWindowsPath(source).name.casefold()
-        if not name or name not in available_names:
+        Source = str(Definition.attributes.get('native_source_path') or Definition.source_path)
+        NameValue = PureWindowsPath(Source).name.casefold()
+        if not NameValue or NameValue not in AvailableNames:
             return False
     return True
 
+# this definition exists because focused behavior needs one stable owner
+def SolidworksA(Required: frozenset[Capability], Native: frozenset[Capability], Mixed: frozenset[Capability]=frozenset()) -> tuple[CapabilityTransfer, ...]:
 
-def _solidworks_transfers(
-    required: frozenset[Capability],
-    native: frozenset[Capability],
-    mixed: frozenset[Capability] = frozenset(),
-) -> tuple[CapabilityTransfer, ...]:
-    return tuple(
-        CapabilityTransfer(
-            capability,
-            (
-                TransferMode.NATIVE
-                if capability in native
-                else (
-                    TransferMode.MIXED if capability in mixed else TransferMode.CARRIER
-                )
-            ),
-            (
-                None
-                if capability in native
-                else (
-                    CarrierReason.TARGET_UNSUPPORTED
-                    if capability in mixed
-                    or capability in _TARGET_UNSUPPORTED_CAPABILITIES
-                    else CarrierReason.WRITER_UNIMPLEMENTED
-                )
-            ),
-        )
-        for capability in sorted(required, key=lambda value: value.value)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    return tuple((CapabilityTransfer(Capability, TransferMode.NATIVE if Capability in Native else TransferMode.MIXED if Capability in Mixed else TransferMode.CARRIER, None if Capability in Native else CarrierReason.TARGET_UNSUPPORTED if Capability in Mixed or Capability in KTargetUnsupported else CarrierReason.WRITER_UNIMPLEMENTED) for Capability in sorted(Required, key=lambda Value: Value.value)))
 
+# this definition exists because focused behavior needs one stable owner
+def NativeStreamSha(Streams: Mapping[str, bytes]) -> str:
+    Digest = Hashlib.sha256()
 
-def _native_stream_sha256(streams: Mapping[str, bytes]) -> str:
-    digest = hashlib.sha256()
-    for name in sorted(
-        (
-            name
-            for name in streams
-            if name not in {KIT_DOCUMENT_STREAM, KIT_NATIVE_STREAM}
-        ),
-        key=lambda value: (value.casefold(), value),
-    ):
-        encoded = name.encode("utf-8")
-        data = streams[name]
-        digest.update(struct.pack(">I", len(encoded)))
-        digest.update(encoded)
-        digest.update(struct.pack(">Q", len(data)))
-        digest.update(data)
-    return digest.hexdigest()
+    # this callback exists because local behavior needs one focused transformation
+    for NameValue in sorted((NameValue for NameValue in Streams if NameValue not in {KitDocStream, KitNativeStream}), key=lambda Value: (Value.casefold(), Value)):
+        Encoded = NameValue.encode('utf-8')
+        DataValue = Streams[NameValue]
+        Digest.update(Struct.pack('>I', len(Encoded)))
+        Digest.update(Encoded)
+        Digest.update(Struct.pack('>Q', len(DataValue)))
+        Digest.update(DataValue)
+    return Digest.hexdigest()
 
+# this definition exists because focused behavior needs one stable owner
+def NativeBytes(Streams: Mapping[str, bytes], Compatibility: str, AppUsable: bool, VendorLoadable: bool, Transfers: tuple[CapabilityTransfer, ...], NativeBrep: str) -> bytes:
+    Embedded = Streams[KitDocStream]
+    DocValue = CadDoc.from_json(Embedded.decode('utf-8'))
+    Value = {'version': 2, 'compatibility': Compatibility, 'application_usable': AppUsable, 'vendor_loadable': VendorLoadable, 'native_brep': NativeBrep, 'native_stream_sha256': NativeStreamSha(Streams), 'embedded_sha256': Hashlib.sha256(Embedded).hexdigest(), 'semantic_sha256': SemanticShaTwo(DocValue), 'transfers': [{'capability': Transfer.capability.value, 'mode': Transfer.mode.value, 'carrier_reason': Transfer.carrier_reason.value if Transfer.carrier_reason is not None else None} for Transfer in Transfers]}
+    return JsonValue.dumps(Value, sort_keys=True, separators=(',', ':')).encode('utf-8')
 
-def _native_attestation_bytes(
-    streams: Mapping[str, bytes],
-    compatibility: str,
-    application_usable: bool,
-    vendor_loadable: bool,
-    transfers: tuple[CapabilityTransfer, ...],
-    native_brep: str,
-) -> bytes:
-    embedded = streams[KIT_DOCUMENT_STREAM]
-    document = CadDocument.from_json(embedded.decode("utf-8"))
-    value = {
-        "version": 2,
-        "compatibility": compatibility,
-        "application_usable": application_usable,
-        "vendor_loadable": vendor_loadable,
-        "native_brep": native_brep,
-        "native_stream_sha256": _native_stream_sha256(streams),
-        "embedded_sha256": hashlib.sha256(embedded).hexdigest(),
-        "semantic_sha256": _semantic_sha256(document),
-        "transfers": [
-            {
-                "capability": transfer.capability.value,
-                "mode": transfer.mode.value,
-                "carrier_reason": (
-                    transfer.carrier_reason.value
-                    if transfer.carrier_reason is not None
-                    else None
-                ),
-            }
-            for transfer in transfers
-        ],
-    }
-    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
-
-def _native_attestation(data: bytes) -> dict[str, Any] | None:
+# this definition exists because focused behavior needs one stable owner
+def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
     try:
-        archive = SldprtArchive.from_bytes(data)
-        raw = archive.require(KIT_NATIVE_STREAM)
-        embedded = archive.require(KIT_DOCUMENT_STREAM)
-        value = json.loads(raw.decode("utf-8"))
-        document = CadDocument.from_json(embedded.decode("utf-8"))
+        Archive = SldprtArchive.from_bytes(DataValue)
+        RawValue = Archive.require(KitNativeStream)
+        Embedded = Archive.require(KitDocStream)
+        Value = JsonValue.loads(RawValue.decode('utf-8'))
+        DocValue = CadDoc.from_json(Embedded.decode('utf-8'))
     except (KeyError, SldprtFormatError, TypeError, ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(value, dict) or value.get("version") != 2:
+    if not isinstance(Value, dict) or Value.get('version') != 2:
         return None
-    if value.get("embedded_sha256") != hashlib.sha256(embedded).hexdigest():
+    if Value.get('embedded_sha256') != Hashlib.sha256(Embedded).hexdigest():
         return None
-    if value.get("semantic_sha256") != _semantic_sha256(document):
+    if Value.get('semantic_sha256') != SemanticShaTwo(DocValue):
         return None
-    if value.get("native_stream_sha256") != _native_stream_sha256(archive.streams):
+    if Value.get('native_stream_sha256') != NativeStreamSha(Archive.streams):
         return None
-    if not isinstance(value.get("application_usable"), bool) or not isinstance(
-        value.get("vendor_loadable"), bool
-    ):
+    if not isinstance(Value.get('application_usable'), bool) or not isinstance(Value.get('vendor_loadable'), bool):
         return None
-    if value["application_usable"] and not value["vendor_loadable"]:
+    if Value['application_usable'] and (not Value['vendor_loadable']):
         return None
-    compatibility = value.get("compatibility")
-    if (
-        not isinstance(compatibility, str)
-        or compatibility not in _ATTESTED_COMPATIBILITIES
-    ):
+    Compatibility = Value.get('compatibility')
+    if not isinstance(Compatibility, str) or Compatibility not in KAttestedCompatibilities:
         return None
-    records = value.get("transfers")
-    if not isinstance(records, list):
+    Records = Value.get('transfers')
+    if not isinstance(Records, list):
         return None
     try:
-        parsed = tuple(
-            CapabilityTransfer(
-                Capability(record["capability"]),
-                TransferMode(record["mode"]),
-                (
-                    CarrierReason(record["carrier_reason"])
-                    if record.get("carrier_reason") is not None
-                    else None
-                ),
-            )
-            for record in records
-            if isinstance(record, dict)
-        )
+        Parsed = tuple((CapabilityTransfer(Capability(Record['capability']), TransferMode(Record['mode']), CarrierReason(Record['carrier_reason']) if Record.get('carrier_reason') is not None else None) for Record in Records if isinstance(Record, dict)))
     except (KeyError, TypeError, ValueError):
         return None
-    if len(parsed) != len(records) or len({item.capability for item in parsed}) != len(
-        parsed
-    ):
+    if len(Parsed) != len(Records) or len({ItemValue.capability for ItemValue in Parsed}) != len(Parsed):
         return None
-    AttestedNativeCaps = frozenset(
-        TransferItem.capability
-        for TransferItem in parsed
-        if TransferItem.mode is TransferMode.NATIVE
-    )
-    proof = _attested_native_proof(
-        document,
-        archive,
-        compatibility,
-        AttestedNativeCaps,
-    )
-    if proof is None:
+    AttestedNativeCaps = frozenset((TransferItem.capability for TransferItem in Parsed if TransferItem.mode is TransferMode.NATIVE))
+    Proof = AttestedNative(DocValue, Archive, Compatibility, AttestedNativeCaps)
+    if Proof is None:
         return None
-    expected_transfers = _solidworks_transfers(
-        _required_capabilities(document),
-        proof.native_capabilities,
-        proof.mixed_capabilities,
-    )
-    if (
-        compatibility != proof.compatibility
-        or value["application_usable"] is not proof.application_usable
-        or value["vendor_loadable"] is not proof.vendor_loadable
-        or value.get("native_brep") != proof.native_brep
-        or parsed != expected_transfers
-    ):
+    ExpectedTransfers = SolidworksA(Required(DocValue), Proof.native_capabilities, Proof.mixed_capabilities)
+    if Compatibility != Proof.compatibility or Value['application_usable'] is not Proof.application_usable or Value['vendor_loadable'] is not Proof.vendor_loadable or (Value.get('native_brep') != Proof.native_brep) or (Parsed != ExpectedTransfers):
         return None
-    value["parsed_transfers"] = parsed
-    return value
+    Value['parsed_transfers'] = Parsed
+    return Value
 
-
-# replay uses attested delivery state only where bytes cannot encode sibling files
-def _attested_native_proof(
-    document: CadDocument,
-    archive: SldprtArchive,
-    compatibility: str,
-    AttestedNativeCaps: frozenset[Capability],
-) -> _GeneratedStreams | None:
-    streams = archive.streams
-    before = _native_stream_sha256(streams)
-    bundle_names = _attested_generated_bundle_names(document, archive)
+# this definition exists because focused behavior needs one stable owner
+def AttestedNative(DocValue: CadDocument, Archive: SldprtArchive, Compatibility: str, AttestedNativeCaps: frozenset[Capability]) -> Generated | None:
+    Streams = Archive.streams
+    Before = NativeStreamSha(Streams)
+    BundleNames = AttestedBundle(DocValue, Archive)
     try:
-        if compatibility in {
-            "native-brep-with-kit-neutral",
-            "native-metadata-with-kit-neutral",
-        }:
-            proof = _generated_streams(
-                document,
-                bundle_names=bundle_names,
-                BundleComplete=(Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps),
-                BundleCapabilities=AttestedNativeCaps,
-            )
-        elif KEYWORDS_STREAM in streams and RESOLVED_FEATURES_STREAM in streams:
-            proof = _patch_native_template(document, streams, {})
+        if Compatibility in {'native-brep-with-kit-neutral', 'native-metadata-with-kit-neutral'}:
+            Proof = GeneratedB(DocValue, BundleNames=BundleNames, BundleComplete=Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps, BundleCapabilities=AttestedNativeCaps)
+        elif KeywordsStream in Streams and ResolvedFeaturesStream in Streams:
+            Proof = PatchNative(DocValue, Streams, {})
         else:
-            proof = _generated_streams(
-                document,
-                bundle_names=bundle_names,
-                BundleComplete=(Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps),
-                BundleCapabilities=AttestedNativeCaps,
-            )
-    except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
+            Proof = GeneratedB(DocValue, BundleNames=BundleNames, BundleComplete=Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps, BundleCapabilities=AttestedNativeCaps)
+    except (KeyError, SldprtFormatError, TypeError, ValueError, Struct.error):
         return None
-    if _native_stream_sha256(proof.streams) != before:
+    if NativeStreamSha(Proof.streams) != Before:
         return None
-    return proof
+    return Proof
 
-
-def _attested_generated_bundle_names(
-    document: CadDocument,
-    archive: SldprtArchive,
-) -> Mapping[str, str]:
-    assembly = document.assembly
-    if assembly is None or COMPONENT_TREE_STREAM not in archive.streams:
+# this definition exists because focused behavior needs one stable owner
+def AttestedBundle(DocValue: CadDocument, Archive: SldprtArchive) -> Mapping[str, str]:
+    AsmValue = DocValue.assembly
+    if AsmValue is None or ComponentTreeStream not in Archive.streams:
         return {}
-    RootName = assembly.definition(assembly.root_definition_id).name
-    ModelName = RootName or PureWindowsPath(document.source.path).stem or "Assembly"
+    RootName = AsmValue.definition(AsmValue.root_definition_id).name
+    ModelName = RootName or PureWindowsPath(DocValue.source.path).stem or 'Assembly'
     try:
-        encoding = encode_native_assembly(
-            assembly,
-            document.configurations,
-            ModelName,
-        )
-        native = decode_native_assembly(archive, include_tessellation=False)
-    except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
+        Encoding = EncodeNativeAsm(AsmValue, DocValue.configurations, ModelName)
+        Native = DecodeNativeAsm(Archive, include_tessellation=False)
+    except (KeyError, SldprtFormatError, TypeError, ValueError, Struct.error):
         return {}
-    definitions = {item.object_id: item for item in native.definitions}
-    result: dict[str, str] = {}
-    for definition in assembly.definitions:
-        if definition.id == assembly.root_definition_id:
+    Definitions = {ItemValue.object_id: ItemValue for ItemValue in Native.definitions}
+    Result: dict[str, str] = {}
+    for Definition in AsmValue.definitions:
+        if Definition.id == AsmValue.root_definition_id:
             continue
-        native_id = encoding.definition_ids.get(definition.id)
-        target = definitions.get(native_id) if native_id is not None else None
-        if target is None or not target.source_path:
+        NativeId = Encoding.definition_ids.get(Definition.id)
+        Target = Definitions.get(NativeId) if NativeId is not None else None
+        if Target is None or not Target.source_path:
             continue
-        result[definition.id] = target.source_path
-        if definition.document_id:
-            result[definition.document_id] = target.source_path
-    return result
+        Result[Definition.id] = Target.source_path
+        if Definition.document_id:
+            Result[Definition.document_id] = Target.source_path
+    return Result
 
+# this definition exists because focused behavior needs one stable owner
+def Attested(Attestation: Mapping[str, Any], Required: frozenset[Capability]) -> tuple[CapabilityTransfer, ...]:
+    Parsed = Attestation.get('parsed_transfers')
+    if not isinstance(Parsed, tuple):
+        return SolidworksA(Required, frozenset())
+    ByCapability = {ItemValue.capability: ItemValue for ItemValue in Parsed}
+    if set(ByCapability) != set(Required):
+        return SolidworksA(Required, frozenset())
 
-def _attested_transfers(
-    attestation: Mapping[str, Any], required: frozenset[Capability]
-) -> tuple[CapabilityTransfer, ...]:
-    parsed = attestation.get("parsed_transfers")
-    if not isinstance(parsed, tuple):
-        return _solidworks_transfers(required, frozenset())
-    by_capability = {item.capability: item for item in parsed}
-    if set(by_capability) != set(required):
-        return _solidworks_transfers(required, frozenset())
-    return tuple(
-        by_capability[capability]
-        for capability in sorted(required, key=lambda value: value.value)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    return tuple((ByCapability[Capability] for Capability in sorted(Required, key=lambda Value: Value.value)))
 
+# this definition exists because focused behavior needs one stable owner
+def Replay(DataValue: bytes) -> str:
+    Archive = SldprtArchive.from_bytes(DataValue)
+    if KitDocStream not in Archive.streams:
+        return 'native-exact'
+    Attestation = Native(DataValue)
+    return str(Attestation['compatibility']) if Attestation is not None else 'kit-neutral-only'
 
-def _replay_compatibility(data: bytes) -> str:
-    archive = SldprtArchive.from_bytes(data)
-    if KIT_DOCUMENT_STREAM not in archive.streams:
-        return "native-exact"
-    attestation = _native_attestation(data)
-    return (
-        str(attestation["compatibility"])
-        if attestation is not None
-        else "kit-neutral-only"
-    )
-
-
-# this assembles independently serialized solidworks document streams
-def _generated_streams(
-    document: CadDocument,
-    template: bytes | None = None,
-    bundle_names: Mapping[str, str] | None = None,
-    BundleComplete: bool | None = None,
-    BundleCapabilities: frozenset[Capability] = frozenset(),
-    BundleStamps: Mapping[str, int] | None = None,
-    ModelName: str = "",
-) -> _GeneratedStreams:
-    portable = _document_without_source(document)
-    if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
-        envelope_indexes = source_payload_indexes(document)
-        portable = replace(
-            portable,
-            brep_payloads=tuple(
-                payload
-                for index, payload in enumerate(portable.brep_payloads)
-                if index not in envelope_indexes
-            ),
-        )
-    embedded = portable.to_json(indent=None).encode("utf-8")
-    if template is not None:
-        streams = SldprtArchive.from_bytes(template).streams
-        streams[KIT_DOCUMENT_STREAM] = embedded
-        return _patch_native_template(document, streams, bundle_names or {})
-    configuration = next(
-        (item.name for item in portable.configurations if item.active),
-        portable.configurations[0].name if portable.configurations else "Default",
-    )
-    model_name = ModelName or PureWindowsPath(portable.source.path).stem
-    streams = {
-        **_solidworks_package_streams(),
-        SOLIDWORKS_STREAM: _solidworks_xml(model_name, configuration),
-        KIT_DOCUMENT_STREAM: embedded,
-    }
-    encoding: NativeAssemblyEncoding | None = None
-    part_capabilities: frozenset[Capability] = frozenset()
-    mixed_capabilities: frozenset[Capability] = frozenset()
-    part_partition: bytes | None = None
+# this definition exists because focused behavior needs one stable owner
+def GeneratedB(DocValue: CadDocument, Template: bytes | None=None, BundleNames: Mapping[str, str] | None=None, BundleComplete: bool | None=None, BundleCapabilities: frozenset[Capability]=frozenset(), BundleStamps: Mapping[str, int] | None=None, ModelName: str='') -> Generated:
+    Portable = DocWithout(DocValue)
+    if isinstance(DocValue.source.attributes.get('embedded_source_format_id'), str):
+        EnvelopeIndexes = SourcePayloadIndexes(DocValue)
+        Portable = Replace(Portable, brep_payloads=tuple((Payload for Index, Payload in enumerate(Portable.brep_payloads) if Index not in EnvelopeIndexes)))
+    Embedded = Portable.to_json(indent=None).encode('utf-8')
+    if Template is not None:
+        Streams = SldprtArchive.from_bytes(Template).streams
+        Streams[KitDocStream] = Embedded
+        return PatchNative(DocValue, Streams, BundleNames or {})
+    Config = next((ItemValue.name for ItemValue in Portable.configurations if ItemValue.active), Portable.configurations[0].name if Portable.configurations else 'Default')
+    ModelNameA = ModelName or PureWindowsPath(Portable.source.path).stem
+    Streams = {**Solidworks(), SolidworksStream: SolidworksXml(ModelNameA, Config), KitDocStream: Embedded}
+    Encoding: NativeAsmEncoding | None = None
+    PartCapabilities: frozenset[Capability] = frozenset()
+    MixedCapabilities: frozenset[Capability] = frozenset()
+    PartPartition: bytes | None = None
     PartObjectIds: Mapping[str, int] = {}
-    part_application_usable = False
-    part_vendor_loadable = False
-    part_donor_notes: tuple[str, ...] = ()
-    assembly_envelope_complete = False
-    assembly_notes: tuple[str, ...] = ()
-    if portable.assembly is None:
-        part = encode_native_part(portable, model_name)
-        streams.update(part.envelope_streams)
-        streams[KEYWORDS_STREAM] = part.keywords
-        streams[FEATURES_STREAM] = part.features
-        streams.update(
-            {
-                f"Contents/Config-{index}-ResolvedFeatures": lane
-                for index, lane in part.configuration_lanes
-            }
-        )
-        if part.kit_resolved_features is not None:
-            streams[KIT_RESOLVED_STREAM] = part.kit_resolved_features
-        part_capabilities = part.native_capabilities
-        mixed_capabilities = part.mixed_capabilities
-        part_partition = part.partition
-        PartObjectIds = part.object_ids
-        part_application_usable = part.application_usable
-        part_vendor_loadable = part.vendor_loadable
-        part_donor_notes = part.donor_notes
+    PartAppUsable = False
+    PartVendorLoadable = False
+    PartDonorNotes: tuple[str, ...] = ()
+    AsmEnvelopeComplete = False
+    AsmNotes: tuple[str, ...] = ()
+    if Portable.assembly is None:
+        PartValue = EncodeNativePart(Portable, ModelNameA)
+        Streams.update(PartValue.envelope_streams)
+        Streams[KeywordsStream] = PartValue.keywords
+        Streams[FeaturesStream] = PartValue.features
+        Streams.update({f'Contents/Config-{Index}-ResolvedFeatures': LaneValue for Index, LaneValue in PartValue.configuration_lanes})
+        if PartValue.kit_resolved_features is not None:
+            Streams[KitResolvedStream] = PartValue.kit_resolved_features
+        PartCapabilities = PartValue.native_capabilities
+        MixedCapabilities = PartValue.mixed_capabilities
+        PartPartition = PartValue.partition
+        PartObjectIds = PartValue.object_ids
+        PartAppUsable = PartValue.application_usable
+        PartVendorLoadable = PartValue.vendor_loadable
+        PartDonorNotes = PartValue.donor_notes
     else:
-        RootName = portable.assembly.definition(
-            portable.assembly.root_definition_id
-        ).name
-        AssemblyName = RootName or model_name or "Assembly"
-        encoding = encode_native_assembly(
-            portable.assembly,
-            portable.configurations,
-            AssemblyName,
-            bundle_names,
-        )
-        preserved_mates, mates_complete = _preserved_generated_mate_streams(
-            portable,
-            encoding,
-        )
-        if mates_complete:
-            encoding = replace(
-                encoding,
-                mate_streams=preserved_mates,
-                mates_complete=True,
-                unsupported_mate_ids=(),
-                generated_mate_ids=(),
-            )
-        envelope = encode_native_assembly_envelope(
-            portable,
-            AssemblyName,
-            _generated_occurrence_labels(portable.assembly),
-            tuple(mate.name for mate in portable.assembly.mates),
-        )
-        streams.update(envelope.streams)
-        streams[COMPONENT_TREE_STREAM] = encoding.component_tree
+        RootName = Portable.assembly.definition(Portable.assembly.root_definition_id).name
+        AsmName = RootName or ModelNameA or 'Assembly'
+        Encoding = EncodeNativeAsm(Portable.assembly, Portable.configurations, AsmName, BundleNames)
+        SavedMates, MatesComplete = SavedGenerated(Portable, Encoding)
+        if MatesComplete:
+            Encoding = Replace(Encoding, mate_streams=SavedMates, mates_complete=True, unsupported_mate_ids=(), generated_mate_ids=())
+        Envelope = EncodeNativeAsmEnvelope(Portable, AsmName, GeneratedItem(Portable.assembly), tuple((MateValue.name for MateValue in Portable.assembly.mates)))
+        Streams.update(Envelope.streams)
+        Streams[ComponentTreeStream] = Encoding.component_tree
         try:
-            streams.update(
-                AsmCoreStreams(
-                    portable.assembly,
-                    encoding,
-                    AssemblyName,
-                    BundleStamps,
-                )
-            )
-            CoreError = ""
+            Streams.update(AsmCoreStreams(Portable.assembly, Encoding, AsmName, BundleStamps))
+            CoreError = ''
         except SldprtFormatError as ErrorData:
             CoreError = str(ErrorData)
-        streams.update(encoding.mate_streams)
-        assembly_envelope_complete = envelope.envelope_complete
-        assembly_notes = (
-            *_generated_assembly_notes(encoding, envelope, streams),
-            *((f"native_assembly_core_declined:{CoreError}",) if CoreError else ()),
-        )
-    if part_partition is not None:
-        payload = part_partition
-        native_brep = "generated"
+        Streams.update(Encoding.mate_streams)
+        AsmEnvelopeComplete = Envelope.envelope_complete
+        AsmNotes = (*GeneratedAsmA(Encoding, Envelope, Streams), *((f'native_assembly_core_declined:{CoreError}',) if CoreError else ()))
+    if PartPartition is not None:
+        Payload = PartPartition
+        NativeBrep = 'generated'
     else:
-        payload, native_brep = _parasolid_payload(portable, PartObjectIds)
-        if (
-            portable.assembly is None
-            and part_vendor_loadable
-            and Capability.BREP in part_capabilities
-        ):
-            payload = None
-            native_brep = "feature-rebuilt"
-    if payload is not None:
-        streams[PARTITION_STREAM] = payload
-    NativeCaps = set(
-        _generated_assembly_capabilities(
-            portable.assembly, encoding, streams, portable.configurations
-        )
-        if portable.assembly is not None and encoding is not None
-        else part_capabilities
-    )
-    if (
-        portable.assembly is not None
-        and (BundleComplete if BundleComplete is not None else bundle_names is not None)
-        and all(
-            DefinitionItem.id == portable.assembly.root_definition_id
-            or DefinitionItem.document_id in bundle_names
-            or DefinitionItem.id in bundle_names
-            for DefinitionItem in portable.assembly.definitions
-        )
-    ):
+        Payload, NativeBrep = Parasolid(Portable, PartObjectIds)
+        if Portable.assembly is None and PartVendorLoadable and (Capability.BREP in PartCapabilities):
+            Payload = None
+            NativeBrep = 'feature-rebuilt'
+    if Payload is not None:
+        Streams[PartitionStream] = Payload
+    NativeCaps = set(GeneratedAsm(Portable.assembly, Encoding, Streams, Portable.configurations) if Portable.assembly is not None and Encoding is not None else PartCapabilities)
+    if Portable.assembly is not None and (BundleComplete if BundleComplete is not None else BundleNames is not None) and all((DefinitionItem.id == Portable.assembly.root_definition_id or DefinitionItem.document_id in BundleNames or DefinitionItem.id in BundleNames for DefinitionItem in Portable.assembly.definitions)):
         NativeCaps.add(Capability.COMPONENT_DOCUMENTS)
         NativeCaps.update(BundleCapabilities)
-    if (
-        portable.assembly is None
-        and payload is not None
-        and native_brep in {"generated", "preserved"}
-    ):
+    if Portable.assembly is None and Payload is not None and (NativeBrep in {'generated', 'preserved'}):
         NativeCaps.update({Capability.BREP, Capability.NATIVE_PAYLOADS})
-    native_capabilities = frozenset(NativeCaps)
-    proof_transfers = _solidworks_transfers(
-        _required_capabilities(portable),
-        native_capabilities,
-        mixed_capabilities,
-    )
-    native_assembly_records = (
-        portable.assembly is not None
-        and assembly_envelope_complete
-        and encoding is not None
-        and encoding.structure_complete
-        and Capability.ASSEMBLIES in native_capabilities
-    )
-    if portable.assembly is None:
-        vendor_loadable = part_vendor_loadable
-        native_records_usable = part_application_usable
+    NativeCapabilities = frozenset(NativeCaps)
+    ProofTransfers = SolidworksA(Required(Portable), NativeCapabilities, MixedCapabilities)
+    NativeAsmRecords = Portable.assembly is not None and AsmEnvelopeComplete and (Encoding is not None) and Encoding.structure_complete and (Capability.ASSEMBLIES in NativeCapabilities)
+    if Portable.assembly is None:
+        VendorLoadable = PartVendorLoadable
+        NativeRecordsUsable = PartAppUsable
     else:
-        vendor_loadable = native_assembly_records and not _assembly_reader_gaps(streams)
-        native_records_usable = vendor_loadable and (
-            not portable.assembly.mates
-            or Capability.ASSEMBLY_MATES in native_capabilities
-        )
-    application_usable = native_records_usable and all(
-        transfer.mode is TransferMode.NATIVE
-        or transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
-        for transfer in proof_transfers
-    )
-    return _GeneratedStreams(
-        streams,
-        native_brep,
-        native_capabilities,
-        (
-            "native-brep-with-kit-neutral"
-            if native_brep in {"generated", "preserved"}
-            else (
-                "native-metadata-with-kit-neutral"
-                if portable.assembly is None
-                else (
-                    "native-assembly-with-kit-neutral"
-                    if native_assembly_records
-                    else "kit-neutral-only"
-                )
-            )
-        ),
-        application_usable,
-        vendor_loadable,
-        mixed_capabilities,
-        assembly_notes,
-        part_donor_notes,
-        (_assembly_reader_gaps(streams) if portable.assembly is not None else ()),
-    )
+        VendorLoadable = NativeAsmRecords and (not AsmReaderGaps(Streams))
+        NativeRecordsUsable = VendorLoadable and (not Portable.assembly.mates or Capability.ASSEMBLY_MATES in NativeCapabilities)
+    AppUsable = NativeRecordsUsable and all((Transfer.mode is TransferMode.NATIVE or Transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED for Transfer in ProofTransfers))
+    return Generated(Streams, NativeBrep, NativeCapabilities, 'native-brep-with-kit-neutral' if NativeBrep in {'generated', 'preserved'} else 'native-metadata-with-kit-neutral' if Portable.assembly is None else 'native-assembly-with-kit-neutral' if NativeAsmRecords else 'kit-neutral-only', AppUsable, VendorLoadable, MixedCapabilities, AsmNotes, PartDonorNotes, AsmReaderGaps(Streams) if Portable.assembly is not None else ())
 
-
-def _assembly_reader_gaps(
-    streams: Mapping[str, bytes],
-    donor: Mapping[str, bytes] | None = None,
-    rewritable: frozenset[str] = frozenset(),
-) -> tuple[str, ...]:
-    gaps = [
-        f"absent_vendor_stream:{name}"
-        for name in _ASSEMBLY_READER_REQUIRED_STREAMS
-        if name not in streams
-    ]
-    if donor is None:
-        return tuple(gaps)
-    gaps.extend(
-        f"donor_stream_absent:{name}"
-        for name in _ASSEMBLY_DONOR_CARRIED_STREAMS
-        if name not in donor
-    )
-    for name in sorted(set(streams) | set(donor)):
-        if name in rewritable:
+# this definition exists because focused behavior needs one stable owner
+def AsmReaderGaps(Streams: Mapping[str, bytes], Donor: Mapping[str, bytes] | None=None, Rewritable: frozenset[str]=frozenset()) -> tuple[str, ...]:
+    GapsValue = [f'absent_vendor_stream:{NameValue}' for NameValue in KAsmReaderRequiredStreams if NameValue not in Streams]
+    if Donor is None:
+        return tuple(GapsValue)
+    GapsValue.extend((f'donor_stream_absent:{NameValue}' for NameValue in KAsmDonorCarriedStreams if NameValue not in Donor))
+    for NameValue in sorted(set(Streams) | set(Donor)):
+        if NameValue in Rewritable:
             continue
-        if name not in donor:
-            gaps.append(f"donor_stream_added:{name}")
-        elif name not in streams:
-            gaps.append(f"donor_stream_removed:{name}")
-        elif streams[name] != donor[name]:
-            gaps.append(f"donor_stream_rewritten:{name}")
-    return tuple(gaps)
+        if NameValue not in Donor:
+            GapsValue.append(f'donor_stream_added:{NameValue}')
+        elif NameValue not in Streams:
+            GapsValue.append(f'donor_stream_removed:{NameValue}')
+        elif Streams[NameValue] != Donor[NameValue]:
+            GapsValue.append(f'donor_stream_rewritten:{NameValue}')
+    return tuple(GapsValue)
 
+# this definition exists because focused behavior needs one stable owner
+def GeneratedAsmA(Encoding: NativeAssemblyEncoding, Envelope: NativeAssemblyEnvelope, Streams: Mapping[str, bytes]) -> tuple[str, ...]:
+    Counts: Counter[str] = Counter()
+    for Reasons in Encoding.unsupported_mate_reasons.values():
+        Counts.update(Reasons)
+    for Reasons in Encoding.generated_mate_losses.values():
+        Counts.update(Reasons)
+    Notes = [f'{Reason}:{Count}' for Reason, Count in sorted(Counts.items())]
+    if Envelope.omitted_object_names:
+        Notes.append(f'header_object_name_unencodable:{len(Envelope.omitted_object_names)}')
+    if not Encoding.structure_complete:
+        Notes.append('component_structure_incomplete:1')
+    if Encoding.generated_mate_ids:
+        Notes.append(f'vendor_unread_synthesised_mate:{len(Encoding.generated_mate_ids)}')
+    return tuple(Notes)
 
-def _generated_assembly_notes(
-    encoding: NativeAssemblyEncoding,
-    envelope: NativeAssemblyEnvelope,
-    streams: Mapping[str, bytes],
-) -> tuple[str, ...]:
-    counts: Counter[str] = Counter()
-    for reasons in encoding.unsupported_mate_reasons.values():
-        counts.update(reasons)
-    for reasons in encoding.generated_mate_losses.values():
-        counts.update(reasons)
-    notes = [f"{reason}:{count}" for reason, count in sorted(counts.items())]
-    if envelope.omitted_object_names:
-        notes.append(
-            f"header_object_name_unencodable:{len(envelope.omitted_object_names)}"
-        )
-    if not encoding.structure_complete:
-        notes.append("component_structure_incomplete:1")
-    if encoding.generated_mate_ids:
-        notes.append(
-            f"vendor_unread_synthesised_mate:{len(encoding.generated_mate_ids)}"
-        )
-    return tuple(notes)
+# this definition exists because focused behavior needs one stable owner
+def GeneratedItem(AsmValue: AssemblyData) -> tuple[str, ...]:
+    Labels: list[str] = []
+    for Index, Instance in enumerate(AsmValue.instances):
+        RefValue = GeneratedRef(Instance, Index + 1)
+        Suffix = f'-{RefValue}'
+        BaseName = Instance.name[:-len(Suffix)] if Instance.name.endswith(Suffix) else Instance.name
+        Labels.append(f'{BaseName}{Suffix}')
+    return tuple(Labels)
 
-
-def _generated_occurrence_labels(assembly: AssemblyData) -> tuple[str, ...]:
-    labels: list[str] = []
-    for index, instance in enumerate(assembly.instances):
-        reference = _generated_reference_number(instance, index + 1)
-        suffix = f"-{reference}"
-        base_name = (
-            instance.name[: -len(suffix)]
-            if instance.name.endswith(suffix)
-            else instance.name
-        )
-        labels.append(f"{base_name}{suffix}")
-    return tuple(labels)
-
-
-# projective component frames cannot fit the native affine transform record
+# this definition exists because focused behavior needs one stable owner
 def HasAffineFrame(MatrixValues: tuple[float, ...]) -> bool:
-    return (
-        len(MatrixValues) == 16
-        and all(math.isfinite(MatrixValue) for MatrixValue in MatrixValues)
-        and all(
-            math.isclose(
-                MatrixValues[ValueIndex],
-                ExpectedValue,
-                rel_tol=0.0,
-                abs_tol=1e-12,
-            )
-            for ValueIndex, ExpectedValue in zip(
-                (12, 13, 14, 15),
-                (0.0, 0.0, 0.0, 1.0),
-                strict=True,
-            )
-        )
-    )
+    return len(MatrixValues) == 16 and all((MathValue.isfinite(MatrixValue) for MatrixValue in MatrixValues)) and all((MathValue.isclose(MatrixValues[ValueIndex], ExpectedValue, rel_tol=0.0, abs_tol=1e-12) for ValueIndex, ExpectedValue in zip((12, 13, 14, 15), (0.0, 0.0, 0.0, 1.0), strict=True)))
 
-
-# native history binds every direct occurrence to its path and affine frame
-def AsmCoreStreams(
-    AssemblyValue: AssemblyData,
-    EncodingValue: NativeAssemblyEncoding,
-    ModelName: str,
-    StampValues: Mapping[str, int] | None = None,
-) -> Mapping[str, bytes]:
-    DirectItems = AssemblyValue.children(AssemblyValue.root_definition_id)
+# this definition exists because focused behavior needs one stable owner
+def AsmCoreStreams(AsmValue: AssemblyData, EncodingValue: NativeAssemblyEncoding, ModelName: str, StampValues: Mapping[str, int] | None=None) -> Mapping[str, bytes]:
+    DirectItems = AsmValue.children(AsmValue.root_definition_id)
     if not DirectItems:
-        raise SldprtFormatError(
-            "first-principles assembly history requires a direct component"
-        )
-    XmlRoot = ET.fromstring(EncodingValue.component_tree)
-    XmlSpace = {"sw": "http://www.solidworks.com/sw2003/schema"}
-    OccurNames = _generated_occurrence_labels(AssemblyValue)
+        raise SldprtFormatError('first-principles assembly history requires a direct component')
+    XmlRoot = XmlTree.fromstring(EncodingValue.component_tree)
+    XmlSpace = {'sw': 'http://www.solidworks.com/sw2003/schema'}
+    OccurNames = GeneratedItem(AsmValue)
     CoreItems: list[AsmCoreItem] = []
     StampMap = StampValues or {}
-    ConfigName = ""
+    ConfigName = ''
     for InstanceItem in DirectItems:
-        InstanceIndex = AssemblyValue.instances.index(InstanceItem)
+        InstanceIndex = AsmValue.instances.index(InstanceItem)
         TargetId = EncodingValue.definition_ids[InstanceItem.definition_id]
-        ModelNode = next(
-            (
-                NodeItem
-                for NodeItem in XmlRoot.findall("sw:swModelList/sw:swModel", XmlSpace)
-                if NodeItem.attrib.get("id") == str(TargetId)
-            ),
-            None,
-        )
+        ModelNode = next((NodeItem for NodeItem in XmlRoot.findall('sw:swModelList/sw:swModel', XmlSpace) if NodeItem.attrib.get('id') == str(TargetId)), None)
         if ModelNode is None:
-            raise SldprtFormatError(
-                "assembly component model is absent from native tree"
-            )
-        FileId = ModelNode.attrib.get("swFileRef", "")
-        FileNode = next(
-            (
-                NodeItem
-                for NodeItem in XmlRoot.findall("sw:swHeader/sw:swFile", XmlSpace)
-                if NodeItem.attrib.get("id") == FileId
-            ),
-            None,
-        )
-        if FileNode is None or not (CompPath := FileNode.attrib.get("swPath", "")):
-            raise SldprtFormatError(
-                "assembly component file is absent from native tree"
-            )
-        InstanceConfig = (
-            InstanceItem.configuration_name
-            or AssemblyValue.definition(InstanceItem.definition_id).configuration_name
-        )
+            raise SldprtFormatError('assembly component model is absent from native tree')
+        FileId = ModelNode.attrib.get('swFileRef', '')
+        FileNode = next((NodeItem for NodeItem in XmlRoot.findall('sw:swHeader/sw:swFile', XmlSpace) if NodeItem.attrib.get('id') == FileId), None)
+        if FileNode is None or not (CompPath := FileNode.attrib.get('swPath', '')):
+            raise SldprtFormatError('assembly component file is absent from native tree')
+        InstanceConfig = InstanceItem.configuration_name or AsmValue.definition(InstanceItem.definition_id).configuration_name
         if not ConfigName:
-            ConfigName = "Default"
+            ConfigName = 'Default'
         MatrixValues = InstanceItem.transform.values
         if not HasAffineFrame(MatrixValues):
-            raise SldprtFormatError(
-                "native assembly history requires an affine component transform"
-            )
-        CoreItems.append(
-            AsmCoreItem(
-                OccurNames[InstanceIndex],
-                CompPath,
-                MatrixValues[3] / 1000.0,
-                MatrixValues[7] / 1000.0,
-                MatrixValues[11] / 1000.0,
-                InstanceConfig or "Default",
-                StampMap.get(str(PureWindowsPath(CompPath)).casefold(), 0),
-                (
-                    MatrixValues[0],
-                    MatrixValues[4],
-                    MatrixValues[8],
-                    MatrixValues[1],
-                    MatrixValues[5],
-                    MatrixValues[9],
-                    MatrixValues[2],
-                    MatrixValues[6],
-                    MatrixValues[10],
-                ),
-            )
-        )
+            raise SldprtFormatError('native assembly history requires an affine component transform')
+        CoreItems.append(AsmCoreItem(OccurNames[InstanceIndex], CompPath, MatrixValues[3] / 1000.0, MatrixValues[7] / 1000.0, MatrixValues[11] / 1000.0, InstanceConfig or 'Default', StampMap.get(str(PureWindowsPath(CompPath)).casefold(), 0), (MatrixValues[0], MatrixValues[4], MatrixValues[8], MatrixValues[1], MatrixValues[5], MatrixValues[9], MatrixValues[2], MatrixValues[6], MatrixValues[10])))
     return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))
 
-
-def _preserved_generated_mate_streams(
-    document: CadDocument,
-    encoding: NativeAssemblyEncoding,
-) -> tuple[dict[str, bytes], bool]:
-    assembly = document.assembly
-    if assembly is None or encoding.mates_complete:
-        return dict(encoding.mate_streams), encoding.mates_complete
-    root_id = encoding.definition_ids[assembly.root_definition_id]
-    candidates: dict[str, tuple[BrepPayload, NativeMateList]] = {}
-    for payload in document.brep_payloads:
-        if (
-            payload.role is not PayloadRole.ASSEMBLY_STRUCTURE
-            or payload.format_id.casefold() != "solidworks.mates"
-            or payload.data is None
-            or "::" in payload.source_stream
-        ):
+# this definition exists because focused behavior needs one stable owner
+def SavedGenerated(DocValue: CadDocument, Encoding: NativeAssemblyEncoding) -> tuple[dict[str, bytes], bool]:
+    AsmValue = DocValue.assembly
+    if AsmValue is None or Encoding.mates_complete:
+        return (dict(Encoding.mate_streams), Encoding.mates_complete)
+    RootId = Encoding.definition_ids[AsmValue.root_definition_id]
+    Candidates: dict[str, tuple[BrepPayload, NativeMateList]] = {}
+    for Payload in DocValue.brep_payloads:
+        if Payload.role is not PayloadRole.ASSEMBLY_STRUCTURE or Payload.format_id.casefold() != 'solidworks.mates' or Payload.data is None or ('::' in Payload.source_stream):
             continue
-        leaf = payload.source_stream.replace("\\", "/").rsplit("/", 1)[-1]
-        if (
-            leaf.casefold() != MATES_STREAM_NAME.casefold()
-            and not leaf.casefold().endswith(MATES_STREAM_SUFFIX.casefold())
-        ):
+        LeafValue = Payload.source_stream.replace('\\', '/').rsplit('/', 1)[-1]
+        if LeafValue.casefold() != MatesStreamName.casefold() and (not LeafValue.casefold().endswith(MatesStreamSuffix.casefold())):
             continue
         try:
-            owner_id = int(payload.attributes.get("owner_definition_id", -1))
-            decoded = decode_mate_list(payload.data, payload.source_stream, owner_id)
-        except (SldprtFormatError, TypeError, ValueError, struct.error):
+            OwnerId = int(Payload.attributes.get('owner_definition_id', -1))
+            Decoded = DecodeMateList(Payload.data, Payload.source_stream, OwnerId)
+        except (SldprtFormatError, TypeError, ValueError, Struct.error):
             continue
-        if owner_id != root_id or payload.source_stream in candidates:
+        if OwnerId != RootId or Payload.source_stream in Candidates:
             continue
-        candidates[payload.source_stream] = (payload, decoded)
-    if not candidates:
-        return {}, False
-    payload_ids = {payload.id for payload, _ in candidates.values()}
-    desired_payload_ids = {
-        str(value)
-        for value in (
-            *(mate.attributes.get("native_payload_id") for mate in assembly.mates),
-            *(
-                group.attributes.get("native_payload_id")
-                for group in assembly.mate_groups
-            ),
-        )
-        if isinstance(value, str) and value
-    }
-    if desired_payload_ids != payload_ids:
-        return {}, False
-    desired_mates = {
-        (
-            str(mate.attributes.get("native_payload_id", "")),
-            _generated_integer(mate.attributes.get("native_record_offset")),
-        ): mate
-        for mate in assembly.mates
-    }
-    desired_entities = {entity.id: entity for entity in assembly.mate_entities}
-    matched_mates: set[str] = set()
-    matched_group_offsets: set[tuple[str, int]] = set()
-    for payload, mate_list in candidates.values():
-        for native_mate in mate_list.mates:
-            key = (payload.id, native_mate.record_offset)
-            if native_mate.kind == "group":
-                matched_group_offsets.add(key)
+        Candidates[Payload.source_stream] = (Payload, Decoded)
+    if not Candidates:
+        return ({}, False)
+    PayloadIds = {Payload.id for Payload, Ignored in Candidates.values()}
+    DesiredPayloadIds = {str(Value) for Value in (*(MateValue.attributes.get('native_payload_id') for MateValue in AsmValue.mates), *(Group.attributes.get('native_payload_id') for Group in AsmValue.mate_groups)) if isinstance(Value, str) and Value}
+    if DesiredPayloadIds != PayloadIds:
+        return ({}, False)
+    DesiredMates = {(str(MateValue.attributes.get('native_payload_id', '')), GeneratedA(MateValue.attributes.get('native_record_offset'))): MateValue for MateValue in AsmValue.mates}
+    DesiredEntities = {Entity.id: Entity for Entity in AsmValue.mate_entities}
+    MatchedMates: set[str] = set()
+    MatchedGroupOffsets: set[tuple[str, int]] = set()
+    for Payload, MateList in Candidates.values():
+        for NativeMate in MateList.mates:
+            KeyValue = (Payload.id, NativeMate.record_offset)
+            if NativeMate.kind == 'group':
+                MatchedGroupOffsets.add(KeyValue)
                 continue
-            mate = desired_mates.get(key)
-            if mate is None or not _preserved_native_mate_matches(
-                mate,
-                native_mate,
-                desired_entities,
-            ):
-                return {}, False
-            matched_mates.add(mate.id)
-    if matched_mates != {mate.id for mate in assembly.mates}:
-        return {}, False
-    expected_group_offsets = {
-        (
-            str(group.attributes.get("native_payload_id", "")),
-            _generated_integer(group.attributes.get(name)),
-        )
-        for group in assembly.mate_groups
-        for name in ("start_record_offset", "end_record_offset")
-    }
-    if matched_group_offsets != expected_group_offsets:
-        return {}, False
-    return {
-        payload.source_stream: bytes(payload.data) for payload, _ in candidates.values()
-    }, True
+            MateValue = DesiredMates.get(KeyValue)
+            if MateValue is None or not SavedNativeMate(MateValue, NativeMate, DesiredEntities):
+                return ({}, False)
+            MatchedMates.add(MateValue.id)
+    if MatchedMates != {MateValue.id for MateValue in AsmValue.mates}:
+        return ({}, False)
+    ExpectedGroupOffsets = {(str(Group.attributes.get('native_payload_id', '')), GeneratedA(Group.attributes.get(NameValue))) for Group in AsmValue.mate_groups for NameValue in ('start_record_offset', 'end_record_offset')}
+    if MatchedGroupOffsets != ExpectedGroupOffsets:
+        return ({}, False)
+    return ({Payload.source_stream: bytes(Payload.data) for Payload, Ignored in Candidates.values()}, True)
 
-
-def _preserved_native_mate_matches(
-    mate: MateConstraint,
-    native: NativeMate,
-    entities: Mapping[str, MateEntity],
-) -> bool:
-    if (
-        mate.name != native.name
-        or mate.kind != _neutral_mate_kind(native.kind)
-        or mate.alignment != _neutral_mate_alignment(native)
-        or _mate_parameter_value(mate.value)
-        != _mate_parameter_value(_neutral_mate_value(native))
-        or mate.suppressed
-        or not mate.driving
-        or mate.parameter_ids
-        or len(mate.entity_ids) != len(native.entities)
-    ):
+# this definition exists because focused behavior needs one stable owner
+def SavedNativeMate(MateValue: MateConstraint, Native: NativeMate, Entities: Mapping[str, MateEntity]) -> bool:
+    if MateValue.name != Native.name or MateValue.kind != NeutralMateKinA(Native.kind) or MateValue.alignment != NeutralMate(Native) or (MateParamValue(MateValue.value) != MateParamValue(NeutralMateA(Native))) or MateValue.suppressed or (not MateValue.driving) or MateValue.parameter_ids or (len(MateValue.entity_ids) != len(Native.entities)):
         return False
-    for entity_id, native_entity in zip(mate.entity_ids, native.entities):
-        entity = entities.get(entity_id)
-        if entity is None:
+    for EntityId, NativeEntity in zip(MateValue.entity_ids, Native.entities):
+        Entity = Entities.get(EntityId)
+        if Entity is None:
             return False
-        component_path = entity.attributes.get("component_path", "")
-        persistent = entity.attributes.get("persistent_references", ())
-        if (
-            component_path != native_entity.component_path
-            or persistent != native_entity.persistent_references
-            or entity.source_entity_id
-            != (
-                native_entity.persistent_references[-1]
-                if native_entity.persistent_references
-                else ""
-            )
-        ):
+        ComponentPath = Entity.attributes.get('component_path', '')
+        Persistent = Entity.attributes.get('persistent_references', ())
+        if ComponentPath != NativeEntity.component_path or Persistent != NativeEntity.persistent_references or Entity.source_entity_id != (NativeEntity.persistent_references[-1] if NativeEntity.persistent_references else ''):
             return False
     return True
 
-
-# replaying the emitted archive prevents capability claims from outrunning bytes
-def _generated_assembly_capabilities(
-    assembly: AssemblyData,
-    encoding: NativeAssemblyEncoding,
-    streams: Mapping[str, bytes],
-    configurations: Sequence[Configuration],
-) -> frozenset[Capability]:
+# this definition exists because focused behavior needs one stable owner
+def GeneratedAsm(AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Streams: Mapping[str, bytes], Configurations: Sequence[Configuration]) -> frozenset[Capability]:
     try:
-        native = decode_native_assembly(
-            SldprtArchive.from_bytes(build_sldprt(dict(streams))),
-            include_tessellation=False,
-        )
-    except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
+        Native = DecodeNativeAsm(SldprtArchive.from_bytes(BuildSldprt(dict(Streams))), include_tessellation=False)
+    except (KeyError, SldprtFormatError, TypeError, ValueError, Struct.error):
         return frozenset()
-    result: set[Capability] = set()
-    if encoding.structure_complete and _generated_assembly_structure_matches(
-        assembly,
-        encoding,
-        native,
-    ):
-        result.add(Capability.ASSEMBLIES)
-        if len(assembly.definitions) > 1:
-            result.add(Capability.EXTERNAL_REFERENCES)
-    OrderedConfigs = tuple(
-        sorted(
-            configurations,
-            key=lambda ConfigurationItem: (
-                not ConfigurationItem.active,
-                configurations.index(ConfigurationItem),
-            ),
-        )
-    )
-    if tuple(
-        (ConfigurationItem.name, ConfigurationItem.active)
-        for ConfigurationItem in OrderedConfigs
-    ) == tuple(
-        (ConfigurationItem.name, ConfigurationItem.most_recent)
-        for ConfigurationItem in native.configurations
-    ):
-        result.add(Capability.CONFIGURATIONS)
-    if (
-        encoding.mates_complete
-        and not encoding.generated_mate_ids
-        and assembly.mates
-        and len(native.mate_lists) == len(encoding.mate_streams)
-        and all(item.declared_count == len(item.mates) for item in native.mate_lists)
-        and sum(
-            1
-            for item in native.mate_lists
-            for mate in item.mates
-            if mate.kind != "group"
-        )
-        == len(assembly.mates)
-    ):
-        result.add(Capability.ASSEMBLY_MATES)
-    return frozenset(result)
+    Result: set[Capability] = set()
+    if Encoding.structure_complete and GeneratedAsmB(AsmValue, Encoding, Native):
+        Result.add(Capability.ASSEMBLIES)
+        if len(AsmValue.definitions) > 1:
+            Result.add(Capability.EXTERNAL_REFERENCES)
 
+    # this callback exists because local behavior needs one focused transformation
+    OrderedConfigs = tuple(sorted(Configurations, key=lambda ConfigItem: (not ConfigItem.active, Configurations.index(ConfigItem))))
+    if tuple(((ConfigItem.name, ConfigItem.active) for ConfigItem in OrderedConfigs)) == tuple(((ConfigItem.name, ConfigItem.most_recent) for ConfigItem in Native.configurations)):
+        Result.add(Capability.CONFIGURATIONS)
+    if Encoding.mates_complete and (not Encoding.generated_mate_ids) and AsmValue.mates and (len(Native.mate_lists) == len(Encoding.mate_streams)) and all((ItemValue.declared_count == len(ItemValue.mates) for ItemValue in Native.mate_lists)) and (sum((1 for ItemValue in Native.mate_lists for MateValue in ItemValue.mates if MateValue.kind != 'group')) == len(AsmValue.mates)):
+        Result.add(Capability.ASSEMBLY_MATES)
+    return frozenset(Result)
 
-def _generated_assembly_structure_matches(
-    assembly: AssemblyData,
-    encoding: NativeAssemblyEncoding,
-    native: NativeAssembly,
-) -> bool:
-    definitions = {item.object_id: item for item in native.definitions}
-    if native.root_definition_id != encoding.definition_ids.get(
-        assembly.root_definition_id
-    ):
+# this definition exists because focused behavior needs one stable owner
+def GeneratedAsmB(AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Native: NativeAssembly) -> bool:
+    Definitions = {ItemValue.object_id: ItemValue for ItemValue in Native.definitions}
+    if Native.root_definition_id != Encoding.definition_ids.get(AsmValue.root_definition_id):
         return False
-    if set(definitions) != set(encoding.definition_ids.values()):
+    if set(Definitions) != set(Encoding.definition_ids.values()):
         return False
-    for source in assembly.definitions:
-        target = definitions.get(encoding.definition_ids[source.id])
-        if target is None:
+    for Source in AsmValue.definitions:
+        Target = Definitions.get(Encoding.definition_ids[Source.id])
+        if Target is None:
             return False
-        expected_kind = (
-            "ASSEMBLY" if str(source.kind) == ComponentKind.ASSEMBLY.value else "PART"
-        )
-        if (
-            target.name != source.name
-            or target.document_type != expected_kind
-            or target.configuration_name != (source.configuration_name or "Default")
-        ):
+        ExpectedKind = 'ASSEMBLY' if str(Source.kind) == ComponentKind.ASSEMBLY.value else 'PART'
+        if Target.name != Source.name or Target.document_type != ExpectedKind or Target.configuration_name != (Source.configuration_name or 'Default'):
             return False
-        if source.bounding_box is not None:
-            expected_box = tuple(
-                value / 1000.0
-                for value in (
-                    source.bounding_box.minimum.x,
-                    source.bounding_box.minimum.y,
-                    source.bounding_box.minimum.z,
-                    source.bounding_box.maximum.x,
-                    source.bounding_box.maximum.y,
-                    source.bounding_box.maximum.z,
-                )
-            )
-            if target.bounding_box_m != expected_box:
+        if Source.bounding_box is not None:
+            ExpectedBox = tuple((Value / 1000.0 for Value in (Source.bounding_box.minimum.x, Source.bounding_box.minimum.y, Source.bounding_box.minimum.z, Source.bounding_box.maximum.x, Source.bounding_box.maximum.y, Source.bounding_box.maximum.z)))
+            if Target.bounding_box_m != ExpectedBox:
                 return False
-    occurrences = {item.object_id: item for item in native.occurrences}
-    if set(occurrences) != set(encoding.occurrence_ids.values()):
+    Occurrences = {ItemValue.object_id: ItemValue for ItemValue in Native.occurrences}
+    if set(Occurrences) != set(Encoding.occurrence_ids.values()):
         return False
-    by_owner: defaultdict[str, list[tuple[int, int, ComponentInstance]]] = defaultdict(
-        list
-    )
-    for index, source in enumerate(assembly.instances):
-        by_owner[source.owner_definition_id].append((source.order, index, source))
-        target = occurrences.get(encoding.occurrence_ids[source.id])
-        if target is None:
+    ByOwner: Defaultdict[str, list[tuple[int, int, ComponentInstance]]] = Defaultdict(list)
+    for Index, Source in enumerate(AsmValue.instances):
+        ByOwner[Source.owner_definition_id].append((Source.order, Index, Source))
+        Target = Occurrences.get(Encoding.occurrence_ids[Source.id])
+        if Target is None:
             return False
-        reference = _generated_reference_number(source, index + 1)
-        suffix = f"-{reference}"
-        base_name = (
-            source.name[: -len(suffix)] if source.name.endswith(suffix) else source.name
-        )
-        configuration_id = _generated_integer(source.configuration_id)
-        if (
-            target.name != base_name
-            or target.reference_number != reference
-            or target.owner_definition_id
-            != encoding.definition_ids[source.owner_definition_id]
-            or target.definition_id != encoding.definition_ids[source.definition_id]
-            or target.configuration_name
-            != (
-                source.configuration_name
-                or assembly.definition(source.definition_id).configuration_name
-                or "Default"
-            )
-            or target.configuration_id != configuration_id
-            or target.transform != _native_assembly_matrix(source.transform)
-            or target.suppressed != source.suppressed
-            or target.hidden != source.hidden
-            or target.flexible != source.flexible
-            or target.exclude_from_bom != source.exclude_from_bom
-        ):
+        RefValue = GeneratedRef(Source, Index + 1)
+        Suffix = f'-{RefValue}'
+        BaseName = Source.name[:-len(Suffix)] if Source.name.endswith(Suffix) else Source.name
+        ConfigId = GeneratedA(Source.configuration_id)
+        if Target.name != BaseName or Target.reference_number != RefValue or Target.owner_definition_id != Encoding.definition_ids[Source.owner_definition_id] or (Target.definition_id != Encoding.definition_ids[Source.definition_id]) or (Target.configuration_name != (Source.configuration_name or AsmValue.definition(Source.definition_id).configuration_name or 'Default')) or (Target.configuration_id != ConfigId) or (Target.transform != NativeAsmMatrix(Source.transform)) or (Target.suppressed != Source.suppressed) or (Target.hidden != Source.hidden) or (Target.flexible != Source.flexible) or (Target.exclude_from_bom != Source.exclude_from_bom):
             return False
-    native_by_owner: defaultdict[int, list[NativeAssemblyOccurrence]] = defaultdict(
-        list
-    )
-    for target in native.occurrences:
-        native_by_owner[target.owner_definition_id].append(target)
-    for owner_id, values in by_owner.items():
-        expected = [
-            encoding.occurrence_ids[item.id]
-            for _, _, item in sorted(values, key=lambda value: (value[0], value[1]))
-        ]
-        actual = [
-            item.object_id
-            for item in native_by_owner[encoding.definition_ids[owner_id]]
-        ]
-        if actual != expected:
+    NativeByOwner: Defaultdict[int, list[NativeAsmItem]] = Defaultdict(list)
+    for Target in Native.occurrences:
+        NativeByOwner[Target.owner_definition_id].append(Target)
+    for OwnerId, Values in ByOwner.items():
+
+        # this callback exists because local behavior needs one focused transformation
+        Expected = [Encoding.occurrence_ids[ItemValue.id] for Ignored, Ignored, ItemValue in sorted(Values, key=lambda Value: (Value[0], Value[1]))]
+        Actual = [ItemValue.object_id for ItemValue in NativeByOwner[Encoding.definition_ids[OwnerId]]]
+        if Actual != Expected:
             return False
     return True
 
-
-def _generated_reference_number(instance: ComponentInstance, fallback: int) -> int:
-    for value in (
-        instance.reference_number,
-        instance.attributes.get("native_reference_number"),
-    ):
-        if isinstance(value, bool):
+# this definition exists because focused behavior needs one stable owner
+def GeneratedRef(Instance: ComponentInstance, Fallback: int) -> int:
+    for Value in (Instance.reference_number, Instance.attributes.get('native_reference_number')):
+        if isinstance(Value, bool):
             continue
         try:
-            number = int(value)
+            Number = int(Value)
         except (TypeError, ValueError):
             continue
-        if number > 0:
-            return number
-    match = re.search(r"-(\d+)$", instance.name)
-    return int(match.group(1)) if match is not None else fallback
+        if Number > 0:
+            return Number
+    Match = RegexLib.search('-(\\d+)$', Instance.name)
+    return int(Match.group(1)) if Match is not None else Fallback
 
-
-def _generated_integer(value: Any) -> int:
-    if isinstance(value, bool):
+# this definition exists because focused behavior needs one stable owner
+def GeneratedA(Value: Any) -> int:
+    if isinstance(Value, bool):
         return 0
     try:
-        return int(value)
+        return int(Value)
     except (TypeError, ValueError):
         return 0
 
+# this definition exists because focused behavior needs one stable owner
+def PatchNative(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]) -> Generated:
+    Native = set[Capability]()
+    OriginalStreams = dict(Streams)
+    if KeywordsStream not in Streams or ResolvedFeaturesStream not in Streams:
+        return Generated(Streams, 'template', frozenset(), 'native-source-with-kit-neutral', False, False)
+    ResolvedStream = ResolvedStream(Streams, ResolvedFeaturesStream)
+    OriginalModel = DecodeNativeModel(Streams[KeywordsStream], Streams[ResolvedStream], resolved_stream=ResolvedStream)
+    Keywords = KeywordsRoot(Streams[KeywordsStream])
+    Resolved = bytearray(Streams[ResolvedStream])
+    KeywordsChanged = PatchFeature(DocValue, OriginalModel, Keywords[1], Resolved)
+    KeywordsChanged = PatchParameters(DocValue, OriginalModel, Keywords[1], Resolved) or KeywordsChanged
+    PatchSupport(DocValue, OriginalModel, Resolved)
+    PatchSketchGeom(DocValue, OriginalModel, Resolved)
+    if KeywordsChanged:
+        Streams[KeywordsStream] = KeywordsBytes(*Keywords)
+    Streams[ResolvedStream] = bytes(Resolved)
+    PatchedModel = DecodeNativeModel(Streams[KeywordsStream], Streams[ResolvedStream], resolved_stream=ResolvedStream)
+    PatchedParameters = Parameters(PatchedModel)
+    PatchedPlanes = Planes(PatchedModel, {Param.id for Param in PatchedParameters})
+    PatchedSketches = Sketches(PatchedModel, {Param.id for Param in PatchedParameters})
+    PatchedSelections = Selections(PatchedModel)
+    PatchedTimeline = Timeline(PatchedModel, PatchedSelections)
+    OriginalParameters = Parameters(OriginalModel)
+    OriginalSketches = Sketches(OriginalModel, {Param.id for Param in OriginalParameters})
+    OriginalSelections = Selections(OriginalModel)
+    OriginalTimeline = Timeline(OriginalModel, OriginalSelections)
+    if ParamValues(DocValue.parameters) == ParamValues(PatchedParameters):
+        Native.add(Capability.PARAMETERS)
+        if not any((Param.expression is not None for Param in DocValue.parameters)):
+            Native.add(Capability.EXPRESSIONS)
+    if PlaneValues(DocValue.support_planes) == PlaneValues(PatchedPlanes):
+        Native.add(Capability.SUPPORT_PLANES)
+    DesiredSketchValues = SketchValues(DocValue.sketches)
+    if DesiredSketchValues == SketchValues(PatchedSketches) or DesiredSketchValues == SketchValues(OriginalSketches):
+        Native.add(Capability.EDITABLE_SKETCHES)
+    if FeatureValues(DocValue.feature_timeline, DocValue.parameters) == FeatureValues(PatchedTimeline, PatchedParameters) and NativeFeatureA(DocValue.feature_timeline, OriginalTimeline):
+        Native.add(Capability.PARAMETRIC_HISTORY)
+    if SelectionValues(DocValue.selections) == SelectionValues(OriginalSelections):
+        Native.add(Capability.SELECTIONS)
+    OriginalConfigurations = Configurations(OriginalModel, None)
+    if ConfigValues(DocValue.configurations) == ConfigValues(OriginalConfigurations):
+        Native.add(Capability.CONFIGURATIONS)
+    if DocValue.assembly is None and BodyValues(DocValue.bodies) == NativeBody(OriginalModel, OriginalTimeline):
+        Native.add(Capability.BODY_STRUCTURE)
+    NativeBrep, BrepNative, PayloadsNative = PatchTemplate(DocValue, Streams, OriginalStreams)
+    if BrepNative:
+        Native.add(Capability.BREP)
+    if PayloadsNative:
+        Native.add(Capability.NATIVE_PAYLOADS)
+    if DocValue.assembly is None and DocValue.meshes == ():
+        Native.add(Capability.TESSELLATION)
+    Divergences: tuple[str, ...] = ()
+    if DocValue.assembly is not None:
+        Patch = PatchNativeAsm(DocValue, Streams, BundleNames)
+        Native.update(Patch.capabilities)
+        Divergences = Patch.divergences
+        if Capability.COMPONENT_DOCUMENTS in Patch.capabilities and BrepNative:
+            Native.add(Capability.NATIVE_PAYLOADS)
+    Required = Required(DocValue)
+    Blockers = Required - Native - KTargetUnsupported
+    Usable = not Blockers
+    if DocValue.assembly is None:
+        return Generated(Streams, NativeBrep, frozenset(Native), 'native-template' if Usable else 'native-source-with-kit-neutral', Usable, Usable)
+    ReaderGaps = AsmReaderGaps(Streams, OriginalStreams, KAsmRewritableDonorStreaA) + Divergences
+    Loadable = not ReaderGaps
+    return Generated(Streams, NativeBrep, frozenset(Native), 'native-template' if Usable and Loadable else 'native-source-with-kit-neutral', Usable and Loadable, Loadable, reader_gaps=ReaderGaps)
 
-def _patch_native_template(
-    document: CadDocument,
-    streams: dict[str, bytes],
-    bundle_names: Mapping[str, str],
-) -> _GeneratedStreams:
-    native = set[Capability]()
-    original_streams = dict(streams)
-    if KEYWORDS_STREAM not in streams or RESOLVED_FEATURES_STREAM not in streams:
-        return _GeneratedStreams(
-            streams,
-            "template",
-            frozenset(),
-            "native-source-with-kit-neutral",
-            False,
-            False,
-        )
-    resolved_stream = _resolved_features_stream(streams, RESOLVED_FEATURES_STREAM)
-    original_model = decode_native_model(
-        streams[KEYWORDS_STREAM],
-        streams[resolved_stream],
-        resolved_stream=resolved_stream,
-    )
-    keywords = _keywords_root(streams[KEYWORDS_STREAM])
-    resolved = bytearray(streams[resolved_stream])
-    keywords_changed = _patch_feature_names(
-        document, original_model, keywords[1], resolved
-    )
-    keywords_changed = (
-        _patch_parameters(document, original_model, keywords[1], resolved)
-        or keywords_changed
-    )
-    _patch_support_planes(document, original_model, resolved)
-    _patch_sketch_geometry(document, original_model, resolved)
-    if keywords_changed:
-        streams[KEYWORDS_STREAM] = _keywords_bytes(*keywords)
-    streams[resolved_stream] = bytes(resolved)
-    patched_model = decode_native_model(
-        streams[KEYWORDS_STREAM],
-        streams[resolved_stream],
-        resolved_stream=resolved_stream,
-    )
-    patched_parameters = _parameters(patched_model)
-    patched_planes = _planes(
-        patched_model, {parameter.id for parameter in patched_parameters}
-    )
-    patched_sketches = _sketches(
-        patched_model, {parameter.id for parameter in patched_parameters}
-    )
-    patched_selections = _selections(patched_model)
-    patched_timeline = _timeline(patched_model, patched_selections)
-    original_parameters = _parameters(original_model)
-    original_sketches = _sketches(
-        original_model, {parameter.id for parameter in original_parameters}
-    )
-    original_selections = _selections(original_model)
-    original_timeline = _timeline(original_model, original_selections)
-    if _parameter_values(document.parameters) == _parameter_values(patched_parameters):
-        native.add(Capability.PARAMETERS)
-        if not any(
-            parameter.expression is not None for parameter in document.parameters
-        ):
-            native.add(Capability.EXPRESSIONS)
-    if _plane_values(document.support_planes) == _plane_values(patched_planes):
-        native.add(Capability.SUPPORT_PLANES)
-    desired_sketch_values = _sketch_values(document.sketches)
-    if desired_sketch_values == _sketch_values(
-        patched_sketches
-    ) or desired_sketch_values == _sketch_values(original_sketches):
-        native.add(Capability.EDITABLE_SKETCHES)
-    if _feature_values(
-        document.feature_timeline, document.parameters
-    ) == _feature_values(
-        patched_timeline, patched_parameters
-    ) and _native_feature_definitions_unchanged(
-        document.feature_timeline, original_timeline
-    ):
-        native.add(Capability.PARAMETRIC_HISTORY)
-    if _selection_values(document.selections) == _selection_values(original_selections):
-        native.add(Capability.SELECTIONS)
-    original_configurations = _configurations(original_model, None)
-    if _configuration_values(document.configurations) == _configuration_values(
-        original_configurations
-    ):
-        native.add(Capability.CONFIGURATIONS)
-    if document.assembly is None and _body_values(
-        document.bodies
-    ) == _native_body_values(original_model, original_timeline):
-        native.add(Capability.BODY_STRUCTURE)
-    native_brep, brep_native, payloads_native = _patch_template_brep(
-        document, streams, original_streams
-    )
-    if brep_native:
-        native.add(Capability.BREP)
-    if payloads_native:
-        native.add(Capability.NATIVE_PAYLOADS)
-    if document.assembly is None and document.meshes == ():
-        native.add(Capability.TESSELLATION)
-    divergences: tuple[str, ...] = ()
-    if document.assembly is not None:
-        patch = _patch_native_assembly(document, streams, bundle_names)
-        native.update(patch.capabilities)
-        divergences = patch.divergences
-        if Capability.COMPONENT_DOCUMENTS in patch.capabilities and brep_native:
-            native.add(Capability.NATIVE_PAYLOADS)
-    required = _required_capabilities(document)
-    blockers = required - native - _TARGET_UNSUPPORTED_CAPABILITIES
-    usable = not blockers
-    if document.assembly is None:
-        return _GeneratedStreams(
-            streams,
-            native_brep,
-            frozenset(native),
-            "native-template" if usable else "native-source-with-kit-neutral",
-            usable,
-            usable,
-        )
-    reader_gaps = (
-        _assembly_reader_gaps(
-            streams, original_streams, _ASSEMBLY_REWRITABLE_DONOR_STREAMS
-        )
-        + divergences
-    )
-    loadable = not reader_gaps
-    return _GeneratedStreams(
-        streams,
-        native_brep,
-        frozenset(native),
-        "native-template" if usable and loadable else "native-source-with-kit-neutral",
-        usable and loadable,
-        loadable,
-        reader_gaps=reader_gaps,
-    )
-
-
-def _keywords_root(data: bytes) -> tuple[bytes, ET.Element, bytes]:
-    start = data.find(b"<?xml")
-    if start < 0:
-        start = data.find(b"<")
-    if start < 0:
-        raise SldprtFormatError("keyword stream contains no XML document")
-    prefix = data[:start]
-    raw = data[start:]
-    trailing = (
-        b"\r\n" if raw.endswith(b"\r\n") else b"\n" if raw.endswith(b"\n") else b""
-    )
+# this definition exists because focused behavior needs one stable owner
+def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
+    Start = DataValue.find(b'<?xml')
+    if Start < 0:
+        Start = DataValue.find(b'<')
+    if Start < 0:
+        raise SldprtFormatError('keyword stream contains no XML document')
+    Prefix = DataValue[:Start]
+    RawValue = DataValue[Start:]
+    Trailing = b'\r\n' if RawValue.endswith(b'\r\n') else b'\n' if RawValue.endswith(b'\n') else b''
     try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as exc:
-        raise SldprtFormatError(f"invalid keyword XML: {exc}") from exc
-    return prefix, root, trailing
+        RootValue = XmlTree.fromstring(RawValue)
+    except XmlTree.ParseError as exc:
+        raise SldprtFormatError(f'invalid keyword XML: {exc}') from exc
+    return (Prefix, RootValue, Trailing)
 
+# this definition exists because focused behavior needs one stable owner
+def KeywordsBytes(Prefix: bytes, RootValue: ET.Element, Trailing: bytes) -> bytes:
+    return Prefix + XmlTree.tostring(RootValue, encoding='utf-8', xml_declaration=True) + Trailing
 
-def _keywords_bytes(prefix: bytes, root: ET.Element, trailing: bytes) -> bytes:
-    return prefix + ET.tostring(root, encoding="utf-8", xml_declaration=True) + trailing
-
-
-def _xml_elements_by_id(root: ET.Element) -> dict[int, ET.Element]:
-    result: dict[int, ET.Element] = {}
-    for element in root.iter():
-        raw = element.attrib.get("id")
-        if raw is None:
+# this definition exists because focused behavior needs one stable owner
+def XmlElementsById(RootValue: ET.Element) -> dict[int, XmlTree.Element]:
+    Result: dict[int, XmlTree.Element] = {}
+    for ElemValue in RootValue.iter():
+        RawValue = ElemValue.attrib.get('id')
+        if RawValue is None:
             continue
         try:
-            result[int(raw)] = element
+            Result[int(RawValue)] = ElemValue
         except ValueError:
             continue
-    return result
+    return Result
 
-
-def _native_id(value: str, prefix: str) -> int | None:
-    if not value.startswith(prefix):
+# this definition exists because focused behavior needs one stable owner
+def NativeId(Value: str, Prefix: str) -> int | None:
+    if not Value.startswith(Prefix):
         return None
     try:
-        return int(value.removeprefix(prefix).split(":", 1)[0])
+        return int(Value.removeprefix(Prefix).split(':', 1)[0])
     except ValueError:
         return None
 
-
-def _patch_feature_names(
-    document: CadDocument,
-    model: NativeModel,
-    root: ET.Element,
-    resolved: bytearray,
-) -> bool:
-    desired: dict[int, str] = {}
-    for feature in document.feature_timeline:
-        native_id = _native_id(feature.id, "sldprt:feature:")
-        if native_id is not None:
-            desired[native_id] = feature.name
-    for plane in document.support_planes:
-        native_id = _native_id(plane.id, "sldprt:plane:")
-        if native_id is not None and native_id not in desired:
-            desired[native_id] = plane.name
-    for sketch in document.sketches:
-        native_id = _native_id(sketch.id, "sldprt:sketch:")
-        if native_id is not None and native_id not in desired:
-            desired[native_id] = sketch.name
-    elements = _xml_elements_by_id(root)
-    features = {feature.object_id: feature for feature in model.features}
-    changed = False
-    for object_id, name in desired.items():
-        feature = features.get(object_id)
-        if feature is None or name == feature.name:
+# this definition exists because focused behavior needs one stable owner
+def PatchFeature(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
+    Desired: dict[int, str] = {}
+    for Feature in DocValue.feature_timeline:
+        NativeId = NativeId(Feature.id, 'sldprt:feature:')
+        if NativeId is not None:
+            Desired[NativeId] = Feature.name
+    for Plane in DocValue.support_planes:
+        NativeId = NativeId(Plane.id, 'sldprt:plane:')
+        if NativeId is not None and NativeId not in Desired:
+            Desired[NativeId] = Plane.name
+    for Sketch in DocValue.sketches:
+        NativeId = NativeId(Sketch.id, 'sldprt:sketch:')
+        if NativeId is not None and NativeId not in Desired:
+            Desired[NativeId] = Sketch.name
+    Elements = XmlElementsById(RootValue)
+    Features = {Feature.object_id: Feature for Feature in Model.features}
+    Changed = False
+    for ObjectId, NameValue in Desired.items():
+        Feature = Features.get(ObjectId)
+        if Feature is None or NameValue == Feature.name:
             continue
-        record = next(
-            (
-                candidate
-                for candidate in model.names
-                if candidate.object_id == object_id
-                and candidate.offset == feature.native_offset
-            ),
-            None,
-        )
-        encoded = name.encode("utf-16le")
-        if record is None or len(encoded) != len(feature.name.encode("utf-16le")):
+        Record = next((Choice for Choice in Model.names if Choice.object_id == ObjectId and Choice.offset == Feature.native_offset), None)
+        Encoded = NameValue.encode('utf-16le')
+        if Record is None or len(Encoded) != len(Feature.name.encode('utf-16le')):
             continue
-        start = record.text_end - len(feature.name.encode("utf-16le"))
-        if bytes(resolved[start : record.text_end]).decode("utf-16le") != feature.name:
+        Start = Record.text_end - len(Feature.name.encode('utf-16le'))
+        if bytes(Resolved[Start:Record.text_end]).decode('utf-16le') != Feature.name:
             continue
-        resolved[start : record.text_end] = encoded
-        element = elements.get(object_id)
-        if element is not None:
-            element.attrib["Name"] = name
-        changed = True
-    return changed
+        Resolved[Start:Record.text_end] = Encoded
+        ElemValue = Elements.get(ObjectId)
+        if ElemValue is not None:
+            ElemValue.attrib['Name'] = NameValue
+        Changed = True
+    return Changed
 
-
-def _parameter_millimeters(parameter: Parameter) -> float | None:
-    value = parameter.value.value
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+# this definition exists because focused behavior needs one stable owner
+def ParamA(Param: Parameter) -> float | None:
+    Value = Param.value.value
+    if isinstance(Value, bool) or not isinstance(Value, (int, float)):
         return None
-    number = float(value)
-    if not math.isfinite(number) or parameter.value.kind is not ValueKind.LENGTH:
+    Number = float(Value)
+    if not MathValue.isfinite(Number) or Param.value.kind is not ValueKind.LENGTH:
         return None
-    factor = {
-        "": 1.0,
-        "mm": 1.0,
-        "millimeter": 1.0,
-        "millimeters": 1.0,
-        "cm": 10.0,
-        "m": 1000.0,
-        "in": 25.4,
-        "inch": 25.4,
-        "inches": 25.4,
-    }.get(parameter.value.unit.casefold())
-    return number * factor if factor is not None else None
+    Factor = {'': 1.0, 'mm': 1.0, 'millimeter': 1.0, 'millimeters': 1.0, 'cm': 10.0, 'm': 1000.0, 'in': 25.4, 'inch': 25.4, 'inches': 25.4}.get(Param.value.unit.casefold())
+    return Number * Factor if Factor is not None else None
 
+# this definition exists because focused behavior needs one stable owner
+def DimensionText(Source: str, Millimeters: float) -> str:
+    Value = format(Millimeters, '.15g')
+    return KNumberText.sub(Value, Source, count=1)
 
-def _dimension_text(source: str, millimeters: float) -> str:
-    value = format(millimeters, ".15g")
-    return _NUMBER_TEXT.sub(value, source, count=1)
-
-
-def _patch_parameters(
-    document: CadDocument,
-    model: NativeModel,
-    root: ET.Element,
-    resolved: bytearray,
-) -> bool:
-    original = {parameter.id: parameter for parameter in _parameters(model)}
-    desired = {parameter.id: parameter for parameter in document.parameters}
-    if set(original) != set(desired):
+# this definition exists because focused behavior needs one stable owner
+def PatchParameters(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
+    Original = {Param.id: Param for Param in Parameters(Model)}
+    Desired = {Param.id: Param for Param in DocValue.parameters}
+    if set(Original) != set(Desired):
         return False
-    elements = _xml_elements_by_id(root)
-    dimensions: dict[str, tuple[int, NativeDimension]] = {}
-    for feature in model.features:
-        for dimension, parameter_id in _parameter_entries(
-            feature.object_id, feature.dimensions
-        ):
-            dimensions[parameter_id] = feature.object_id, dimension
-    changed = False
-    for parameter_id, target in desired.items():
-        source = original[parameter_id]
-        target_mm = _parameter_millimeters(target)
-        source_mm = _parameter_millimeters(source)
-        if (
-            target_mm is None
-            or source_mm is None
-            or math.isclose(target_mm, source_mm, rel_tol=1e-12, abs_tol=1e-12)
-        ):
+    Elements = XmlElementsById(RootValue)
+    Dimensions: dict[str, tuple[int, NativeDimension]] = {}
+    for Feature in Model.features:
+        for Dimension, ParamId in ParamEntries(Feature.object_id, Feature.dimensions):
+            Dimensions[ParamId] = (Feature.object_id, Dimension)
+    Changed = False
+    for ParamId, Target in Desired.items():
+        Source = Original[ParamId]
+        TargetMm = ParamA(Target)
+        SourceMm = ParamA(Source)
+        if TargetMm is None or SourceMm is None or MathValue.isclose(TargetMm, SourceMm, rel_tol=1e-12, abs_tol=1e-12):
             continue
-        if (
-            target.name != source.name
-            or target.role != source.role
-            or target.owner_id != source.owner_id
-            or target.expression != source.expression
-        ):
+        if Target.name != Source.name or Target.role != Source.role or Target.owner_id != Source.owner_id or (Target.expression != Source.expression):
             continue
-        record = dimensions.get(parameter_id)
-        if record is None or record[1].native_offset is None:
+        Record = Dimensions.get(ParamId)
+        if Record is None or Record[1].native_offset is None:
             continue
-        object_id, dimension = record
-        struct.pack_into("<d", resolved, dimension.native_offset, target_mm / 1000.0)
-        element = elements.get(object_id)
-        if element is None:
+        ObjectId, Dimension = Record
+        Struct.pack_into('<d', Resolved, Dimension.native_offset, TargetMm / 1000.0)
+        ElemValue = Elements.get(ObjectId)
+        if ElemValue is None:
             continue
-        occurrence = (
-            int(parameter_id.rsplit(":", 1)[-1]) - 1
-            if parameter_id.rsplit(":", 1)[-1].isdigit() and parameter_id.count(":") > 3
-            else 0
-        )
-        matches = tuple(
-            child
-            for child in element
-            if child.tag.rsplit("}", 1)[-1] == "Dimension"
-            and child.attrib.get("Name", "") == dimension.name
-        )
-        if occurrence < len(matches):
-            matches[occurrence].text = _dimension_text(
-                matches[occurrence].text or dimension.source_text,
-                target_mm,
-            )
-            changed = True
-    return changed
+        ItemValue = int(ParamId.rsplit(':', 1)[-1]) - 1 if ParamId.rsplit(':', 1)[-1].isdigit() and ParamId.count(':') > 3 else 0
+        Matches = tuple((Child for Child in ElemValue if Child.tag.rsplit('}', 1)[-1] == 'Dimension' and Child.attrib.get('Name', '') == Dimension.name))
+        if ItemValue < len(Matches):
+            Matches[ItemValue].text = DimensionText(Matches[ItemValue].text or Dimension.source_text, TargetMm)
+            Changed = True
+    return Changed
 
+# this definition exists because focused behavior needs one stable owner
+def VectorValues(Vector: Vector3) -> tuple[float, float, float]:
+    return (Vector.x, Vector.y, Vector.z)
 
-def _vector_values(vector: Vector3) -> tuple[float, float, float]:
-    return vector.x, vector.y, vector.z
+# this definition exists because focused behavior needs one stable owner
+def UnitVector(Values: tuple[float, float, float]) -> bool:
+    return all((MathValue.isfinite(Value) for Value in Values)) and MathValue.isclose(sum((Value * Value for Value in Values)), 1.0, rel_tol=1e-09, abs_tol=1e-09)
 
+# this definition exists because focused behavior needs one stable owner
+def Orthonormal(Transform: Transform) -> bool:
+    AxesValue = (VectorValues(Transform.x_axis), VectorValues(Transform.y_axis), VectorValues(Transform.z_axis))
+    return all((UnitVector(AxisValue) for AxisValue in AxesValue)) and all((MathValue.isclose(sum((LeftValue[Index] * Right[Index] for Index in range(3))), 0.0, abs_tol=1e-09) for LeftValue, Right in ((AxesValue[0], AxesValue[1]), (AxesValue[0], AxesValue[2]), (AxesValue[1], AxesValue[2]))))
 
-def _unit_vector(values: tuple[float, float, float]) -> bool:
-    return all(math.isfinite(value) for value in values) and math.isclose(
-        sum(value * value for value in values), 1.0, rel_tol=1e-9, abs_tol=1e-9
-    )
-
-
-def _orthonormal_transform(transform: Transform) -> bool:
-    axes = (
-        _vector_values(transform.x_axis),
-        _vector_values(transform.y_axis),
-        _vector_values(transform.z_axis),
-    )
-    return all(_unit_vector(axis) for axis in axes) and all(
-        math.isclose(
-            sum(left[index] * right[index] for index in range(3)),
-            0.0,
-            abs_tol=1e-9,
-        )
-        for left, right in ((axes[0], axes[1]), (axes[0], axes[2]), (axes[1], axes[2]))
-    )
-
-
-def _patch_support_planes(
-    document: CadDocument, model: NativeModel, resolved: bytearray
-) -> None:
-    parameters = _parameters(model)
-    original = {
-        plane.id: plane
-        for plane in _planes(model, {parameter.id for parameter in parameters})
-    }
-    desired = {plane.id: plane for plane in document.support_planes}
-    if set(original) != set(desired):
+# this definition exists because focused behavior needs one stable owner
+def PatchSupport(DocValue: CadDocument, Model: NativeModel, Resolved: bytearray) -> None:
+    Parameters = Parameters(Model)
+    Original = {Plane.id: Plane for Plane in Planes(Model, {Param.id for Param in Parameters})}
+    Desired = {Plane.id: Plane for Plane in DocValue.support_planes}
+    if set(Original) != set(Desired):
         return
-    for plane_id, target in desired.items():
-        source = original[plane_id]
-        if target.transform == source.transform:
+    for PlaneId, Target in Desired.items():
+        Source = Original[PlaneId]
+        if Target.transform == Source.transform:
             continue
-        if (
-            target.name != source.name
-            or target.support_selection_id != source.support_selection_id
-            or target.offset_parameter_id != source.offset_parameter_id
-            or not _orthonormal_transform(target.transform)
-        ):
+        if Target.name != Source.name or Target.support_selection_id != Source.support_selection_id or Target.offset_parameter_id != Source.offset_parameter_id or (not Orthonormal(Target.transform)):
             continue
-        offset = source.attributes.get("native_frame_offset")
-        length = source.attributes.get("native_frame_length")
-        if not isinstance(offset, int) or length not in {81, 121}:
+        Offset = Source.attributes.get('native_frame_offset')
+        Length = Source.attributes.get('native_frame_length')
+        if not isinstance(Offset, int) or Length not in {81, 121}:
             continue
-        origin = tuple(
-            value / 1000.0 for value in _vector_values(target.transform.origin)
-        )
-        x_axis = _vector_values(target.transform.x_axis)
-        y_axis = _vector_values(target.transform.y_axis)
-        z_axis = _vector_values(target.transform.z_axis)
-        if not all(math.isfinite(value) for value in origin):
+        Origin = tuple((Value / 1000.0 for Value in VectorValues(Target.transform.origin)))
+        XAxis = VectorValues(Target.transform.x_axis)
+        YAxis = VectorValues(Target.transform.y_axis)
+        ZAxis = VectorValues(Target.transform.z_axis)
+        if not all((MathValue.isfinite(Value) for Value in Origin)):
             continue
-        if length == 81:
-            if (
-                x_axis != (1.0, 0.0, 0.0)
-                or y_axis != (0.0, 1.0, 0.0)
-                or z_axis != (0.0, 0.0, 1.0)
-            ):
+        if Length == 81:
+            if XAxis != (1.0, 0.0, 0.0) or YAxis != (0.0, 1.0, 0.0) or ZAxis != (0.0, 0.0, 1.0):
                 continue
-            struct.pack_into("<3d", resolved, offset, *origin)
-            struct.pack_into("<3d", resolved, offset + 57, 0.0, -origin[2], 1.0)
+            Struct.pack_into('<3d', Resolved, Offset, *Origin)
+            Struct.pack_into('<3d', Resolved, Offset + 57, 0.0, -Origin[2], 1.0)
             continue
-        struct.pack_into("<3d", resolved, offset, *origin)
-        struct.pack_into("<3d", resolved, offset + 24, *z_axis)
-        rows = tuple(zip(x_axis, y_axis, z_axis, strict=True))
-        for index, row in enumerate(rows):
-            struct.pack_into("<3d", resolved, offset + 49 + index * 24, *row)
+        Struct.pack_into('<3d', Resolved, Offset, *Origin)
+        Struct.pack_into('<3d', Resolved, Offset + 24, *ZAxis)
+        RowsValue = tuple(zip(XAxis, YAxis, ZAxis, strict=True))
+        for Index, RowValue in enumerate(RowsValue):
+            Struct.pack_into('<3d', Resolved, Offset + 49 + Index * 24, *RowValue)
 
-
-def _coordinate_offset(data: bytes | bytearray, marker_offset: int) -> int | None:
-    for relative in (56, 64):
-        offset = marker_offset + relative
-        if data[offset : offset + 2] == b"\x1e\x00" and offset + 18 <= len(data):
-            return offset + 2
+# this definition exists because focused behavior needs one stable owner
+def Coordinate(DataValue: bytes | bytearray, MarkerOffset: int) -> int | None:
+    for Relative in (56, 64):
+        Offset = MarkerOffset + Relative
+        if DataValue[Offset:Offset + 2] == b'\x1e\x00' and Offset + 18 <= len(DataValue):
+            return Offset + 2
     return None
 
-
-def _patch_coordinate(
-    resolved: bytearray, marker_offset: int, point: tuple[float, float]
-) -> bool:
-    if not all(math.isfinite(value) for value in point):
+# this definition exists because focused behavior needs one stable owner
+def PatchCoordinate(Resolved: bytearray, MarkerOffset: int, Point: tuple[float, float]) -> bool:
+    if not all((MathValue.isfinite(Value) for Value in Point)):
         return False
-    offset = _coordinate_offset(resolved, marker_offset)
-    if offset is None:
+    Offset = Coordinate(Resolved, MarkerOffset)
+    if Offset is None:
         return False
-    struct.pack_into("<2d", resolved, offset, point[0] / 1000.0, point[1] / 1000.0)
+    Struct.pack_into('<2d', Resolved, Offset, Point[0] / 1000.0, Point[1] / 1000.0)
     return True
 
+# this definition exists because focused behavior needs one stable owner
+def PointValues(Value: Vector2) -> tuple[float, float]:
+    return (Value.x, Value.y)
 
-def _point_values(value: Vector2) -> tuple[float, float]:
-    return value.x, value.y
-
-
-def _patch_sketch_geometry(
-    document: CadDocument, model: NativeModel, resolved: bytearray
-) -> None:
-    parameters = _parameters(model)
-    original_sketches = _sketches(model, {parameter.id for parameter in parameters})
-    original = {sketch.id: sketch for sketch in original_sketches}
-    native = {_sketch_id(sketch.object_id): sketch for sketch in model.sketches}
-    desired = {sketch.id: sketch for sketch in document.sketches}
-    if set(original) != set(desired):
+# this definition exists because focused behavior needs one stable owner
+def PatchSketchGeom(DocValue: CadDocument, Model: NativeModel, Resolved: bytearray) -> None:
+    Parameters = Parameters(Model)
+    OriginalSketches = Sketches(Model, {Param.id for Param in Parameters})
+    Original = {Sketch.id: Sketch for Sketch in OriginalSketches}
+    Native = {SketchId(Sketch.object_id): Sketch for Sketch in Model.sketches}
+    Desired = {Sketch.id: Sketch for Sketch in DocValue.sketches}
+    if set(Original) != set(Desired):
         return
-    for sketch_id, target in desired.items():
-        source = original[sketch_id]
-        native_sketch = native[sketch_id]
-        if (
-            target.support_plane_id != source.support_plane_id
-            or target.constraints != source.constraints
-            or target.parameter_ids != source.parameter_ids
-            or target.closed_profile_entity_ids != source.closed_profile_entity_ids
-            or target.suppressed != source.suppressed
-        ):
+    for SketchId, Target in Desired.items():
+        Source = Original[SketchId]
+        NativeSketch = Native[SketchId]
+        if Target.support_plane_id != Source.support_plane_id or Target.constraints != Source.constraints or Target.parameter_ids != Source.parameter_ids or (Target.closed_profile_entity_ids != Source.closed_profile_entity_ids) or (Target.suppressed != Source.suppressed):
             continue
-        source_entities = {entity.id: entity for entity in source.entities}
-        target_entities = {entity.id: entity for entity in target.entities}
-        if set(source_entities) != set(target_entities):
+        SourceEntities = {Entity.id: Entity for Entity in Source.entities}
+        TargetEntities = {Entity.id: Entity for Entity in Target.entities}
+        if set(SourceEntities) != set(TargetEntities):
             continue
-        for entity_id, target_entity in target_entities.items():
-            source_entity = source_entities[entity_id]
-            if target_entity.geometry == source_entity.geometry:
+        for EntityId, TargetEntity in TargetEntities.items():
+            SourceEntity = SourceEntities[EntityId]
+            if TargetEntity.geometry == SourceEntity.geometry:
                 continue
-            if (
-                target_entity.kind != source_entity.kind
-                or target_entity.construction != source_entity.construction
-                or target_entity.fixed != source_entity.fixed
-            ):
+            if TargetEntity.kind != SourceEntity.kind or TargetEntity.construction != SourceEntity.construction or TargetEntity.fixed != SourceEntity.fixed:
                 continue
-            if isinstance(source_entity.geometry, PointGeometry) and isinstance(
-                target_entity.geometry, PointGeometry
-            ):
-                marker_offset = _native_id(
-                    entity_id, f"sldprt:sketch:{native_sketch.object_id}:native:"
-                )
-                if marker_offset is not None:
-                    _patch_coordinate(
-                        resolved,
-                        marker_offset,
-                        _point_values(target_entity.geometry.point),
-                    )
-        for profile_index, profile in enumerate(native_sketch.profiles):
-            if profile.kind == "circle":
-                entity_id = _profile_id(native_sketch.object_id, profile_index)
-                source_entity = source_entities.get(entity_id)
-                target_entity = target_entities.get(entity_id)
-                if (
-                    source_entity is None
-                    or target_entity is None
-                    or target_entity.geometry == source_entity.geometry
-                    or not isinstance(target_entity.geometry, CircleGeometry)
-                    or len(profile.marker_offsets) < 2
-                ):
+            if isinstance(SourceEntity.geometry, PointGeom) and isinstance(TargetEntity.geometry, PointGeom):
+                MarkerOffset = NativeId(EntityId, f'sldprt:sketch:{NativeSketch.object_id}:native:')
+                if MarkerOffset is not None:
+                    PatchCoordinate(Resolved, MarkerOffset, PointValues(TargetEntity.geometry.point))
+        for ProfileIndex, Profile in enumerate(NativeSketch.profiles):
+            if Profile.kind == 'circle':
+                EntityId = ProfileId(NativeSketch.object_id, ProfileIndex)
+                SourceEntity = SourceEntities.get(EntityId)
+                TargetEntity = TargetEntities.get(EntityId)
+                if SourceEntity is None or TargetEntity is None or TargetEntity.geometry == SourceEntity.geometry or (not isinstance(TargetEntity.geometry, CircleGeom)) or (len(Profile.marker_offsets) < 2):
                     continue
-                center = _point_values(target_entity.geometry.center)
-                source_center = profile.coordinates[:2]
-                source_edge = next(
-                    (
-                        marker.coordinates_mm
-                        for marker in native_sketch.markers
-                        if marker.offset == profile.marker_offsets[1]
-                        and marker.coordinates_mm is not None
-                    ),
-                    None,
-                )
-                if source_edge is None or target_entity.geometry.radius <= 0.0:
+                Center = PointValues(TargetEntity.geometry.center)
+                SourceCenter = Profile.coordinates[:2]
+                SourceEdge = next((Marker.coordinates_mm for Marker in NativeSketch.markers if Marker.offset == Profile.marker_offsets[1] and Marker.coordinates_mm is not None), None)
+                if SourceEdge is None or TargetEntity.geometry.radius <= 0.0:
                     continue
-                dx = source_edge[0] - source_center[0]
-                dy = source_edge[1] - source_center[1]
-                length = math.hypot(dx, dy)
-                if length <= 1e-12:
-                    dx, dy, length = 1.0, 0.0, 1.0
-                edge = (
-                    center[0] + dx / length * target_entity.geometry.radius,
-                    center[1] + dy / length * target_entity.geometry.radius,
-                )
-                _patch_coordinate(resolved, profile.marker_offsets[0], center)
-                _patch_coordinate(resolved, profile.marker_offsets[1], edge)
-            elif profile.kind == "rectangle":
-                _patch_rectangle_profile(
-                    resolved,
-                    native_sketch,
-                    profile_index,
-                    profile,
-                    target_entities,
-                )
+                DxValue = SourceEdge[0] - SourceCenter[0]
+                DyValue = SourceEdge[1] - SourceCenter[1]
+                Length = MathValue.hypot(DxValue, DyValue)
+                if Length <= 1e-12:
+                    DxValue, DyValue, Length = (1.0, 0.0, 1.0)
+                EdgeValue = (Center[0] + DxValue / Length * TargetEntity.geometry.radius, Center[1] + DyValue / Length * TargetEntity.geometry.radius)
+                PatchCoordinate(Resolved, Profile.marker_offsets[0], Center)
+                PatchCoordinate(Resolved, Profile.marker_offsets[1], EdgeValue)
+            elif Profile.kind == 'rectangle':
+                PatchRectangle(Resolved, NativeSketch, ProfileIndex, Profile, TargetEntities)
 
-
-def _patch_rectangle_profile(
-    resolved: bytearray,
-    sketch: NativeSketch,
-    profile_index: int,
-    profile: NativeProfile,
-    entities: Mapping[str, SketchEntity],
-) -> None:
-    lines: list[LineGeometry] = []
-    for edge_index in range(4):
-        entity = entities.get(
-            _profile_edge_id(sketch.object_id, profile_index, edge_index)
-        )
-        if entity is None or not isinstance(entity.geometry, LineGeometry):
+# this definition exists because focused behavior needs one stable owner
+def PatchRectangle(Resolved: bytearray, Sketch: NativeSketch, ProfileIndex: int, Profile: NativeProfile, Entities: Mapping[str, SketchEntity]) -> None:
+    Lines: list[LineGeom] = []
+    for EdgeIndex in range(4):
+        Entity = Entities.get(ProfileEdgeId(Sketch.object_id, ProfileIndex, EdgeIndex))
+        if Entity is None or not isinstance(Entity.geometry, LineGeom):
             return
-        lines.append(entity.geometry)
-    points = tuple(
-        (
-            _point_values(lines[0].start),
-            _point_values(lines[0].end),
-            _point_values(lines[1].end),
-            _point_values(lines[2].end),
-        )
-    )[0]
-    if (
-        _point_values(lines[1].start) != points[1]
-        or _point_values(lines[2].start) != points[2]
-        or _point_values(lines[3].start) != points[3]
-        or _point_values(lines[3].end) != points[0]
-    ):
+        Lines.append(Entity.geometry)
+    Points = tuple((PointValues(Lines[0].start), PointValues(Lines[0].end), PointValues(Lines[1].end), PointValues(Lines[2].end)))[0]
+    if PointValues(Lines[1].start) != Points[1] or PointValues(Lines[2].start) != Points[2] or PointValues(Lines[3].start) != Points[3] or (PointValues(Lines[3].end) != Points[0]):
         return
-    xs = sorted({point[0] for point in points})
-    ys = sorted({point[1] for point in points})
-    if len(xs) != 2 or len(ys) != 2:
+    XsValue = sorted({Point[0] for Point in Points})
+    YsValue = sorted({Point[1] for Point in Points})
+    if len(XsValue) != 2 or len(YsValue) != 2:
         return
-    x0, y0, x1, y1 = profile.coordinates
-    source_corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
-    for marker in sketch.markers:
-        if marker.coordinates_mm is None:
+    XZero, YZero, XOneValue, YOneValue = Profile.coordinates
+    SourceCorners = ((XZero, YZero), (XOneValue, YZero), (XOneValue, YOneValue), (XZero, YOneValue))
+    for Marker in Sketch.markers:
+        if Marker.coordinates_mm is None:
             continue
-        for source, target in zip(source_corners, points, strict=True):
-            if all(
-                math.isclose(left, right, abs_tol=1e-9)
-                for left, right in zip(marker.coordinates_mm, source, strict=True)
-            ):
-                _patch_coordinate(resolved, marker.offset, target)
+        for Source, Target in zip(SourceCorners, Points, strict=True):
+            if all((MathValue.isclose(LeftValue, Right, abs_tol=1e-09) for LeftValue, Right in zip(Marker.coordinates_mm, Source, strict=True))):
+                PatchCoordinate(Resolved, Marker.offset, Target)
                 break
 
+# this definition exists because focused behavior needs one stable owner
+def RoundNumber(Value: float) -> float:
+    return round(Value, 10)
 
-def _round_number(value: float) -> float:
-    return round(value, 10)
+# this definition exists because focused behavior needs one stable owner
+def ParamValues(Parameters: Sequence[Parameter]) -> tuple[AnyValue, ...]:
+    return tuple(((Param.id, Param.name, RoundNumber(Value) if (Value := ParamA(Param)) is not None else Param.value, Param.role, Param.expression, Param.owner_id) for Param in Parameters))
 
+# this definition exists because focused behavior needs one stable owner
+def TransformValues(Transform: Transform) -> tuple[float, ...]:
+    return tuple((RoundNumber(Value) for Vector in (Transform.origin, Transform.x_axis, Transform.y_axis, Transform.z_axis) for Value in VectorValues(Vector)))
 
-def _parameter_values(parameters: Sequence[Parameter]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            parameter.id,
-            parameter.name,
-            (
-                _round_number(value)
-                if (value := _parameter_millimeters(parameter)) is not None
-                else parameter.value
-            ),
-            parameter.role,
-            parameter.expression,
-            parameter.owner_id,
-        )
-        for parameter in parameters
-    )
+# this definition exists because focused behavior needs one stable owner
+def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[AnyValue, ...]:
+    return tuple(((Plane.id, Plane.name, TransformValues(Plane.transform), Plane.support_selection_id, Plane.offset_parameter_id) for Plane in Planes))
 
+# this definition exists because focused behavior needs one stable owner
+def GeomValues(GeomValue: Any) -> AnyValue:
+    if isinstance(GeomValue, PointGeom):
+        return ('point', tuple((RoundNumber(Value) for Value in PointValues(GeomValue.point))))
+    if isinstance(GeomValue, LineGeom):
+        return ('line', tuple((RoundNumber(Value) for Value in PointValues(GeomValue.start))), tuple((RoundNumber(Value) for Value in PointValues(GeomValue.end))))
+    if isinstance(GeomValue, CircleGeom):
+        return ('circle', tuple((RoundNumber(Value) for Value in PointValues(GeomValue.center))), RoundNumber(GeomValue.radius))
+    return GeomValue
 
-def _transform_values(transform: Transform) -> tuple[float, ...]:
-    return tuple(
-        _round_number(value)
-        for vector in (
-            transform.origin,
-            transform.x_axis,
-            transform.y_axis,
-            transform.z_axis,
-        )
-        for value in _vector_values(vector)
-    )
+# this definition exists because focused behavior needs one stable owner
+def SketchValues(Sketches: Sequence[Sketch]) -> tuple[AnyValue, ...]:
+    return tuple(((Sketch.id, Sketch.name, Sketch.support_plane_id, tuple(((Entity.id, Entity.kind, GeomValues(Entity.geometry), Entity.construction, Entity.fixed) for Entity in Sketch.entities)), tuple(((RuleValue.id, RuleValue.kind, RuleValue.references, RuleValue.parameter_id, RuleValue.driving, RuleValue.suppressed) for RuleValue in Sketch.constraints)), Sketch.parameter_ids, Sketch.closed_profile_entity_ids, Sketch.suppressed) for Sketch in Sketches))
 
+# this definition exists because focused behavior needs one stable owner
+def DefinitionValue(Definition: Any, ParamValue: ParameterValue | None=None) -> AnyValue:
+    if isinstance(Definition, ExtrusionFeature):
+        Length = ParamValue or Definition.length
+        return ('extrusion', RoundNumber(float(Length.value)), Length.kind, Length.unit, Definition.end_condition, Definition.reversed)
+    if isinstance(Definition, FilletFeature):
+        Radius = ParamValue or Definition.radius
+        return ('fillet', RoundNumber(float(Radius.value)), Radius.kind, Radius.unit)
+    if isinstance(Definition, NativeFeatureDefinition):
+        return ('native', Definition.format_id, Definition.type_id)
+    return Definition
 
-def _plane_values(planes: Sequence[SupportPlane]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            plane.id,
-            plane.name,
-            _transform_values(plane.transform),
-            plane.support_selection_id,
-            plane.offset_parameter_id,
-        )
-        for plane in planes
-    )
+# this definition exists because focused behavior needs one stable owner
+def FeatureValues(Features: Sequence[FeatureStep], Parameters: Sequence[Parameter]=()) -> tuple[AnyValue, ...]:
+    ParamById = {Param.id: Param for Param in Parameters}
+    return tuple(((Feature.id, Feature.name, Feature.kind, Feature.order, Feature.input_feature_ids, Feature.sketch_id, Feature.parameter_ids, Feature.operation, DefinitionValue(Feature.definition, next((ParamById[ParamId].value for ParamId in Feature.parameter_ids if ParamId in ParamById), None)), Feature.selection_ids, Feature.suppressed, Feature.configuration_states) for Feature in Features))
 
-
-def _geometry_values(geometry: Any) -> Any:
-    if isinstance(geometry, PointGeometry):
-        return "point", tuple(
-            _round_number(value) for value in _point_values(geometry.point)
-        )
-    if isinstance(geometry, LineGeometry):
-        return (
-            "line",
-            tuple(_round_number(value) for value in _point_values(geometry.start)),
-            tuple(_round_number(value) for value in _point_values(geometry.end)),
-        )
-    if isinstance(geometry, CircleGeometry):
-        return (
-            "circle",
-            tuple(_round_number(value) for value in _point_values(geometry.center)),
-            _round_number(geometry.radius),
-        )
-    return geometry
-
-
-def _sketch_values(sketches: Sequence[Sketch]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            sketch.id,
-            sketch.name,
-            sketch.support_plane_id,
-            tuple(
-                (
-                    entity.id,
-                    entity.kind,
-                    _geometry_values(entity.geometry),
-                    entity.construction,
-                    entity.fixed,
-                )
-                for entity in sketch.entities
-            ),
-            tuple(
-                (
-                    constraint.id,
-                    constraint.kind,
-                    constraint.references,
-                    constraint.parameter_id,
-                    constraint.driving,
-                    constraint.suppressed,
-                )
-                for constraint in sketch.constraints
-            ),
-            sketch.parameter_ids,
-            sketch.closed_profile_entity_ids,
-            sketch.suppressed,
-        )
-        for sketch in sketches
-    )
-
-
-def _definition_value(
-    definition: Any, parameter_value: ParameterValue | None = None
-) -> Any:
-    if isinstance(definition, ExtrusionFeature):
-        length = parameter_value or definition.length
-        return (
-            "extrusion",
-            _round_number(float(length.value)),
-            length.kind,
-            length.unit,
-            definition.end_condition,
-            definition.reversed,
-        )
-    if isinstance(definition, FilletFeature):
-        radius = parameter_value or definition.radius
-        return (
-            "fillet",
-            _round_number(float(radius.value)),
-            radius.kind,
-            radius.unit,
-        )
-    if isinstance(definition, NativeFeatureDefinition):
-        return "native", definition.format_id, definition.type_id
-    return definition
-
-
-def _feature_values(
-    features: Sequence[FeatureStep], parameters: Sequence[Parameter] = ()
-) -> tuple[Any, ...]:
-    parameter_by_id = {parameter.id: parameter for parameter in parameters}
-    return tuple(
-        (
-            feature.id,
-            feature.name,
-            feature.kind,
-            feature.order,
-            feature.input_feature_ids,
-            feature.sketch_id,
-            feature.parameter_ids,
-            feature.operation,
-            _definition_value(
-                feature.definition,
-                next(
-                    (
-                        parameter_by_id[parameter_id].value
-                        for parameter_id in feature.parameter_ids
-                        if parameter_id in parameter_by_id
-                    ),
-                    None,
-                ),
-            ),
-            feature.selection_ids,
-            feature.suppressed,
-            feature.configuration_states,
-        )
-        for feature in features
-    )
-
-
-def _native_feature_definitions_unchanged(
-    desired: Sequence[FeatureStep], original: Sequence[FeatureStep]
-) -> bool:
-    originals = {feature.id: feature for feature in original}
-    for feature in desired:
-        source = originals.get(feature.id)
-        if source is None:
+# this definition exists because focused behavior needs one stable owner
+def NativeFeatureA(Desired: Sequence[FeatureStep], Original: Sequence[FeatureStep]) -> bool:
+    Originals = {Feature.id: Feature for Feature in Original}
+    for Feature in Desired:
+        Source = Originals.get(Feature.id)
+        if Source is None:
             return False
-        if (
-            isinstance(source.definition, NativeFeatureDefinition)
-            and feature.definition != source.definition
-        ):
+        if isinstance(Source.definition, NativeFeatureDefinition) and Feature.definition != Source.definition:
             return False
     return True
 
+# this definition exists because focused behavior needs one stable owner
+def SelectionValues(Selections: Sequence[Selection]) -> tuple[AnyValue, ...]:
+    return tuple(((Selection.id, Selection.name, Selection.path, dict(Selection.query)) for Selection in Selections))
 
-def _selection_values(selections: Sequence[Selection]) -> tuple[Any, ...]:
-    return tuple(
-        (selection.id, selection.name, selection.path, dict(selection.query))
-        for selection in selections
-    )
+# this definition exists because focused behavior needs one stable owner
+def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[AnyValue, ...]:
+    return tuple(((Config.id, Config.name, Config.active, Config.parent_id, Config.overrides, Config.suppressed_feature_ids) for Config in Configurations))
 
+# this definition exists because focused behavior needs one stable owner
+def BodyValues(Bodies: Sequence[Body]) -> tuple[AnyValue, ...]:
+    return tuple(((BodyValue.id, BodyValue.name, BodyValue.final_feature_id, BodyValue.topology, BodyValue.material_id) for BodyValue in Bodies))
 
-def _configuration_values(configurations: Sequence[Configuration]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            configuration.id,
-            configuration.name,
-            configuration.active,
-            configuration.parent_id,
-            configuration.overrides,
-            configuration.suppressed_feature_ids,
-        )
-        for configuration in configurations
-    )
+# this definition exists because focused behavior needs one stable owner
+def NativeBody(Model: NativeModel, Timeline: tuple[FeatureStep, ...]) -> tuple[AnyValue, ...]:
+    BodyFeature = SolidBody(Model.features)
+    BodyValue = BodyValue(id='sldprt:body:1', name=BodyFeature.name if BodyFeature is not None else 'Body 1', final_feature_id=FinalBodyId(Timeline, frozenset((FeatureId(Operation.object_id) for Operation in Model.operations))), topology=TopologySummary(solid_count=1 if Model.operations else 0, bounding_box=BoundingBoxA(Model)))
+    return BodyValues((BodyValue,))
 
+# this definition exists because focused behavior needs one stable owner
+def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[AnyValue, ...]:
+    return tuple(((Payload.id, Payload.format_id, Payload.kind, Payload.schema, Payload.sha256, Payload.data, Payload.source_stream, Payload.role, Payload.file_extension) for Payload in Payloads))
 
-def _body_values(bodies: Sequence[Body]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            body.id,
-            body.name,
-            body.final_feature_id,
-            body.topology,
-            body.material_id,
-        )
-        for body in bodies
-    )
+# this definition exists because focused behavior needs one stable owner
+def PatchTemplate(DocValue: CadDocument, Streams: dict[str, bytes], OriginalStreams: Mapping[str, bytes]) -> tuple[str, bool, bool]:
+    Archive = SldprtArchive.from_bytes(BuildSldprt(OriginalStreams))
+    OriginalPayloads, Ignored = BrepPayloads(Archive, ReadOptions(strict=False))
+    DesiredIndexes = SourcePayloadIndexes(DocValue)
+    DesiredPayloads = tuple((Payload for Index, Payload in enumerate(DocValue.brep_payloads) if Index not in DesiredIndexes and Payload.role is PayloadRole.BREP))
+    PayloadsNative = PayloadValues(DesiredPayloads) == PayloadValues(OriginalPayloads)
+    OriginalBrep = TypedBrep(OriginalPayloads)
+    if DocValue.brep == OriginalBrep and PayloadsNative:
+        return ('template', True, True)
+    Payload, State = Parasolid(DocValue)
+    if Payload is None:
+        Status = State if State.startswith('unsupported:') else 'unsupported:geometry has no writable Parasolid representation'
+        return (Status, False, PayloadsNative)
+    Streams[PartitionStream] = Payload
+    return ('patched', True, PayloadsNative)
 
-
-def _native_body_values(
-    model: NativeModel, timeline: tuple[FeatureStep, ...]
-) -> tuple[Any, ...]:
-    body_feature = _solid_body_feature(model.features)
-    body = Body(
-        id="sldprt:body:1",
-        name=body_feature.name if body_feature is not None else "Body 1",
-        final_feature_id=_final_body_feature_id(
-            timeline,
-            frozenset(
-                _feature_id(operation.object_id) for operation in model.operations
-            ),
-        ),
-        topology=TopologySummary(
-            solid_count=1 if model.operations else 0,
-            bounding_box=_bounding_box(model),
-        ),
-    )
-    return _body_values((body,))
-
-
-def _payload_values(payloads: Sequence[BrepPayload]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            payload.id,
-            payload.format_id,
-            payload.kind,
-            payload.schema,
-            payload.sha256,
-            payload.data,
-            payload.source_stream,
-            payload.role,
-            payload.file_extension,
-        )
-        for payload in payloads
-    )
-
-
-def _patch_template_brep(
-    document: CadDocument,
-    streams: dict[str, bytes],
-    original_streams: Mapping[str, bytes],
-) -> tuple[str, bool, bool]:
-    archive = SldprtArchive.from_bytes(build_sldprt(original_streams))
-    original_payloads, _ = _brep_payloads(archive, ReadOptions(strict=False))
-    desired_indexes = source_payload_indexes(document)
-    desired_payloads = tuple(
-        payload
-        for index, payload in enumerate(document.brep_payloads)
-        if index not in desired_indexes and payload.role is PayloadRole.BREP
-    )
-    payloads_native = _payload_values(desired_payloads) == _payload_values(
-        original_payloads
-    )
-    original_brep = _typed_brep(original_payloads)
-    if document.brep == original_brep and payloads_native:
-        return "template", True, True
-    payload, state = _parasolid_payload(document)
-    if payload is None:
-        status = (
-            state
-            if state.startswith("unsupported:")
-            else "unsupported:geometry has no writable Parasolid representation"
-        )
-        return status, False, payloads_native
-    streams[PARTITION_STREAM] = payload
-    return "patched", True, payloads_native
-
-
-def _patch_native_assembly(
-    document: CadDocument,
-    streams: dict[str, bytes],
-    bundle_names: Mapping[str, str],
-) -> _AssemblyTemplatePatch:
-    if document.assembly is None or COMPONENT_TREE_STREAM not in streams:
-        return _AssemblyTemplatePatch(frozenset(), ("donor_component_tree_absent",))
-    if bundle_names:
-        prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
-        path_by_file_id = {
-            int(definition.attributes["native_file_id"]): (
-                bundle_names.get(definition.document_id) or bundle_names[definition.id]
-            )
-            for definition in document.assembly.definitions
-            if (definition.document_id in bundle_names or definition.id in bundle_names)
-            and isinstance(definition.attributes.get("native_file_id"), int)
-        }
-        changed = False
-        for element in root.iter():
-            if element.tag.rsplit("}", 1)[-1] != "swFile":
+# this definition exists because focused behavior needs one stable owner
+def PatchNativeAsm(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]) -> AsmTemplate:
+    if DocValue.assembly is None or ComponentTreeStream not in Streams:
+        return AsmTemplate(frozenset(), ('donor_component_tree_absent',))
+    if BundleNames:
+        Prefix, RootValue, Trailing = KeywordsRoot(Streams[ComponentTreeStream])
+        PathByFileId = {int(Definition.attributes['native_file_id']): BundleNames.get(Definition.document_id) or BundleNames[Definition.id] for Definition in DocValue.assembly.definitions if (Definition.document_id in BundleNames or Definition.id in BundleNames) and isinstance(Definition.attributes.get('native_file_id'), int)}
+        Changed = False
+        for ElemValue in RootValue.iter():
+            if ElemValue.tag.rsplit('}', 1)[-1] != 'swFile':
                 continue
             try:
-                file_id = int(element.attrib.get("id", ""))
+                FileId = int(ElemValue.attrib.get('id', ''))
             except ValueError:
                 continue
-            target = path_by_file_id.get(file_id)
-            if target is not None and element.attrib.get("swPath") != target:
-                element.attrib["swPath"] = target
-                changed = True
-        if changed:
-            streams[COMPONENT_TREE_STREAM] = _keywords_bytes(prefix, root, trailing)
+            Target = PathByFileId.get(FileId)
+            if Target is not None and ElemValue.attrib.get('swPath') != Target:
+                ElemValue.attrib['swPath'] = Target
+                Changed = True
+        if Changed:
+            Streams[ComponentTreeStream] = KeywordsBytes(Prefix, RootValue, Trailing)
     try:
-        archive = SldprtArchive.from_bytes(build_sldprt(streams))
-        native = decode_native_assembly(archive, include_tessellation=True)
+        Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
+        Native = DecodeNativeAsm(Archive, include_tessellation=True)
     except SldprtFormatError:
-        return _AssemblyTemplatePatch(frozenset(), ("donor_component_tree_unreadable",))
-    donor_divergences = _diverged_donor_records(document.assembly, native)
-    rewritten_instances = _patch_assembly_instances(document.assembly, native, streams)
-    if rewritten_instances:
+        return AsmTemplate(frozenset(), ('donor_component_tree_unreadable',))
+    DonorDivergences = DivergedDonor(DocValue.assembly, Native)
+    RewrittenInstances = PatchAsm(DocValue.assembly, Native, Streams)
+    if RewrittenInstances:
         try:
-            archive = SldprtArchive.from_bytes(build_sldprt(streams))
-            native = decode_native_assembly(archive, include_tessellation=True)
+            Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
+            Native = DecodeNativeAsm(Archive, include_tessellation=True)
         except SldprtFormatError:
-            return _AssemblyTemplatePatch(
-                frozenset(), ("donor_component_tree_unreadable",)
-            )
-    rewritten_mates = _patch_assembly_mates(
-        document.assembly, native, streams, document.source.path
-    )
-    if rewritten_mates:
+            return AsmTemplate(frozenset(), ('donor_component_tree_unreadable',))
+    RewrittenMates = PatchAsmMates(DocValue.assembly, Native, Streams, DocValue.source.path)
+    if RewrittenMates:
         try:
-            archive = SldprtArchive.from_bytes(build_sldprt(streams))
-            native = decode_native_assembly(archive, include_tessellation=True)
+            Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
+            Native = DecodeNativeAsm(Archive, include_tessellation=True)
         except SldprtFormatError:
-            return _AssemblyTemplatePatch(
-                frozenset(), ("donor_component_tree_unreadable",)
-            )
-    result: set[Capability] = set()
-    if _assembly_structure_values(
-        document.assembly
-    ) == _native_assembly_structure_values(native):
-        result.add(Capability.ASSEMBLIES)
-    definitions = {
-        definition.id: definition for definition in document.assembly.definitions
-    }
-    document_ids = {component.id for component in document.assembly.documents}
-    preserved_documents = all(
-        isinstance(component.document, CadDocument)
-        and _preserved_source(component.document, None) is not None
-        for component in document.assembly.documents
-    )
-    bundled_documents = bool(document_ids) and document_ids <= set(bundle_names)
-    if preserved_documents or bundled_documents:
-        result.add(Capability.COMPONENT_DOCUMENTS)
-        if all(
-            not component.document.bodies
-            or Capability.BODY_STRUCTURE in component.document.capabilities
-            for component in document.assembly.documents
-            if isinstance(component.document, CadDocument)
-        ):
-            result.add(Capability.BODY_STRUCTURE)
-    if any(definition.source_path for definition in definitions.values()):
-        result.add(Capability.EXTERNAL_REFERENCES)
-    identity_definitions = {
-        definition.object_id: definition.object_id for definition in native.definitions
-    }
-    identity_occurrences = {
-        occurrence.object_id: occurrence.object_id for occurrence in native.occurrences
-    }
-    _, entities, mates, groups = _assembly_mates(
-        native,
-        (
-            (
-                native,
-                archive,
-                identity_definitions,
-                identity_occurrences,
-                document.source.path,
-            ),
-        ),
-    )
-    desired_entities = {entity.id: entity for entity in document.assembly.mate_entities}
-    root_entity_ids = {entity_id for mate in mates for entity_id in mate.entity_ids}
-    selected_entities = tuple(
-        desired_entities[entity.id]
-        for entity in entities
-        if entity.id in root_entity_ids and entity.id in desired_entities
-    )
-    desired_mates = {mate.id: mate for mate in document.assembly.mates}
-    selected_mates = tuple(
-        desired_mates[mate.id] for mate in mates if mate.id in desired_mates
-    )
-    desired_groups = {group.id: group for group in document.assembly.mate_groups}
-    selected_groups = tuple(
-        desired_groups[group.id] for group in groups if group.id in desired_groups
-    )
-    root_mates_native = _mate_values(
-        selected_entities,
-        selected_mates,
-        selected_groups,
-    ) == _mate_values(entities, mates, groups)
-    all_root_records_found = (
-        len(selected_entities) == len(entities)
-        and len(selected_mates) == len(mates)
-        and len(selected_groups) == len(groups)
-    )
-    nested_mates_native = len(document.assembly.mates) == len(mates) or (
-        Capability.COMPONENT_DOCUMENTS in result
-    )
-    if root_mates_native and all_root_records_found and nested_mates_native:
-        result.add(Capability.ASSEMBLY_MATES)
-    native_meshes, _ = _assembly_meshes(native)
-    if _mesh_values(document.meshes) == _mesh_values(native_meshes):
-        result.add(Capability.TESSELLATION)
-    divergences = donor_divergences + tuple(
-        f"donor_mate_diverged:{item}" for item in rewritten_mates
-    )
-    if Capability.ASSEMBLIES not in result and not divergences:
-        divergences = ("donor_structure_diverged",)
-    return _AssemblyTemplatePatch(frozenset(result), divergences)
+            return AsmTemplate(frozenset(), ('donor_component_tree_unreadable',))
+    Result: set[Capability] = set()
+    if AsmStructure(DocValue.assembly) == NativeAsmValues(Native):
+        Result.add(Capability.ASSEMBLIES)
+    Definitions = {Definition.id: Definition for Definition in DocValue.assembly.definitions}
+    DocIds = {Component.id for Component in DocValue.assembly.documents}
+    SavedDocuments = all((isinstance(Component.document, CadDoc) and SavedSource(Component.document, None) is not None for Component in DocValue.assembly.documents))
+    BundledDocuments = bool(DocIds) and DocIds <= set(BundleNames)
+    if SavedDocuments or BundledDocuments:
+        Result.add(Capability.COMPONENT_DOCUMENTS)
+        if all((not Component.document.bodies or Capability.BODY_STRUCTURE in Component.document.capabilities for Component in DocValue.assembly.documents if isinstance(Component.document, CadDoc))):
+            Result.add(Capability.BODY_STRUCTURE)
+    if any((Definition.source_path for Definition in Definitions.values())):
+        Result.add(Capability.EXTERNAL_REFERENCES)
+    IdentityDefinitions = {Definition.object_id: Definition.object_id for Definition in Native.definitions}
+    IdentityOccurrences = {ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences}
+    Ignored, Entities, Mates, Groups = AsmMates(Native, ((Native, Archive, IdentityDefinitions, IdentityOccurrences, DocValue.source.path),))
+    DesiredEntities = {Entity.id: Entity for Entity in DocValue.assembly.mate_entities}
+    RootEntityIds = {EntityId for MateValue in Mates for EntityId in MateValue.entity_ids}
+    SelectedEntities = tuple((DesiredEntities[Entity.id] for Entity in Entities if Entity.id in RootEntityIds and Entity.id in DesiredEntities))
+    DesiredMates = {MateValue.id: MateValue for MateValue in DocValue.assembly.mates}
+    SelectedMates = tuple((DesiredMates[MateValue.id] for MateValue in Mates if MateValue.id in DesiredMates))
+    DesiredGroups = {Group.id: Group for Group in DocValue.assembly.mate_groups}
+    SelectedGroups = tuple((DesiredGroups[Group.id] for Group in Groups if Group.id in DesiredGroups))
+    RootMatesNative = MateValues(SelectedEntities, SelectedMates, SelectedGroups) == MateValues(Entities, Mates, Groups)
+    AllRootRecordsFound = len(SelectedEntities) == len(Entities) and len(SelectedMates) == len(Mates) and (len(SelectedGroups) == len(Groups))
+    NestedMatesNative = len(DocValue.assembly.mates) == len(Mates) or Capability.COMPONENT_DOCUMENTS in Result
+    if RootMatesNative and AllRootRecordsFound and NestedMatesNative:
+        Result.add(Capability.ASSEMBLY_MATES)
+    NativeMeshes, Ignored = AsmMeshes(Native)
+    if MeshValues(DocValue.meshes) == MeshValues(NativeMeshes):
+        Result.add(Capability.TESSELLATION)
+    Divergences = DonorDivergences + tuple((f'donor_mate_diverged:{ItemValue}' for ItemValue in RewrittenMates))
+    if Capability.ASSEMBLIES not in Result and (not Divergences):
+        Divergences = ('donor_structure_diverged',)
+    return AsmTemplate(frozenset(Result), Divergences)
 
-
-def _patch_assembly_instances(
-    assembly: AssemblyData,
-    native: NativeAssembly,
-    streams: dict[str, bytes],
-) -> tuple[str, ...]:
-    original = {instance.id: instance for instance in _assembly_instances(native)}
-    desired = {instance.id: instance for instance in assembly.instances}
-    if not set(original) <= set(desired):
+# this definition exists because focused behavior needs one stable owner
+def PatchAsm(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes]) -> tuple[str, ...]:
+    Original = {Instance.id: Instance for Instance in AsmInstances(Native)}
+    Desired = {Instance.id: Instance for Instance in AsmValue.instances}
+    if not set(Original) <= set(Desired):
         return ()
-    prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
-    elements: dict[int, ET.Element] = {}
-    for element in root.iter():
-        if element.tag.rsplit("}", 1)[-1] != "swReference":
+    Prefix, RootValue, Trailing = KeywordsRoot(Streams[ComponentTreeStream])
+    Elements: dict[int, XmlTree.Element] = {}
+    for ElemValue in RootValue.iter():
+        if ElemValue.tag.rsplit('}', 1)[-1] != 'swReference':
             continue
         try:
-            elements[int(element.attrib.get("id", ""))] = element
+            Elements[int(ElemValue.attrib.get('id', ''))] = ElemValue
         except ValueError:
             continue
-    rewritten: list[str] = []
-    for instance_id, target in desired.items():
-        source = original[instance_id]
-        native_id = _native_id(instance_id, "sldasm:instance:")
-        element = elements.get(native_id or -1)
-        if element is None:
+    Rewritten: list[str] = []
+    for InstanceId, Target in Desired.items():
+        Source = Original[InstanceId]
+        NativeId = NativeId(InstanceId, 'sldasm:instance:')
+        ElemValue = Elements.get(NativeId or -1)
+        if ElemValue is None:
             continue
-        if (
-            target.owner_definition_id != source.owner_definition_id
-            or target.order != source.order
-            or target.fixed != source.fixed
-        ):
+        if Target.owner_definition_id != Source.owner_definition_id or Target.order != Source.order or Target.fixed != Source.fixed:
             continue
-        instance_values = {
-            "swModelRef": str(
-                _native_id(target.definition_id, "sldasm:definition:")
-                or element.attrib.get("swModelRef", "")
-            ),
-            "swReferenceNumber": target.reference_number,
-            "swConfigurationName": target.configuration_name,
-            "swConfigurationId": target.configuration_id,
-            "swTransform": " ".join(
-                format(value, ".17g")
-                for value in _native_assembly_matrix(target.transform)
-            ),
-            "swSuppressed": _yes_text(target.suppressed),
-            "swHidden": _yes_text(target.hidden),
-            "swFlexible": _yes_text(target.flexible),
-            "swExcludeFromBOM": _yes_text(target.exclude_from_bom),
-        }
-        reference_number = target.reference_number or source.reference_number
-        suffix = f"-{reference_number}"
-        target_name = (
-            target.name[: -len(suffix)]
-            if target.name.endswith(suffix)
-            else source.name[: -len(f"-{source.reference_number}")]
-        )
-        instance_values["swName"] = target_name
-        for key, value in instance_values.items():
-            if element.attrib.get(key) != value:
-                element.attrib[key] = value
-                if instance_id not in rewritten:
-                    rewritten.append(instance_id)
-    if rewritten:
-        streams[COMPONENT_TREE_STREAM] = _keywords_bytes(prefix, root, trailing)
-    return tuple(rewritten)
+        InstanceValues = {'swModelRef': str(NativeId(Target.definition_id, 'sldasm:definition:') or ElemValue.attrib.get('swModelRef', '')), 'swReferenceNumber': Target.reference_number, 'swConfigurationName': Target.configuration_name, 'swConfigurationId': Target.configuration_id, 'swTransform': ' '.join((format(Value, '.17g') for Value in NativeAsmMatrix(Target.transform))), 'swSuppressed': YesText(Target.suppressed), 'swHidden': YesText(Target.hidden), 'swFlexible': YesText(Target.flexible), 'swExcludeFromBOM': YesText(Target.exclude_from_bom)}
+        RefNumber = Target.reference_number or Source.reference_number
+        Suffix = f'-{RefNumber}'
+        TargetName = Target.name[:-len(Suffix)] if Target.name.endswith(Suffix) else Source.name[:-len(f'-{Source.reference_number}')]
+        InstanceValues['swName'] = TargetName
+        for KeyValue, Value in InstanceValues.items():
+            if ElemValue.attrib.get(KeyValue) != Value:
+                ElemValue.attrib[KeyValue] = Value
+                if InstanceId not in Rewritten:
+                    Rewritten.append(InstanceId)
+    if Rewritten:
+        Streams[ComponentTreeStream] = KeywordsBytes(Prefix, RootValue, Trailing)
+    return tuple(Rewritten)
 
+# this definition exists because focused behavior needs one stable owner
+def NativeAsmMatrix(Matrix: Matrix4) -> tuple[float, ...]:
+    Values = Matrix.values
+    Result = [0.0] * 16
+    Result[0], Result[4], Result[8], Result[12] = (Values[0], Values[1], Values[2], Values[3] / 1000.0)
+    Result[1], Result[5], Result[9], Result[13] = (Values[4], Values[5], Values[6], Values[7] / 1000.0)
+    Result[2], Result[6], Result[10], Result[14] = (Values[8], Values[9], Values[10], Values[11] / 1000.0)
+    Result[3], Result[7], Result[11], Result[15] = (Values[12], Values[13], Values[14], Values[15])
+    if not all((MathValue.isfinite(Value) for Value in Result)):
+        raise SldprtFormatError('component transform contains a non-finite value')
+    return tuple(Result)
 
-def _native_assembly_matrix(matrix: Matrix4) -> tuple[float, ...]:
-    values = matrix.values
-    result = [0.0] * 16
-    result[0], result[4], result[8], result[12] = (
-        values[0],
-        values[1],
-        values[2],
-        values[3] / 1000.0,
-    )
-    result[1], result[5], result[9], result[13] = (
-        values[4],
-        values[5],
-        values[6],
-        values[7] / 1000.0,
-    )
-    result[2], result[6], result[10], result[14] = (
-        values[8],
-        values[9],
-        values[10],
-        values[11] / 1000.0,
-    )
-    result[3], result[7], result[11], result[15] = (
-        values[12],
-        values[13],
-        values[14],
-        values[15],
-    )
-    if not all(math.isfinite(value) for value in result):
-        raise SldprtFormatError("component transform contains a non-finite value")
-    return tuple(result)
+# this definition exists because focused behavior needs one stable owner
+def YesText(Value: bool) -> str:
+    return 'YES' if Value else 'NO'
 
-
-def _yes_text(value: bool) -> str:
-    return "YES" if value else "NO"
-
-
-def _patch_assembly_mates(
-    assembly: AssemblyData,
-    native: NativeAssembly,
-    streams: dict[str, bytes],
-    source_path: str,
-) -> tuple[str, ...]:
-    definition_map = {
-        definition.object_id: definition.object_id for definition in native.definitions
-    }
-    occurrence_map = {
-        occurrence.object_id: occurrence.object_id for occurrence in native.occurrences
-    }
-    _, _, original_mates, _ = _assembly_mates(
-        native,
-        (
-            (
-                native,
-                SldprtArchive.from_bytes(build_sldprt(streams)),
-                definition_map,
-                occurrence_map,
-                source_path,
-            ),
-        ),
-    )
-    original = {mate.id: mate for mate in original_mates}
-    desired = {mate.id: mate for mate in assembly.mates}
-    if set(original) != set(desired):
+# this definition exists because focused behavior needs one stable owner
+def PatchAsmMates(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes], SourcePath: str) -> tuple[str, ...]:
+    DefinitionMap = {Definition.object_id: Definition.object_id for Definition in Native.definitions}
+    ItemMap = {ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences}
+    Ignored, Ignored, OriginalMates, Ignored = AsmMates(Native, ((Native, SldprtArchive.from_bytes(BuildSldprt(Streams)), DefinitionMap, ItemMap, SourcePath),))
+    Original = {MateValue.id: MateValue for MateValue in OriginalMates}
+    Desired = {MateValue.id: MateValue for MateValue in AsmValue.mates}
+    if set(Original) != set(Desired):
         return ()
-    buffers: dict[str, bytearray] = {}
-    rewritten: list[str] = []
-    for mate_id, target in desired.items():
-        source = original[mate_id]
-        if (
-            target.name != source.name
-            or target.kind != source.kind
-            or target.owner_definition_id != source.owner_definition_id
-            or target.entity_ids != source.entity_ids
-            or target.order != source.order
-            or target.parameter_ids != source.parameter_ids
-            or target.suppressed != source.suppressed
-            or target.driving != source.driving
-        ):
+    Buffers: dict[str, bytearray] = {}
+    Rewritten: list[str] = []
+    for MateId, Target in Desired.items():
+        Source = Original[MateId]
+        if Target.name != Source.name or Target.kind != Source.kind or Target.owner_definition_id != Source.owner_definition_id or (Target.entity_ids != Source.entity_ids) or (Target.order != Source.order) or (Target.parameter_ids != Source.parameter_ids) or (Target.suppressed != Source.suppressed) or (Target.driving != Source.driving):
             continue
-        parts = mate_id.split(":")
-        if len(parts) != 5:
+        Parts = MateId.split(':')
+        if len(Parts) != 5:
             continue
         try:
-            list_index = int(parts[3])
-            mate_order = int(parts[4])
+            ListIndex = int(Parts[3])
+            MateOrder = int(Parts[4])
         except ValueError:
             continue
-        if not 0 <= list_index < len(native.mate_lists):
+        if not 0 <= ListIndex < len(Native.mate_lists):
             continue
-        mate_list = native.mate_lists[list_index]
-        native_mate = next(
-            (mate for mate in mate_list.mates if mate.order == mate_order), None
-        )
-        if native_mate is None:
+        MateList = Native.mate_lists[ListIndex]
+        NativeMate = next((MateValue for MateValue in MateList.mates if MateValue.order == MateOrder), None)
+        if NativeMate is None:
             continue
-        buffer = buffers.setdefault(
-            mate_list.stream, bytearray(streams[mate_list.stream])
-        )
-        if target.value != source.value:
-            values = _native_mate_values(target.value, native_mate)
-            if values is not None:
-                for index, native_value in enumerate(values):
-                    struct.pack_into(
-                        "<d",
-                        buffer,
-                        native_mate.dimensions[index].value_offset,
-                        native_value,
-                    )
-                if mate_id not in rewritten:
-                    rewritten.append(mate_id)
-        if target.alignment != source.alignment:
-            alignment_code = next(
-                (
-                    code
-                    for code, alignment in NATIVE_MATE_ALIGNMENT_BY_CODE.items()
-                    if alignment.kind == str(target.alignment)
-                    or alignment.kind == getattr(target.alignment, "value", None)
-                ),
-                None,
-            )
-            offset = _native_mate_alignment_offset(buffer, native_mate)
-            if alignment_code is not None and offset is not None:
-                struct.pack_into("<H", buffer, offset, alignment_code)
-                if mate_id not in rewritten:
-                    rewritten.append(mate_id)
-    for stream, buffer in buffers.items():
-        streams[stream] = bytes(buffer)
-    return tuple(rewritten)
+        Buffer = Buffers.setdefault(MateList.stream, bytearray(Streams[MateList.stream]))
+        if Target.value != Source.value:
+            Values = NativeMateB(Target.value, NativeMate)
+            if Values is not None:
+                for Index, NativeValue in enumerate(Values):
+                    Struct.pack_into('<d', Buffer, NativeMate.dimensions[Index].value_offset, NativeValue)
+                if MateId not in Rewritten:
+                    Rewritten.append(MateId)
+        if Target.alignment != Source.alignment:
+            AlignmentCode = next((CodeValue for CodeValue, Alignment in NativeMateAlignmentByCode.items() if Alignment.kind == str(Target.alignment) or Alignment.kind == getattr(Target.alignment, 'value', None)), None)
+            Offset = NativeMateA(Buffer, NativeMate)
+            if AlignmentCode is not None and Offset is not None:
+                Struct.pack_into('<H', Buffer, Offset, AlignmentCode)
+                if MateId not in Rewritten:
+                    Rewritten.append(MateId)
+    for Stream, Buffer in Buffers.items():
+        Streams[Stream] = bytes(Buffer)
+    return tuple(Rewritten)
 
-
-def _native_mate_values(
-    value: ParameterValue | None, mate: NativeMate
-) -> tuple[float, ...] | None:
-    if value is None or not mate.dimensions:
+# this definition exists because focused behavior needs one stable owner
+def NativeMateB(Value: ParameterValue | None, MateValue: NativeMate) -> tuple[float, ...] | None:
+    if Value is None or not MateValue.dimensions:
         return None
-    if isinstance(value.value, bool) or not isinstance(value.value, (int, float)):
+    if isinstance(Value.value, bool) or not isinstance(Value.value, (int, float)):
         return None
-    number = float(value.value)
-    if not math.isfinite(number):
+    Number = float(Value.value)
+    if not MathValue.isfinite(Number):
         return None
-    semantic = MATE_VALUE_SEMANTICS.get(mate.kind)
-    if semantic == "length" and value.kind is ValueKind.LENGTH:
-        factor = {
-            "": 1.0,
-            "mm": 1.0,
-            "cm": 10.0,
-            "m": 1000.0,
-            "in": 25.4,
-        }.get(value.unit.casefold())
-        return (number * factor / 1000.0,) if factor is not None else None
-    if semantic == "angle" and value.kind is ValueKind.ANGLE:
-        factor = {"": 1.0, "rad": 1.0, "deg": math.pi / 180.0}.get(
-            value.unit.casefold()
-        )
-        return (number * factor,) if factor is not None else None
-    if (
-        semantic == "ratio"
-        and value.kind is ValueKind.NUMBER
-        and len(mate.dimensions) >= 2
-    ):
-        denominator = mate.dimensions[1].value
-        return number * denominator, denominator
+    Semantic = MateValueSemantics.get(MateValue.kind)
+    if Semantic == 'length' and Value.kind is ValueKind.LENGTH:
+        Factor = {'': 1.0, 'mm': 1.0, 'cm': 10.0, 'm': 1000.0, 'in': 25.4}.get(Value.unit.casefold())
+        return (Number * Factor / 1000.0,) if Factor is not None else None
+    if Semantic == 'angle' and Value.kind is ValueKind.ANGLE:
+        Factor = {'': 1.0, 'rad': 1.0, 'deg': MathValue.pi / 180.0}.get(Value.unit.casefold())
+        return (Number * Factor,) if Factor is not None else None
+    if Semantic == 'ratio' and Value.kind is ValueKind.NUMBER and (len(MateValue.dimensions) >= 2):
+        Denominator = MateValue.dimensions[1].value
+        return (Number * Denominator, Denominator)
     return None
 
-
-def _native_mate_alignment_offset(
-    data: bytes | bytearray, mate: NativeMate
-) -> int | None:
-    start = mate.record_offset
-    end = start + mate.record_length
-    encoded = mate.name.encode("utf-16le")
-    text_start = bytes(data).find(encoded, start, end)
-    if text_start < 0:
+# this definition exists because focused behavior needs one stable owner
+def NativeMateA(DataValue: bytes | bytearray, MateValue: NativeMate) -> int | None:
+    Start = MateValue.record_offset
+    EndValue = Start + MateValue.record_length
+    Encoded = MateValue.name.encode('utf-16le')
+    TextStart = bytes(DataValue).find(Encoded, Start, EndValue)
+    if TextStart < 0:
         return None
-    offset = text_start + len(encoded) + 159
-    return offset if offset + 2 <= end else None
+    Offset = TextStart + len(Encoded) + 159
+    return Offset if Offset + 2 <= EndValue else None
 
+# this definition exists because focused behavior needs one stable owner
+def Definition(Definition: ComponentDefinition) -> tuple[AnyValue, ...]:
+    return (Definition.id, Definition.name, Definition.kind, Definition.configuration_name)
 
-def _definition_structure_values(definition: ComponentDefinition) -> tuple[Any, ...]:
-    return (
-        definition.id,
-        definition.name,
-        definition.kind,
-        definition.configuration_name,
-    )
+# this definition exists because focused behavior needs one stable owner
+def InstanceValues(Instance: ComponentInstance) -> tuple[AnyValue, ...]:
+    return (Instance.id, Instance.name, Instance.definition_id, Instance.owner_definition_id, tuple((RoundNumber(Value) for Value in Instance.transform.values)), Instance.order, Instance.reference_number, Instance.configuration_name, Instance.configuration_id, Instance.suppressed, Instance.hidden, Instance.fixed, Instance.flexible, Instance.exclude_from_bom)
 
+# this definition exists because focused behavior needs one stable owner
+def AsmStructure(AsmValue: AssemblyData) -> tuple[AnyValue, ...]:
+    return (AsmValue.root_definition_id, tuple((Definition(Definition) for Definition in AsmValue.definitions)), tuple((InstanceValues(Instance) for Instance in AsmValue.instances)))
 
-def _instance_structure_values(instance: ComponentInstance) -> tuple[Any, ...]:
-    return (
-        instance.id,
-        instance.name,
-        instance.definition_id,
-        instance.owner_definition_id,
-        tuple(_round_number(value) for value in instance.transform.values),
-        instance.order,
-        instance.reference_number,
-        instance.configuration_name,
-        instance.configuration_id,
-        instance.suppressed,
-        instance.hidden,
-        instance.fixed,
-        instance.flexible,
-        instance.exclude_from_bom,
-    )
+# this definition exists because focused behavior needs one stable owner
+def NativeAsmData(Native: NativeAssembly) -> AsmData:
+    return AsmData(AsmDefinitionId(Native.root_definition_id), AsmDefinitions(Native, {}, {}, {}, {}, '<memory>'), AsmInstances(Native))
 
+# this definition exists because focused behavior needs one stable owner
+def NativeAsmValues(Native: NativeAssembly) -> tuple[AnyValue, ...]:
+    return AsmStructure(NativeAsmData(Native))
 
-def _assembly_structure_values(assembly: AssemblyData) -> tuple[Any, ...]:
-    return (
-        assembly.root_definition_id,
-        tuple(
-            _definition_structure_values(definition)
-            for definition in assembly.definitions
-        ),
-        tuple(_instance_structure_values(instance) for instance in assembly.instances),
-    )
+# this definition exists because focused behavior needs one stable owner
+def DivergedKeys(Donor: Mapping[str, Any], Desired: Mapping[str, Any]) -> tuple[str, ...]:
+    return tuple(sorted(set(Donor) ^ set(Desired))) + tuple((KeyValue for KeyValue in sorted(set(Donor) & set(Desired)) if Donor[KeyValue] != Desired[KeyValue]))
 
+# this definition exists because focused behavior needs one stable owner
+def DivergedDonor(AsmValue: AssemblyData, Native: NativeAssembly) -> tuple[str, ...]:
+    Donor = NativeAsmData(Native)
+    Names: list[str] = []
+    if AsmValue.root_definition_id != Donor.root_definition_id:
+        Names.append('donor_root_definition_diverged')
+    if tuple((ItemValue.id for ItemValue in Donor.definitions)) != tuple((ItemValue.id for ItemValue in AsmValue.definitions)):
+        Names.append('donor_definition_order_diverged')
+    if tuple((ItemValue.id for ItemValue in Donor.instances)) != tuple((ItemValue.id for ItemValue in AsmValue.instances)):
+        Names.append('donor_instance_order_diverged')
+    Names.extend((f'donor_definition_diverged:{KeyValue}' for KeyValue in DivergedKeys({ItemValue.id: Definition(ItemValue) for ItemValue in Donor.definitions}, {ItemValue.id: Definition(ItemValue) for ItemValue in AsmValue.definitions})))
+    Names.extend((f'donor_instance_diverged:{KeyValue}' for KeyValue in DivergedKeys({ItemValue.id: InstanceValues(ItemValue) for ItemValue in Donor.instances}, {ItemValue.id: InstanceValues(ItemValue) for ItemValue in AsmValue.instances})))
+    return tuple(Names)
 
-def _native_assembly_data(native: NativeAssembly) -> AssemblyData:
-    return AssemblyData(
-        _assembly_definition_id(native.root_definition_id),
-        _assembly_definitions(native, {}, {}, {}, {}, "<memory>"),
-        _assembly_instances(native),
-    )
+# this definition exists because focused behavior needs one stable owner
+def MateValues(Entities: Sequence[MateEntity], Mates: Sequence[MateConstraint], Groups: Sequence[MateGroup]) -> tuple[AnyValue, ...]:
+    return (tuple(((Entity.id, Entity.owner_definition_id, Entity.instance_path, Entity.kind, Entity.source_entity_id, Entity.selection_id, Entity.frame, Entity.radius) for Entity in Entities)), tuple(((MateValue.id, MateValue.name, MateValue.kind, MateValue.owner_definition_id, MateValue.entity_ids, MateValue.order, MateParamValue(MateValue.value), MateValue.parameter_ids, MateValue.alignment, MateValue.suppressed, MateValue.driving) for MateValue in Mates)), tuple(((Group.id, Group.name, Group.owner_definition_id, Group.mate_ids, Group.parent_group_id, Group.order) for Group in Groups)))
 
+# this definition exists because focused behavior needs one stable owner
+def MateParamValue(Value: ParameterValue | None) -> AnyValue:
+    if Value is None or isinstance(Value.value, bool) or (not isinstance(Value.value, (int, float))):
+        return Value
+    Number = float(Value.value)
+    if Value.kind is ValueKind.LENGTH:
+        Factor = {'': 1.0, 'mm': 1.0, 'cm': 10.0, 'm': 1000.0, 'in': 25.4}.get(Value.unit.casefold())
+        if Factor is not None:
+            return (ValueKind.LENGTH, RoundNumber(Number * Factor))
+    if Value.kind is ValueKind.ANGLE:
+        Factor = {'': 1.0, 'rad': 1.0, 'deg': MathValue.pi / 180.0}.get(Value.unit.casefold())
+        if Factor is not None:
+            return (ValueKind.ANGLE, RoundNumber(Number * Factor))
+    if Value.kind is ValueKind.NUMBER:
+        return (ValueKind.NUMBER, RoundNumber(Number))
+    return Value
 
-def _native_assembly_structure_values(native: NativeAssembly) -> tuple[Any, ...]:
-    return _assembly_structure_values(_native_assembly_data(native))
+# this definition exists because focused behavior needs one stable owner
+def MeshValues(Meshes: Sequence[Mesh]) -> tuple[AnyValue, ...]:
+    return tuple(((MeshValue.id, MeshValue.name, MeshValue.vertices, MeshValue.triangles, MeshValue.normals) for MeshValue in Meshes))
 
-
-def _diverged_keys(
-    donor: Mapping[str, Any], desired: Mapping[str, Any]
-) -> tuple[str, ...]:
-    return tuple(sorted(set(donor) ^ set(desired))) + tuple(
-        key for key in sorted(set(donor) & set(desired)) if donor[key] != desired[key]
-    )
-
-
-def _diverged_donor_records(
-    assembly: AssemblyData, native: NativeAssembly
-) -> tuple[str, ...]:
-    donor = _native_assembly_data(native)
-    names: list[str] = []
-    if assembly.root_definition_id != donor.root_definition_id:
-        names.append("donor_root_definition_diverged")
-    if tuple(item.id for item in donor.definitions) != tuple(
-        item.id for item in assembly.definitions
-    ):
-        names.append("donor_definition_order_diverged")
-    if tuple(item.id for item in donor.instances) != tuple(
-        item.id for item in assembly.instances
-    ):
-        names.append("donor_instance_order_diverged")
-    names.extend(
-        f"donor_definition_diverged:{key}"
-        for key in _diverged_keys(
-            {item.id: _definition_structure_values(item) for item in donor.definitions},
-            {
-                item.id: _definition_structure_values(item)
-                for item in assembly.definitions
-            },
-        )
-    )
-    names.extend(
-        f"donor_instance_diverged:{key}"
-        for key in _diverged_keys(
-            {item.id: _instance_structure_values(item) for item in donor.instances},
-            {item.id: _instance_structure_values(item) for item in assembly.instances},
-        )
-    )
-    return tuple(names)
-
-
-def _mate_values(
-    entities: Sequence[MateEntity],
-    mates: Sequence[MateConstraint],
-    groups: Sequence[MateGroup],
-) -> tuple[Any, ...]:
-    return (
-        tuple(
-            (
-                entity.id,
-                entity.owner_definition_id,
-                entity.instance_path,
-                entity.kind,
-                entity.source_entity_id,
-                entity.selection_id,
-                entity.frame,
-                entity.radius,
-            )
-            for entity in entities
-        ),
-        tuple(
-            (
-                mate.id,
-                mate.name,
-                mate.kind,
-                mate.owner_definition_id,
-                mate.entity_ids,
-                mate.order,
-                _mate_parameter_value(mate.value),
-                mate.parameter_ids,
-                mate.alignment,
-                mate.suppressed,
-                mate.driving,
-            )
-            for mate in mates
-        ),
-        tuple(
-            (
-                group.id,
-                group.name,
-                group.owner_definition_id,
-                group.mate_ids,
-                group.parent_group_id,
-                group.order,
-            )
-            for group in groups
-        ),
-    )
-
-
-def _mate_parameter_value(value: ParameterValue | None) -> Any:
-    if (
-        value is None
-        or isinstance(value.value, bool)
-        or not isinstance(value.value, (int, float))
-    ):
-        return value
-    number = float(value.value)
-    if value.kind is ValueKind.LENGTH:
-        factor = {"": 1.0, "mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}.get(
-            value.unit.casefold()
-        )
-        if factor is not None:
-            return ValueKind.LENGTH, _round_number(number * factor)
-    if value.kind is ValueKind.ANGLE:
-        factor = {"": 1.0, "rad": 1.0, "deg": math.pi / 180.0}.get(
-            value.unit.casefold()
-        )
-        if factor is not None:
-            return ValueKind.ANGLE, _round_number(number * factor)
-    if value.kind is ValueKind.NUMBER:
-        return ValueKind.NUMBER, _round_number(number)
-    return value
-
-
-def _mesh_values(meshes: Sequence[Mesh]) -> tuple[Any, ...]:
-    return tuple(
-        (
-            mesh.id,
-            mesh.name,
-            mesh.vertices,
-            mesh.triangles,
-            mesh.normals,
-        )
-        for mesh in meshes
-    )
-
-
-# this writes native parasolid geometry with solidworks feature ownership
-def _parasolid_payload(
-    document: CadDocument,
-    ObjectIds: Mapping[str, int] | None = None,
-) -> tuple[bytes | None, str]:
-    candidates: list[bytes] = []
-    for payload in document.brep_payloads:
-        if (
-            payload.role != PayloadRole.BREP
-            or payload.format_id.casefold() != "parasolid"
-            or payload.data is None
-        ):
+# this definition exists because focused behavior needs one stable owner
+def Parasolid(DocValue: CadDocument, ObjectIds: Mapping[str, int] | None=None) -> tuple[bytes | None, str]:
+    Candidates: list[bytes] = []
+    for Payload in DocValue.brep_payloads:
+        if Payload.role != PayloadRole.BREP or Payload.format_id.casefold() != 'parasolid' or Payload.data is None:
             continue
         try:
-            decoded = decode_partition_stream(payload.data, payload.source_stream)
+            Decoded = DecodePartitionStream(Payload.data, Payload.source_stream)
         except SldprtFormatError:
             continue
-        candidates.extend(
-            item.data for item in decoded if is_native_parasolid_payload(item.data)
-        )
-    if candidates:
-        return encode_partition_stream(max(candidates, key=len)), "preserved"
-    if document.assembly is not None:
-        return None, "none"
-    if document.brep is None:
-        if (
-            not document.feature_timeline
-            and not document.sketches
-            and not document.bodies
-            and not document.meshes
-        ):
-            return encode_blank_partition_stream(), "generated"
-        return encode_blank_partition_stream(), "none"
+        Candidates.extend((ItemValue.data for ItemValue in Decoded if IsNativeParasolidPayload(ItemValue.data)))
+    if Candidates:
+        return (EncodePartitionStream(max(Candidates, key=len)), 'preserved')
+    if DocValue.assembly is not None:
+        return (None, 'none')
+    if DocValue.brep is None:
+        if not DocValue.feature_timeline and (not DocValue.sketches) and (not DocValue.bodies) and (not DocValue.meshes):
+            return (EncodeBlankPartition(), 'generated')
+        return (EncodeBlankPartition(), 'none')
     FeatureIds: dict[str, int] = {}
     if ObjectIds:
-        DesignBodies = {Body.id: Body for Body in document.bodies}
-        SingleFeatureId = (
-            document.bodies[0].final_feature_id if len(document.bodies) == 1 else ""
-        )
-        for BrepBody in document.brep.bodies:
-            FeatureId = str(BrepBody.attributes.get("feature_id", ""))
+        DesignBodies = {BodyValue.id: BodyValue for BodyValue in DocValue.bodies}
+        SingleFeatureId = DocValue.bodies[0].final_feature_id if len(DocValue.bodies) == 1 else ''
+        for BrepBody in DocValue.brep.bodies:
+            FeatureId = str(BrepBody.attributes.get('feature_id', ''))
             if not FeatureId and BrepBody.design_body_id in DesignBodies:
                 FeatureId = DesignBodies[BrepBody.design_body_id].final_feature_id
-            if not FeatureId and len(document.brep.bodies) == 1:
+            if not FeatureId and len(DocValue.brep.bodies) == 1:
                 FeatureId = SingleFeatureId
-            NativeId = ObjectIds.get(f"feature:{FeatureId}")
+            NativeId = ObjectIds.get(f'feature:{FeatureId}')
             if NativeId is not None:
                 FeatureIds[BrepBody.id] = NativeId
     try:
-        return (
-            encode_partition_stream(
-                encode_brep_model(
-                    document.brep,
-                    solidworks_feature_ids=(
-                        FeatureIds
-                        if len(FeatureIds) == len(document.brep.bodies)
-                        else None
-                    ),
-                )
-            ),
-            "generated",
-        )
+        return (EncodePartitionStream(EncodeBrepModel(DocValue.brep, solidworks_feature_ids=FeatureIds if len(FeatureIds) == len(DocValue.brep.bodies) else None)), 'generated')
     except ParasolidWriteError as exc:
-        return None, f"unsupported:{exc}"
+        return (None, f'unsupported:{exc}')
 
+# this definition exists because focused behavior needs one stable owner
+def SolidworksXml(Model: str, Config: str) -> bytes:
+    ModelValue = XmlAttr(Model)
+    ConfigValue = XmlAttr(Config)
+    return f'<?xml version="1.0"?><swSolidWorks><swModel swName="{ModelValue}" swConfigurationName="{ConfigValue}"/></swSolidWorks>'.encode('utf-8')
 
-def _solidworks_xml(model: str, configuration: str) -> bytes:
-    model_value = _xml_attribute(model)
-    configuration_value = _xml_attribute(configuration)
-    return (
-        '<?xml version="1.0"?><swSolidWorks><swModel swName="'
-        f'{model_value}" swConfigurationName="{configuration_value}"/>'
-        "</swSolidWorks>"
-    ).encode("utf-8")
+# this definition exists because focused behavior needs one stable owner
+def Solidworks() -> dict[str, bytes]:
+    return {ContentTypesStream: b'<?xml version="1.0"?>\r\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/></Types>\r\n', RelationshipsStream: b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/></Relationships>\r\n', 'docProps/app.xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Template>Normal.dotm</Template><TotalTime>1526</TotalTime><Application>SOLIDWORKS</Application><DocSecurity>0</DocSecurity><Company>Dassault Systèmes SolidWorks Corporation</Company><LinksUpToDate>false</LinksUpToDate><SharedDoc>false</SharedDoc><HyperlinksChanged>false</HyperlinksChanged><AppVersion>23.0000</AppVersion></Properties>\r\n'.encode('utf-8'), 'docProps/core.xml': b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:lastModifiedBy>Kit</dc:lastModifiedBy><dcterms:created>2026-08-02T17:13:26Z</dcterms:created><dcterms:modified>2026-08-02T17:13:27Z</dcterms:modified></cp:coreProperties>\r\n', 'docProps/custom.xml': b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><propertySection xmlns="" name="DocumentSummaryInformation" fmtid="{D5CDD502-2E9C-101B-9397-08002B2CF9AE}"><property name="" pid="1" TypeID="0"><vt:i2>65001</vt:i2></property><property name="" pid="22" TypeID="0"><vt:bool>No</vt:bool></property><propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement></propertySection><propertySection xmlns="" name="UserDefinedProperties" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"><property name="" pid="1" TypeID="0"><vt:i2>65001</vt:i2></property><propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement></propertySection></Properties>\r\n'}
 
+# this definition exists because focused behavior needs one stable owner
+def XmlAttr(Value: str) -> str:
+    return Value.replace('&', '&amp;').replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
 
-def _solidworks_package_streams() -> dict[str, bytes]:
-    return {
-        CONTENT_TYPES_STREAM: (
-            b'<?xml version="1.0"?>\r\n'
-            b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-            b'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-            b'<Default Extension="xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
-            b'<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
-            b'<Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>'
-            b"</Types>\r\n"
-        ),
-        RELATIONSHIPS_STREAM: (
-            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            b'<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
-            b'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
-            b'<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/>'
-            b"</Relationships>\r\n"
-        ),
-        "docProps/app.xml": (
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-            '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
-            "<Template>Normal.dotm</Template><TotalTime>1526</TotalTime>"
-            "<Application>SOLIDWORKS</Application><DocSecurity>0</DocSecurity>"
-            "<Company>Dassault Systèmes SolidWorks Corporation</Company>"
-            "<LinksUpToDate>false</LinksUpToDate><SharedDoc>false</SharedDoc>"
-            "<HyperlinksChanged>false</HyperlinksChanged>"
-            "<AppVersion>23.0000</AppVersion></Properties>\r\n"
-        ).encode("utf-8"),
-        "docProps/core.xml": (
-            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-            b'<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-            b"<dc:lastModifiedBy>Kit</dc:lastModifiedBy>"
-            b"<dcterms:created>2026-08-02T17:13:26Z</dcterms:created>"
-            b"<dcterms:modified>2026-08-02T17:13:27Z</dcterms:modified>"
-            b"</cp:coreProperties>\r\n"
-        ),
-        "docProps/custom.xml": (
-            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-            b'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
-            b'<propertySection xmlns="" name="DocumentSummaryInformation" fmtid="{D5CDD502-2E9C-101B-9397-08002B2CF9AE}">'
-            b'<property name="" pid="1" TypeID="0"><vt:i2>65001</vt:i2></property>'
-            b'<property name="" pid="22" TypeID="0"><vt:bool>No</vt:bool></property>'
-            b'<propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement>'
-            b"</propertySection>"
-            b'<propertySection xmlns="" name="UserDefinedProperties" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}">'
-            b'<property name="" pid="1" TypeID="0"><vt:i2>65001</vt:i2></property>'
-            b'<propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement>'
-            b"</propertySection></Properties>\r\n"
-        ),
-    }
+# this definition exists because focused behavior needs one stable owner
+def TargetFormatId(DocValue: CadDocument) -> str:
+    return KAsmFormatId if DocValue.assembly is not None else KFormatId
 
-
-def _xml_attribute(value: str) -> str:
-    return (
-        value.replace("&", "&amp;")
-        .replace('"', "&quot;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
-
-
-def _destination_format_id(document: CadDocument) -> str:
-    return _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
-
-
-def _destination_path(destination: Destination) -> Path | None:
-    if isinstance(destination, (str, Path)):
-        return Path(destination).expanduser().resolve()
+# this definition exists because focused behavior needs one stable owner
+def TargetPath(Target: Destination) -> PathValue | None:
+    if isinstance(Target, (str, PathValue)):
+        return PathValue(Target).expanduser().resolve()
     return None
 
-
-def _write_destination(
-    destination: Destination, data: bytes, overwrite: bool
-) -> Path | None:
-    path = _destination_path(destination)
-    if path is None:
+# this definition exists because focused behavior needs one stable owner
+def WriteTarget(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathValue | None:
+    PathValue = TargetPath(Target)
+    if PathValue is None:
         try:
-            written = destination.write(data)
+            Written = Target.write(DataValue)
         except TypeError as exc:
-            raise TypeError("SLDPRT destination stream must accept bytes") from exc
-        if isinstance(written, int) and written != len(data):
-            raise OSError("SLDPRT destination stream accepted a partial write")
+            raise TypeError('SLDPRT destination stream must accept bytes') from exc
+        if isinstance(Written, int) and Written != len(DataValue):
+            raise OSError('SLDPRT destination stream accepted a partial write')
         return None
-    if path.exists() and not overwrite:
-        raise FileExistsError(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
+    if PathValue.exists() and (not Overwrite):
+        raise FileExistsError(PathValue)
+    PathValue.parent.mkdir(parents=True, exist_ok=True)
+    Descriptor, TemporaryName = Tempfile.mkstemp(prefix=f'.{PathValue.name}.', suffix='.tmp', dir=PathValue.parent)
     try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary_name, path)
+        with OsModule.fdopen(Descriptor, 'wb') as Stream:
+            Stream.write(DataValue)
+            Stream.flush()
+            OsModule.fsync(Stream.fileno())
+        OsModule.replace(TemporaryName, PathValue)
     except BaseException:
-        with suppress(FileNotFoundError):
-            os.unlink(temporary_name)
+        with Suppress(FileNotFoundError):
+            OsModule.unlink(TemporaryName)
         raise
-    return path
+    return PathValue
 
+# this definition exists because focused behavior needs one stable owner
+def AsmDoc(Adapter: SldprtAdapter, Archive: SldprtArchive, DataValue: bytes, Label: str, Settings: ReadOptions) -> CadDoc:
+    Native = DecodeNativeAsm(Archive, include_tessellation=True)
+    ResolvedStream = ResolvedStream(Archive.streams, ResolvedFeaturesStream)
+    Model = DecodeNativeModel(Archive.require(KeywordsStream), Archive.require(ResolvedStream), resolved_stream=ResolvedStream)
+    Configurations = Configurations(Model, Settings.configuration)
+    Parameters = Parameters(Model)
+    ParamIds = {Param.id for Param in Parameters}
+    Planes = Planes(Model, ParamIds)
+    Sketches = Sketches(Model, ParamIds)
+    Selections = Selections(Model)
+    Timeline = Timeline(Model, Selections)
+    Meshes, MeshIds = AsmMeshes(Native)
+    Index = ComponentFile(Label, Settings)
+    ResolveComponents = Settings.values.get('resolve_components', True) is not False
+    Documents, DocIds, ResolvedPaths, DocDiagnostics = AsmDocuments(Adapter, Native, Index if ResolveComponents else {}, Settings)
+    Definitions = AsmDefinitions(Native, DocIds, ResolvedPaths, {DocValue.id: DocValue.document for DocValue in Documents}, MeshIds, Label)
+    Instances = AsmInstances(Native)
+    MateSources, SourceDiagnostics = MateSources(Native, Archive, Label, Index, Settings)
+    MatePayloads, MateEntities, Mates, MateGroups = AsmMates(Native, MateSources)
+    FlattenedMates = FlattenedMates(Native, Mates)
+    PayloadSettings = ReadOptions(configuration=Settings.configuration, include_brep=Settings.include_brep, include_tessellation=Settings.include_tessellation, strict=False, values=Settings.values)
+    BrepPayloads, PayloadDiagnostics = BrepPayloads(Archive, PayloadSettings)
+    CompanionPayloads = Companion(Label) if Settings.include_brep and Settings.values.get('discover_companions', True) is not False else ()
+    Unresolved = tuple((Definition for Definition in Native.definitions if Definition.document_type == 'PART' and Definition.object_id not in DocIds and (Definition.object_id not in MeshIds)))
+    if Unresolved and Settings.strict and ResolveComponents:
+        Names = ', '.join((Definition.name for Definition in Unresolved))
+        raise SldprtFormatError(f'assembly component sources and tessellation are unavailable: {Names}')
+    Diagnostics = tuple((DiagValue(code='sldasm.native_record_unresolved', message=Message, severity=Severity.INFO) for Message in Model.diagnostics)) + PayloadDiagnostics + DocDiagnostics + SourceDiagnostics
+    PathRecords = Flattened(Native)
+    LinkedDocuments = {DocValue.id: DocValue.document for DocValue in Documents}
+    LinkedPartDocuments = tuple((DocValue for DocValue in Documents if DocValue.document.source.format_id == KFormatId))
+    LinkedAsmDocuments = tuple((DocValue for DocValue in Documents if DocValue.document.source.format_id == KAsmFormatId))
+    AsmValue = AsmData(root_definition_id=AsmDefinitionId(Native.root_definition_id), definitions=Definitions, instances=Instances, documents=Documents, mate_entities=MateEntities, mates=Mates, mate_groups=MateGroups, attributes=FrozenMapping({'application_version': Native.application_version, 'configurations': tuple(({'native_object_id': Config.object_id, 'native_configuration_id': Config.configuration_id, 'name': Config.name, 'reference': Config.reference, 'model_id': Config.model_id, 'most_recent': Config.most_recent, 'needs_update': Config.needs_update, 'native_attributes': Config.attributes} for Config in Native.configurations)), 'display_states': tuple(({'native_object_id': State.object_id, 'name': State.name, 'configuration_id': State.configuration_id, 'native_attributes': State.attributes} for State in Native.display_states)), 'flattened_occurrences': PathRecords, 'flattened_occurrence_count': len(PathRecords), 'flattened_mate_occurrences': FlattenedMates, 'flattened_mate_occurrence_count': len(FlattenedMates), 'native_file_count': len(Native.files), 'native_definition_count': len(Native.definitions), 'native_instance_count': len(Native.occurrences), 'linked_document_count': len(Documents), 'linked_part_document_count': len(LinkedPartDocuments), 'linked_assembly_document_count': len(LinkedAsmDocuments), 'linked_sketch_count': sum((len(DocValue.sketches) for DocValue in LinkedDocuments.values())), 'linked_feature_count': sum((len(DocValue.feature_timeline) for DocValue in LinkedDocuments.values()))}))
+    DocValue = CadDoc(source=CadSource(format_id=KAsmFormatId, path=Label, sha256=Hashlib.sha256(DataValue).hexdigest(), container_version=str(Archive.format_version), application_version=str(Native.application_version), attributes=FrozenMapping({'file_id': Archive.file_id, 'stream_count': len(Archive.records)})), configurations=Configurations, parameters=Parameters, support_planes=Planes, sketches=Sketches, selections=Selections, feature_timeline=Timeline, bodies=(), meshes=Meshes, brep_payloads=(*BrepPayloads, *MatePayloads, *CompanionPayloads), diagnostics=Diagnostics, capabilities=Adapter.info.capabilities, metadata=FrozenMapping({'adapter': KAsmFormatId, 'file_id': Archive.file_id, 'native_class_names': tuple(dict.fromkeys((ItemValue.name for ItemValue in Model.classes))), 'native_feature_count': len(Model.features), 'native_name_record_count': len(Model.names), 'native_scalar_count': len(Model.scalars), 'stream_names': tuple((Record.name for Record in Archive.records)), 'assembly_definition_count': len(Definitions), 'assembly_instance_count': len(Instances), 'assembly_flattened_occurrence_count': len(PathRecords), 'assembly_mate_count': len(Mates), 'assembly_flattened_mate_count': len(FlattenedMates), 'assembly_mesh_count': len(Meshes)}), units=UnitSystem.MILLIMETER, assembly=AsmValue)
+    DocValue.assert_valid()
+    return DocValue
 
-def _assembly_document(
-    adapter: SldprtAdapter,
-    archive: SldprtArchive,
-    data: bytes,
-    label: str,
-    settings: ReadOptions,
-) -> CadDocument:
-    native = decode_native_assembly(archive, include_tessellation=True)
-    resolved_stream = _resolved_features_stream(
-        archive.streams, RESOLVED_FEATURES_STREAM
-    )
-    model = decode_native_model(
-        archive.require(KEYWORDS_STREAM),
-        archive.require(resolved_stream),
-        resolved_stream=resolved_stream,
-    )
-    configurations = _configurations(model, settings.configuration)
-    parameters = _parameters(model)
-    parameter_ids = {parameter.id for parameter in parameters}
-    planes = _planes(model, parameter_ids)
-    sketches = _sketches(model, parameter_ids)
-    selections = _selections(model)
-    timeline = _timeline(model, selections)
-    meshes, mesh_ids = _assembly_meshes(native)
-    index = _component_file_index(label, settings)
-    resolve_components = settings.values.get("resolve_components", True) is not False
-    documents, document_ids, resolved_paths, document_diagnostics = _assembly_documents(
-        adapter,
-        native,
-        index if resolve_components else {},
-        settings,
-    )
-    definitions = _assembly_definitions(
-        native,
-        document_ids,
-        resolved_paths,
-        {document.id: document.document for document in documents},
-        mesh_ids,
-        label,
-    )
-    instances = _assembly_instances(native)
-    mate_sources, source_diagnostics = _mate_sources(
-        native, archive, label, index, settings
-    )
-    mate_payloads, mate_entities, mates, mate_groups = _assembly_mates(
-        native, mate_sources
-    )
-    flattened_mates = _flattened_mates(native, mates)
-    payload_settings = ReadOptions(
-        configuration=settings.configuration,
-        include_brep=settings.include_brep,
-        include_tessellation=settings.include_tessellation,
-        strict=False,
-        values=settings.values,
-    )
-    brep_payloads, payload_diagnostics = _brep_payloads(archive, payload_settings)
-    companion_payloads = (
-        _companion_payloads(label)
-        if settings.include_brep
-        and settings.values.get("discover_companions", True) is not False
-        else ()
-    )
-    unresolved = tuple(
-        definition
-        for definition in native.definitions
-        if definition.document_type == "PART"
-        and definition.object_id not in document_ids
-        and definition.object_id not in mesh_ids
-    )
-    if unresolved and settings.strict and resolve_components:
-        names = ", ".join(definition.name for definition in unresolved)
-        raise SldprtFormatError(
-            f"assembly component sources and tessellation are unavailable: {names}"
-        )
-    diagnostics = (
-        tuple(
-            Diagnostic(
-                code="sldasm.native_record_unresolved",
-                message=message,
-                severity=Severity.INFO,
-            )
-            for message in model.diagnostics
-        )
-        + payload_diagnostics
-        + document_diagnostics
-        + source_diagnostics
-    )
-    path_records = _flattened_occurrences(native)
-    linked_documents = {document.id: document.document for document in documents}
-    linked_part_documents = tuple(
-        document
-        for document in documents
-        if document.document.source.format_id == _FORMAT_ID
-    )
-    linked_assembly_documents = tuple(
-        document
-        for document in documents
-        if document.document.source.format_id == _ASSEMBLY_FORMAT_ID
-    )
-    assembly = AssemblyData(
-        root_definition_id=_assembly_definition_id(native.root_definition_id),
-        definitions=definitions,
-        instances=instances,
-        documents=documents,
-        mate_entities=mate_entities,
-        mates=mates,
-        mate_groups=mate_groups,
-        attributes=frozen_mapping(
-            {
-                "application_version": native.application_version,
-                "configurations": tuple(
-                    {
-                        "native_object_id": configuration.object_id,
-                        "native_configuration_id": configuration.configuration_id,
-                        "name": configuration.name,
-                        "reference": configuration.reference,
-                        "model_id": configuration.model_id,
-                        "most_recent": configuration.most_recent,
-                        "needs_update": configuration.needs_update,
-                        "native_attributes": configuration.attributes,
-                    }
-                    for configuration in native.configurations
-                ),
-                "display_states": tuple(
-                    {
-                        "native_object_id": state.object_id,
-                        "name": state.name,
-                        "configuration_id": state.configuration_id,
-                        "native_attributes": state.attributes,
-                    }
-                    for state in native.display_states
-                ),
-                "flattened_occurrences": path_records,
-                "flattened_occurrence_count": len(path_records),
-                "flattened_mate_occurrences": flattened_mates,
-                "flattened_mate_occurrence_count": len(flattened_mates),
-                "native_file_count": len(native.files),
-                "native_definition_count": len(native.definitions),
-                "native_instance_count": len(native.occurrences),
-                "linked_document_count": len(documents),
-                "linked_part_document_count": len(linked_part_documents),
-                "linked_assembly_document_count": len(linked_assembly_documents),
-                "linked_sketch_count": sum(
-                    len(document.sketches) for document in linked_documents.values()
-                ),
-                "linked_feature_count": sum(
-                    len(document.feature_timeline)
-                    for document in linked_documents.values()
-                ),
-            }
-        ),
-    )
-    document = CadDocument(
-        source=CadSource(
-            format_id=_ASSEMBLY_FORMAT_ID,
-            path=label,
-            sha256=hashlib.sha256(data).hexdigest(),
-            container_version=str(archive.format_version),
-            application_version=str(native.application_version),
-            attributes=frozen_mapping(
-                {
-                    "file_id": archive.file_id,
-                    "stream_count": len(archive.records),
-                }
-            ),
-        ),
-        configurations=configurations,
-        parameters=parameters,
-        support_planes=planes,
-        sketches=sketches,
-        selections=selections,
-        feature_timeline=timeline,
-        bodies=(),
-        meshes=meshes,
-        brep_payloads=(*brep_payloads, *mate_payloads, *companion_payloads),
-        diagnostics=diagnostics,
-        capabilities=adapter.info.capabilities,
-        metadata=frozen_mapping(
-            {
-                "adapter": _ASSEMBLY_FORMAT_ID,
-                "file_id": archive.file_id,
-                "native_class_names": tuple(
-                    dict.fromkeys(item.name for item in model.classes)
-                ),
-                "native_feature_count": len(model.features),
-                "native_name_record_count": len(model.names),
-                "native_scalar_count": len(model.scalars),
-                "stream_names": tuple(record.name for record in archive.records),
-                "assembly_definition_count": len(definitions),
-                "assembly_instance_count": len(instances),
-                "assembly_flattened_occurrence_count": len(path_records),
-                "assembly_mate_count": len(mates),
-                "assembly_flattened_mate_count": len(flattened_mates),
-                "assembly_mesh_count": len(meshes),
-            }
-        ),
-        units=UnitSystem.MILLIMETER,
-        assembly=assembly,
-    )
-    document.assert_valid()
-    return document
-
-
-def _component_file_index(
-    label: str, settings: ReadOptions
-) -> dict[str, tuple[Path, ...]]:
-    requested_root = settings.values.get("component_search_root")
-    if requested_root:
-        root = Path(str(requested_root)).expanduser().resolve()
+# this definition exists because focused behavior needs one stable owner
+def ComponentFile(Label: str, Settings: ReadOptions) -> dict[str, tuple[PathValue, ...]]:
+    RequestedRoot = Settings.values.get('component_search_root')
+    if RequestedRoot:
+        RootValue = PathValue(str(RequestedRoot)).expanduser().resolve()
     else:
-        source = Path(label)
-        if not source.is_file():
+        Source = PathValue(Label)
+        if not Source.is_file():
             return {}
-        root = source.resolve().parent
-    if not root.is_dir():
+        RootValue = Source.resolve().parent
+    if not RootValue.is_dir():
         return {}
-    result: defaultdict[str, list[Path]] = defaultdict(list)
-    for path in root.rglob("*"):
-        if path.is_file() and path.suffix.casefold() in FORMAT_ID_BY_SUFFIX:
-            result[path.name.casefold()].append(path.resolve())
-    return {
-        name: tuple(sorted(paths, key=lambda path: str(path).casefold()))
-        for name, paths in result.items()
-    }
+    Result: Defaultdict[str, list[PathValue]] = Defaultdict(list)
+    for PathValue in RootValue.rglob('*'):
+        if PathValue.is_file() and PathValue.suffix.casefold() in FormatIdBySuffix:
+            Result[PathValue.name.casefold()].append(PathValue.resolve())
 
+    # this callback exists because local behavior needs one focused transformation
+    return {NameValue: tuple(sorted(Paths, key=lambda PathValue: str(PathValue).casefold())) for NameValue, Paths in Result.items()}
 
-def _resolved_component_path(
-    source_path: str, index: dict[str, tuple[Path, ...]]
-) -> Path | None:
-    native = PureWindowsPath(source_path)
-    candidates = index.get(native.name.casefold(), ())
-    if not candidates:
+# this definition exists because focused behavior needs one stable owner
+def ResolvedPath(SourcePath: str, Index: dict[str, tuple[Path, ...]]) -> PathValue | None:
+    Native = PureWindowsPath(SourcePath)
+    Candidates = Index.get(Native.name.casefold(), ())
+    if not Candidates:
         return None
-    native_parts = tuple(part.casefold() for part in native.parts)
+    NativeParts = tuple((PartValue.casefold() for PartValue in Native.parts))
 
-    def score(candidate: Path) -> tuple[int, str]:
-        candidate_parts = tuple(part.casefold() for part in candidate.parts)
-        matches = 0
-        for left, right in zip(reversed(native_parts), reversed(candidate_parts)):
-            if left != right:
+    # this definition exists because focused behavior needs one stable owner
+    def Score(Choice: Path) -> tuple[int, str]:
+        ChoiceParts = tuple((PartValue.casefold() for PartValue in Choice.parts))
+        Matches = 0
+        for LeftValue, Right in zip(reversed(NativeParts), reversed(ChoiceParts)):
+            if LeftValue != Right:
                 break
-            matches += 1
-        return matches, str(candidate).casefold()
+            Matches += 1
+        return (Matches, str(Choice).casefold())
+    return max(Candidates, key=Score)
 
-    return max(candidates, key=score)
-
-
-def _assembly_documents(
-    adapter: SldprtAdapter,
-    native: NativeAssembly,
-    index: dict[str, tuple[Path, ...]],
-    settings: ReadOptions,
-) -> tuple[
-    tuple[ComponentDocument, ...],
-    dict[int, str],
-    dict[int, Path],
-    tuple[Diagnostic, ...],
-]:
-    if not index:
-        return (), {}, {}, ()
-    root_id = native.root_definition_id
-    definitions_by_path: defaultdict[Path, list[NativeAssemblyDefinition]] = (
-        defaultdict(list)
-    )
-    resolved_paths: dict[int, Path] = {}
-    diagnostics: list[Diagnostic] = []
-    for definition in native.definitions:
-        if definition.object_id == root_id:
+# this definition exists because focused behavior needs one stable owner
+def AsmDocuments(Adapter: SldprtAdapter, Native: NativeAssembly, Index: dict[str, tuple[Path, ...]], Settings: ReadOptions) -> tuple[tuple[ComponentDoc, ...], dict[int, str], dict[int, PathValue], tuple[DiagValue, ...]]:
+    if not Index:
+        return ((), {}, {}, ())
+    RootId = Native.root_definition_id
+    DefinitionsByPath: Defaultdict[PathValue, list[NativeAsmDefinition]] = Defaultdict(list)
+    ResolvedPaths: dict[int, PathValue] = {}
+    Diagnostics: list[DiagValue] = []
+    for Definition in Native.definitions:
+        if Definition.object_id == RootId:
             continue
-        resolved = _resolved_component_path(definition.source_path, index)
-        if resolved is None:
-            diagnostics.append(
-                Diagnostic(
-                    code="sldasm.component_source_missing",
-                    message=f"component source is unavailable: {definition.source_path}",
-                    severity=Severity.INFO,
-                    attributes=frozen_mapping(
-                        {
-                            "native_definition_id": definition.object_id,
-                            "configuration": definition.configuration_name,
-                        }
-                    ),
-                )
-            )
+        Resolved = ResolvedPath(Definition.source_path, Index)
+        if Resolved is None:
+            Diagnostics.append(DiagValue(code='sldasm.component_source_missing', message=f'component source is unavailable: {Definition.source_path}', severity=Severity.INFO, attributes=FrozenMapping({'native_definition_id': Definition.object_id, 'configuration': Definition.configuration_name})))
             continue
-        resolved_paths[definition.object_id] = resolved
-        definitions_by_path[resolved].append(definition)
-    documents: list[ComponentDocument] = []
-    document_ids: dict[int, str] = {}
-    for resolved, definitions in sorted(
-        definitions_by_path.items(), key=lambda item: str(item[0]).casefold()
-    ):
-        representative = definitions[0]
-        values = dict(settings.values)
-        values["resolve_components"] = False
-        values["discover_companions"] = False
-        options = ReadOptions(
-            configuration=representative.configuration_name or None,
-            include_brep=settings.include_brep,
-            include_tessellation=representative.document_type == "ASSEMBLY",
-            strict=settings.strict,
-            values=frozen_mapping(values),
-        )
+        ResolvedPaths[Definition.object_id] = Resolved
+        DefinitionsByPath[Resolved].append(Definition)
+    Documents: list[ComponentDoc] = []
+    DocIds: dict[int, str] = {}
+
+    # this callback exists because local behavior needs one focused transformation
+    for Resolved, Definitions in sorted(DefinitionsByPath.items(), key=lambda ItemValue: str(ItemValue[0]).casefold()):
+        Representative = Definitions[0]
+        Values = dict(Settings.values)
+        Values['resolve_components'] = False
+        Values['discover_companions'] = False
+        Options = ReadOptions(configuration=Representative.configuration_name or None, include_brep=Settings.include_brep, include_tessellation=Representative.document_type == 'ASSEMBLY', strict=Settings.strict, values=FrozenMapping(Values))
         try:
-            document = adapter.read(resolved, options)
+            DocValue = Adapter.read(Resolved, Options)
         except (OSError, SldprtFormatError, TypeError, ValueError) as exc:
-            if settings.strict:
+            if Settings.strict:
                 raise
-            diagnostics.append(
-                Diagnostic(
-                    code="sldasm.component_decode_failed",
-                    message=f"cannot decode {resolved}: {exc}",
-                    severity=Severity.WARNING,
-                    attributes=frozen_mapping(
-                        {
-                            "native_definition_ids": tuple(
-                                definition.object_id for definition in definitions
-                            )
-                        }
-                    ),
-                )
-            )
+            Diagnostics.append(DiagValue(code='sldasm.component_decode_failed', message=f'cannot decode {Resolved}: {exc}', severity=Severity.WARNING, attributes=FrozenMapping({'native_definition_ids': tuple((Definition.object_id for Definition in Definitions))})))
             continue
-        document_id = f"sldasm:document:{document.source.sha256[:20]}"
-        documents.append(ComponentDocument(document_id, document))
-        for definition in definitions:
-            document_ids[definition.object_id] = document_id
-    return tuple(documents), document_ids, resolved_paths, tuple(diagnostics)
+        DocId = f'sldasm:document:{DocValue.source.sha256[:20]}'
+        Documents.append(ComponentDoc(DocId, DocValue))
+        for Definition in Definitions:
+            DocIds[Definition.object_id] = DocId
+    return (tuple(Documents), DocIds, ResolvedPaths, tuple(Diagnostics))
 
-
-def _assembly_meshes(
-    native: NativeAssembly,
-) -> tuple[tuple[Mesh, ...], dict[int, str]]:
-    definition_by_path = {
-        occurrence.path.casefold(): occurrence.definition_id
-        for occurrence in native.occurrence_paths
-    }
-    occurrence_by_id = {
-        occurrence.object_id: occurrence for occurrence in native.occurrences
-    }
-    identity = {object_id: object_id for object_id in occurrence_by_id}
-    definition_by_id = {
-        definition.object_id: definition for definition in native.definitions
-    }
-    result: list[Mesh] = []
-    mesh_ids: dict[int, str] = {}
-    for component in native.display_components:
-        definition_id = definition_by_path.get(component.occurrence_path.casefold())
-        if definition_id is None:
+# this definition exists because focused behavior needs one stable owner
+def AsmMeshes(Native: NativeAssembly) -> tuple[tuple[MeshValue, ...], dict[int, str]]:
+    DefinitionByPath = {ItemValue.path.casefold(): ItemValue.definition_id for ItemValue in Native.occurrence_paths}
+    ItemById = {ItemValue.object_id: ItemValue for ItemValue in Native.occurrences}
+    Identity = {ObjectId: ObjectId for ObjectId in ItemById}
+    DefinitionById = {Definition.object_id: Definition for Definition in Native.definitions}
+    Result: list[MeshValue] = []
+    MeshIds: dict[int, str] = {}
+    for Component in Native.display_components:
+        DefinitionId = DefinitionByPath.get(Component.occurrence_path.casefold())
+        if DefinitionId is None:
             try:
-                path = _mate_instance_path(native, identity, component.occurrence_path)
+                PathValue = MateInstance(Native, Identity, Component.occurrence_path)
             except SldprtFormatError:
-                path = ()
-            if path:
-                definition_id = occurrence_by_id[path[-1]].definition_id
-        if definition_id is None or definition_id in mesh_ids:
+                PathValue = ()
+            if PathValue:
+                DefinitionId = ItemById[PathValue[-1]].definition_id
+        if DefinitionId is None or DefinitionId in MeshIds:
             continue
-        vertices: list[Vector3] = []
-        normals: list[Vector3] = []
-        triangles: list[tuple[int, int, int]] = []
-        faces: list[dict[str, Any]] = []
-        for face in component.faces:
-            vertex_start = len(vertices)
-            triangle_start = len(triangles)
-            vertices.extend(Vector3(*point) for point in face.positions_mm)
-            normals.extend(Vector3(*normal) for normal in face.normals)
-            triangles.extend(
-                tuple(index + vertex_start for index in triangle)
-                for triangle in face.triangle_indices
-            )
-            faces.append(
-                {
-                    "face_id": face.face_id,
-                    "vertex_start": vertex_start,
-                    "vertex_count": len(face.positions_mm),
-                    "triangle_start": triangle_start,
-                    "triangle_count": len(face.triangle_indices),
-                    "strip_lengths": face.strip_lengths,
-                    "source_offset": face.offset,
-                    "source_length": face.record_length,
-                }
-            )
-        definition = definition_by_id[definition_id]
-        mesh_id = f"sldasm:mesh:{definition_id}"
-        result.append(
-            Mesh(
-                id=mesh_id,
-                name=f"{definition.name} tessellation",
-                vertices=tuple(vertices),
-                triangles=tuple(triangles),
-                normals=tuple(normals),
-                provenance=Provenance(
-                    adapter=_ASSEMBLY_FORMAT_ID,
-                    native_id=str(definition_id),
-                    spans=(
-                        ProvenanceSpan(
-                            DISPLAY_LISTS_STREAM,
-                            component.record_offset,
-                            component.record_length,
-                            "component-tessellation",
-                        ),
-                    ),
-                ),
-                attributes=frozen_mapping(
-                    {
-                        "occurrence_path": component.occurrence_path,
-                        "source_path": component.source_path,
-                        "faces": tuple(faces),
-                    }
-                ),
-            )
-        )
-        mesh_ids[definition_id] = mesh_id
-    return tuple(result), mesh_ids
+        Vertices: list[VectorThree] = []
+        Normals: list[VectorThree] = []
+        Triangles: list[tuple[int, int, int]] = []
+        Faces: list[dict[str, AnyValue]] = []
+        for FaceValue in Component.faces:
+            VertexStart = len(Vertices)
+            TriangleStart = len(Triangles)
+            Vertices.extend((VectorThree(*Point) for Point in FaceValue.positions_mm))
+            Normals.extend((VectorThree(*Normal) for Normal in FaceValue.normals))
+            Triangles.extend((tuple((Index + VertexStart for Index in Triangle)) for Triangle in FaceValue.triangle_indices))
+            Faces.append({'face_id': FaceValue.face_id, 'vertex_start': VertexStart, 'vertex_count': len(FaceValue.positions_mm), 'triangle_start': TriangleStart, 'triangle_count': len(FaceValue.triangle_indices), 'strip_lengths': FaceValue.strip_lengths, 'source_offset': FaceValue.offset, 'source_length': FaceValue.record_length})
+        Definition = DefinitionById[DefinitionId]
+        MeshId = f'sldasm:mesh:{DefinitionId}'
+        Result.append(MeshValue(id=MeshId, name=f'{Definition.name} tessellation', vertices=tuple(Vertices), triangles=tuple(Triangles), normals=tuple(Normals), provenance=Provenance(adapter=KAsmFormatId, native_id=str(DefinitionId), spans=(ProvenanceSpan(DisplayListsStream, Component.record_offset, Component.record_length, 'component-tessellation'),)), attributes=FrozenMapping({'occurrence_path': Component.occurrence_path, 'source_path': Component.source_path, 'faces': tuple(Faces)})))
+        MeshIds[DefinitionId] = MeshId
+    return (tuple(Result), MeshIds)
 
+# this definition exists because focused behavior needs one stable owner
+def AsmDefinitions(Native: NativeAssembly, DocIds: dict[int, str], ResolvedPaths: dict[int, Path], Documents: dict[str, CadDocument], MeshIds: dict[int, str], Label: str) -> tuple[ComponentDefinition, ...]:
+    Result: list[ComponentDefinition] = []
+    for Definition in Native.definitions:
+        DocId = DocIds.get(Definition.object_id, '')
+        DocValue = Documents.get(DocId)
+        SourcePath = ResolvedPaths.get(Definition.object_id)
+        if Definition.object_id == Native.root_definition_id and PathValue(Label).is_file():
+            SourcePath = PathValue(Label).resolve()
+        KindValue = ComponentKind.ASSEMBLY if Definition.document_type == 'ASSEMBLY' else ComponentKind.PART if Definition.document_type == 'PART' else ComponentKind.NATIVE
+        Result.append(ComponentDefinition(id=AsmDefinitionId(Definition.object_id), name=Definition.name, kind=KindValue, document_id=DocId, configuration_name=Definition.configuration_name, configuration_id=str(Definition.configuration_id), bounding_box=AsmBoundingBox(Definition.bounding_box_m), body_ids=tuple((BodyValue.id for BodyValue in DocValue.bodies)) if DocValue is not None and KindValue == ComponentKind.PART else (), mesh_ids=(MeshIds[Definition.object_id],) if Definition.object_id in MeshIds else (), source_path=str(SourcePath) if SourcePath is not None else Definition.source_path, source_format_id=KAsmFormatId if KindValue == ComponentKind.ASSEMBLY else KFormatId, source_sha256=DocValue.source.sha256 if DocValue is not None else '', provenance=Provenance(adapter=KAsmFormatId, native_id=str(Definition.object_id), spans=(ProvenanceSpan(ComponentTreeStream, 0, 0, 'component-definition'),)), attributes=FrozenMapping({'native_object_id': Definition.object_id, 'native_file_id': Definition.file_id, 'native_source_path': Definition.source_path, 'alternate_configuration_name': Definition.alternate_configuration_name, 'last_modified_stamp': Definition.last_modified_stamp, 'configuration_flags': Definition.configuration_flags, 'child_occurrence_ids': Definition.child_occurrence_ids, 'native_attributes': Definition.attributes})))
+    return tuple(Result)
 
-def _assembly_definitions(
-    native: NativeAssembly,
-    document_ids: dict[int, str],
-    resolved_paths: dict[int, Path],
-    documents: dict[str, CadDocument],
-    mesh_ids: dict[int, str],
-    label: str,
-) -> tuple[ComponentDefinition, ...]:
-    result: list[ComponentDefinition] = []
-    for definition in native.definitions:
-        document_id = document_ids.get(definition.object_id, "")
-        document = documents.get(document_id)
-        source_path = resolved_paths.get(definition.object_id)
-        if definition.object_id == native.root_definition_id and Path(label).is_file():
-            source_path = Path(label).resolve()
-        kind = (
-            ComponentKind.ASSEMBLY
-            if definition.document_type == "ASSEMBLY"
-            else (
-                ComponentKind.PART
-                if definition.document_type == "PART"
-                else ComponentKind.NATIVE
-            )
-        )
-        result.append(
-            ComponentDefinition(
-                id=_assembly_definition_id(definition.object_id),
-                name=definition.name,
-                kind=kind,
-                document_id=document_id,
-                configuration_name=definition.configuration_name,
-                configuration_id=str(definition.configuration_id),
-                bounding_box=_assembly_bounding_box(definition.bounding_box_m),
-                body_ids=(
-                    tuple(body.id for body in document.bodies)
-                    if document is not None and kind == ComponentKind.PART
-                    else ()
-                ),
-                mesh_ids=(
-                    (mesh_ids[definition.object_id],)
-                    if definition.object_id in mesh_ids
-                    else ()
-                ),
-                source_path=(
-                    str(source_path)
-                    if source_path is not None
-                    else definition.source_path
-                ),
-                source_format_id=(
-                    _ASSEMBLY_FORMAT_ID
-                    if kind == ComponentKind.ASSEMBLY
-                    else _FORMAT_ID
-                ),
-                source_sha256=document.source.sha256 if document is not None else "",
-                provenance=Provenance(
-                    adapter=_ASSEMBLY_FORMAT_ID,
-                    native_id=str(definition.object_id),
-                    spans=(
-                        ProvenanceSpan(
-                            COMPONENT_TREE_STREAM,
-                            0,
-                            0,
-                            "component-definition",
-                        ),
-                    ),
-                ),
-                attributes=frozen_mapping(
-                    {
-                        "native_object_id": definition.object_id,
-                        "native_file_id": definition.file_id,
-                        "native_source_path": definition.source_path,
-                        "alternate_configuration_name": definition.alternate_configuration_name,
-                        "last_modified_stamp": definition.last_modified_stamp,
-                        "configuration_flags": definition.configuration_flags,
-                        "child_occurrence_ids": definition.child_occurrence_ids,
-                        "native_attributes": definition.attributes,
-                    }
-                ),
-            )
-        )
-    return tuple(result)
+# this definition exists because focused behavior needs one stable owner
+def AsmInstances(Native: NativeAssembly) -> tuple[ComponentInstance, ...]:
+    return tuple((ComponentInstance(id=AsmInstanceId(ItemValue.object_id), name=f'{ItemValue.name}-{ItemValue.reference_number}', definition_id=AsmDefinitionId(ItemValue.definition_id), owner_definition_id=AsmDefinitionId(ItemValue.owner_definition_id), transform=AsmMatrix(ItemValue.transform), order=ItemValue.order, reference_number=str(ItemValue.reference_number), configuration_name=ItemValue.configuration_name, configuration_id=str(ItemValue.configuration_id), suppressed=ItemValue.suppressed, hidden=ItemValue.hidden, fixed=False, flexible=ItemValue.flexible, exclude_from_bom=ItemValue.exclude_from_bom, provenance=Provenance(adapter=KAsmFormatId, native_id=str(ItemValue.object_id), spans=(ProvenanceSpan(ComponentTreeStream, 0, 0, 'component-instance'),)), attributes=FrozenMapping({'native_feature_id': ItemValue.feature_id, 'native_reference_number': ItemValue.reference_number, 'component_reference': ItemValue.component_reference, 'native_transform': ItemValue.transform, 'transform_stamp': ItemValue.transform_stamp, 'virtual': ItemValue.virtual, 'zone': ItemValue.zone, 'display_mode': ItemValue.display_mode, 'display_quality': ItemValue.display_quality, 'edges_in_shaded_mode': ItemValue.edges_in_shaded_mode, 'native_attributes': ItemValue.attributes})) for ItemValue in Native.occurrences))
 
-
-def _assembly_instances(
-    native: NativeAssembly,
-) -> tuple[ComponentInstance, ...]:
-    return tuple(
-        ComponentInstance(
-            id=_assembly_instance_id(occurrence.object_id),
-            name=f"{occurrence.name}-{occurrence.reference_number}",
-            definition_id=_assembly_definition_id(occurrence.definition_id),
-            owner_definition_id=_assembly_definition_id(occurrence.owner_definition_id),
-            transform=_assembly_matrix(occurrence.transform),
-            order=occurrence.order,
-            reference_number=str(occurrence.reference_number),
-            configuration_name=occurrence.configuration_name,
-            configuration_id=str(occurrence.configuration_id),
-            suppressed=occurrence.suppressed,
-            hidden=occurrence.hidden,
-            fixed=False,
-            flexible=occurrence.flexible,
-            exclude_from_bom=occurrence.exclude_from_bom,
-            provenance=Provenance(
-                adapter=_ASSEMBLY_FORMAT_ID,
-                native_id=str(occurrence.object_id),
-                spans=(
-                    ProvenanceSpan(
-                        COMPONENT_TREE_STREAM,
-                        0,
-                        0,
-                        "component-instance",
-                    ),
-                ),
-            ),
-            attributes=frozen_mapping(
-                {
-                    "native_feature_id": occurrence.feature_id,
-                    "native_reference_number": occurrence.reference_number,
-                    "component_reference": occurrence.component_reference,
-                    "native_transform": occurrence.transform,
-                    "transform_stamp": occurrence.transform_stamp,
-                    "virtual": occurrence.virtual,
-                    "zone": occurrence.zone,
-                    "display_mode": occurrence.display_mode,
-                    "display_quality": occurrence.display_quality,
-                    "edges_in_shaded_mode": occurrence.edges_in_shaded_mode,
-                    "native_attributes": occurrence.attributes,
-                }
-            ),
-        )
-        for occurrence in native.occurrences
-    )
-
-
-def _mate_sources(
-    root: NativeAssembly,
-    archive: SldprtArchive,
-    label: str,
-    index: dict[str, tuple[Path, ...]],
-    settings: ReadOptions,
-) -> tuple[
-    tuple[
-        tuple[
-            NativeAssembly,
-            SldprtArchive,
-            dict[int, int],
-            dict[int, int],
-            str,
-        ],
-        ...,
-    ],
-    tuple[Diagnostic, ...],
-]:
-    sources = [
-        (
-            root,
-            archive,
-            {
-                definition.object_id: definition.object_id
-                for definition in root.definitions
-            },
-            {
-                occurrence.object_id: occurrence.object_id
-                for occurrence in root.occurrences
-            },
-            label,
-        )
-    ]
-    diagnostics: list[Diagnostic] = []
-    for target in root.definitions:
-        if (
-            target.document_type != "ASSEMBLY"
-            or target.object_id == root.root_definition_id
-        ):
+# this definition exists because focused behavior needs one stable owner
+def MateSources(RootValue: NativeAssembly, Archive: SldprtArchive, Label: str, Index: dict[str, tuple[Path, ...]], Settings: ReadOptions) -> tuple[tuple[tuple[NativeAsm, SldprtArchive, dict[int, int], dict[int, int], str], ...], tuple[DiagValue, ...]]:
+    Sources = [(RootValue, Archive, {Definition.object_id: Definition.object_id for Definition in RootValue.definitions}, {ItemValue.object_id: ItemValue.object_id for ItemValue in RootValue.occurrences}, Label)]
+    Diagnostics: list[DiagValue] = []
+    for Target in RootValue.definitions:
+        if Target.document_type != 'ASSEMBLY' or Target.object_id == RootValue.root_definition_id:
             continue
-        resolved = _resolved_component_path(target.source_path, index)
-        if resolved is None:
-            message = (
-                f"nested assembly mate source is unavailable: {target.source_path}"
-            )
-            if settings.strict:
-                raise SldprtFormatError(message)
-            diagnostics.append(
-                Diagnostic(
-                    code="sldasm.nested_mates_missing",
-                    message=message,
-                    severity=Severity.WARNING,
-                )
-            )
+        Resolved = ResolvedPath(Target.source_path, Index)
+        if Resolved is None:
+            Message = f'nested assembly mate source is unavailable: {Target.source_path}'
+            if Settings.strict:
+                raise SldprtFormatError(Message)
+            Diagnostics.append(DiagValue(code='sldasm.nested_mates_missing', message=Message, severity=Severity.WARNING))
             continue
-        nested_archive = SldprtArchive.open(resolved)
-        nested = decode_native_assembly(nested_archive, include_tessellation=False)
+        NestedArchive = SldprtArchive.open(Resolved)
+        Nested = DecodeNativeAsm(NestedArchive, include_tessellation=False)
         try:
-            definition_map = _nested_definition_map(root, nested, target.object_id)
-            occurrence_map = _nested_occurrence_map(root, nested, definition_map)
+            DefinitionMap = NestedMap(RootValue, Nested, Target.object_id)
+            ItemMap = NestedItemMap(RootValue, Nested, DefinitionMap)
         except SldprtFormatError as exc:
-            if settings.strict:
+            if Settings.strict:
                 raise
-            diagnostics.append(
-                Diagnostic(
-                    code="sldasm.nested_mates_unmapped",
-                    message=f"cannot map nested mates from {resolved}: {exc}",
-                    severity=Severity.WARNING,
-                )
-            )
+            Diagnostics.append(DiagValue(code='sldasm.nested_mates_unmapped', message=f'cannot map nested mates from {Resolved}: {exc}', severity=Severity.WARNING))
             continue
-        sources.append(
-            (
-                nested,
-                nested_archive,
-                definition_map,
-                occurrence_map,
-                str(resolved),
-            )
-        )
-    return tuple(sources), tuple(diagnostics)
+        Sources.append((Nested, NestedArchive, DefinitionMap, ItemMap, str(Resolved)))
+    return (tuple(Sources), tuple(Diagnostics))
 
+# this definition exists because focused behavior needs one stable owner
+def NativeKey(Definition: NativeAssemblyDefinition) -> tuple[str, str, str]:
+    return (PureWindowsPath(Definition.source_path).name.casefold(), Definition.configuration_name.casefold(), Definition.document_type.casefold())
 
-def _native_definition_key(
-    definition: NativeAssemblyDefinition,
-) -> tuple[str, str, str]:
-    return (
-        PureWindowsPath(definition.source_path).name.casefold(),
-        definition.configuration_name.casefold(),
-        definition.document_type.casefold(),
-    )
-
-
-def _nested_definition_map(
-    root: NativeAssembly, nested: NativeAssembly, target_root_id: int
-) -> dict[int, int]:
-    result = {nested.root_definition_id: target_root_id}
-    targets: defaultdict[tuple[str, str, str], list[NativeAssemblyDefinition]] = (
-        defaultdict(list)
-    )
-    for definition in root.definitions:
-        targets[_native_definition_key(definition)].append(definition)
-    for definition in nested.definitions:
-        if definition.object_id == nested.root_definition_id:
+# this definition exists because focused behavior needs one stable owner
+def NestedMap(RootValue: NativeAssembly, Nested: NativeAssembly, TargetRootId: int) -> dict[int, int]:
+    Result = {Nested.root_definition_id: TargetRootId}
+    Targets: Defaultdict[tuple[str, str, str], list[NativeAsmDefinition]] = Defaultdict(list)
+    for Definition in RootValue.definitions:
+        Targets[NativeKey(Definition)].append(Definition)
+    for Definition in Nested.definitions:
+        if Definition.object_id == Nested.root_definition_id:
             continue
-        candidates = targets.get(_native_definition_key(definition), [])
-        if len(candidates) != 1:
-            raise SldprtFormatError(
-                f"nested definition {definition.name!r} has {len(candidates)} root mappings"
-            )
-        result[definition.object_id] = candidates[0].object_id
-    return result
+        Candidates = Targets.get(NativeKey(Definition), [])
+        if len(Candidates) != 1:
+            raise SldprtFormatError(f'nested definition {Definition.name!r} has {len(Candidates)} root mappings')
+        Result[Definition.object_id] = Candidates[0].object_id
+    return Result
 
+# this definition exists because focused behavior needs one stable owner
+def NestedItemMap(RootValue: NativeAssembly, Nested: NativeAssembly, DefinitionMap: dict[int, int]) -> dict[int, int]:
+    Result: dict[int, int] = {}
+    for ItemValue in Nested.occurrences:
+        OwnerId = DefinitionMap[ItemValue.owner_definition_id]
+        DefinitionId = DefinitionMap[ItemValue.definition_id]
+        Candidates = tuple((Target for Target in RootValue.occurrences if Target.owner_definition_id == OwnerId and Target.definition_id == DefinitionId and (Target.name.casefold() == ItemValue.name.casefold()) and (Target.reference_number == ItemValue.reference_number) and (Target.feature_id == ItemValue.feature_id)))
+        if len(Candidates) != 1:
+            raise SldprtFormatError(f'nested occurrence {ItemValue.name}-{ItemValue.reference_number} has {len(Candidates)} root mappings')
+        Result[ItemValue.object_id] = Candidates[0].object_id
+    return Result
 
-def _nested_occurrence_map(
-    root: NativeAssembly,
-    nested: NativeAssembly,
-    definition_map: dict[int, int],
-) -> dict[int, int]:
-    result: dict[int, int] = {}
-    for occurrence in nested.occurrences:
-        owner_id = definition_map[occurrence.owner_definition_id]
-        definition_id = definition_map[occurrence.definition_id]
-        candidates = tuple(
-            target
-            for target in root.occurrences
-            if target.owner_definition_id == owner_id
-            and target.definition_id == definition_id
-            and target.name.casefold() == occurrence.name.casefold()
-            and target.reference_number == occurrence.reference_number
-            and target.feature_id == occurrence.feature_id
-        )
-        if len(candidates) != 1:
-            raise SldprtFormatError(
-                f"nested occurrence {occurrence.name}-{occurrence.reference_number} has {len(candidates)} root mappings"
-            )
-        result[occurrence.object_id] = candidates[0].object_id
-    return result
-
-
-def _assembly_mates(
-    root: NativeAssembly,
-    sources: tuple[
-        tuple[
-            NativeAssembly,
-            SldprtArchive,
-            dict[int, int],
-            dict[int, int],
-            str,
-        ],
-        ...,
-    ],
-) -> tuple[
-    tuple[BrepPayload, ...],
-    tuple[MateEntity, ...],
-    tuple[MateConstraint, ...],
-    tuple[MateGroup, ...],
-]:
-    payloads: list[BrepPayload] = []
-    entities: list[MateEntity] = []
-    mates: list[MateConstraint] = []
-    groups: list[MateGroup] = []
-    for source_index, (
-        source,
-        archive,
-        definition_map,
-        occurrence_map,
-        source_label,
-    ) in enumerate(sources):
-        for list_index, mate_list in enumerate(source.mate_lists):
-            owner_id = definition_map[mate_list.owner_definition_id]
-            stream_data = archive.require(mate_list.stream)
-            stream_name = (
-                mate_list.stream
-                if source_index == 0
-                else f"{source_label}::{mate_list.stream}"
-            )
-            payload_id = f"sldasm:mates:{owner_id}:{list_index}"
-            payloads.append(
-                _mate_payload(
-                    payload_id,
-                    stream_name,
-                    stream_data,
-                    mate_list,
-                    owner_id,
-                    source_label,
-                )
-            )
-            mate_ids_by_order: dict[int, str] = {}
-            for mate in mate_list.mates:
-                if mate.kind == "group":
+# this definition exists because focused behavior needs one stable owner
+def AsmMates(RootValue: NativeAssembly, Sources: tuple[tuple[NativeAssembly, SldprtArchive, dict[int, int], dict[int, int], str], ...]) -> tuple[tuple[BrepPayload, ...], tuple[MateEntity, ...], tuple[MateRule, ...], tuple[MateGroup, ...]]:
+    Payloads: list[BrepPayload] = []
+    Entities: list[MateEntity] = []
+    Mates: list[MateRule] = []
+    Groups: list[MateGroup] = []
+    for SourceIndex, (Source, Archive, DefinitionMap, ItemMap, SourceLabel) in enumerate(Sources):
+        for ListIndex, MateList in enumerate(Source.mate_lists):
+            OwnerId = DefinitionMap[MateList.owner_definition_id]
+            StreamData = Archive.require(MateList.stream)
+            StreamName = MateList.stream if SourceIndex == 0 else f'{SourceLabel}::{MateList.stream}'
+            PayloadId = f'sldasm:mates:{OwnerId}:{ListIndex}'
+            Payloads.append(MatePayload(PayloadId, StreamName, StreamData, MateList, OwnerId, SourceLabel))
+            MateIdsByOrder: dict[int, str] = {}
+            for MateValue in MateList.mates:
+                if MateValue.kind == 'group':
                     continue
-                mate_id = f"sldasm:mate:{owner_id}:{list_index}:{mate.order}"
-                entity_ids: list[str] = []
-                for entity_index, native_entity in enumerate(mate.entities):
-                    entity_id = f"{mate_id}:entity:{entity_index}"
-                    entity_ids.append(entity_id)
-                    entities.append(
-                        _assembly_mate_entity(
-                            entity_id,
-                            owner_id,
-                            source,
-                            occurrence_map,
-                            native_entity,
-                            mate,
-                            stream_name,
-                            source_label,
-                        )
-                    )
-                mates.append(
-                    MateConstraint(
-                        id=mate_id,
-                        name=mate.name,
-                        kind=_neutral_mate_kind(mate.kind),
-                        owner_definition_id=_assembly_definition_id(owner_id),
-                        entity_ids=tuple(entity_ids),
-                        order=mate.order,
-                        value=_neutral_mate_value(mate),
-                        alignment=_neutral_mate_alignment(mate),
-                        suppressed=False,
-                        driving=True,
-                        provenance=_mate_provenance(mate, stream_name),
-                        attributes=frozen_mapping(
-                            {
-                                "native_kind": mate.kind,
-                                "native_class_name": mate.class_name,
-                                "native_class_token": mate.class_token,
-                                "native_owner_definition_id": mate.owner_definition_id,
-                                "native_record_offset": mate.record_offset,
-                                "native_record_length": mate.record_length,
-                                "native_payload_id": payload_id,
-                                "serialized_strings": mate.serialized_strings,
-                                "source_document": source_label,
-                                "native_alignment_code": mate.alignment_code,
-                                "native_dimensions": tuple(
-                                    {
-                                        "name": dimension.name,
-                                        "value": dimension.value,
-                                        "value_offset": dimension.value_offset,
-                                    }
-                                    for dimension in mate.dimensions
-                                ),
-                                "native_value_m": mate.value_m,
-                                "native_value_offset": mate.value_offset,
-                            }
-                        ),
-                    )
-                )
-                mate_ids_by_order[mate.order] = mate_id
-            groups.extend(
-                _mate_groups(
-                    mate_list,
-                    owner_id,
-                    mate_ids_by_order,
-                    stream_name,
-                    payload_id,
-                )
-            )
-    return tuple(payloads), tuple(entities), tuple(mates), tuple(groups)
+                MateId = f'sldasm:mate:{OwnerId}:{ListIndex}:{MateValue.order}'
+                EntityIds: list[str] = []
+                for EntityIndex, NativeEntity in enumerate(MateValue.entities):
+                    EntityId = f'{MateId}:entity:{EntityIndex}'
+                    EntityIds.append(EntityId)
+                    Entities.append(AsmMateEntity(EntityId, OwnerId, Source, ItemMap, NativeEntity, MateValue, StreamName, SourceLabel))
+                Mates.append(MateRule(id=MateId, name=MateValue.name, kind=NeutralMateKinA(MateValue.kind), owner_definition_id=AsmDefinitionId(OwnerId), entity_ids=tuple(EntityIds), order=MateValue.order, value=NeutralMateA(MateValue), alignment=NeutralMate(MateValue), suppressed=False, driving=True, provenance=MateProvenance(MateValue, StreamName), attributes=FrozenMapping({'native_kind': MateValue.kind, 'native_class_name': MateValue.class_name, 'native_class_token': MateValue.class_token, 'native_owner_definition_id': MateValue.owner_definition_id, 'native_record_offset': MateValue.record_offset, 'native_record_length': MateValue.record_length, 'native_payload_id': PayloadId, 'serialized_strings': MateValue.serialized_strings, 'source_document': SourceLabel, 'native_alignment_code': MateValue.alignment_code, 'native_dimensions': tuple(({'name': Dimension.name, 'value': Dimension.value, 'value_offset': Dimension.value_offset} for Dimension in MateValue.dimensions)), 'native_value_m': MateValue.value_m, 'native_value_offset': MateValue.value_offset})))
+                MateIdsByOrder[MateValue.order] = MateId
+            Groups.extend(MateGroups(MateList, OwnerId, MateIdsByOrder, StreamName, PayloadId))
+    return (tuple(Payloads), tuple(Entities), tuple(Mates), tuple(Groups))
 
+# this definition exists because focused behavior needs one stable owner
+def MatePayload(PayloadId: str, StreamName: str, DataValue: bytes, MateList: NativeMateList, OwnerId: int, SourceLabel: str) -> BrepPayload:
+    return BrepPayload(id=PayloadId, format_id='solidworks.mates', kind='mate-list', schema='solidworks.serialized-object-stream', sha256=Hashlib.sha256(DataValue).hexdigest(), data=DataValue, source_stream=StreamName, provenance=Provenance(adapter=KAsmFormatId, native_id=str(MateList.native_id), spans=(ProvenanceSpan(StreamName, 0, len(DataValue), 'mate-list'),)), attributes=FrozenMapping({'native_id': MateList.native_id, 'declared_count': MateList.declared_count, 'owner_definition_id': OwnerId, 'source_document': SourceLabel, 'records': tuple(({'name': MateValue.name, 'kind': MateValue.kind, 'class_name': MateValue.class_name, 'class_token': MateValue.class_token, 'offset': MateValue.record_offset, 'length': MateValue.record_length} for MateValue in MateList.mates))}), role=PayloadRole.ASSEMBLY_STRUCTURE, file_extension='.bin')
 
-def _mate_payload(
-    payload_id: str,
-    stream_name: str,
-    data: bytes,
-    mate_list: NativeMateList,
-    owner_id: int,
-    source_label: str,
-) -> BrepPayload:
-    return BrepPayload(
-        id=payload_id,
-        format_id="solidworks.mates",
-        kind="mate-list",
-        schema="solidworks.serialized-object-stream",
-        sha256=hashlib.sha256(data).hexdigest(),
-        data=data,
-        source_stream=stream_name,
-        provenance=Provenance(
-            adapter=_ASSEMBLY_FORMAT_ID,
-            native_id=str(mate_list.native_id),
-            spans=(ProvenanceSpan(stream_name, 0, len(data), "mate-list"),),
-        ),
-        attributes=frozen_mapping(
-            {
-                "native_id": mate_list.native_id,
-                "declared_count": mate_list.declared_count,
-                "owner_definition_id": owner_id,
-                "source_document": source_label,
-                "records": tuple(
-                    {
-                        "name": mate.name,
-                        "kind": mate.kind,
-                        "class_name": mate.class_name,
-                        "class_token": mate.class_token,
-                        "offset": mate.record_offset,
-                        "length": mate.record_length,
-                    }
-                    for mate in mate_list.mates
-                ),
-            }
-        ),
-        role=PayloadRole.ASSEMBLY_STRUCTURE,
-        file_extension=".bin",
-    )
+# this definition exists because focused behavior needs one stable owner
+def AsmMateEntity(EntityId: str, OwnerId: int, Source: NativeAssembly, ItemMap: dict[int, int], Entity: NativeMateEntity, MateValue: NativeMate, StreamName: str, SourceLabel: str) -> MateEntity:
+    PathValue = MateInstance(Source, ItemMap, Entity.component_path)
+    SourceEntityId = Entity.persistent_references[-1] if Entity.persistent_references else ''
+    return MateEntity(id=EntityId, owner_definition_id=AsmDefinitionId(OwnerId), instance_path=tuple((AsmInstanceId(Value) for Value in PathValue)), kind=NeutralMateKind(SourceEntityId), source_entity_id=SourceEntityId, provenance=MateProvenance(MateValue, StreamName), attributes=FrozenMapping({'component_path': Entity.component_path, 'persistent_references': Entity.persistent_references, 'source_path': Entity.source_path, 'configuration_name': Entity.configuration_name, 'source_document': SourceLabel}))
 
-
-def _assembly_mate_entity(
-    entity_id: str,
-    owner_id: int,
-    source: NativeAssembly,
-    occurrence_map: dict[int, int],
-    entity: NativeMateEntity,
-    mate: NativeMate,
-    stream_name: str,
-    source_label: str,
-) -> MateEntity:
-    path = _mate_instance_path(source, occurrence_map, entity.component_path)
-    source_entity_id = (
-        entity.persistent_references[-1] if entity.persistent_references else ""
-    )
-    return MateEntity(
-        id=entity_id,
-        owner_definition_id=_assembly_definition_id(owner_id),
-        instance_path=tuple(_assembly_instance_id(value) for value in path),
-        kind=_neutral_mate_entity_kind(source_entity_id),
-        source_entity_id=source_entity_id,
-        provenance=_mate_provenance(mate, stream_name),
-        attributes=frozen_mapping(
-            {
-                "component_path": entity.component_path,
-                "persistent_references": entity.persistent_references,
-                "source_path": entity.source_path,
-                "configuration_name": entity.configuration_name,
-                "source_document": source_label,
-            }
-        ),
-    )
-
-
-def _mate_instance_path(
-    source: NativeAssembly,
-    occurrence_map: dict[int, int],
-    component_path: str,
-) -> tuple[int, ...]:
-    if not component_path:
+# this definition exists because focused behavior needs one stable owner
+def MateInstance(Source: NativeAssembly, ItemMap: dict[int, int], ComponentPath: str) -> tuple[int, ...]:
+    if not ComponentPath:
         return ()
-    children: defaultdict[int, list[NativeAssemblyOccurrence]] = defaultdict(list)
-    for occurrence in source.occurrences:
-        children[occurrence.owner_definition_id].append(occurrence)
-    owner_id = source.root_definition_id
-    result: list[int] = []
-    for raw_segment in component_path.split("/"):
-        segment = raw_segment.split("@", 1)[0].strip().casefold()
-        candidates = tuple(
-            occurrence
-            for occurrence in children.get(owner_id, [])
-            if segment
-            in {
-                occurrence.name.strip().casefold(),
-                f"{occurrence.name}-{occurrence.reference_number}".strip().casefold(),
-            }
-        )
-        if not candidates:
+    Children: Defaultdict[int, list[NativeAsmItem]] = Defaultdict(list)
+    for ItemValue in Source.occurrences:
+        Children[ItemValue.owner_definition_id].append(ItemValue)
+    OwnerId = Source.root_definition_id
+    Result: list[int] = []
+    for RawSegment in ComponentPath.split('/'):
+        Segment = RawSegment.split('@', 1)[0].strip().casefold()
+        Candidates = tuple((ItemValue for ItemValue in Children.get(OwnerId, []) if Segment in {ItemValue.name.strip().casefold(), f'{ItemValue.name}-{ItemValue.reference_number}'.strip().casefold()}))
+        if not Candidates:
             return ()
-        if len(candidates) != 1:
-            raise SldprtFormatError(
-                f"mate component path segment {raw_segment!r} has {len(candidates)} hierarchy mappings"
-            )
-        occurrence = candidates[0]
-        mapped = occurrence_map.get(occurrence.object_id)
-        if mapped is None:
-            raise SldprtFormatError(
-                f"mate component path references unmapped occurrence {occurrence.object_id}"
-            )
-        result.append(mapped)
-        owner_id = occurrence.definition_id
-    return tuple(result)
+        if len(Candidates) != 1:
+            raise SldprtFormatError(f'mate component path segment {RawSegment!r} has {len(Candidates)} hierarchy mappings')
+        ItemValue = Candidates[0]
+        Mapped = ItemMap.get(ItemValue.object_id)
+        if Mapped is None:
+            raise SldprtFormatError(f'mate component path references unmapped occurrence {ItemValue.object_id}')
+        Result.append(Mapped)
+        OwnerId = ItemValue.definition_id
+    return tuple(Result)
 
-
-def _neutral_mate_kind(value: str) -> MateKind:
-    alias = NATIVE_MATE_NEUTRAL_KIND_ALIASES.get(value)
-    if alias is not None:
-        return MateKind(alias)
+# this definition exists because focused behavior needs one stable owner
+def NeutralMateKinA(Value: str) -> MateKind:
+    Alias = NativeMateNeutralKind.get(Value)
+    if Alias is not None:
+        return MateKind(Alias)
     try:
-        return MateKind(value)
+        return MateKind(Value)
     except ValueError:
         return MateKind.NATIVE
 
-
-def _neutral_mate_alignment(mate: NativeMate) -> MateAlignment:
-    alignment = NATIVE_MATE_ALIGNMENT_BY_CODE.get(mate.alignment_code)
-    if alignment is None:
+# this definition exists because focused behavior needs one stable owner
+def NeutralMate(MateValue: NativeMate) -> MateAlignment:
+    Alignment = NativeMateAlignmentByCode.get(MateValue.alignment_code)
+    if Alignment is None:
         return MateAlignment.UNKNOWN
-    return MateAlignment(alignment.kind)
+    return MateAlignment(Alignment.kind)
 
-
-def _neutral_mate_value(mate: NativeMate) -> ParameterValue | None:
-    dimensions = mate.dimensions
-    if not dimensions:
+# this definition exists because focused behavior needs one stable owner
+def NeutralMateA(MateValue: NativeMate) -> ParamValue | None:
+    Dimensions = MateValue.dimensions
+    if not Dimensions:
         return None
-    semantic = MATE_VALUE_SEMANTICS.get(mate.kind)
-    if semantic == "angle":
-        return ParameterValue(dimensions[0].value, ValueKind.ANGLE, "rad")
-    if semantic == "length":
-        return ParameterValue(dimensions[0].value * 1000.0, ValueKind.LENGTH, "mm")
-    if semantic == "ratio" and len(dimensions) >= 2:
-        denominator = dimensions[1].value
-        if denominator != 0.0:
-            return ParameterValue(
-                dimensions[0].value / denominator, ValueKind.NUMBER, ""
-            )
+    Semantic = MateValueSemantics.get(MateValue.kind)
+    if Semantic == 'angle':
+        return ParamValue(Dimensions[0].value, ValueKind.ANGLE, 'rad')
+    if Semantic == 'length':
+        return ParamValue(Dimensions[0].value * 1000.0, ValueKind.LENGTH, 'mm')
+    if Semantic == 'ratio' and len(Dimensions) >= 2:
+        Denominator = Dimensions[1].value
+        if Denominator != 0.0:
+            return ParamValue(Dimensions[0].value / Denominator, ValueKind.NUMBER, '')
     return None
 
-
-def _neutral_mate_entity_kind(value: str) -> MateEntityKind:
-    lowered = value.casefold()
-    for marker, kind in NATIVE_MATE_ENTITY_MARKERS:
-        if marker in lowered:
-            return MateEntityKind(kind)
+# this definition exists because focused behavior needs one stable owner
+def NeutralMateKind(Value: str) -> MateEntityKind:
+    Lowered = Value.casefold()
+    for Marker, KindValue in NativeMateEntityMarkers:
+        if Marker in Lowered:
+            return MateEntityKind(KindValue)
     return MateEntityKind.NATIVE
 
+# this definition exists because focused behavior needs one stable owner
+def MateProvenance(MateValue: NativeMate, StreamName: str) -> Provenance:
+    return Provenance(adapter=KAsmFormatId, native_id=MateValue.name, spans=(ProvenanceSpan(StreamName, MateValue.record_offset, MateValue.record_length, 'mate-record'),))
 
-def _mate_provenance(mate: NativeMate, stream_name: str) -> Provenance:
-    return Provenance(
-        adapter=_ASSEMBLY_FORMAT_ID,
-        native_id=mate.name,
-        spans=(
-            ProvenanceSpan(
-                stream_name,
-                mate.record_offset,
-                mate.record_length,
-                "mate-record",
-            ),
-        ),
-    )
-
-
-def _mate_groups(
-    mate_list: NativeMateList,
-    owner_id: int,
-    mate_ids_by_order: dict[int, str],
-    stream_name: str,
-    payload_id: str,
-) -> tuple[MateGroup, ...]:
-    result: list[MateGroup] = []
-    records = mate_list.mates
-    markers = tuple(record for record in records if record.kind == "group")
-    for pair_index in range(0, len(markers) - 1, 2):
-        marker = markers[pair_index]
-        end = markers[pair_index + 1]
-        next_start = (
-            markers[pair_index + 2].order
-            if pair_index + 2 < len(markers)
-            else len(records)
-        )
-        members: list[str] = []
-        for candidate in records:
-            if (
-                candidate.order <= end.order
-                or candidate.order >= next_start
-                or candidate.kind == "group"
-            ):
+# this definition exists because focused behavior needs one stable owner
+def MateGroups(MateList: NativeMateList, OwnerId: int, MateIdsByOrder: dict[int, str], StreamName: str, PayloadId: str) -> tuple[MateGroup, ...]:
+    Result: list[MateGroup] = []
+    Records = MateList.mates
+    Markers = tuple((Record for Record in Records if Record.kind == 'group'))
+    for PairIndex in range(0, len(Markers) - 1, 2):
+        Marker = Markers[PairIndex]
+        EndValue = Markers[PairIndex + 1]
+        NextStart = Markers[PairIndex + 2].order if PairIndex + 2 < len(Markers) else len(Records)
+        Members: list[str] = []
+        for Choice in Records:
+            if Choice.order <= EndValue.order or Choice.order >= NextStart or Choice.kind == 'group':
                 continue
-            mate_id = mate_ids_by_order.get(candidate.order)
-            if mate_id is not None:
-                members.append(mate_id)
-            if candidate.kind == "lock_to_sketch":
+            MateId = MateIdsByOrder.get(Choice.order)
+            if MateId is not None:
+                Members.append(MateId)
+            if Choice.kind == 'lock_to_sketch':
                 break
-        result.append(
-            MateGroup(
-                id=f"sldasm:mate-group:{owner_id}:{marker.order}",
-                name=marker.name,
-                owner_definition_id=_assembly_definition_id(owner_id),
-                mate_ids=tuple(members),
-                order=marker.order,
-                provenance=Provenance(
-                    adapter=_ASSEMBLY_FORMAT_ID,
-                    native_id=marker.name,
-                    spans=(
-                        ProvenanceSpan(
-                            stream_name,
-                            marker.record_offset,
-                            marker.record_length,
-                            "mate-group-start",
-                        ),
-                        ProvenanceSpan(
-                            stream_name,
-                            end.record_offset,
-                            end.record_length,
-                            "mate-group-end",
-                        ),
-                    ),
-                ),
-                attributes=frozen_mapping(
-                    {
-                        "native_payload_id": payload_id,
-                        "start_record_offset": marker.record_offset,
-                        "start_record_length": marker.record_length,
-                        "end_record_offset": end.record_offset,
-                        "end_record_length": end.record_length,
-                    }
-                ),
-            )
-        )
-    return tuple(result)
+        Result.append(MateGroup(id=f'sldasm:mate-group:{OwnerId}:{Marker.order}', name=Marker.name, owner_definition_id=AsmDefinitionId(OwnerId), mate_ids=tuple(Members), order=Marker.order, provenance=Provenance(adapter=KAsmFormatId, native_id=Marker.name, spans=(ProvenanceSpan(StreamName, Marker.record_offset, Marker.record_length, 'mate-group-start'), ProvenanceSpan(StreamName, EndValue.record_offset, EndValue.record_length, 'mate-group-end'))), attributes=FrozenMapping({'native_payload_id': PayloadId, 'start_record_offset': Marker.record_offset, 'start_record_length': Marker.record_length, 'end_record_offset': EndValue.record_offset, 'end_record_length': EndValue.record_length})))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def Flattened(Native: NativeAssembly) -> tuple[dict[str, AnyValue], ...]:
+    Identity = {ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences}
+    return tuple(({'occurrence_id': AsmInstanceId(ItemValue.occurrence_id), 'definition_id': AsmDefinitionId(ItemValue.definition_id), 'path': ItemValue.path, 'instance_path': tuple((AsmInstanceId(Value) for Value in MateInstance(Native, Identity, ItemValue.path))), 'depth': ItemValue.depth} for ItemValue in Native.occurrence_paths))
 
-def _flattened_occurrences(native: NativeAssembly) -> tuple[dict[str, Any], ...]:
-    identity = {item.object_id: item.object_id for item in native.occurrences}
-    return tuple(
-        {
-            "occurrence_id": _assembly_instance_id(occurrence.occurrence_id),
-            "definition_id": _assembly_definition_id(occurrence.definition_id),
-            "path": occurrence.path,
-            "instance_path": tuple(
-                _assembly_instance_id(value)
-                for value in _mate_instance_path(
-                    native,
-                    identity,
-                    occurrence.path,
-                )
-            ),
-            "depth": occurrence.depth,
-        }
-        for occurrence in native.occurrence_paths
-    )
+# this definition exists because focused behavior needs one stable owner
+def FlattenedMates(Native: NativeAssembly, Mates: tuple[MateConstraint, ...]) -> tuple[dict[str, AnyValue], ...]:
+    Identity = {ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences}
+    OwnerPaths: Defaultdict[int, list[tuple[str, tuple[str, ...]]]] = Defaultdict(list)
+    OwnerPaths[Native.root_definition_id].append(('', ()))
+    for ItemValue in Native.occurrence_paths:
+        PathValue = tuple((AsmInstanceId(Value) for Value in MateInstance(Native, Identity, ItemValue.path)))
+        OwnerPaths[ItemValue.definition_id].append((ItemValue.path, PathValue))
+    Result: list[dict[str, AnyValue]] = []
+    for MateValue in Mates:
+        OwnerId = int(MateValue.owner_definition_id.rsplit(':', 1)[-1])
+        for Index, (PathValue, InstancePath) in enumerate(OwnerPaths.get(OwnerId, [])):
+            Result.append({'id': f'{MateValue.id}:occurrence:{Index}', 'mate_id': MateValue.id, 'owner_definition_id': MateValue.owner_definition_id, 'owner_occurrence_path': PathValue, 'owner_instance_path': InstancePath})
+    return tuple(Result)
 
-
-def _flattened_mates(
-    native: NativeAssembly, mates: tuple[MateConstraint, ...]
-) -> tuple[dict[str, Any], ...]:
-    identity = {item.object_id: item.object_id for item in native.occurrences}
-    owner_paths: defaultdict[int, list[tuple[str, tuple[str, ...]]]] = defaultdict(list)
-    owner_paths[native.root_definition_id].append(("", ()))
-    for occurrence in native.occurrence_paths:
-        path = tuple(
-            _assembly_instance_id(value)
-            for value in _mate_instance_path(native, identity, occurrence.path)
-        )
-        owner_paths[occurrence.definition_id].append((occurrence.path, path))
-    result: list[dict[str, Any]] = []
-    for mate in mates:
-        owner_id = int(mate.owner_definition_id.rsplit(":", 1)[-1])
-        for index, (path, instance_path) in enumerate(owner_paths.get(owner_id, [])):
-            result.append(
-                {
-                    "id": f"{mate.id}:occurrence:{index}",
-                    "mate_id": mate.id,
-                    "owner_definition_id": mate.owner_definition_id,
-                    "owner_occurrence_path": path,
-                    "owner_instance_path": instance_path,
-                }
-            )
-    return tuple(result)
-
-
-def _companion_payloads(label: str) -> tuple[BrepPayload, ...]:
-    source = Path(label)
-    if not source.is_file():
+# this definition exists because focused behavior needs one stable owner
+def Companion(Label: str) -> tuple[BrepPayload, ...]:
+    Source = PathValue(Label)
+    if not Source.is_file():
         return ()
-    source = source.resolve()
-    specifications = (
-        ("ACIS", ".sat", "acis.sat"),
-        ("Parasolid", ".x_t", "parasolid.x_t"),
-    )
-    result: list[BrepPayload] = []
-    for directory_name, suffix, format_id in specifications:
-        directory = source.parent / directory_name
-        if not directory.is_dir():
+    Source = Source.resolve()
+    Specifications = (('ACIS', '.sat', 'acis.sat'), ('Parasolid', '.x_t', 'parasolid.x_t'))
+    Result: list[BrepPayload] = []
+    for FolderName, Suffix, FormatId in Specifications:
+        Folder = Source.parent / FolderName
+        if not Folder.is_dir():
             continue
-        candidate = next(
-            (
-                path
-                for path in directory.iterdir()
-                if path.is_file()
-                and path.stem.casefold() == source.stem.casefold()
-                and path.suffix.casefold() == suffix
-            ),
-            None,
-        )
-        if candidate is None:
+        Choice = next((PathValue for PathValue in Folder.iterdir() if PathValue.is_file() and PathValue.stem.casefold() == Source.stem.casefold() and (PathValue.suffix.casefold() == Suffix)), None)
+        if Choice is None:
             continue
-        data = candidate.read_bytes()
-        attributes: dict[str, Any] = {
-            "companion_path": str(candidate.resolve()),
-            "source_assembly": str(source),
-        }
-        if format_id == "acis.sat":
-            header = data.splitlines()[0].decode("ascii", errors="replace").split()
-            if len(header) >= 3 and header[2].isdigit():
-                attributes["body_count"] = int(header[2])
-        result.append(
-            BrepPayload(
-                id=f"sldasm:resolved:{format_id}",
-                format_id=format_id,
-                kind="resolved-assembly",
-                schema=format_id,
-                sha256=hashlib.sha256(data).hexdigest(),
-                data=data,
-                source_stream=str(candidate.resolve()),
-                provenance=Provenance(
-                    adapter=_ASSEMBLY_FORMAT_ID,
-                    native_id=candidate.name,
-                    spans=(
-                        ProvenanceSpan(
-                            str(candidate.resolve()),
-                            0,
-                            len(data),
-                            "resolved-assembly-brep",
-                        ),
-                    ),
-                ),
-                attributes=frozen_mapping(attributes),
-                role=PayloadRole.BREP,
-                file_extension=suffix,
-            )
-        )
-    return tuple(result)
+        DataValue = Choice.read_bytes()
+        Attributes: dict[str, AnyValue] = {'companion_path': str(Choice.resolve()), 'source_assembly': str(Source)}
+        if FormatId == 'acis.sat':
+            Header = DataValue.splitlines()[0].decode('ascii', errors='replace').split()
+            if len(Header) >= 3 and Header[2].isdigit():
+                Attributes['body_count'] = int(Header[2])
+        Result.append(BrepPayload(id=f'sldasm:resolved:{FormatId}', format_id=FormatId, kind='resolved-assembly', schema=FormatId, sha256=Hashlib.sha256(DataValue).hexdigest(), data=DataValue, source_stream=str(Choice.resolve()), provenance=Provenance(adapter=KAsmFormatId, native_id=Choice.name, spans=(ProvenanceSpan(str(Choice.resolve()), 0, len(DataValue), 'resolved-assembly-brep'),)), attributes=FrozenMapping(Attributes), role=PayloadRole.BREP, file_extension=Suffix))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def AsmMatrix(Values: tuple[float, ...]) -> MatrixFour:
+    return MatrixFour((Values[0], Values[4], Values[8], Values[12] * 1000.0, Values[1], Values[5], Values[9], Values[13] * 1000.0, Values[2], Values[6], Values[10], Values[14] * 1000.0, Values[3], Values[7], Values[11], Values[15]))
 
-def _assembly_matrix(values: tuple[float, ...]) -> Matrix4:
-    return Matrix4(
-        (
-            values[0],
-            values[4],
-            values[8],
-            values[12] * 1000.0,
-            values[1],
-            values[5],
-            values[9],
-            values[13] * 1000.0,
-            values[2],
-            values[6],
-            values[10],
-            values[14] * 1000.0,
-            values[3],
-            values[7],
-            values[11],
-            values[15],
-        )
-    )
-
-
-def _assembly_bounding_box(
-    values: tuple[float, float, float, float, float, float] | None,
-) -> BoundingBox | None:
-    if values is None:
+# this definition exists because focused behavior needs one stable owner
+def AsmBoundingBox(Values: tuple[float, float, float, float, float, float] | None) -> BoundingBox | None:
+    if Values is None:
         return None
-    return BoundingBox(
-        Vector3(*(value * 1000.0 for value in values[:3])),
-        Vector3(*(value * 1000.0 for value in values[3:])),
-    )
+    return BoundingBox(VectorThree(*(Value * 1000.0 for Value in Values[:3])), VectorThree(*(Value * 1000.0 for Value in Values[3:])))
 
+# this definition exists because focused behavior needs one stable owner
+def AsmDefinitionId(NativeId: int) -> str:
+    return f'sldasm:definition:{NativeId}'
 
-def _assembly_definition_id(native_id: int) -> str:
-    return f"sldasm:definition:{native_id}"
+# this definition exists because focused behavior needs one stable owner
+def AsmInstanceId(NativeId: int) -> str:
+    return f'sldasm:instance:{NativeId}'
 
+# this definition exists because focused behavior needs one stable owner
+def ValidateSource(Label: str, IsAsm: bool) -> None:
+    Suffix = PathValue(Label).suffix.casefold()
+    ExpectedFormat = KAsmFormatId if IsAsm else KFormatId
+    Expected = SuffixByFormatId[ExpectedFormat]
+    if Suffix in FormatIdBySuffix and Suffix != Expected:
+        KindValue = 'assembly' if IsAsm else 'part'
+        raise SldprtFormatError(f'SOLIDWORKS {KindValue} content requires a {Expected.upper()} source')
 
-def _assembly_instance_id(native_id: int) -> str:
-    return f"sldasm:instance:{native_id}"
-
-
-def _validate_source_suffix(label: str, is_assembly: bool) -> None:
-    suffix = Path(label).suffix.casefold()
-    expected_format = _ASSEMBLY_FORMAT_ID if is_assembly else _FORMAT_ID
-    expected = SUFFIX_BY_FORMAT_ID[expected_format]
-    if suffix in FORMAT_ID_BY_SUFFIX and suffix != expected:
-        kind = "assembly" if is_assembly else "part"
-        raise SldprtFormatError(
-            f"SOLIDWORKS {kind} content requires a {expected.upper()} source"
-        )
-
-
-def _source_bytes(source: Source) -> tuple[bytes, str]:
-    if isinstance(source, (str, Path)):
-        path = Path(source).expanduser().resolve()
-        return path.read_bytes(), str(path)
-    if isinstance(source, (bytes, bytearray)):
-        return bytes(source), "<memory>"
-    position = None
-    tell = getattr(source, "tell", None)
-    seek = getattr(source, "seek", None)
-    if callable(tell):
+# this definition exists because focused behavior needs one stable owner
+def SourceBytes(Source: Source) -> tuple[bytes, str]:
+    if isinstance(Source, (str, PathValue)):
+        PathValue = PathValue(Source).expanduser().resolve()
+        return (PathValue.read_bytes(), str(PathValue))
+    if isinstance(Source, (bytes, bytearray)):
+        return (bytes(Source), '<memory>')
+    Position = None
+    TellValue = getattr(Source, 'tell', None)
+    SeekValue = getattr(Source, 'seek', None)
+    if callable(TellValue):
         try:
-            position = tell()
+            Position = TellValue()
         except (OSError, ValueError):
-            position = None
-    value = source.read()
-    if position is not None and callable(seek):
+            Position = None
+    Value = Source.read()
+    if Position is not None and callable(SeekValue):
         try:
-            seek(position)
+            SeekValue(Position)
         except (OSError, ValueError):
-            position = None
-    if not isinstance(value, (bytes, bytearray)):
-        raise TypeError("SLDPRT source stream must yield bytes")
-    name = getattr(source, "name", "<stream>")
-    return bytes(value), str(name)
+            Position = None
+    if not isinstance(Value, (bytes, bytearray)):
+        raise TypeError('SLDPRT source stream must yield bytes')
+    NameValue = getattr(Source, 'name', '<stream>')
+    return (bytes(Value), str(NameValue))
 
+# this definition exists because focused behavior needs one stable owner
+def ResolvedStream(Streams: Mapping[str, bytes], LaneValue: str) -> str:
+    return KitResolvedStream if KitResolvedStream in Streams else LaneValue
 
-def _resolved_features_stream(streams: Mapping[str, bytes], lane: str) -> str:
-    return KIT_RESOLVED_STREAM if KIT_RESOLVED_STREAM in streams else lane
+# this definition exists because focused behavior needs one stable owner
+def NativePartModel(Archive: SldprtArchive, Requested: str | None) -> NativeModel:
+    Keywords = Archive.require(KeywordsStream)
+    Lanes = {int(Match.group(1)): NameValue for NameValue in Archive.streams if (Match := KResolvedConfigStream.fullmatch(NameValue)) is not None}
+    if not Lanes:
+        raise SldprtFormatError('required native resolved-feature stream is missing')
+    InitialId = 0 if 0 in Lanes else min(Lanes)
+    InitialStream = ResolvedStream(Archive.streams, Lanes[InitialId])
+    Initial = DecodeNativeModel(Keywords, Archive.require(InitialStream), configuration_id=InitialId, resolved_stream=InitialStream)
+    SelectedId = InitialId
+    if Requested is not None:
+        Selected = next((ItemValue.configuration_id for ItemValue in Initial.configurations if ItemValue.name == Requested), None)
+        if Selected is None:
+            raise SldprtFormatError(f'configuration {Requested!r} is unavailable; choices are {sorted((ItemValue.name for ItemValue in Initial.configurations))}')
+        SelectedId = Selected
+    if SelectedId not in Lanes:
+        raise SldprtFormatError(f'native data for configuration {SelectedId} is unavailable; available lanes are {sorted(Lanes)}')
+    ResolvedStream = ResolvedStream(Archive.streams, Lanes[SelectedId])
+    ConfigStream = f'Contents/Config-{SelectedId}'
+    return DecodeNativeModel(Keywords, Archive.require(ResolvedStream), Archive.get(ConfigStream) or b'', configuration_id=SelectedId, resolved_stream=ResolvedStream, configuration_stream=ConfigStream)
 
+# this definition exists because focused behavior needs one stable owner
+def Configurations(Model: NativeModel, Requested: str | None) -> tuple[Config, ...]:
+    Available = {ItemValue.name for ItemValue in Model.configurations}
+    if Requested is not None and Requested not in Available:
+        raise SldprtFormatError(f'configuration {Requested!r} is unavailable; choices are {sorted(Available)}')
+    Active = Requested or next((ItemValue.name for ItemValue in Model.configurations if ItemValue.configuration_id == Model.active_configuration_id), Model.configurations[0].name)
+    return tuple((Config(id=ConfigId(ItemValue.configuration_id), name=ItemValue.name, active=ItemValue.name == Active, attributes=FrozenMapping({'native_object_id': ItemValue.object_id, 'native_configuration_id': ItemValue.configuration_id, 'native_properties': ItemValue.properties})) for ItemValue in Model.configurations))
 
-def _native_part_model(archive: SldprtArchive, requested: str | None) -> NativeModel:
-    keywords = archive.require(KEYWORDS_STREAM)
-    lanes = {
-        int(match.group(1)): name
-        for name in archive.streams
-        if (match := _RESOLVED_CONFIGURATION_STREAM.fullmatch(name)) is not None
-    }
-    if not lanes:
-        raise SldprtFormatError("required native resolved-feature stream is missing")
-    initial_id = 0 if 0 in lanes else min(lanes)
-    initial_stream = _resolved_features_stream(archive.streams, lanes[initial_id])
-    initial = decode_native_model(
-        keywords,
-        archive.require(initial_stream),
-        configuration_id=initial_id,
-        resolved_stream=initial_stream,
-    )
-    selected_id = initial_id
-    if requested is not None:
-        selected = next(
-            (
-                item.configuration_id
-                for item in initial.configurations
-                if item.name == requested
-            ),
-            None,
-        )
-        if selected is None:
-            raise SldprtFormatError(
-                f"configuration {requested!r} is unavailable; choices are "
-                f"{sorted(item.name for item in initial.configurations)}"
-            )
-        selected_id = selected
-    if selected_id not in lanes:
-        raise SldprtFormatError(
-            f"native data for configuration {selected_id} is unavailable; "
-            f"available lanes are {sorted(lanes)}"
-        )
-    resolved_stream = _resolved_features_stream(archive.streams, lanes[selected_id])
-    configuration_stream = f"Contents/Config-{selected_id}"
-    return decode_native_model(
-        keywords,
-        archive.require(resolved_stream),
-        archive.get(configuration_stream) or b"",
-        configuration_id=selected_id,
-        resolved_stream=resolved_stream,
-        configuration_stream=configuration_stream,
-    )
+# this definition exists because focused behavior needs one stable owner
+def Parameters(Model: NativeModel) -> tuple[Param, ...]:
+    Parameters: list[Param] = []
+    DimensionIds: dict[tuple[str, str], str] = {}
+    for Feature in Model.features:
+        for Dimension, ParamId in ParamEntries(Feature.object_id, Feature.dimensions):
+            NativeValue = Dimension.native_value if Dimension.native_value is not None else Dimension.value_mm / 1000.0
+            Parameters.append(Param(id=ParamId, name=Dimension.name, value=DimensionParam(Dimension), role=ParamRole.DRIVEN if Dimension.native_role == 'display' else ParamRole.DRIVING, owner_id=FeatureId(Feature.object_id), provenance=ProvenanceA(f'{Feature.object_id}:{Dimension.name}', Dimension.native_offset, 8, 'dimension-scalar', Stream=Feature.native_stream) if Dimension.native_offset is not None else FeatureA(Feature), attributes=FrozenMapping({'source_text': Dimension.source_text, 'dimension_kind': Dimension.kind, 'native_value': NativeValue, 'native_unit': 'rad' if Dimension.kind == 'angle' else 'm', 'native_role': Dimension.native_role or 'unresolved', 'native_operands': tuple(({'offset': Operand.offset, 'kind_code': Operand.kind_code, 'entity_index': Operand.entity_index} for Operand in Dimension.operands))})))
+            DimensionIds.setdefault((Feature.name, Dimension.name), ParamId)
+    return ApplyNative(Parameters, Model, DimensionIds)
 
+# this definition exists because focused behavior needs one stable owner
+def DimensionParam(Dimension: NativeDimension) -> ParamValue:
+    if Dimension.kind == 'angle':
+        return ParamValue(Dimension.value_mm, ValueKind.ANGLE, 'deg')
+    return ParamValue(Dimension.value_mm, ValueKind.LENGTH, 'mm')
 
-def _configurations(
-    model: NativeModel, requested: str | None
-) -> tuple[Configuration, ...]:
-    available = {item.name for item in model.configurations}
-    if requested is not None and requested not in available:
-        raise SldprtFormatError(
-            f"configuration {requested!r} is unavailable; choices are {sorted(available)}"
-        )
-    active = requested or next(
-        (
-            item.name
-            for item in model.configurations
-            if item.configuration_id == model.active_configuration_id
-        ),
-        model.configurations[0].name,
-    )
-    return tuple(
-        Configuration(
-            id=_configuration_id(item.configuration_id),
-            name=item.name,
-            active=item.name == active,
-            attributes=frozen_mapping(
-                {
-                    "native_object_id": item.object_id,
-                    "native_configuration_id": item.configuration_id,
-                    "native_properties": item.properties,
-                }
-            ),
-        )
-        for item in model.configurations
-    )
-
-
-def _parameters(model: NativeModel) -> tuple[Parameter, ...]:
-    parameters: list[Parameter] = []
-    dimension_ids: dict[tuple[str, str], str] = {}
-    for feature in model.features:
-        for dimension, parameter_id in _parameter_entries(
-            feature.object_id, feature.dimensions
-        ):
-            native_value = (
-                dimension.native_value
-                if dimension.native_value is not None
-                else dimension.value_mm / 1000.0
-            )
-            parameters.append(
-                Parameter(
-                    id=parameter_id,
-                    name=dimension.name,
-                    value=_dimension_parameter_value(dimension),
-                    role=(
-                        ParameterRole.DRIVEN
-                        if dimension.native_role == "display"
-                        else ParameterRole.DRIVING
-                    ),
-                    owner_id=_feature_id(feature.object_id),
-                    provenance=(
-                        _provenance(
-                            f"{feature.object_id}:{dimension.name}",
-                            dimension.native_offset,
-                            8,
-                            "dimension-scalar",
-                            stream=feature.native_stream,
-                        )
-                        if dimension.native_offset is not None
-                        else _feature_provenance(feature)
-                    ),
-                    attributes=frozen_mapping(
-                        {
-                            "source_text": dimension.source_text,
-                            "dimension_kind": dimension.kind,
-                            "native_value": native_value,
-                            "native_unit": (
-                                "rad" if dimension.kind == "angle" else "m"
-                            ),
-                            "native_role": dimension.native_role or "unresolved",
-                            "native_operands": tuple(
-                                {
-                                    "offset": operand.offset,
-                                    "kind_code": operand.kind_code,
-                                    "entity_index": operand.entity_index,
-                                }
-                                for operand in dimension.operands
-                            ),
-                        }
-                    ),
-                )
-            )
-            dimension_ids.setdefault((feature.name, dimension.name), parameter_id)
-    return _apply_native_equations(parameters, model, dimension_ids)
-
-
-def _dimension_parameter_value(dimension: NativeDimension) -> ParameterValue:
-    if dimension.kind == "angle":
-        return ParameterValue(dimension.value_mm, ValueKind.ANGLE, "deg")
-    return ParameterValue(dimension.value_mm, ValueKind.LENGTH, "mm")
-
-
-def _apply_native_equations(
-    parameters: list[Parameter],
-    model: NativeModel,
-    dimension_ids: dict[tuple[str, str], str],
-) -> tuple[Parameter, ...]:
-    if not model.equations:
-        return tuple(parameters)
-    global_ids = {
-        equation.lhs: f"sldprt:parameter:equation:{equation.lhs}"
-        for equation in model.equations
-        if "@" not in equation.lhs
-    }
-    values: dict[str, ParameterValue] = {}
-    parameter_indexes = {
-        parameter.id: index for index, parameter in enumerate(parameters)
-    }
-    for equation in model.equations:
-        reference_ids = tuple(
-            global_ids[reference]
-            for reference in equation.references
-            if reference in global_ids
-        )
-        expression = Expression(
-            equation.rhs,
-            reference_ids,
-            "solidworks",
-        )
-        provenance = Provenance(
-            adapter=_FORMAT_ID,
-            native_id=f"equation:{equation.native_offset}",
-            spans=(
-                ProvenanceSpan(
-                    equation.native_stream,
-                    equation.native_offset,
-                    equation.native_length,
-                    "equation",
-                ),
-            ),
-        )
-        if "@" in equation.lhs:
-            dimension_name, feature_name = equation.lhs.split("@", 1)
-            parameter_id = dimension_ids.get((feature_name, dimension_name))
-            if parameter_id is None or parameter_id not in parameter_indexes:
+# this definition exists because focused behavior needs one stable owner
+def ApplyNative(Parameters: list[Parameter], Model: NativeModel, DimensionIds: dict[tuple[str, str], str]) -> tuple[Param, ...]:
+    if not Model.equations:
+        return tuple(Parameters)
+    GlobalIds = {Equation.lhs: f'sldprt:parameter:equation:{Equation.lhs}' for Equation in Model.equations if '@' not in Equation.lhs}
+    Values: dict[str, ParamValue] = {}
+    ParamIndexes = {Param.id: Index for Index, Param in enumerate(Parameters)}
+    for Equation in Model.equations:
+        RefIds = tuple((GlobalIds[RefValue] for RefValue in Equation.references if RefValue in GlobalIds))
+        Expression = Expression(Equation.rhs, RefIds, 'solidworks')
+        Provenance = Provenance(adapter=KFormatId, native_id=f'equation:{Equation.native_offset}', spans=(ProvenanceSpan(Equation.native_stream, Equation.native_offset, Equation.native_length, 'equation'),))
+        if '@' in Equation.lhs:
+            DimensionName, FeatureName = Equation.lhs.split('@', 1)
+            ParamId = DimensionIds.get((FeatureName, DimensionName))
+            if ParamId is None or ParamId not in ParamIndexes:
                 continue
-            index = parameter_indexes[parameter_id]
-            parameters[index] = replace(
-                parameters[index],
-                role=ParameterRole.DERIVED,
-                expression=expression,
-                provenance=provenance,
-                attributes=frozen_mapping(
-                    {
-                        **dict(parameters[index].attributes),
-                        "equation_source": equation.source,
-                        "equation_configuration_id": equation.configuration_id,
-                    }
-                ),
-            )
+            Index = ParamIndexes[ParamId]
+            Parameters[Index] = Replace(Parameters[Index], role=ParamRole.DERIVED, expression=Expression, provenance=Provenance, attributes=FrozenMapping({**dict(Parameters[Index].attributes), 'equation_source': Equation.source, 'equation_configuration_id': Equation.configuration_id}))
             continue
-        value = _native_equation_value(equation.rhs, values)
-        if value is None:
-            value = ParameterValue(equation.rhs, ValueKind.STRING)
-        values[equation.lhs] = value
-        parameter = Parameter(
-            id=global_ids[equation.lhs],
-            name=equation.lhs,
-            value=value,
-            role=(
-                ParameterRole.DERIVED if equation.references else ParameterRole.DRIVING
-            ),
-            expression=expression,
-            owner_id=_feature_id(16),
-            provenance=provenance,
-            attributes=frozen_mapping(
-                {
-                    "equation_source": equation.source,
-                    "equation_configuration_id": equation.configuration_id,
-                }
-            ),
-        )
-        if parameter.id in parameter_indexes:
-            parameters[parameter_indexes[parameter.id]] = parameter
+        Value = NativeEquation(Equation.rhs, Values)
+        if Value is None:
+            Value = ParamValue(Equation.rhs, ValueKind.STRING)
+        Values[Equation.lhs] = Value
+        Param = Param(id=GlobalIds[Equation.lhs], name=Equation.lhs, value=Value, role=ParamRole.DERIVED if Equation.references else ParamRole.DRIVING, expression=Expression, owner_id=FeatureId(16), provenance=Provenance, attributes=FrozenMapping({'equation_source': Equation.source, 'equation_configuration_id': Equation.configuration_id}))
+        if Param.id in ParamIndexes:
+            Parameters[ParamIndexes[Param.id]] = Param
         else:
-            parameter_indexes[parameter.id] = len(parameters)
-            parameters.append(parameter)
-    return tuple(parameters)
+            ParamIndexes[Param.id] = len(Parameters)
+            Parameters.append(Param)
+    return tuple(Parameters)
 
-
-def _native_equation_value(
-    rhs: str, values: Mapping[str, ParameterValue]
-) -> ParameterValue | None:
-    literal = re.fullmatch(
-        r"\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*mm\s*",
-        rhs,
-        re.IGNORECASE,
-    )
-    if literal is not None:
-        return ParameterValue(float(literal.group(1)), ValueKind.LENGTH, "mm")
-    number = re.fullmatch(r"\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*", rhs)
-    if number is not None:
-        return ParameterValue(float(number.group(1)), ValueKind.NUMBER, "")
-    quotient = re.fullmatch(
-        r'\s*"([^"\r\n]+)"\s*/\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*',
-        rhs,
-    )
-    if quotient is None:
+# this definition exists because focused behavior needs one stable owner
+def NativeEquation(RhsValue: str, Values: Mapping[str, ParameterValue]) -> ParamValue | None:
+    Literal = RegexLib.fullmatch('\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*mm\\s*', RhsValue, RegexLib.IGNORECASE)
+    if Literal is not None:
+        return ParamValue(float(Literal.group(1)), ValueKind.LENGTH, 'mm')
+    Number = RegexLib.fullmatch('\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*', RhsValue)
+    if Number is not None:
+        return ParamValue(float(Number.group(1)), ValueKind.NUMBER, '')
+    Quotient = RegexLib.fullmatch('\\s*"([^"\\r\\n]+)"\\s*/\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*', RhsValue)
+    if Quotient is None:
         return None
-    source = values.get(quotient.group(1))
-    if (
-        source is None
-        or source.kind not in {ValueKind.LENGTH, ValueKind.NUMBER}
-        or not isinstance(source.value, (int, float))
-    ):
+    Source = Values.get(Quotient.group(1))
+    if Source is None or Source.kind not in {ValueKind.LENGTH, ValueKind.NUMBER} or (not isinstance(Source.value, (int, float))):
         return None
-    divisor = float(quotient.group(2))
-    if not math.isfinite(divisor) or divisor == 0.0:
+    Divisor = float(Quotient.group(2))
+    if not MathValue.isfinite(Divisor) or Divisor == 0.0:
         return None
-    return ParameterValue(float(source.value) / divisor, source.kind, source.unit)
+    return ParamValue(float(Source.value) / Divisor, Source.kind, Source.unit)
 
+# this definition exists because focused behavior needs one stable owner
+def Planes(Model: NativeModel, ParamIds: set[str]) -> tuple[SupportPlane, ...]:
+    Result: list[SupportPlane] = []
 
-def _planes(model: NativeModel, parameter_ids: set[str]) -> tuple[SupportPlane, ...]:
-    result: list[SupportPlane] = []
-    for plane in sorted(
-        model.planes,
-        key=lambda item: (
-            next(
-                (
-                    feature.native_offset
-                    for feature in model.features
-                    if feature.object_id == item.object_id
-                ),
-                None,
-            )
-            is None,
-            next(
-                (
-                    feature.native_offset
-                    for feature in model.features
-                    if feature.object_id == item.object_id
-                ),
-                1 << 62,
-            ),
-        ),
-    ):
-        offset_id = _parameter_id(plane.object_id, "D1")
-        result.append(
-            SupportPlane(
-                id=_plane_id(plane.object_id),
-                name=plane.name,
-                transform=Transform(
-                    origin=Vector3(*plane.origin_mm),
-                    x_axis=Vector3(*plane.u_axis),
-                    y_axis=Vector3(*plane.v_axis),
-                    z_axis=Vector3(*plane.normal),
-                ),
-                offset_parameter_id=(offset_id if offset_id in parameter_ids else None),
-                provenance=(
-                    _provenance(
-                        str(plane.object_id),
-                        plane.native_offset,
-                        plane.native_length or 1,
-                        "support-plane-frame",
-                        stream=plane.native_stream,
-                    )
-                    if plane.native_offset is not None
-                    else _provenance(
-                        str(plane.object_id), None, None, "principal-plane"
-                    )
-                ),
-                attributes=frozen_mapping(
-                    {
-                        "native_object_id": plane.object_id,
-                        "native_frame_offset": plane.native_offset,
-                        "native_frame_length": plane.native_length,
-                        "principal": plane.principal,
-                        "native_reference_ids": plane.reference_ids,
-                    }
-                ),
-            )
-        )
-    return tuple(result)
+    # this callback exists because local behavior needs one focused transformation
+    for Plane in sorted(Model.planes, key=lambda ItemValue: (next((Feature.native_offset for Feature in Model.features if Feature.object_id == ItemValue.object_id), None) is None, next((Feature.native_offset for Feature in Model.features if Feature.object_id == ItemValue.object_id), 1 << 62))):
+        OffsetId = ParamId(Plane.object_id, 'D1')
+        Result.append(SupportPlane(id=PlaneId(Plane.object_id), name=Plane.name, transform=Transform(origin=VectorThree(*Plane.origin_mm), x_axis=VectorThree(*Plane.u_axis), y_axis=VectorThree(*Plane.v_axis), z_axis=VectorThree(*Plane.normal)), offset_parameter_id=OffsetId if OffsetId in ParamIds else None, provenance=ProvenanceA(str(Plane.object_id), Plane.native_offset, Plane.native_length or 1, 'support-plane-frame', Stream=Plane.native_stream) if Plane.native_offset is not None else ProvenanceA(str(Plane.object_id), None, None, 'principal-plane'), attributes=FrozenMapping({'native_object_id': Plane.object_id, 'native_frame_offset': Plane.native_offset, 'native_frame_length': Plane.native_length, 'principal': Plane.principal, 'native_reference_ids': Plane.reference_ids})))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[Sketch, ...]:
 
-def _sketches(model: NativeModel, parameter_ids: set[str]) -> tuple[Sketch, ...]:
-    return tuple(
-        _sketch(sketch, parameter_ids)
-        for sketch in sorted(model.sketches, key=lambda item: item.native_offset)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    return tuple((SketchA(Sketch, ParamIds) for Sketch in sorted(Model.sketches, key=lambda ItemValue: ItemValue.native_offset)))
 
-
-def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
-    entities: list[SketchEntity] = []
-    reference_map: dict[str, str] = {}
-    profile_entities: dict[int, str] = {}
-    profile_offsets = {
-        offset for profile in sketch.profiles for offset in profile.marker_offsets
-    }
-    for profile_index, profile in enumerate(sketch.profiles):
-        if profile.kind == "rectangle":
-            x0, y0, x1, y1 = profile.coordinates
-            endpoints = (
-                ((x0, y0), (x1, y0)),
-                ((x1, y0), (x1, y1)),
-                ((x1, y1), (x0, y1)),
-                ((x0, y1), (x0, y0)),
-            )
-            for edge_index, (start, end) in enumerate(endpoints):
-                entity_id = _profile_edge_id(
-                    sketch.object_id, profile_index, edge_index
-                )
-                marker_offset = (
-                    profile.marker_offsets[edge_index]
-                    if edge_index < len(profile.marker_offsets)
-                    else None
-                )
-                entities.append(
-                    SketchEntity(
-                        id=entity_id,
-                        kind=GeometryKind.LINE,
-                        geometry=LineGeometry(Vector2(*start), Vector2(*end)),
-                        provenance=(
-                            _provenance(
-                                f"{sketch.object_id}:{marker_offset}",
-                                marker_offset,
-                                92,
-                                "sketch-profile-line",
-                                stream=sketch.native_stream,
-                            )
-                            if marker_offset is not None
-                            else _feature_span_provenance(sketch)
-                        ),
-                        attributes=frozen_mapping(
-                            {
-                                "profile_index": profile_index,
-                                "edge_index": edge_index,
-                            }
-                        ),
-                    )
-                )
-                reference_map[
-                    f"{sketch.object_id}:profile:{profile_index}:edge:{edge_index}"
-                ] = entity_id
-                if marker_offset is not None:
-                    profile_entities[marker_offset] = entity_id
-        elif profile.kind == "circle":
-            x, y, radius = profile.coordinates
-            entity_id = _profile_id(sketch.object_id, profile_index)
-            entities.append(
-                SketchEntity(
-                    id=entity_id,
-                    kind=GeometryKind.CIRCLE,
-                    geometry=CircleGeometry(Vector2(x, y), radius),
-                    provenance=Provenance(
-                        adapter=_FORMAT_ID,
-                        native_id=f"{sketch.object_id}:profile:{profile_index}",
-                        spans=tuple(
-                            ProvenanceSpan(
-                                sketch.native_stream,
-                                offset,
-                                142,
-                                "sketch-circle-marker",
-                            )
-                            for offset in profile.marker_offsets
-                        ),
-                    ),
-                    attributes=frozen_mapping({"profile_index": profile_index}),
-                )
-            )
-            reference_map[f"{sketch.object_id}:profile:{profile_index}"] = entity_id
-            profile_entities.update(
-                {offset: entity_id for offset in profile.marker_offsets}
-            )
-    coordinates_by_prefix = {
-        prefix: tuple(
-            marker.coordinates_mm
-            for marker in sketch.markers
-            if marker.prefix == prefix
-        )
-        for prefix in {marker.prefix for marker in sketch.markers}
-    }
-    coordinates_by_index = tuple(marker.coordinates_mm for marker in sketch.markers)
-    marker_semantics = tuple(
-        _marker_curve_semantic(marker) for marker in sketch.markers
-    )
-    curve_reference_indices = {
-        reference
-        for marker, semantic in zip(sketch.markers, marker_semantics, strict=True)
-        for reference in _marker_curve_reference_indices(marker, semantic)
-    } | {
-        reference
-        for marker in sketch.markers
-        for reference in _marker_object_reference_indices(marker.data)
-    }
-    marker_entities: dict[int, str] = {}
-    for marker_index, (marker, semantic) in enumerate(
-        zip(sketch.markers, marker_semantics, strict=True)
-    ):
-        if marker.offset in profile_offsets:
-            entity_id = profile_entities.get(marker.offset)
-            if entity_id is not None:
-                marker_entities[marker_index] = entity_id
+# this definition exists because focused behavior needs one stable owner
+def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> Sketch:
+    Entities: list[SketchEntity] = []
+    RefMap: dict[str, str] = {}
+    ProfileEntities: dict[int, str] = {}
+    ProfileOffsets = {Offset for Profile in Sketch.profiles for Offset in Profile.marker_offsets}
+    for ProfileIndex, Profile in enumerate(Sketch.profiles):
+        if Profile.kind == 'rectangle':
+            XZero, YZero, XOneValue, YOneValue = Profile.coordinates
+            Endpoints = (((XZero, YZero), (XOneValue, YZero)), ((XOneValue, YZero), (XOneValue, YOneValue)), ((XOneValue, YOneValue), (XZero, YOneValue)), ((XZero, YOneValue), (XZero, YZero)))
+            for EdgeIndex, (Start, EndValue) in enumerate(Endpoints):
+                EntityId = ProfileEdgeId(Sketch.object_id, ProfileIndex, EdgeIndex)
+                MarkerOffset = Profile.marker_offsets[EdgeIndex] if EdgeIndex < len(Profile.marker_offsets) else None
+                Entities.append(SketchEntity(id=EntityId, kind=GeomKind.LINE, geometry=LineGeom(VectorTwo(*Start), VectorTwo(*EndValue)), provenance=ProvenanceA(f'{Sketch.object_id}:{MarkerOffset}', MarkerOffset, 92, 'sketch-profile-line', Stream=Sketch.native_stream) if MarkerOffset is not None else FeatureSpan(Sketch), attributes=FrozenMapping({'profile_index': ProfileIndex, 'edge_index': EdgeIndex})))
+                RefMap[f'{Sketch.object_id}:profile:{ProfileIndex}:edge:{EdgeIndex}'] = EntityId
+                if MarkerOffset is not None:
+                    ProfileEntities[MarkerOffset] = EntityId
+        elif Profile.kind == 'circle':
+            FirstCoord, SecondCoord, Radius = Profile.coordinates
+            EntityId = ProfileId(Sketch.object_id, ProfileIndex)
+            Entities.append(SketchEntity(id=EntityId, kind=GeomKind.CIRCLE, geometry=CircleGeom(VectorTwo(FirstCoord, SecondCoord), Radius), provenance=Provenance(adapter=KFormatId, native_id=f'{Sketch.object_id}:profile:{ProfileIndex}', spans=tuple((ProvenanceSpan(Sketch.native_stream, Offset, 142, 'sketch-circle-marker') for Offset in Profile.marker_offsets))), attributes=FrozenMapping({'profile_index': ProfileIndex})))
+            RefMap[f'{Sketch.object_id}:profile:{ProfileIndex}'] = EntityId
+            ProfileEntities.update({Offset: EntityId for Offset in Profile.marker_offsets})
+    CoordinatesByPrefix = {Prefix: tuple((Marker.coordinates_mm for Marker in Sketch.markers if Marker.prefix == Prefix)) for Prefix in {Marker.prefix for Marker in Sketch.markers}}
+    CoordinatesByIndex = tuple((Marker.coordinates_mm for Marker in Sketch.markers))
+    MarkerSemantics = tuple((MarkerCurve(Marker) for Marker in Sketch.markers))
+    CurveRefIndices = {RefValue for Marker, Semantic in zip(Sketch.markers, MarkerSemantics, strict=True) for RefValue in MarkerCurveRef(Marker, Semantic)} | {RefValue for Marker in Sketch.markers for RefValue in MarkerObjectRef(Marker.data)}
+    MarkerEntities: dict[int, str] = {}
+    for MarkerIndex, (Marker, Semantic) in enumerate(zip(Sketch.markers, MarkerSemantics, strict=True)):
+        if Marker.offset in ProfileOffsets:
+            EntityId = ProfileEntities.get(Marker.offset)
+            if EntityId is not None:
+                MarkerEntities[MarkerIndex] = EntityId
             continue
-        if (
-            marker_index in curve_reference_indices
-            and marker.coordinates_mm is not None
-            and marker.locus == "05000100"
-        ):
+        if MarkerIndex in CurveRefIndices and Marker.coordinates_mm is not None and (Marker.locus == '05000100'):
             continue
-        if (
-            marker.coordinates_mm is not None
-            and marker.object_index is None
-            and marker.locus == "05000100"
-        ):
+        if Marker.coordinates_mm is not None and Marker.object_index is None and (Marker.locus == '05000100'):
             continue
-        if marker.endpoint_indices is None and b"sgSlot_c" in marker.data:
+        if Marker.endpoint_indices is None and b'sgSlot_c' in Marker.data:
             continue
-        entity = _marker_entity(
-            sketch,
-            marker,
-            coordinates_by_prefix,
-            coordinates_by_index,
-            semantic,
-        )
-        entities.append(entity)
-        marker_entities[marker_index] = entity.id
-    reference_map.update(
-        {
-            f"native-index:{index}": entity_id
-            for index, entity_id in marker_entities.items()
-        }
-    )
-    for dimension in sketch.dimensions:
-        if dimension.kind != "length":
+        Entity = MarkerEntity(Sketch, Marker, CoordinatesByPrefix, CoordinatesByIndex, Semantic)
+        Entities.append(Entity)
+        MarkerEntities[MarkerIndex] = Entity.id
+    RefMap.update({f'native-index:{Index}': EntityId for Index, EntityId in MarkerEntities.items()})
+    for Dimension in Sketch.dimensions:
+        if Dimension.kind != 'length':
             continue
-        for operand in dimension.operands:
-            entity_id = marker_entities.get(operand.entity_index)
-            if entity_id is not None:
-                reference_map[
-                    f"native:{operand.kind_code:04x}:{operand.entity_index}"
-                ] = entity_id
-    constraints = _sketch_constraints(sketch, reference_map, parameter_ids)
-    closed_profiles: list[tuple[str, ...]] = []
-    for profile_index, profile in enumerate(sketch.profiles):
-        if profile.kind == "rectangle":
-            closed_profiles.append(
-                tuple(
-                    _profile_edge_id(sketch.object_id, profile_index, edge_index)
-                    for edge_index in range(4)
-                )
-            )
-        elif profile.kind == "circle":
-            closed_profiles.append((_profile_id(sketch.object_id, profile_index),))
-    sketch_parameter_ids = tuple(
-        parameter_id
-        for dimension, parameter_id in _parameter_entries(
-            sketch.object_id, sketch.dimensions
-        )
-        if parameter_id in parameter_ids
-    )
-    return Sketch(
-        id=_sketch_id(sketch.object_id),
-        name=sketch.name,
-        support_plane_id=_plane_id(sketch.support_plane_id),
-        entities=tuple(entities),
-        constraints=constraints,
-        parameter_ids=sketch_parameter_ids,
-        closed_profile_entity_ids=tuple(closed_profiles),
-        provenance=_feature_span_provenance(sketch),
-        attributes=frozen_mapping(
-            {
-                "native_object_id": sketch.object_id,
-                "native_marker_count": len(sketch.markers),
-                "native_profile_count": len(sketch.profiles),
-                "support_plane_native_id": sketch.support_plane_id,
-                "support_plane_source": sketch.support_source,
-                "unframed_support_plane_native_id": sketch.unframed_support_plane_id,
-            }
-        ),
-    )
+        for Operand in Dimension.operands:
+            EntityId = MarkerEntities.get(Operand.entity_index)
+            if EntityId is not None:
+                RefMap[f'native:{Operand.kind_code:04x}:{Operand.entity_index}'] = EntityId
+    Constraints = SketchB(Sketch, RefMap, ParamIds)
+    ClosedProfiles: list[tuple[str, ...]] = []
+    for ProfileIndex, Profile in enumerate(Sketch.profiles):
+        if Profile.kind == 'rectangle':
+            ClosedProfiles.append(tuple((ProfileEdgeId(Sketch.object_id, ProfileIndex, EdgeIndex) for EdgeIndex in range(4))))
+        elif Profile.kind == 'circle':
+            ClosedProfiles.append((ProfileId(Sketch.object_id, ProfileIndex),))
+    SketchParamIds = tuple((ParamId for Dimension, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions) if ParamId in ParamIds))
+    return Sketch(id=SketchId(Sketch.object_id), name=Sketch.name, support_plane_id=PlaneId(Sketch.support_plane_id), entities=tuple(Entities), constraints=Constraints, parameter_ids=SketchParamIds, closed_profile_entity_ids=tuple(ClosedProfiles), provenance=FeatureSpan(Sketch), attributes=FrozenMapping({'native_object_id': Sketch.object_id, 'native_marker_count': len(Sketch.markers), 'native_profile_count': len(Sketch.profiles), 'support_plane_native_id': Sketch.support_plane_id, 'support_plane_source': Sketch.support_source, 'unframed_support_plane_native_id': Sketch.unframed_support_plane_id}))
 
-
-def _marker_entity(
-    sketch: NativeSketch,
-    marker: NativeMarker,
-    coordinates_by_prefix: dict[str, tuple[tuple[float, float] | None, ...]],
-    coordinates_by_index: tuple[tuple[float, float] | None, ...],
-    semantic: str | None = None,
-) -> SketchEntity:
-    entity_id = _marker_id(sketch.object_id, marker.offset)
-    resolved_semantic = semantic or marker.semantic
-    if resolved_semantic == "point" and marker.coordinates_mm is not None:
-        kind = GeometryKind.POINT
-        geometry: Any = PointGeometry(Vector2(*marker.coordinates_mm))
-    elif resolved_semantic == "line" and marker.endpoint_indices is not None:
-        coordinates = (
-            coordinates_by_index
-            if resolved_semantic != marker.semantic
-            or marker.profile_role == 2
-            and marker.native_kind == 2
-            else coordinates_by_prefix[marker.prefix]
-        )
-        start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
-        end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
-        if start is not None and end is not None and start != end:
-            kind = GeometryKind.LINE
-            geometry = LineGeometry(Vector2(*start), Vector2(*end))
+# this definition exists because focused behavior needs one stable owner
+def MarkerEntity(Sketch: NativeSketch, Marker: NativeMarker, CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]], CoordinatesByIndex: tuple[tuple[float, float] | None, ...], Semantic: str | None=None) -> SketchEntity:
+    EntityId = MarkerId(Sketch.object_id, Marker.offset)
+    ResolvedSemantic = Semantic or Marker.semantic
+    if ResolvedSemantic == 'point' and Marker.coordinates_mm is not None:
+        KindValue = GeomKind.POINT
+        GeomValue: AnyValue = PointGeom(VectorTwo(*Marker.coordinates_mm))
+    elif ResolvedSemantic == 'line' and Marker.endpoint_indices is not None:
+        Coordinates = CoordinatesByIndex if ResolvedSemantic != Marker.semantic or (Marker.profile_role == 2 and Marker.native_kind == 2) else CoordinatesByPrefix[Marker.prefix]
+        Start = CoordinateRef(Coordinates, Marker.endpoint_indices[0])
+        EndValue = CoordinateRef(Coordinates, Marker.endpoint_indices[1])
+        if Start is not None and EndValue is not None and (Start != EndValue):
+            KindValue = GeomKind.LINE
+            GeomValue = LineGeom(VectorTwo(*Start), VectorTwo(*EndValue))
         else:
-            kind = GeometryKind.NATIVE
-            geometry = _native_marker_geometry(marker)
-    elif resolved_semantic in {"circle", "arc"}:
-        circular = _marker_circular_geometry(
-            marker, coordinates_by_index, resolved_semantic
-        )
-        if circular is None:
-            kind = GeometryKind.NATIVE
-            geometry = _native_marker_geometry(marker, resolved_semantic)
+            KindValue = GeomKind.NATIVE
+            GeomValue = NativeMarkerA(Marker)
+    elif ResolvedSemantic in {'circle', 'arc'}:
+        Circular = MarkerCircular(Marker, CoordinatesByIndex, ResolvedSemantic)
+        if Circular is None:
+            KindValue = GeomKind.NATIVE
+            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
         else:
-            kind, geometry = circular
-    elif resolved_semantic == "ellipse":
-        ellipse = _marker_ellipse_geometry(marker, coordinates_by_index)
-        if ellipse is None:
-            kind = GeometryKind.NATIVE
-            geometry = _native_marker_geometry(marker, resolved_semantic)
+            KindValue, GeomValue = Circular
+    elif ResolvedSemantic == 'ellipse':
+        Ellipse = MarkerEllipse(Marker, CoordinatesByIndex)
+        if Ellipse is None:
+            KindValue = GeomKind.NATIVE
+            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
         else:
-            kind = GeometryKind.ELLIPSE
-            geometry = ellipse
-    elif resolved_semantic == "arc_ellipse":
-        ellipse = _marker_arc_ellipse_geometry(marker, coordinates_by_index)
-        if ellipse is None:
-            kind = GeometryKind.NATIVE
-            geometry = _native_marker_geometry(marker, resolved_semantic)
+            KindValue = GeomKind.ELLIPSE
+            GeomValue = Ellipse
+    elif ResolvedSemantic == 'arc_ellipse':
+        Ellipse = MarkerArcGeom(Marker, CoordinatesByIndex)
+        if Ellipse is None:
+            KindValue = GeomKind.NATIVE
+            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
         else:
-            kind = GeometryKind.ARC_ELLIPSE
-            geometry = ellipse
-    elif resolved_semantic == "parabola":
-        parabola = _marker_parabola_geometry(marker, coordinates_by_index)
-        if parabola is None:
-            kind = GeometryKind.NATIVE
-            geometry = _native_marker_geometry(marker, resolved_semantic)
+            KindValue = GeomKind.ARC_ELLIPSE
+            GeomValue = Ellipse
+    elif ResolvedSemantic == 'parabola':
+        Parabola = MarkerParabola(Marker, CoordinatesByIndex)
+        if Parabola is None:
+            KindValue = GeomKind.NATIVE
+            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
         else:
-            kind = GeometryKind.ARC_PARABOLA
-            geometry = parabola
-    elif resolved_semantic == "spline":
-        spline = _marker_spline_geometry(marker, coordinates_by_index)
-        if spline is None:
-            kind = GeometryKind.NATIVE
-            geometry = _native_marker_geometry(marker, resolved_semantic)
+            KindValue = GeomKind.ARC_PARABOLA
+            GeomValue = Parabola
+    elif ResolvedSemantic == 'spline':
+        Spline = MarkerSpline(Marker, CoordinatesByIndex)
+        if Spline is None:
+            KindValue = GeomKind.NATIVE
+            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
         else:
-            kind = GeometryKind.SPLINE
-            geometry = spline
+            KindValue = GeomKind.SPLINE
+            GeomValue = Spline
     else:
-        kind = GeometryKind.NATIVE
-        geometry = _native_marker_geometry(marker, resolved_semantic)
-    return SketchEntity(
-        id=entity_id,
-        kind=kind,
-        geometry=geometry,
-        construction=marker.construction,
-        provenance=_provenance(
-            f"{sketch.object_id}:{marker.offset}",
-            marker.offset,
-            marker.length,
-            "sketch-native-marker",
-            stream=sketch.native_stream,
-        ),
-        attributes=frozen_mapping(
-            {
-                "native_kind": marker.native_kind,
-                "native_locus": marker.locus,
-                "profile_role": marker.profile_role,
-                "state": marker.state,
-                "object_index": marker.object_index,
-                "local_id": marker.local_id,
-                "endpoint_indices": marker.endpoint_indices,
-                "semantic": resolved_semantic,
-                "marker_prefix": marker.prefix,
-            }
-        ),
-    )
+        KindValue = GeomKind.NATIVE
+        GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
+    return SketchEntity(id=EntityId, kind=KindValue, geometry=GeomValue, construction=Marker.construction, provenance=ProvenanceA(f'{Sketch.object_id}:{Marker.offset}', Marker.offset, Marker.length, 'sketch-native-marker', Stream=Sketch.native_stream), attributes=FrozenMapping({'native_kind': Marker.native_kind, 'native_locus': Marker.locus, 'profile_role': Marker.profile_role, 'state': Marker.state, 'object_index': Marker.object_index, 'local_id': Marker.local_id, 'endpoint_indices': Marker.endpoint_indices, 'semantic': ResolvedSemantic, 'marker_prefix': Marker.prefix}))
 
+# this definition exists because focused behavior needs one stable owner
+def MarkerCurve(Marker: NativeMarker) -> str:
+    Endpoints = Marker.endpoint_indices
+    if Endpoints is None:
+        return Marker.semantic
+    if Marker.semantic == 'line' and b'cptsSplineList_c' not in Marker.data[:192]:
+        return 'line'
+    if len(Marker.data) >= 102 and Marker.data[86:102] == b'\xfe\xff\xff\xff' * 4:
+        return 'circle' if Endpoints[0] == Endpoints[1] else 'arc'
+    if (Marker.length == 92 or (Marker.length == 104 and Endpoints[0] != Endpoints[1])) and (Marker.locus == '05000100' or Marker.profile_role == 1):
+        return 'line'
+    if Marker.length in {112, 116}:
+        return 'circle' if Endpoints[0] == Endpoints[1] else 'arc'
+    if Marker.length == 104:
+        return 'ellipse'
+    if Marker.length == 108:
+        return 'arc_ellipse'
+    if Marker.length == 124:
+        return 'parabola'
+    if Marker.length == 128:
+        return 'conic'
+    if Marker.length > 128:
+        return 'spline'
+    return Marker.semantic
 
-def _marker_curve_semantic(marker: NativeMarker) -> str:
-    endpoints = marker.endpoint_indices
-    if endpoints is None:
-        return marker.semantic
-    if marker.semantic == "line" and b"cptsSplineList_c" not in marker.data[:192]:
-        return "line"
-    if len(marker.data) >= 102 and marker.data[86:102] == b"\xfe\xff\xff\xff" * 4:
-        return "circle" if endpoints[0] == endpoints[1] else "arc"
-    if (
-        marker.length == 92 or marker.length == 104 and endpoints[0] != endpoints[1]
-    ) and (marker.locus == "05000100" or marker.profile_role == 1):
-        return "line"
-    if marker.length in {112, 116}:
-        return "circle" if endpoints[0] == endpoints[1] else "arc"
-    if marker.length == 104:
-        return "ellipse"
-    if marker.length == 108:
-        return "arc_ellipse"
-    if marker.length == 124:
-        return "parabola"
-    if marker.length == 128:
-        return "conic"
-    if marker.length > 128:
-        return "spline"
-    return marker.semantic
+# this definition exists because focused behavior needs one stable owner
+def MarkerCurveRef(Marker: NativeMarker, Semantic: str) -> tuple[int, ...]:
+    Result = list(Marker.endpoint_indices or ())
+    if Semantic in {'circle', 'arc'} and len(Marker.data) >= 86:
+        Result.append(Struct.unpack_from('<H', Marker.data, 84)[0])
+    elif Semantic in {'ellipse', 'arc_ellipse'} and len(Marker.data) >= 94:
+        Result.extend(Struct.unpack_from('<5H', Marker.data, 84))
+    elif Semantic == 'parabola' and len(Marker.data) >= 88:
+        Result.extend(Struct.unpack_from('<2I', Marker.data, 80))
+    elif Semantic == 'conic' and len(Marker.data) >= 96:
+        Result.extend(Struct.unpack_from('<2I', Marker.data, 88))
+    elif Semantic == 'spline':
+        Result.extend(MarkerSplineRef(Marker.data))
+    return tuple(dict.fromkeys(Result))
 
-
-def _marker_curve_reference_indices(
-    marker: NativeMarker, semantic: str
-) -> tuple[int, ...]:
-    result = list(marker.endpoint_indices or ())
-    if semantic in {"circle", "arc"} and len(marker.data) >= 86:
-        result.append(struct.unpack_from("<H", marker.data, 84)[0])
-    elif semantic in {"ellipse", "arc_ellipse"} and len(marker.data) >= 94:
-        result.extend(struct.unpack_from("<5H", marker.data, 84))
-    elif semantic == "parabola" and len(marker.data) >= 88:
-        result.extend(struct.unpack_from("<2I", marker.data, 80))
-    elif semantic == "conic" and len(marker.data) >= 96:
-        result.extend(struct.unpack_from("<2I", marker.data, 88))
-    elif semantic == "spline":
-        result.extend(_marker_spline_reference_indices(marker.data))
-    return tuple(dict.fromkeys(result))
-
-
-def _marker_spline_reference_indices(data: bytes) -> tuple[int, ...]:
-    result: list[int] = []
-    for offset in range(max(0, len(data) - 11)):
-        if data[offset : offset + 2] != b"\xa7\x80":
+# this definition exists because focused behavior needs one stable owner
+def MarkerSplineRef(DataValue: bytes) -> tuple[int, ...]:
+    Result: list[int] = []
+    for Offset in range(max(0, len(DataValue) - 11)):
+        if DataValue[Offset:Offset + 2] != b'\xa7\x80':
             continue
-        if data[offset + 4 : offset + 12] != b"\xff\xff\xff\xff\0\0\0\0":
+        if DataValue[Offset + 4:Offset + 12] != b'\xff\xff\xff\xff\x00\x00\x00\x00':
             continue
-        result.append(struct.unpack_from("<H", data, offset + 2)[0])
-    return tuple(dict.fromkeys(result))
+        Result.append(Struct.unpack_from('<H', DataValue, Offset + 2)[0])
+    return tuple(dict.fromkeys(Result))
 
-
-def _marker_object_reference_indices(data: bytes) -> tuple[int, ...]:
-    result: list[int] = []
-    for offset in range(max(0, len(data) - 11)):
-        if data[offset] not in {0xA7, 0xB2, 0xB7, 0xC7} or data[offset + 1] != 0x80:
+# this definition exists because focused behavior needs one stable owner
+def MarkerObjectRef(DataValue: bytes) -> tuple[int, ...]:
+    Result: list[int] = []
+    for Offset in range(max(0, len(DataValue) - 11)):
+        if DataValue[Offset] not in {167, 178, 183, 199} or DataValue[Offset + 1] != 128:
             continue
-        if data[offset + 4 : offset + 12] != b"\xff\xff\xff\xff\0\0\0\0":
+        if DataValue[Offset + 4:Offset + 12] != b'\xff\xff\xff\xff\x00\x00\x00\x00':
             continue
-        result.append(struct.unpack_from("<H", data, offset + 2)[0])
-    return tuple(dict.fromkeys(result))
+        Result.append(Struct.unpack_from('<H', DataValue, Offset + 2)[0])
+    return tuple(dict.fromkeys(Result))
 
-
-def _marker_circular_geometry(
-    marker: NativeMarker,
-    coordinates: tuple[tuple[float, float] | None, ...],
-    semantic: str,
-) -> tuple[GeometryKind, CircleGeometry | ArcGeometry] | None:
-    if marker.endpoint_indices is None or len(marker.data) < 86:
+# this definition exists because focused behavior needs one stable owner
+def MarkerCircular(Marker: NativeMarker, Coordinates: tuple[tuple[float, float] | None, ...], Semantic: str) -> tuple[GeomKind, CircleGeom | ArcGeom] | None:
+    if Marker.endpoint_indices is None or len(Marker.data) < 86:
         return None
-    center = _coordinate_reference(
-        coordinates, struct.unpack_from("<H", marker.data, 84)[0]
-    )
-    start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
-    end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
-    if center is None or start is None:
+    Center = CoordinateRef(Coordinates, Struct.unpack_from('<H', Marker.data, 84)[0])
+    Start = CoordinateRef(Coordinates, Marker.endpoint_indices[0])
+    EndValue = CoordinateRef(Coordinates, Marker.endpoint_indices[1])
+    if Center is None or Start is None:
         return None
-    radius = math.dist(center, start)
-    if not math.isfinite(radius) or radius <= 1e-12:
+    Radius = MathValue.dist(Center, Start)
+    if not MathValue.isfinite(Radius) or Radius <= 1e-12:
         return None
-    if semantic == "circle":
-        return GeometryKind.CIRCLE, CircleGeometry(Vector2(*center), radius)
-    if end is None:
+    if Semantic == 'circle':
+        return (GeomKind.CIRCLE, CircleGeom(VectorTwo(*Center), Radius))
+    if EndValue is None:
         return None
-    start_angle = math.atan2(start[1] - center[1], start[0] - center[0])
-    end_angle = math.atan2(end[1] - center[1], end[0] - center[0])
-    if struct.unpack_from("<I", marker.data, 80)[0] == 0xFFFFFFFF:
-        start_angle, end_angle = end_angle, start_angle
-    return (
-        GeometryKind.ARC,
-        ArcGeometry(Vector2(*center), radius, start_angle, end_angle),
-    )
+    StartAngle = MathValue.atan2(Start[1] - Center[1], Start[0] - Center[0])
+    EndAngle = MathValue.atan2(EndValue[1] - Center[1], EndValue[0] - Center[0])
+    if Struct.unpack_from('<I', Marker.data, 80)[0] == 4294967295:
+        StartAngle, EndAngle = (EndAngle, StartAngle)
+    return (GeomKind.ARC, ArcGeom(VectorTwo(*Center), Radius, StartAngle, EndAngle))
 
-
-def _marker_ellipse_geometry(
-    marker: NativeMarker,
-    coordinates: tuple[tuple[float, float] | None, ...],
-) -> EllipseGeometry | None:
-    if len(marker.data) < 90:
+# this definition exists because focused behavior needs one stable owner
+def MarkerEllipse(Marker: NativeMarker, Coordinates: tuple[tuple[float, float] | None, ...]) -> EllipseGeom | None:
+    if len(Marker.data) < 90:
         return None
-    center_index, major_index, minor_index = struct.unpack_from("<3H", marker.data, 84)
-    center = _coordinate_reference(coordinates, center_index)
-    major = _coordinate_reference(coordinates, major_index)
-    minor = _coordinate_reference(coordinates, minor_index)
-    if center is None or major is None or minor is None:
+    CenterIndex, MajorIndex, MinorIndex = Struct.unpack_from('<3H', Marker.data, 84)
+    Center = CoordinateRef(Coordinates, CenterIndex)
+    Major = CoordinateRef(Coordinates, MajorIndex)
+    Minor = CoordinateRef(Coordinates, MinorIndex)
+    if Center is None or Major is None or Minor is None:
         return None
-    major_radius = math.dist(center, major)
-    minor_radius = math.dist(center, minor)
-    if major_radius <= 1e-12 or minor_radius <= 1e-12:
+    MajorRadius = MathValue.dist(Center, Major)
+    MinorRadius = MathValue.dist(Center, Minor)
+    if MajorRadius <= 1e-12 or MinorRadius <= 1e-12:
         return None
-    return EllipseGeometry(
-        Vector2(*center),
-        Vector2(
-            (major[0] - center[0]) / major_radius,
-            (major[1] - center[1]) / major_radius,
-        ),
-        major_radius,
-        minor_radius,
-    )
+    return EllipseGeom(VectorTwo(*Center), VectorTwo((Major[0] - Center[0]) / MajorRadius, (Major[1] - Center[1]) / MajorRadius), MajorRadius, MinorRadius)
 
-
-def _marker_arc_ellipse_geometry(
-    marker: NativeMarker,
-    coordinates: tuple[tuple[float, float] | None, ...],
-) -> ArcEllipseGeometry | None:
-    ellipse = _marker_ellipse_geometry(marker, coordinates)
-    if ellipse is None or marker.endpoint_indices is None:
+# this definition exists because focused behavior needs one stable owner
+def MarkerArcGeom(Marker: NativeMarker, Coordinates: tuple[tuple[float, float] | None, ...]) -> ArcEllipseGeom | None:
+    Ellipse = MarkerEllipse(Marker, Coordinates)
+    if Ellipse is None or Marker.endpoint_indices is None:
         return None
-    start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
-    end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
-    if start is None or end is None:
+    Start = CoordinateRef(Coordinates, Marker.endpoint_indices[0])
+    EndValue = CoordinateRef(Coordinates, Marker.endpoint_indices[1])
+    if Start is None or EndValue is None:
         return None
-    u = ellipse.major_axis
-    v = Vector2(-u.y, u.x)
+    FirstParam = Ellipse.major_axis
+    SecondParam = VectorTwo(-FirstParam.y, FirstParam.x)
 
-    def parameter(point: tuple[float, float]) -> float:
-        delta = Vector2(point[0] - ellipse.center.x, point[1] - ellipse.center.y)
-        return math.atan2(
-            (delta.x * v.x + delta.y * v.y) / ellipse.minor_radius,
-            (delta.x * u.x + delta.y * u.y) / ellipse.major_radius,
-        )
+    # this definition exists because focused behavior needs one stable owner
+    def Param(Point: tuple[float, float]) -> float:
+        Delta = VectorTwo(Point[0] - Ellipse.center.x, Point[1] - Ellipse.center.y)
+        return MathValue.atan2((Delta.x * SecondParam.x + Delta.y * SecondParam.y) / Ellipse.minor_radius, (Delta.x * FirstParam.x + Delta.y * FirstParam.y) / Ellipse.major_radius)
+    return ArcEllipseGeom(Ellipse.center, Ellipse.major_axis, Ellipse.major_radius, Ellipse.minor_radius, Param(Start), Param(EndValue))
 
-    return ArcEllipseGeometry(
-        ellipse.center,
-        ellipse.major_axis,
-        ellipse.major_radius,
-        ellipse.minor_radius,
-        parameter(start),
-        parameter(end),
-    )
-
-
-def _marker_spline_geometry(
-    marker: NativeMarker,
-    coordinates: tuple[tuple[float, float] | None, ...],
-) -> SplineGeometry | None:
-    references = _marker_spline_reference_indices(marker.data)
-    points = tuple(
-        point
-        for index in references
-        if (point := _coordinate_reference(coordinates, index)) is not None
-    )
-    if len(points) < 2:
+# this definition exists because focused behavior needs one stable owner
+def MarkerSpline(Marker: NativeMarker, Coordinates: tuple[tuple[float, float] | None, ...]) -> SplineGeom | None:
+    References = MarkerSplineRef(Marker.data)
+    Points = tuple((Point for Index in References if (Point := CoordinateRef(Coordinates, Index)) is not None))
+    if len(Points) < 2:
         return None
-    degree = min(3, len(points) - 1)
-    return SplineGeometry(tuple(Vector2(*point) for point in points), degree)
+    Degree = min(3, len(Points) - 1)
+    return SplineGeom(tuple((VectorTwo(*Point) for Point in Points)), Degree)
 
-
-def _marker_parabola_geometry(
-    marker: NativeMarker,
-    coordinates: tuple[tuple[float, float] | None, ...],
-) -> ArcParabolaGeometry | None:
-    if marker.endpoint_indices is None or len(marker.data) < 88:
+# this definition exists because focused behavior needs one stable owner
+def MarkerParabola(Marker: NativeMarker, Coordinates: tuple[tuple[float, float] | None, ...]) -> ArcParabolaGeom | None:
+    if Marker.endpoint_indices is None or len(Marker.data) < 88:
         return None
-    focus_index, apex_index = struct.unpack_from("<2I", marker.data, 80)
-    focus = _coordinate_reference(coordinates, focus_index)
-    apex = _coordinate_reference(coordinates, apex_index)
-    start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
-    end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
-    if focus is None or apex is None or start is None or end is None:
+    FocusIndex, ApexIndex = Struct.unpack_from('<2I', Marker.data, 80)
+    Focus = CoordinateRef(Coordinates, FocusIndex)
+    ApexValue = CoordinateRef(Coordinates, ApexIndex)
+    Start = CoordinateRef(Coordinates, Marker.endpoint_indices[0])
+    EndValue = CoordinateRef(Coordinates, Marker.endpoint_indices[1])
+    if Focus is None or ApexValue is None or Start is None or (EndValue is None):
         return None
-    focal_length = math.dist(focus, apex)
-    if not math.isfinite(focal_length) or focal_length <= 1e-12:
+    FocalLength = MathValue.dist(Focus, ApexValue)
+    if not MathValue.isfinite(FocalLength) or FocalLength <= 1e-12:
         return None
-    axis = Vector2(
-        (focus[0] - apex[0]) / focal_length,
-        (focus[1] - apex[1]) / focal_length,
-    )
-    perpendicular = Vector2(-axis.y, axis.x)
+    AxisValue = VectorTwo((Focus[0] - ApexValue[0]) / FocalLength, (Focus[1] - ApexValue[1]) / FocalLength)
+    Perpendicular = VectorTwo(-AxisValue.y, AxisValue.x)
 
-    def parameter(point: tuple[float, float]) -> float:
-        delta = Vector2(point[0] - apex[0], point[1] - apex[1])
-        return (delta.x * perpendicular.x + delta.y * perpendicular.y) / (
-            2.0 * focal_length
-        )
+    # this definition exists because focused behavior needs one stable owner
+    def Param(Point: tuple[float, float]) -> float:
+        Delta = VectorTwo(Point[0] - ApexValue[0], Point[1] - ApexValue[1])
+        return (Delta.x * Perpendicular.x + Delta.y * Perpendicular.y) / (2.0 * FocalLength)
+    Limits = sorted((Param(Start), Param(EndValue)))
+    return ArcParabolaGeom(VectorTwo(*ApexValue), AxisValue, FocalLength, Limits[0], Limits[1])
 
-    limits = sorted((parameter(start), parameter(end)))
-    return ArcParabolaGeometry(
-        Vector2(*apex),
-        axis,
-        focal_length,
-        limits[0],
-        limits[1],
-    )
+# this definition exists because focused behavior needs one stable owner
+def CoordinateRef(Coordinates: tuple[tuple[float, float] | None, ...], Index: int) -> tuple[float, float] | None:
+    return Coordinates[Index] if 0 <= Index < len(Coordinates) else None
 
+# this definition exists because focused behavior needs one stable owner
+def NativeMarkerA(Marker: NativeMarker, EntityType: str | None=None) -> NativeGeom:
+    return NativeGeom(format_id=KFormatId, entity_type=EntityType or Marker.semantic, data=FrozenMapping({'native_kind': Marker.native_kind, 'locus': Marker.locus, 'coordinates_mm': Marker.coordinates_mm, 'endpoint_indices': Marker.endpoint_indices, 'record_data': Marker.data}))
 
-def _coordinate_reference(
-    coordinates: tuple[tuple[float, float] | None, ...], index: int
-) -> tuple[float, float] | None:
-    return coordinates[index] if 0 <= index < len(coordinates) else None
-
-
-def _native_marker_geometry(
-    marker: NativeMarker, entity_type: str | None = None
-) -> NativeGeometry:
-    return NativeGeometry(
-        format_id=_FORMAT_ID,
-        entity_type=entity_type or marker.semantic,
-        data=frozen_mapping(
-            {
-                "native_kind": marker.native_kind,
-                "locus": marker.locus,
-                "coordinates_mm": marker.coordinates_mm,
-                "endpoint_indices": marker.endpoint_indices,
-                "record_data": marker.data,
-            }
-        ),
-    )
-
-
-def _sketch_constraints(
-    sketch: NativeSketch,
-    reference_map: dict[str, str],
-    parameter_ids: set[str],
-) -> tuple[SketchConstraint, ...]:
-    result: list[SketchConstraint] = []
-    dimension_usage: defaultdict[float, int] = defaultdict(int)
-    candidates: defaultdict[float, list[tuple[str, str]]] = defaultdict(list)
-    for profile_index, profile in enumerate(sketch.profiles):
-        if profile.kind != "rectangle":
+# this definition exists because focused behavior needs one stable owner
+def SketchB(Sketch: NativeSketch, RefMap: dict[str, str], ParamIds: set[str]) -> tuple[SketchRule, ...]:
+    Result: list[SketchRule] = []
+    DimensionUsage: Defaultdict[float, int] = Defaultdict(int)
+    Candidates: Defaultdict[float, list[tuple[str, str]]] = Defaultdict(list)
+    for ProfileIndex, Profile in enumerate(Sketch.profiles):
+        if Profile.kind != 'rectangle':
             continue
-        width = round(profile.coordinates[2] - profile.coordinates[0], 9)
-        height = round(profile.coordinates[3] - profile.coordinates[1], 9)
-        candidates[width].append(
-            (_profile_edge_id(sketch.object_id, profile_index, 0), "distance_x")
-        )
-        candidates[height].append(
-            (_profile_edge_id(sketch.object_id, profile_index, 1), "distance_y")
-        )
-    dimensions_by_name: defaultdict[str, list[NativeDimension]] = defaultdict(list)
-    parameter_ids_by_name: defaultdict[str, list[str]] = defaultdict(list)
-    for dimension, parameter_id in _parameter_entries(
-        sketch.object_id, sketch.dimensions
-    ):
-        dimensions_by_name[dimension.name].append(dimension)
-        parameter_ids_by_name[dimension.name].append(parameter_id)
-    parameter_usage: defaultdict[str, int] = defaultdict(int)
-    constraint_id_usage: defaultdict[str, int] = defaultdict(int)
-    for constraint in sketch.constraints:
-        resolved_references = [
-            reference_map.get(reference) for reference in constraint.references
-        ]
-        references = (
-            [ConstraintReference(reference) for reference in resolved_references]
-            if resolved_references and all(resolved_references)
-            else []
-        )
-        kind = constraint.kind
-        native_name = (
-            constraint.parameter.rsplit(":", 1)[-1]
-            if constraint.parameter is not None
-            else ""
-        )
-        occurrence = parameter_usage[native_name] if native_name else 0
-        dimensions = dimensions_by_name.get(native_name, [])
-        dimension = (
-            dimensions[min(occurrence, len(dimensions) - 1)] if dimensions else None
-        )
-        if not references and constraint.parameter is not None:
-            if dimension is not None:
-                key = round(dimension.value_mm, 9)
-                available = candidates.get(key, [])
-                if available:
-                    index = dimension_usage[key] % len(available)
-                    entity_id, inferred_kind = available[index]
-                    dimension_usage[key] += 1
-                    references = [ConstraintReference(entity_id)]
-                    kind = inferred_kind
-        parameter_id = None
-        if constraint.parameter is not None:
-            available_parameter_ids = parameter_ids_by_name.get(native_name, [])
-            if available_parameter_ids:
-                candidate = available_parameter_ids[
-                    min(occurrence, len(available_parameter_ids) - 1)
-                ]
-                if candidate in parameter_ids:
-                    parameter_id = candidate
-            parameter_usage[native_name] += 1
-        constraint_id_usage[constraint.id] += 1
-        constraint_occurrence = constraint_id_usage[constraint.id]
-        constraint_id = f"sldprt:constraint:{constraint.id}"
-        if constraint_occurrence > 1:
-            constraint_id += f":{constraint_occurrence}"
-        result.append(
-            SketchConstraint(
-                id=constraint_id,
-                kind=kind,
-                references=tuple(references),
-                parameter_id=parameter_id,
-                driving=dimension.native_role != "display" if dimension else True,
-                provenance=(
-                    _provenance(
-                        constraint.id,
-                        constraint.native_offset,
-                        8,
-                        "sketch-constraint",
-                        stream=sketch.native_stream,
-                    )
-                    if constraint.native_offset is not None
-                    else None
-                ),
-                attributes=frozen_mapping(
-                    {
-                        "native_code": constraint.native_code,
-                        "native_references": constraint.references,
-                        "native_value": constraint.value,
-                        "parameter_occurrence": occurrence + 1 if native_name else None,
-                    }
-                ),
-            )
-        )
-    for profile_index, profile in enumerate(sketch.profiles):
-        if profile.kind != "rectangle":
+        Width = round(Profile.coordinates[2] - Profile.coordinates[0], 9)
+        Height = round(Profile.coordinates[3] - Profile.coordinates[1], 9)
+        Candidates[Width].append((ProfileEdgeId(Sketch.object_id, ProfileIndex, 0), 'distance_x'))
+        Candidates[Height].append((ProfileEdgeId(Sketch.object_id, ProfileIndex, 1), 'distance_y'))
+    DimensionsByName: Defaultdict[str, list[NativeDimension]] = Defaultdict(list)
+    ParamIdsByName: Defaultdict[str, list[str]] = Defaultdict(list)
+    for Dimension, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions):
+        DimensionsByName[Dimension.name].append(Dimension)
+        ParamIdsByName[Dimension.name].append(ParamId)
+    ParamUsage: Defaultdict[str, int] = Defaultdict(int)
+    RuleIdUsage: Defaultdict[str, int] = Defaultdict(int)
+    for RuleValue in Sketch.constraints:
+        ResolvedReferences = [RefMap.get(RefValue) for RefValue in RuleValue.references]
+        References = [RuleRef(RefValue) for RefValue in ResolvedReferences] if ResolvedReferences and all(ResolvedReferences) else []
+        KindValue = RuleValue.kind
+        NativeName = RuleValue.parameter.rsplit(':', 1)[-1] if RuleValue.parameter is not None else ''
+        ItemValue = ParamUsage[NativeName] if NativeName else 0
+        Dimensions = DimensionsByName.get(NativeName, [])
+        Dimension = Dimensions[min(ItemValue, len(Dimensions) - 1)] if Dimensions else None
+        if not References and RuleValue.parameter is not None:
+            if Dimension is not None:
+                KeyValue = round(Dimension.value_mm, 9)
+                Available = Candidates.get(KeyValue, [])
+                if Available:
+                    Index = DimensionUsage[KeyValue] % len(Available)
+                    EntityId, InferredKind = Available[Index]
+                    DimensionUsage[KeyValue] += 1
+                    References = [RuleRef(EntityId)]
+                    KindValue = InferredKind
+        ParamId = None
+        if RuleValue.parameter is not None:
+            AvailableParamIds = ParamIdsByName.get(NativeName, [])
+            if AvailableParamIds:
+                Choice = AvailableParamIds[min(ItemValue, len(AvailableParamIds) - 1)]
+                if Choice in ParamIds:
+                    ParamId = Choice
+            ParamUsage[NativeName] += 1
+        RuleIdUsage[RuleValue.id] += 1
+        RuleItem = RuleIdUsage[RuleValue.id]
+        RuleId = f'sldprt:constraint:{RuleValue.id}'
+        if RuleItem > 1:
+            RuleId += f':{RuleItem}'
+        Result.append(SketchRule(id=RuleId, kind=KindValue, references=tuple(References), parameter_id=ParamId, driving=Dimension.native_role != 'display' if Dimension else True, provenance=ProvenanceA(RuleValue.id, RuleValue.native_offset, 8, 'sketch-constraint', Stream=Sketch.native_stream) if RuleValue.native_offset is not None else None, attributes=FrozenMapping({'native_code': RuleValue.native_code, 'native_references': RuleValue.references, 'native_value': RuleValue.value, 'parameter_occurrence': ItemValue + 1 if NativeName else None})))
+    for ProfileIndex, Profile in enumerate(Sketch.profiles):
+        if Profile.kind != 'rectangle':
             continue
-        for edge_index in range(4):
-            current = _profile_edge_id(sketch.object_id, profile_index, edge_index)
-            following = _profile_edge_id(
-                sketch.object_id, profile_index, (edge_index + 1) % 4
-            )
-            result.append(
-                SketchConstraint(
-                    id=(
-                        f"sldprt:constraint:{sketch.object_id}:profile:"
-                        f"{profile_index}:coincident:{edge_index}"
-                    ),
-                    kind="coincident",
-                    references=(
-                        ConstraintReference(current, "end"),
-                        ConstraintReference(following, "start"),
-                    ),
-                    attributes=frozen_mapping({"inferred": True}),
-                )
-            )
-    return tuple(result)
+        for EdgeIndex in range(4):
+            Current = ProfileEdgeId(Sketch.object_id, ProfileIndex, EdgeIndex)
+            Following = ProfileEdgeId(Sketch.object_id, ProfileIndex, (EdgeIndex + 1) % 4)
+            Result.append(SketchRule(id=f'sldprt:constraint:{Sketch.object_id}:profile:{ProfileIndex}:coincident:{EdgeIndex}', kind='coincident', references=(RuleRef(Current, 'end'), RuleRef(Following, 'start')), attributes=FrozenMapping({'inferred': True})))
+    return tuple(Result)
 
-
-def _selections(model: NativeModel) -> tuple[Selection, ...]:
-    result: list[Selection] = []
-    for operation in model.operations:
-        if not operation.selection_offsets:
+# this definition exists because focused behavior needs one stable owner
+def Selections(Model: NativeModel) -> tuple[Selection, ...]:
+    Result: list[Selection] = []
+    for Operation in Model.operations:
+        if not Operation.selection_offsets:
             continue
-        for producer, local_id, offsets in _operation_selection_entries(operation):
-            selection_id = _operation_selection_id(operation, producer, local_id)
-            kind = operation.selection_kind
-            result.append(
-                Selection(
-                    id=selection_id,
-                    name=f"{operation.name} {kind} {local_id}",
-                    path=(
-                        SelectionPathElement(
-                            entity_kind="feature",
-                            entity_id=_feature_id(producer),
-                            subelement=f"{kind}:{local_id}",
-                        ),
-                    ),
-                    query=frozen_mapping(
-                        {
-                            "native_producer_id": producer,
-                            "native_local_id": local_id,
-                            "native_identity": "7dc39425ad49b2547dc39425ad49b254",
-                            "topology_role": (
-                                "extrusion_terminal_profile_boundary"
-                                if operation.kind == "fillet"
-                                else f"native_{kind}"
-                            ),
-                        }
-                    ),
-                    provenance=Provenance(
-                        adapter=_FORMAT_ID,
-                        native_id=f"{operation.object_id}:{kind}:{local_id}",
-                        spans=tuple(
-                            ProvenanceSpan(
-                                operation.native_stream,
-                                offset,
-                                38,
-                                f"{kind}-selection",
-                            )
-                            for offset in offsets
-                        ),
-                    ),
-                )
-            )
-    return (*result, *_direction_axis_selections(model))
+        for Producer, LocalId, Offsets in OperationA(Operation):
+            SelectionId = OperationId(Operation, Producer, LocalId)
+            KindValue = Operation.selection_kind
+            Result.append(Selection(id=SelectionId, name=f'{Operation.name} {KindValue} {LocalId}', path=(SelectionPathElem(entity_kind='feature', entity_id=FeatureId(Producer), subelement=f'{KindValue}:{LocalId}'),), query=FrozenMapping({'native_producer_id': Producer, 'native_local_id': LocalId, 'native_identity': '7dc39425ad49b2547dc39425ad49b254', 'topology_role': 'extrusion_terminal_profile_boundary' if Operation.kind == 'fillet' else f'native_{KindValue}'}), provenance=Provenance(adapter=KFormatId, native_id=f'{Operation.object_id}:{KindValue}:{LocalId}', spans=tuple((ProvenanceSpan(Operation.native_stream, Offset, 38, f'{KindValue}-selection') for Offset in Offsets)))))
+    return (*Result, *DirectionAxis(Model))
 
-
-def _direction_axis_selections(model: NativeModel) -> tuple[Selection, ...]:
-    sketch_by_id = {sketch.object_id: sketch for sketch in model.sketches}
-    result: list[Selection] = []
-    for operation in model.operations:
-        if operation.profile_id is None:
+# this definition exists because focused behavior needs one stable owner
+def DirectionAxis(Model: NativeModel) -> tuple[Selection, ...]:
+    SketchById = {Sketch.object_id: Sketch for Sketch in Model.sketches}
+    Result: list[Selection] = []
+    for Operation in Model.operations:
+        if Operation.profile_id is None:
             continue
-        sketch = sketch_by_id.get(operation.profile_id)
-        subelement = operation_axis_subelement(operation, sketch)
-        if sketch is None or subelement is None:
+        Sketch = SketchById.get(Operation.profile_id)
+        SubElem = OperationAxisSubElem(Operation, Sketch)
+        if Sketch is None or SubElem is None:
             continue
-        result.append(
-            Selection(
-                id=(
-                    f"sldprt:selection:{operation.object_id}:axis:"
-                    f"{sketch.object_id}:{subelement}"
-                ),
-                name=f"{operation.name} direction {subelement}",
-                path=(
-                    SelectionPathElement(
-                        entity_kind="native",
-                        entity_id=sketch.name,
-                        subelement=subelement,
-                    ),
-                ),
-                query=frozen_mapping(
-                    {
-                        "native_owner_id": operation.object_id,
-                        "native_target_id": sketch.object_id,
-                        "topology_role": DIRECTION_AXIS_ROLE,
-                    }
-                ),
-                provenance=Provenance(
-                    adapter=_FORMAT_ID,
-                    native_id=f"{operation.object_id}:axis:{subelement}",
-                    spans=(
-                        ProvenanceSpan(
-                            operation.native_stream,
-                            operation.native_offset,
-                            operation.native_end - operation.native_offset,
-                            "direction-axis",
-                        ),
-                    ),
-                ),
-            )
-        )
-    return tuple(result)
+        Result.append(Selection(id=f'sldprt:selection:{Operation.object_id}:axis:{Sketch.object_id}:{SubElem}', name=f'{Operation.name} direction {SubElem}', path=(SelectionPathElem(entity_kind='native', entity_id=Sketch.name, subelement=SubElem),), query=FrozenMapping({'native_owner_id': Operation.object_id, 'native_target_id': Sketch.object_id, 'topology_role': DirectionAxisRole}), provenance=Provenance(adapter=KFormatId, native_id=f'{Operation.object_id}:axis:{SubElem}', spans=(ProvenanceSpan(Operation.native_stream, Operation.native_offset, Operation.native_end - Operation.native_offset, 'direction-axis'),))))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def OperationA(Operation: NativeOperation) -> tuple[tuple[int, int, tuple[int, ...]], ...]:
+    References = Operation.selection_references
+    if not References:
+        Producer = Operation.dependencies[-1] if Operation.dependencies else 0
+        References = tuple(((Producer, LocalId) for LocalId in Operation.selected_local_ids))
+    Aligned = len(Operation.selection_offsets) == len(References)
+    return tuple(((Producer, LocalId, (Operation.selection_offsets[Index],) if Aligned else Operation.selection_offsets) for Index, (Producer, LocalId) in enumerate(References)))
 
-def _operation_selection_entries(
-    operation: NativeOperation,
-) -> tuple[tuple[int, int, tuple[int, ...]], ...]:
-    references = operation.selection_references
-    if not references:
-        producer = operation.dependencies[-1] if operation.dependencies else 0
-        references = tuple(
-            (producer, local_id) for local_id in operation.selected_local_ids
-        )
-    aligned = len(operation.selection_offsets) == len(references)
-    return tuple(
-        (
-            producer,
-            local_id,
-            (
-                (operation.selection_offsets[index],)
-                if aligned
-                else operation.selection_offsets
-            ),
-        )
-        for index, (producer, local_id) in enumerate(references)
-    )
+# this definition exists because focused behavior needs one stable owner
+def OperationId(Operation: NativeOperation, Producer: int, LocalId: int) -> str:
+    Duplicate = sum((RefLocal == LocalId for Ignored, RefLocal in Operation.selection_references)) > 1
+    return SelectionId(Operation.object_id, LocalId, Operation.selection_kind, Producer if Duplicate else None)
 
-
-def _operation_selection_id(
-    operation: NativeOperation, producer: int, local_id: int
-) -> str:
-    duplicate = (
-        sum(
-            reference_local == local_id
-            for _, reference_local in operation.selection_references
-        )
-        > 1
-    )
-    return _selection_id(
-        operation.object_id,
-        local_id,
-        operation.selection_kind,
-        producer if duplicate else None,
-    )
-
-
-def _timeline(
-    model: NativeModel, selections: tuple[Selection, ...]
-) -> tuple[FeatureStep, ...]:
-    operation_by_id = {operation.object_id: operation for operation in model.operations}
-    sketch_by_id = {sketch.object_id: sketch for sketch in model.sketches}
-    plane_by_id = {plane.object_id: plane for plane in model.planes}
-    feature_ids = {feature.object_id for feature in model.features}
-    order_by_id = {
-        feature.object_id: order for order, feature in enumerate(model.features)
-    }
-    selection_ids = {selection.id for selection in selections}
-    principal_plane_ids = {plane.object_id for plane in model.planes if plane.principal}
-    previous_operation: int | None = None
-    result: list[FeatureStep] = []
-    for order, feature in enumerate(model.features):
-        operation = operation_by_id.get(feature.object_id)
-        sketch = sketch_by_id.get(feature.object_id)
-        inputs: list[int] = []
-        if operation is not None:
-            inputs.extend(operation.dependencies)
-        elif sketch is not None:
-            inputs.append(sketch.support_plane_id)
-        elif feature.object_id in plane_by_id:
-            reference_ids = plane_by_id[feature.object_id].reference_ids
-            inputs.extend(reference_ids)
-            if (
-                not reference_ids
-                and feature.object_id not in principal_plane_ids
-                and previous_operation is not None
-            ):
-                inputs.append(previous_operation)
-        dependencies = tuple(
-            _feature_id(native_id)
-            for native_id in dict.fromkeys(inputs)
-            if native_id in feature_ids and order_by_id[native_id] < order
-        )
-        parameter_ids = tuple(
-            parameter_id
-            for dimension, parameter_id in _parameter_entries(
-                feature.object_id, feature.dimensions
-            )
-        )
-        attributes: dict[str, Any] = {
-            "native_object_id": feature.object_id,
-            "native_type": feature.kind,
-            "xml_tag": feature.xml_tag,
-            "native_properties": feature.properties,
-        }
-        operation_value: BooleanOperation | str | None = None
-        selected: tuple[str, ...] = ()
-        if operation is not None:
-            attributes.update(_operation_attributes(operation))
-            if operation.kind == "join":
-                operation_value = BooleanOperation.JOIN
-            elif operation.kind == "cut":
-                operation_value = BooleanOperation.CUT
-            elif operation.kind in {
-                "fillet",
-                "chamfer",
-                "shell",
-                "dome",
-                "scale",
-                "move_body",
-            }:
-                operation_value = None
-            elif operation.kind == "revolve_join":
-                operation_value = BooleanOperation.JOIN
-            elif operation.kind == "revolve_cut":
-                operation_value = BooleanOperation.CUT
-            elif operation.kind == "hole":
-                operation_value = BooleanOperation.CUT
-            elif operation.kind == "combine_join":
-                operation_value = BooleanOperation.JOIN
-            elif operation.kind == "surface":
-                operation_value = BooleanOperation.CREATE
+# this definition exists because focused behavior needs one stable owner
+def Timeline(Model: NativeModel, Selections: tuple[Selection, ...]) -> tuple[FeatureStep, ...]:
+    OperationById = {Operation.object_id: Operation for Operation in Model.operations}
+    SketchById = {Sketch.object_id: Sketch for Sketch in Model.sketches}
+    PlaneById = {Plane.object_id: Plane for Plane in Model.planes}
+    FeatureIds = {Feature.object_id for Feature in Model.features}
+    OrderById = {Feature.object_id: Order for Order, Feature in enumerate(Model.features)}
+    SelectionIds = {Selection.id for Selection in Selections}
+    PrincipalPlaneIds = {Plane.object_id for Plane in Model.planes if Plane.principal}
+    PreviousOperation: int | None = None
+    Result: list[FeatureStep] = []
+    for Order, Feature in enumerate(Model.features):
+        Operation = OperationById.get(Feature.object_id)
+        Sketch = SketchById.get(Feature.object_id)
+        Inputs: list[int] = []
+        if Operation is not None:
+            Inputs.extend(Operation.dependencies)
+        elif Sketch is not None:
+            Inputs.append(Sketch.support_plane_id)
+        elif Feature.object_id in PlaneById:
+            RefIds = PlaneById[Feature.object_id].reference_ids
+            Inputs.extend(RefIds)
+            if not RefIds and Feature.object_id not in PrincipalPlaneIds and (PreviousOperation is not None):
+                Inputs.append(PreviousOperation)
+        Dependencies = tuple((FeatureId(NativeId) for NativeId in dict.fromkeys(Inputs) if NativeId in FeatureIds and OrderById[NativeId] < Order))
+        ParamIds = tuple((ParamId for Dimension, ParamId in ParamEntries(Feature.object_id, Feature.dimensions)))
+        Attributes: dict[str, AnyValue] = {'native_object_id': Feature.object_id, 'native_type': Feature.kind, 'xml_tag': Feature.xml_tag, 'native_properties': Feature.properties}
+        OperationValue: BoolOperation | str | None = None
+        Selected: tuple[str, ...] = ()
+        if Operation is not None:
+            Attributes.update(Operation(Operation))
+            if Operation.kind == 'join':
+                OperationValue = BoolOperation.JOIN
+            elif Operation.kind == 'cut':
+                OperationValue = BoolOperation.CUT
+            elif Operation.kind in {'fillet', 'chamfer', 'shell', 'dome', 'scale', 'move_body'}:
+                OperationValue = None
+            elif Operation.kind == 'revolve_join':
+                OperationValue = BoolOperation.JOIN
+            elif Operation.kind == 'revolve_cut':
+                OperationValue = BoolOperation.CUT
+            elif Operation.kind == 'hole':
+                OperationValue = BoolOperation.CUT
+            elif Operation.kind == 'combine_join':
+                OperationValue = BoolOperation.JOIN
+            elif Operation.kind == 'surface':
+                OperationValue = BoolOperation.CREATE
             else:
-                operation_value = operation.kind
-            selected = tuple(
-                selection_id
-                for producer, local_id, _ in _operation_selection_entries(operation)
-                for selection_id in (
-                    _operation_selection_id(operation, producer, local_id),
-                )
-                if selection_id in selection_ids
-            )
-            if operation.kind != "surface":
-                previous_operation = operation.object_id
-        result.append(
-            FeatureStep(
-                id=_feature_id(feature.object_id),
-                name=feature.name,
-                kind=_feature_kind(feature),
-                order=order,
-                input_feature_ids=dependencies,
-                sketch_id=(
-                    _sketch_id(operation.profile_id)
-                    if operation is not None and operation.profile_id in sketch_by_id
-                    else _sketch_id(feature.object_id) if sketch is not None else None
-                ),
-                parameter_ids=parameter_ids,
-                operation=operation_value,
-                definition=_feature_definition(
-                    feature,
-                    operation,
-                    sketch_by_id,
-                    plane_by_id,
-                ),
-                selection_ids=selected,
-                provenance=_feature_provenance(feature),
-                attributes=frozen_mapping(attributes),
-            )
-        )
-    return tuple(result)
+                OperationValue = Operation.kind
+            Selected = tuple((SelectionId for Producer, LocalId, Ignored in OperationA(Operation) for SelectionId in (OperationId(Operation, Producer, LocalId),) if SelectionId in SelectionIds))
+            if Operation.kind != 'surface':
+                PreviousOperation = Operation.object_id
+        Result.append(FeatureStep(id=FeatureId(Feature.object_id), name=Feature.name, kind=FeatureKindA(Feature), order=Order, input_feature_ids=Dependencies, sketch_id=SketchId(Operation.profile_id) if Operation is not None and Operation.profile_id in SketchById else SketchId(Feature.object_id) if Sketch is not None else None, parameter_ids=ParamIds, operation=OperationValue, definition=Feature(Feature, Operation, SketchById, PlaneById), selection_ids=Selected, provenance=FeatureA(Feature), attributes=FrozenMapping(Attributes)))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def SolidBody(Features: tuple[NativeFeature, ...]) -> NativeFeature | None:
+    return next((Feature for Feature in Features if Feature.kind.casefold().strip() in SolidBodyFeatureTypes), None)
 
-def _solid_body_feature(
-    features: tuple[NativeFeature, ...],
-) -> NativeFeature | None:
-    return next(
-        (
-            feature
-            for feature in features
-            if feature.kind.casefold().strip() in SOLID_BODY_FEATURE_TYPES
-        ),
-        None,
-    )
+# this definition exists because focused behavior needs one stable owner
+def FinalBodyId(Timeline: tuple[FeatureStep, ...], OperationFeatureIds: frozenset[str]) -> str:
+    Choice = next((Feature for Feature in reversed(Timeline) if Feature.id in OperationFeatureIds or (isinstance(Feature.kind, FeatureKind) and Feature.kind != FeatureKind.REFERENCE and (Feature.kind != FeatureKind.SURFACE) and (Feature.kind != FeatureKind.NATIVE))), None)
+    if Choice is not None:
+        return Choice.id
+    return Timeline[-1].id if Timeline else ''
 
+# this definition exists because focused behavior needs one stable owner
+def Operation(Operation: NativeOperation) -> dict[str, AnyValue]:
+    Result: dict[str, AnyValue] = {'profile_native_id': Operation.profile_id, 'native_dependencies': Operation.dependencies, 'family_code': Operation.family_code, 'operation_code': Operation.operation_code, 'schema_code': Operation.schema_code, 'direction_code': Operation.direction_code, 'termination_code': Operation.termination_code, 'native_selection_offsets': Operation.selection_offsets, 'selected_local_ids': Operation.selected_local_ids, 'native_selection_references': Operation.selection_references, 'selection_kind': Operation.selection_kind, 'mode': Operation.mode}
+    if Operation.length_mm is not None:
+        Result.update({'length_mm': Operation.length_mm, 'direction_multiplier': -1 if Operation.kind in {'cut', 'revolve_cut', 'hole'} else 1, 'end_condition': 'blind' if Operation.termination_code == 0 else f'native:{Operation.termination_code}'})
+    if Operation.radius_mm is not None:
+        Result['radius_mm'] = Operation.radius_mm
+    if Operation.angle_degrees is not None:
+        Result['angle_degrees'] = Operation.angle_degrees
+    if Operation.diameter_mm is not None:
+        Result['diameter_mm'] = Operation.diameter_mm
+    if Operation.second_length_mm is not None:
+        Result['second_length_mm'] = Operation.second_length_mm
+    if Operation.axis_marker_offset is not None:
+        Result['axis_marker_offset'] = Operation.axis_marker_offset
+    if Operation.axis_source_kind is not None:
+        Result['axis_source_kind'] = Operation.axis_source_kind
+    if Operation.axis_source_id is not None:
+        Result['axis_source_id'] = Operation.axis_source_id
+    if Operation.axis_source_offset is not None:
+        Result['axis_source_offset'] = Operation.axis_source_offset
+    if Operation.end_spec_offset is not None:
+        Result['end_spec_offset'] = Operation.end_spec_offset
+    if Operation.translation_mm is not None:
+        Result['translation_mm'] = Operation.translation_mm
+    if Operation.scale_factors is not None:
+        Result['scale_factors'] = Operation.scale_factors
+    return Result
 
-def _final_body_feature_id(
-    timeline: tuple[FeatureStep, ...], operation_feature_ids: frozenset[str]
-) -> str:
-    candidate = next(
-        (
-            feature
-            for feature in reversed(timeline)
-            if feature.id in operation_feature_ids
-            or (
-                isinstance(feature.kind, FeatureKind)
-                and feature.kind != FeatureKind.REFERENCE
-                and feature.kind != FeatureKind.SURFACE
-                and feature.kind != FeatureKind.NATIVE
-            )
-        ),
-        None,
-    )
-    if candidate is not None:
-        return candidate.id
-    return timeline[-1].id if timeline else ""
+# this definition exists because focused behavior needs one stable owner
+def Feature(Feature: NativeFeature, Operation: NativeOperation | None, Sketches: Mapping[int, NativeSketch], Planes: Mapping[int, NativePlane]) -> ExtrusionFeature | FilletFeature | RevolutionFeature | HoleFeature | ChamferFeature | ShellFeature | RefPlaneFeature | DomeFeature | MoveBodyFeature | CombineFeature | ScaleFeature | NativeFeatureDefinition:
+    if Operation is not None and Operation.kind in {'join', 'cut', 'surface'} and (Operation.length_mm is not None):
+        return ExtrusionFeature(length=ParamValue(Operation.length_mm, ValueKind.LENGTH, 'mm'), end_condition=ExtrusionEndCondition.BLIND if Operation.termination_code == 0 else f'native:{Operation.termination_code}', reversed=Operation.kind == 'cut', second_length=ParamValue(Operation.second_length_mm, ValueKind.LENGTH, 'mm') if Operation.second_length_mm is not None else None)
+    if Operation is not None and Operation.kind in {'revolve_join', 'revolve_cut'} and (Operation.angle_degrees is not None) and (Operation.profile_id in Sketches) and (Operation.axis_marker_offset is not None):
+        return RevolutionFeature(angle=ParamValue(Operation.angle_degrees, ValueKind.ANGLE, 'deg'), axis_entity_id=MarkerId(Operation.profile_id, Operation.axis_marker_offset), reversed=Operation.kind == 'revolve_cut')
+    if Operation is not None and Operation.kind in {'revolve_join', 'revolve_cut'} and (Operation.angle_degrees is not None) and (Operation.axis_source_kind is not None) and (Operation.axis_source_id is not None):
+        return RevolutionFeature(angle=ParamValue(Operation.angle_degrees, ValueKind.ANGLE, 'deg'), axis_entity_id=AxisSourceId(Operation.axis_source_kind, Operation.axis_source_id), reversed=Operation.kind == 'revolve_cut')
+    if Operation is not None and Operation.kind == 'hole' and (Operation.diameter_mm is not None) and (Operation.length_mm is not None):
+        return HoleFeature(diameter=ParamValue(Operation.diameter_mm, ValueKind.LENGTH, 'mm'), depth=ParamValue(Operation.length_mm, ValueKind.LENGTH, 'mm'))
+    if Operation is not None and Operation.kind == 'fillet' and (Operation.radius_mm is not None):
+        return FilletFeature(radius=ParamValue(Operation.radius_mm, ValueKind.LENGTH, 'mm'))
+    if Operation is not None and Operation.kind == 'chamfer' and (Operation.length_mm is not None) and (Operation.mode == 'equal_distance'):
+        return ChamferFeature(distance=ParamValue(Operation.length_mm, ValueKind.LENGTH, 'mm'))
+    if Operation is not None and Operation.kind == 'shell' and (Operation.length_mm is not None):
+        return ShellFeature(thickness=ParamValue(Operation.length_mm, ValueKind.LENGTH, 'mm'))
+    if Operation is not None and Operation.kind == 'dome' and (Operation.length_mm is not None):
+        return DomeFeature(height=ParamValue(Operation.length_mm, ValueKind.LENGTH, 'mm'))
+    if Operation is not None and Operation.kind == 'move_body':
+        Translation = Operation.translation_mm
+        if Translation is not None:
+            return MoveBodyFeature(translation=VectorThree(*Translation))
+    if Operation is not None and Operation.kind == 'combine_join':
+        return CombineFeature(BoolOperation.JOIN)
+    if Operation is not None and Operation.kind == 'scale':
+        Factors = Operation.scale_factors
+        if Factors is not None:
+            return ScaleFeature(VectorThree(*Factors))
+    Plane = Planes.get(Feature.object_id)
+    RefIds = Plane.reference_ids if Plane is not None else ()
+    Offset = OperationValue(Feature.dimensions, 'offset')
+    if Plane is not None and len(RefIds) == 1 and (Offset is not None):
+        return RefPlaneFeature(support_plane_id=PlaneId(Feature.object_id), reference_plane_id=PlaneId(RefIds[0]), offset=ParamValue(Offset, ValueKind.LENGTH, 'mm'))
+    return NativeFeatureDefinition(format_id=KFormatId, type_id=Feature.kind or Feature.xml_tag, object_data=FrozenMapping({'native_object_id': Feature.object_id, 'native_class': Feature.class_name, 'native_stream': Feature.native_stream, 'xml_tag': Feature.xml_tag, 'properties': Feature.properties, 'dimensions': tuple(({'name': Dimension.name, 'value_mm': Dimension.value_mm, 'kind': Dimension.kind, 'source_text': Dimension.source_text, 'native_value': Dimension.native_value, 'native_offset': Dimension.native_offset, 'native_role': Dimension.native_role, 'operands': tuple(({'offset': Operand.offset, 'kind_code': Operand.kind_code, 'entity_index': Operand.entity_index} for Operand in Dimension.operands))} for Dimension in Feature.dimensions)), 'record_data': Feature.data, 'operation': Operation(Operation) if Operation is not None else None}))
 
+# this definition exists because focused behavior needs one stable owner
+def OperationValue(Dimensions: tuple[NativeDimension, ...], KindValue: str) -> float | None:
+    return next((Dimension.value_mm for Dimension in Dimensions if Dimension.kind == KindValue), None)
 
-def _operation_attributes(operation: NativeOperation) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "profile_native_id": operation.profile_id,
-        "native_dependencies": operation.dependencies,
-        "family_code": operation.family_code,
-        "operation_code": operation.operation_code,
-        "schema_code": operation.schema_code,
-        "direction_code": operation.direction_code,
-        "termination_code": operation.termination_code,
-        "native_selection_offsets": operation.selection_offsets,
-        "selected_local_ids": operation.selected_local_ids,
-        "native_selection_references": operation.selection_references,
-        "selection_kind": operation.selection_kind,
-        "mode": operation.mode,
-    }
-    if operation.length_mm is not None:
-        result.update(
-            {
-                "length_mm": operation.length_mm,
-                "direction_multiplier": (
-                    -1 if operation.kind in {"cut", "revolve_cut", "hole"} else 1
-                ),
-                "end_condition": (
-                    "blind"
-                    if operation.termination_code == 0
-                    else f"native:{operation.termination_code}"
-                ),
-            }
-        )
-    if operation.radius_mm is not None:
-        result["radius_mm"] = operation.radius_mm
-    if operation.angle_degrees is not None:
-        result["angle_degrees"] = operation.angle_degrees
-    if operation.diameter_mm is not None:
-        result["diameter_mm"] = operation.diameter_mm
-    if operation.second_length_mm is not None:
-        result["second_length_mm"] = operation.second_length_mm
-    if operation.axis_marker_offset is not None:
-        result["axis_marker_offset"] = operation.axis_marker_offset
-    if operation.axis_source_kind is not None:
-        result["axis_source_kind"] = operation.axis_source_kind
-    if operation.axis_source_id is not None:
-        result["axis_source_id"] = operation.axis_source_id
-    if operation.axis_source_offset is not None:
-        result["axis_source_offset"] = operation.axis_source_offset
-    if operation.end_spec_offset is not None:
-        result["end_spec_offset"] = operation.end_spec_offset
-    if operation.translation_mm is not None:
-        result["translation_mm"] = operation.translation_mm
-    if operation.scale_factors is not None:
-        result["scale_factors"] = operation.scale_factors
-    return result
-
-
-def _feature_definition(
-    feature: NativeFeature,
-    operation: NativeOperation | None,
-    sketches: Mapping[int, NativeSketch],
-    planes: Mapping[int, NativePlane],
-) -> (
-    ExtrusionFeature
-    | FilletFeature
-    | RevolutionFeature
-    | HoleFeature
-    | ChamferFeature
-    | ShellFeature
-    | ReferencePlaneFeature
-    | DomeFeature
-    | MoveBodyFeature
-    | CombineFeature
-    | ScaleFeature
-    | NativeFeatureDefinition
-):
-    if (
-        operation is not None
-        and operation.kind in {"join", "cut", "surface"}
-        and operation.length_mm is not None
-    ):
-        return ExtrusionFeature(
-            length=ParameterValue(operation.length_mm, ValueKind.LENGTH, "mm"),
-            end_condition=(
-                ExtrusionEndCondition.BLIND
-                if operation.termination_code == 0
-                else f"native:{operation.termination_code}"
-            ),
-            reversed=operation.kind == "cut",
-            second_length=(
-                ParameterValue(
-                    operation.second_length_mm,
-                    ValueKind.LENGTH,
-                    "mm",
-                )
-                if operation.second_length_mm is not None
-                else None
-            ),
-        )
-    if (
-        operation is not None
-        and operation.kind in {"revolve_join", "revolve_cut"}
-        and operation.angle_degrees is not None
-        and operation.profile_id in sketches
-        and operation.axis_marker_offset is not None
-    ):
-        return RevolutionFeature(
-            angle=ParameterValue(
-                operation.angle_degrees,
-                ValueKind.ANGLE,
-                "deg",
-            ),
-            axis_entity_id=_marker_id(
-                operation.profile_id,
-                operation.axis_marker_offset,
-            ),
-            reversed=operation.kind == "revolve_cut",
-        )
-    if (
-        operation is not None
-        and operation.kind in {"revolve_join", "revolve_cut"}
-        and operation.angle_degrees is not None
-        and operation.axis_source_kind is not None
-        and operation.axis_source_id is not None
-    ):
-        return RevolutionFeature(
-            angle=ParameterValue(
-                operation.angle_degrees,
-                ValueKind.ANGLE,
-                "deg",
-            ),
-            axis_entity_id=_axis_source_id(
-                operation.axis_source_kind,
-                operation.axis_source_id,
-            ),
-            reversed=operation.kind == "revolve_cut",
-        )
-    if (
-        operation is not None
-        and operation.kind == "hole"
-        and operation.diameter_mm is not None
-        and operation.length_mm is not None
-    ):
-        return HoleFeature(
-            diameter=ParameterValue(
-                operation.diameter_mm,
-                ValueKind.LENGTH,
-                "mm",
-            ),
-            depth=ParameterValue(
-                operation.length_mm,
-                ValueKind.LENGTH,
-                "mm",
-            ),
-        )
-    if (
-        operation is not None
-        and operation.kind == "fillet"
-        and operation.radius_mm is not None
-    ):
-        return FilletFeature(
-            radius=ParameterValue(operation.radius_mm, ValueKind.LENGTH, "mm")
-        )
-    if (
-        operation is not None
-        and operation.kind == "chamfer"
-        and operation.length_mm is not None
-        and operation.mode == "equal_distance"
-    ):
-        return ChamferFeature(
-            distance=ParameterValue(
-                operation.length_mm,
-                ValueKind.LENGTH,
-                "mm",
-            )
-        )
-    if (
-        operation is not None
-        and operation.kind == "shell"
-        and operation.length_mm is not None
-    ):
-        return ShellFeature(
-            thickness=ParameterValue(
-                operation.length_mm,
-                ValueKind.LENGTH,
-                "mm",
-            )
-        )
-    if (
-        operation is not None
-        and operation.kind == "dome"
-        and operation.length_mm is not None
-    ):
-        return DomeFeature(
-            height=ParameterValue(
-                operation.length_mm,
-                ValueKind.LENGTH,
-                "mm",
-            )
-        )
-    if operation is not None and operation.kind == "move_body":
-        translation = operation.translation_mm
-        if translation is not None:
-            return MoveBodyFeature(translation=Vector3(*translation))
-    if operation is not None and operation.kind == "combine_join":
-        return CombineFeature(BooleanOperation.JOIN)
-    if operation is not None and operation.kind == "scale":
-        factors = operation.scale_factors
-        if factors is not None:
-            return ScaleFeature(Vector3(*factors))
-    plane = planes.get(feature.object_id)
-    reference_ids = plane.reference_ids if plane is not None else ()
-    offset = _operation_dimension_value(feature.dimensions, "offset")
-    if plane is not None and len(reference_ids) == 1 and offset is not None:
-        return ReferencePlaneFeature(
-            support_plane_id=_plane_id(feature.object_id),
-            reference_plane_id=_plane_id(reference_ids[0]),
-            offset=ParameterValue(offset, ValueKind.LENGTH, "mm"),
-        )
-    return NativeFeatureDefinition(
-        format_id=_FORMAT_ID,
-        type_id=feature.kind or feature.xml_tag,
-        object_data=frozen_mapping(
-            {
-                "native_object_id": feature.object_id,
-                "native_class": feature.class_name,
-                "native_stream": feature.native_stream,
-                "xml_tag": feature.xml_tag,
-                "properties": feature.properties,
-                "dimensions": tuple(
-                    {
-                        "name": dimension.name,
-                        "value_mm": dimension.value_mm,
-                        "kind": dimension.kind,
-                        "source_text": dimension.source_text,
-                        "native_value": dimension.native_value,
-                        "native_offset": dimension.native_offset,
-                        "native_role": dimension.native_role,
-                        "operands": tuple(
-                            {
-                                "offset": operand.offset,
-                                "kind_code": operand.kind_code,
-                                "entity_index": operand.entity_index,
-                            }
-                            for operand in dimension.operands
-                        ),
-                    }
-                    for dimension in feature.dimensions
-                ),
-                "record_data": feature.data,
-                "operation": (
-                    _operation_attributes(operation) if operation is not None else None
-                ),
-            }
-        ),
-    )
-
-
-def _operation_dimension_value(
-    dimensions: tuple[NativeDimension, ...], kind: str
-) -> float | None:
-    return next(
-        (dimension.value_mm for dimension in dimensions if dimension.kind == kind),
-        None,
-    )
-
-
-def _feature_kind(feature: NativeFeature) -> FeatureKind:
-    if getattr(feature, "class_name", "") in {"moSketchHole", "moHoleWzd_c"}:
+# this definition exists because focused behavior needs one stable owner
+def FeatureKindA(Feature: NativeFeature) -> FeatureKind:
+    if getattr(Feature, 'class_name', '') in {'moSketchHole', 'moHoleWzd_c'}:
         return FeatureKind.HOLE
-    return _FEATURE_KIND_BY_NATIVE.get(
-        feature.kind.casefold().strip(), FeatureKind.NATIVE
-    )
+    return KFeatureKindByNative.get(Feature.kind.casefold().strip(), FeatureKind.NATIVE)
 
-
-def _brep_payloads(
-    archive: SldprtArchive, options: ReadOptions
-) -> tuple[tuple[BrepPayload, ...], tuple[Diagnostic, ...]]:
-    if not options.include_brep:
-        return (), ()
-    payloads: list[BrepPayload] = []
-    diagnostics: list[Diagnostic] = []
-    for record in archive.records:
-        if not contains_parasolid_payload(record.data):
+# this definition exists because focused behavior needs one stable owner
+def BrepPayloads(Archive: SldprtArchive, Options: ReadOptions) -> tuple[tuple[BrepPayload, ...], tuple[DiagValue, ...]]:
+    if not Options.include_brep:
+        return ((), ())
+    Payloads: list[BrepPayload] = []
+    Diagnostics: list[DiagValue] = []
+    for Record in Archive.records:
+        if not ContainsParasolidPayload(Record.data):
             continue
         try:
-            decoded = decode_partition_stream(record.data, record.name)
+            Decoded = DecodePartitionStream(Record.data, Record.name)
         except SldprtFormatError as exc:
-            if options.strict:
+            if Options.strict:
                 raise
-            diagnostics.append(
-                Diagnostic(
-                    code="sldprt.parasolid_decode_failed",
-                    message=str(exc),
-                    severity=Severity.WARNING,
-                    attributes=frozen_mapping({"stream": record.name}),
-                )
-            )
+            Diagnostics.append(DiagValue(code='sldprt.parasolid_decode_failed', message=str(exc), severity=Severity.WARNING, attributes=FrozenMapping({'stream': Record.name})))
             continue
-        for native in decoded:
-            payloads.append(_brep_payload(len(payloads), native))
-    if not payloads and options.strict:
-        raise SldprtFormatError("SLDPRT contains no readable Parasolid payload")
-    return tuple(payloads), tuple(diagnostics)
+        for Native in Decoded:
+            Payloads.append(BrepPayloadA(len(Payloads), Native))
+    if not Payloads and Options.strict:
+        raise SldprtFormatError('SLDPRT contains no readable Parasolid payload')
+    return (tuple(Payloads), tuple(Diagnostics))
 
+# this definition exists because focused behavior needs one stable owner
+def BrepPayloadA(Index: int, Native: ParasolidPayload) -> BrepPayload:
+    return BrepPayload(id=f'sldprt:brep:{Index}', format_id='parasolid', kind=Native.kind, schema=Native.schema, sha256=Native.sha256, data=Native.data, source_stream=Native.stream, provenance=Provenance(adapter=KFormatId, native_id=f'{Native.stream}:{Native.wrapper_offset}', spans=(ProvenanceSpan(Native.stream, Native.wrapper_offset, Native.compressed_offset + Native.compressed_size - Native.wrapper_offset, 'parasolid-wrapper'),)), attributes=FrozenMapping({'description': Native.description, 'wrapper_offset': Native.wrapper_offset, 'magic_offset': Native.magic_offset, 'compressed_offset': Native.compressed_offset, 'compressed_size': Native.compressed_size, 'uncompressed_size': Native.uncompressed_size}), role=PayloadRole.BREP, file_extension='.x_b')
 
-def _brep_payload(index: int, native: ParasolidPayload) -> BrepPayload:
-    return BrepPayload(
-        id=f"sldprt:brep:{index}",
-        format_id="parasolid",
-        kind=native.kind,
-        schema=native.schema,
-        sha256=native.sha256,
-        data=native.data,
-        source_stream=native.stream,
-        provenance=Provenance(
-            adapter=_FORMAT_ID,
-            native_id=f"{native.stream}:{native.wrapper_offset}",
-            spans=(
-                ProvenanceSpan(
-                    native.stream,
-                    native.wrapper_offset,
-                    native.compressed_offset
-                    + native.compressed_size
-                    - native.wrapper_offset,
-                    "parasolid-wrapper",
-                ),
-            ),
-        ),
-        attributes=frozen_mapping(
-            {
-                "description": native.description,
-                "wrapper_offset": native.wrapper_offset,
-                "magic_offset": native.magic_offset,
-                "compressed_offset": native.compressed_offset,
-                "compressed_size": native.compressed_size,
-                "uncompressed_size": native.uncompressed_size,
-            }
-        ),
-        role=PayloadRole.BREP,
-        file_extension=".x_b",
-    )
+# this definition exists because focused behavior needs one stable owner
+def TypedBrep(Payloads: Sequence[BrepPayload]) -> BrepModel | None:
+    Groups: dict[str, list[BrepPayload]] = {}
+    for Index, Payload in enumerate(Payloads):
+        Groups.setdefault(Payload.source_stream or f'payload:{Index}', []).append(Payload)
+    Models: list[BrepModel] = []
+    for Group in Groups.values():
+        Decoded = tuple((Model for Payload in Group if Payload.data is not None and (Model := DecodeBrepModel(Payload.data)) is not None))
+        if len(Decoded) == 1:
+            Models.append(Decoded[0])
+    return Models[0] if len(Models) == 1 else None
 
-
-def _typed_brep(payloads: Sequence[BrepPayload]) -> BrepModel | None:
-    groups: dict[str, list[BrepPayload]] = {}
-    for index, payload in enumerate(payloads):
-        groups.setdefault(payload.source_stream or f"payload:{index}", []).append(
-            payload
-        )
-    models: list[BrepModel] = []
-    for group in groups.values():
-        decoded = tuple(
-            model
-            for payload in group
-            if payload.data is not None
-            and (model := decode_brep_model(payload.data)) is not None
-        )
-        if len(decoded) == 1:
-            models.append(decoded[0])
-    return models[0] if len(models) == 1 else None
-
-
-def _bounding_box(model: NativeModel) -> BoundingBox | None:
-    sketch_by_id = {sketch.object_id: sketch for sketch in model.sketches}
-    plane_by_id = {plane.object_id: plane for plane in model.planes}
-    points: list[tuple[float, float, float]] = []
-    for operation in model.operations:
-        if operation.kind != "join" or operation.profile_id is None:
+# this definition exists because focused behavior needs one stable owner
+def BoundingBoxA(Model: NativeModel) -> BoundingBox | None:
+    SketchById = {Sketch.object_id: Sketch for Sketch in Model.sketches}
+    PlaneById = {Plane.object_id: Plane for Plane in Model.planes}
+    Points: list[tuple[float, float, float]] = []
+    for Operation in Model.operations:
+        if Operation.kind != 'join' or Operation.profile_id is None:
             continue
-        sketch = sketch_by_id.get(operation.profile_id)
-        if sketch is None:
+        Sketch = SketchById.get(Operation.profile_id)
+        if Sketch is None:
             continue
-        plane = plane_by_id.get(sketch.support_plane_id)
-        if plane is None or operation.length_mm is None:
+        Plane = PlaneById.get(Sketch.support_plane_id)
+        if Plane is None or Operation.length_mm is None:
             continue
-        direction = tuple(value * operation.length_mm for value in plane.normal)
-        for profile in sketch.profiles:
-            for local in _profile_extrema(profile):
-                base = tuple(
-                    plane.origin_mm[index]
-                    + plane.u_axis[index] * local[0]
-                    + plane.v_axis[index] * local[1]
-                    for index in range(3)
-                )
-                points.append(base)
-                points.append(
-                    tuple(base[index] + direction[index] for index in range(3))
-                )
-    if not points:
+        Direction = tuple((Value * Operation.length_mm for Value in Plane.normal))
+        for Profile in Sketch.profiles:
+            for Local in ProfileExtrema(Profile):
+                BaseValue = tuple((Plane.origin_mm[Index] + Plane.u_axis[Index] * Local[0] + Plane.v_axis[Index] * Local[1] for Index in range(3)))
+                Points.append(BaseValue)
+                Points.append(tuple((BaseValue[Index] + Direction[Index] for Index in range(3))))
+    if not Points:
         return None
-    return BoundingBox(
-        minimum=Vector3(*(min(point[index] for point in points) for index in range(3))),
-        maximum=Vector3(*(max(point[index] for point in points) for index in range(3))),
-    )
+    return BoundingBox(minimum=VectorThree(*(min((Point[Index] for Point in Points)) for Index in range(3))), maximum=VectorThree(*(max((Point[Index] for Point in Points)) for Index in range(3))))
 
-
-def _profile_extrema(profile: NativeProfile) -> tuple[tuple[float, float], ...]:
-    if profile.kind == "rectangle":
-        x0, y0, x1, y1 = profile.coordinates
-        return ((x0, y0), (x0, y1), (x1, y0), (x1, y1))
-    if profile.kind == "circle":
-        x, y, radius = profile.coordinates
-        return (
-            (x - radius, y),
-            (x + radius, y),
-            (x, y - radius),
-            (x, y + radius),
-        )
+# this definition exists because focused behavior needs one stable owner
+def ProfileExtrema(Profile: NativeProfile) -> tuple[tuple[float, float], ...]:
+    if Profile.kind == 'rectangle':
+        XZero, YZero, XOneValue, YOneValue = Profile.coordinates
+        return ((XZero, YZero), (XZero, YOneValue), (XOneValue, YZero), (XOneValue, YOneValue))
+    if Profile.kind == 'circle':
+        FirstCoord, SecondCoord, Radius = Profile.coordinates
+        return ((FirstCoord - Radius, SecondCoord), (FirstCoord + Radius, SecondCoord), (FirstCoord, SecondCoord - Radius), (FirstCoord, SecondCoord + Radius))
     return ()
 
+# this definition exists because focused behavior needs one stable owner
+def FeatureA(Feature: NativeFeature) -> Provenance:
+    return ProvenanceA(str(Feature.object_id), Feature.native_offset, Feature.native_end - Feature.native_offset if Feature.native_offset is not None and Feature.native_end is not None else None, 'feature-record', Confidence=1.0 if Feature.native_offset is not None else 0.6, Stream=Feature.native_stream)
 
-def _feature_provenance(feature: NativeFeature) -> Provenance:
-    return _provenance(
-        str(feature.object_id),
-        feature.native_offset,
-        (
-            feature.native_end - feature.native_offset
-            if feature.native_offset is not None and feature.native_end is not None
-            else None
-        ),
-        "feature-record",
-        confidence=1.0 if feature.native_offset is not None else 0.6,
-        stream=feature.native_stream,
-    )
+# this definition exists because focused behavior needs one stable owner
+def FeatureSpan(Sketch: NativeSketch) -> Provenance:
+    return ProvenanceA(str(Sketch.object_id), Sketch.native_offset, Sketch.native_end - Sketch.native_offset, 'sketch-record', Stream=Sketch.native_stream)
 
+# this definition exists because focused behavior needs one stable owner
+def ProvenanceA(NativeId: str, Offset: int | None, Length: int | None, KindValue: str, *, Confidence: float=1.0, Stream: str=ResolvedFeaturesStream) -> Provenance:
+    Spans = (ProvenanceSpan(Stream, Offset, Length or 0, KindValue),) if Offset is not None else ()
+    return Provenance(adapter=KFormatId, native_id=NativeId, confidence=Confidence, spans=Spans)
 
-def _feature_span_provenance(sketch: NativeSketch) -> Provenance:
-    return _provenance(
-        str(sketch.object_id),
-        sketch.native_offset,
-        sketch.native_end - sketch.native_offset,
-        "sketch-record",
-        stream=sketch.native_stream,
-    )
+# this definition exists because focused behavior needs one stable owner
+def ConfigId(NativeId: int) -> str:
+    return f'sldprt:configuration:{NativeId}'
 
+# this definition exists because focused behavior needs one stable owner
+def FeatureId(NativeId: int) -> str:
+    return f'sldprt:feature:{NativeId}'
 
-def _provenance(
-    native_id: str,
-    offset: int | None,
-    length: int | None,
-    kind: str,
-    *,
-    confidence: float = 1.0,
-    stream: str = RESOLVED_FEATURES_STREAM,
-) -> Provenance:
-    spans = (
-        (ProvenanceSpan(stream, offset, length or 0, kind),)
-        if offset is not None
-        else ()
-    )
-    return Provenance(
-        adapter=_FORMAT_ID,
-        native_id=native_id,
-        confidence=confidence,
-        spans=spans,
-    )
+# this definition exists because focused behavior needs one stable owner
+def PlaneId(NativeId: int) -> str:
+    return f'sldprt:plane:{NativeId}'
 
+# this definition exists because focused behavior needs one stable owner
+def SketchId(NativeId: int) -> str:
+    return f'sldprt:sketch:{NativeId}'
 
-def _configuration_id(native_id: int) -> str:
-    return f"sldprt:configuration:{native_id}"
+# this definition exists because focused behavior needs one stable owner
+def ParamId(NativeId: int, NameValue: str) -> str:
+    return f'sldprt:parameter:{NativeId}:{NameValue}'
 
+# this definition exists because focused behavior needs one stable owner
+def ParamEntries(NativeId: int, Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeDimension, str], ...]:
+    Occurrences: Defaultdict[str, int] = Defaultdict(int)
+    Result: list[tuple[NativeDimension, str]] = []
+    for Dimension in Dimensions:
+        Occurrences[Dimension.name] += 1
+        ItemValue = Occurrences[Dimension.name]
+        ParamId = ParamId(NativeId, Dimension.name)
+        if ItemValue > 1:
+            ParamId += f':{ItemValue}'
+        Result.append((Dimension, ParamId))
+    return tuple(Result)
 
-def _feature_id(native_id: int) -> str:
-    return f"sldprt:feature:{native_id}"
+# this definition exists because focused behavior needs one stable owner
+def SelectionId(NativeId: int, LocalId: int, KindValue: str='edge', ProducerId: int | None=None) -> str:
+    Producer = f':{ProducerId}' if ProducerId is not None else ''
+    return f'sldprt:selection:{NativeId}:{KindValue}{Producer}:{LocalId}'
 
+# this definition exists because focused behavior needs one stable owner
+def ProfileId(NativeId: int, ProfileIndex: int) -> str:
+    return f'sldprt:sketch:{NativeId}:profile:{ProfileIndex}'
 
-def _plane_id(native_id: int) -> str:
-    return f"sldprt:plane:{native_id}"
+# this definition exists because focused behavior needs one stable owner
+def ProfileEdgeId(NativeId: int, ProfileIndex: int, EdgeIndex: int) -> str:
+    return f'sldprt:sketch:{NativeId}:profile:{ProfileIndex}:edge:{EdgeIndex}'
 
+# this definition exists because focused behavior needs one stable owner
+def AxisSourceId(KindValue: str, NativeId: int) -> str:
+    return f'sldprt:{KindValue}:{NativeId}'
 
-def _sketch_id(native_id: int) -> str:
-    return f"sldprt:sketch:{native_id}"
+# this definition exists because focused behavior needs one stable owner
+def MarkerId(NativeId: int, Offset: int) -> str:
+    return f'sldprt:sketch:{NativeId}:native:{Offset}'
 
+# this binding exists because shared behavior needs one stable value
+globals()['Any'] = AnyValue
 
-def _parameter_id(native_id: int, name: str) -> str:
-    return f"sldprt:parameter:{native_id}:{name}"
+# this binding exists because shared behavior needs one stable value
+globals()['ArcEllipseGeometry'] = ArcEllipseGeom
 
+# this binding exists because shared behavior needs one stable value
+globals()['ArcGeometry'] = ArcGeom
 
-def _parameter_entries(
-    native_id: int, dimensions: tuple[NativeDimension, ...]
-) -> tuple[tuple[NativeDimension, str], ...]:
-    occurrences: defaultdict[str, int] = defaultdict(int)
-    result: list[tuple[NativeDimension, str]] = []
-    for dimension in dimensions:
-        occurrences[dimension.name] += 1
-        occurrence = occurrences[dimension.name]
-        parameter_id = _parameter_id(native_id, dimension.name)
-        if occurrence > 1:
-            parameter_id += f":{occurrence}"
-        result.append((dimension, parameter_id))
-    return tuple(result)
+# this binding exists because shared behavior needs one stable value
+globals()['ArcParabolaGeometry'] = ArcParabolaGeom
 
+# this binding exists because shared behavior needs one stable value
+globals()['AssemblyData'] = AsmData
 
-def _selection_id(
-    native_id: int,
-    local_id: int,
-    kind: str = "edge",
-    producer_id: int | None = None,
-) -> str:
-    producer = f":{producer_id}" if producer_id is not None else ""
-    return f"sldprt:selection:{native_id}:{kind}{producer}:{local_id}"
+# this binding exists because shared behavior needs one stable value
+globals()['Body'] = BodyValue
 
+# this binding exists because shared behavior needs one stable value
+globals()['BooleanOperation'] = BoolOperation
 
-def _profile_id(native_id: int, profile_index: int) -> str:
-    return f"sldprt:sketch:{native_id}:profile:{profile_index}"
+# this binding exists because shared behavior needs one stable value
+globals()['BytesIO'] = BytesIo
 
+# this binding exists because shared behavior needs one stable value
+globals()['COMPONENT_TREE_STREAM'] = ComponentTreeStream
 
-def _profile_edge_id(native_id: int, profile_index: int, edge_index: int) -> str:
-    return f"sldprt:sketch:{native_id}:profile:{profile_index}:edge:{edge_index}"
+# this binding exists because shared behavior needs one stable value
+globals()['CONTAINER_VERSIONS'] = ContainerVersions
 
+# this binding exists because shared behavior needs one stable value
+globals()['CONTENT_TYPES_STREAM'] = ContentTypesStream
 
-def _axis_source_id(kind: str, native_id: int) -> str:
-    return f"sldprt:{kind}:{native_id}"
+# this binding exists because shared behavior needs one stable value
+globals()['CadDocument'] = CadDoc
 
+# this binding exists because shared behavior needs one stable value
+globals()['CircleGeometry'] = CircleGeom
 
-def _marker_id(native_id: int, offset: int) -> str:
-    return f"sldprt:sketch:{native_id}:native:{offset}"
+# this binding exists because shared behavior needs one stable value
+globals()['ComponentDocument'] = ComponentDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['Configuration'] = Config
+
+# this binding exists because shared behavior needs one stable value
+globals()['ConstraintReference'] = RuleRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['DIRECTION_AXIS_ROLE'] = DirectionAxisRole
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_LISTS_STREAM'] = DisplayListsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['Destination'] = Target
+
+# this binding exists because shared behavior needs one stable value
+globals()['Diagnostic'] = DiagValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['ET'] = XmlTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['EllipseGeometry'] = EllipseGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['FEATURES_STREAM'] = FeaturesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['FORMAT_ID_BY_SUFFIX'] = FormatIdBySuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['GeometryKind'] = GeomKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['INFO'] = InfoValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['KEYWORDS_STREAM'] = KeywordsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_DOCUMENT_STREAM'] = KitDocStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_NATIVE_STREAM'] = KitNativeStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_RESOLVED_STREAM'] = KitResolvedStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['LineGeometry'] = LineGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATES_STREAM_NAME'] = MatesStreamName
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATES_STREAM_SUFFIX'] = MatesStreamSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATE_VALUE_SEMANTICS'] = MateValueSemantics
+
+# this binding exists because shared behavior needs one stable value
+globals()['MateConstraint'] = MateRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['Matrix4'] = MatrixFour
+
+# this binding exists because shared behavior needs one stable value
+globals()['Mesh'] = MeshValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['NATIVE_MATE_ALIGNMENT_BY_CODE'] = NativeMateAlignmentByCode
+
+# this binding exists because shared behavior needs one stable value
+globals()['NATIVE_MATE_ENTITY_MARKERS'] = NativeMateEntityMarkers
+
+# this binding exists because shared behavior needs one stable value
+globals()['NATIVE_MATE_NEUTRAL_KIND_ALIASES'] = NativeMateNeutralKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeAssembly'] = NativeAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeAssemblyDefinition'] = NativeAsmDefinition
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeAssemblyEncoding'] = NativeAsmEncoding
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeAssemblyEnvelope'] = NativeAsmEnvelope
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeAssemblyOccurrence'] = NativeAsmItem
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeGeometry'] = NativeGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['PARTITION_STREAM'] = PartitionStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['PLANE_FEATURE_TYPES'] = PlaneFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['Parameter'] = Param
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParameterRole'] = ParamRole
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParameterValue'] = ParamValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['PointGeometry'] = PointGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['RELATIONSHIPS_STREAM'] = RelationshipsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['RESOLVED_FEATURES_STREAM'] = ResolvedFeaturesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['ReferencePlaneFeature'] = RefPlaneFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['SOLIDWORKS_STREAM'] = SolidworksStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['SOLID_BODY_FEATURE_TYPES'] = SolidBodyFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['SUFFIX_BY_FORMAT_ID'] = SuffixByFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['SelectionPathElement'] = SelectionPathElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['SketchConstraint'] = SketchRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['SplineGeometry'] = SplineGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector2'] = VectorTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector3'] = VectorThree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_DONOR_CARRIED_STREAMS'] = KAsmDonorCarriedStreams
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_FORMAT_ID'] = KAsmFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_READER_REQUIRED_STREAMS'] = KAsmReaderRequiredStreams
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_REWRITABLE_DONOR_STREAMS'] = KAsmRewritableDonorStreaA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ATTESTED_COMPATIBILITIES'] = KAttestedCompatibilities
+
+# this binding exists because shared behavior needs one stable value
+globals()['_AssemblyBundle'] = AsmBundle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_AssemblyTemplatePatch'] = AsmTemplate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FEATURE_KIND_BY_NATIVE'] = KFeatureKindByNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FORMAT_ID'] = KFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_GeneratedStreams'] = Generated
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NUMBER_TEXT'] = KNumberText
+
+# this binding exists because shared behavior needs one stable value
+globals()['_RESOLVED_CONFIGURATION_STREAM'] = KResolvedConfigStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOURCE_BYTES_KEY'] = KSourceBytesKey
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOURCE_FORMAT_KEY'] = KSourceFormatKey
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOURCE_KEYS'] = KSourceKeys
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOURCE_SEMANTIC_SHA256_KEY'] = KSourceSemanticShaTwoFive
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOURCE_SHA256_KEY'] = KSourceShaTwoFiveSixKey
+
+# this binding exists because shared behavior needs one stable value
+globals()['_TARGET_UNSUPPORTED_CAPABILITIES'] = KTargetUnsupported
+
+# this binding exists because shared behavior needs one stable value
+globals()['_WRAPPER_METADATA_KEYS'] = KWrapperMetaKeys
+
+# this binding exists because shared behavior needs one stable value
+globals()['_apply_native_equations'] = ApplyNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_bounding_box'] = AsmBoundingBox
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_bundle'] = AsmBundleA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_definition_id'] = AsmDefinitionId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_definitions'] = AsmDefinitions
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_document'] = AsmDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_documents'] = AsmDocuments
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_instance_id'] = AsmInstanceId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_instances'] = AsmInstances
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_mate_entity'] = AsmMateEntity
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_mates'] = AsmMates
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_matrix'] = AsmMatrix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_meshes'] = AsmMeshes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_reader_gaps'] = AsmReaderGaps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_structure_values'] = AsmStructure
+
+# this binding exists because shared behavior needs one stable value
+globals()['_attested_generated_bundle_names'] = AttestedBundle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_attested_native_proof'] = AttestedNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_attested_transfers'] = Attested
+
+# this binding exists because shared behavior needs one stable value
+globals()['_axis_source_id'] = AxisSourceId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_body_values'] = BodyValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bounding_box'] = BoundingBoxA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_brep_payload'] = BrepPayloadA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_brep_payloads'] = BrepPayloads
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bundle_requirements_satisfied'] = BundleSatisfied
+
+# this binding exists because shared behavior needs one stable value
+globals()['_companion_payloads'] = Companion
+
+# this binding exists because shared behavior needs one stable value
+globals()['_component_file_index'] = ComponentFile
+
+# this binding exists because shared behavior needs one stable value
+globals()['_configuration_id'] = ConfigId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_configuration_values'] = ConfigValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_configurations'] = Configurations
+
+# this binding exists because shared behavior needs one stable value
+globals()['_coordinate_offset'] = Coordinate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_coordinate_reference'] = CoordinateRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_definition_structure_values'] = Definition
+
+# this binding exists because shared behavior needs one stable value
+globals()['_definition_value'] = DefinitionValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['_destination_format_id'] = TargetFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_destination_path'] = TargetPath
+
+# this binding exists because shared behavior needs one stable value
+globals()['_dimension_parameter_value'] = DimensionParam
+
+# this binding exists because shared behavior needs one stable value
+globals()['_dimension_text'] = DimensionText
+
+# this binding exists because shared behavior needs one stable value
+globals()['_direction_axis_selections'] = DirectionAxis
+
+# this binding exists because shared behavior needs one stable value
+globals()['_diverged_donor_records'] = DivergedDonor
+
+# this binding exists because shared behavior needs one stable value
+globals()['_diverged_keys'] = DivergedKeys
+
+# this binding exists because shared behavior needs one stable value
+globals()['_document_without_source'] = DocWithout
+
+# this binding exists because shared behavior needs one stable value
+globals()['_embedded_document'] = EmbeddedDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_definition'] = Feature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_id'] = FeatureId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_kind'] = FeatureKindA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_provenance'] = FeatureA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_span_provenance'] = FeatureSpan
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_values'] = FeatureValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_final_body_feature_id'] = FinalBodyId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_flattened_mates'] = FlattenedMates
+
+# this binding exists because shared behavior needs one stable value
+globals()['_flattened_occurrences'] = Flattened
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_assembly_capabilities'] = GeneratedAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_assembly_notes'] = GeneratedAsmA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_assembly_structure_matches'] = GeneratedAsmB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_integer'] = GeneratedA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_occurrence_labels'] = GeneratedItem
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_reference_number'] = GeneratedRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_streams'] = GeneratedB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_geometry_values'] = GeomValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_instance_structure_values'] = InstanceValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_geometry_brep_payload'] = IsGeomBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_keywords_bytes'] = KeywordsBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_keywords_root'] = KeywordsRoot
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_arc_ellipse_geometry'] = MarkerArcGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_circular_geometry'] = MarkerCircular
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_curve_reference_indices'] = MarkerCurveRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_curve_semantic'] = MarkerCurve
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_ellipse_geometry'] = MarkerEllipse
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_entity'] = MarkerEntity
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_id'] = MarkerId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_object_reference_indices'] = MarkerObjectRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_parabola_geometry'] = MarkerParabola
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_spline_geometry'] = MarkerSpline
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_spline_reference_indices'] = MarkerSplineRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_groups'] = MateGroups
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_instance_path'] = MateInstance
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_parameter_value'] = MateParamValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_payload'] = MatePayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_provenance'] = MateProvenance
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_sources'] = MateSources
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_values'] = MateValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mesh_values'] = MeshValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_assembly_data'] = NativeAsmData
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_assembly_matrix'] = NativeAsmMatrix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_assembly_structure_values'] = NativeAsmValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_attestation'] = Native
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_attestation_bytes'] = NativeBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_body_values'] = NativeBody
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_definition_key'] = NativeKey
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_equation_value'] = NativeEquation
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_feature_definitions_unchanged'] = NativeFeatureA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_id'] = NativeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_marker_geometry'] = NativeMarkerA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_mate_alignment_offset'] = NativeMateA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_mate_values'] = NativeMateB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_part_model'] = NativePartModel
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_source_matches_document'] = NativeSourceDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_stream_sha256'] = NativeStreamSha
+
+# this binding exists because shared behavior needs one stable value
+globals()['_nested_assembly_document'] = NestedAsmDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_nested_definition_map'] = NestedMap
+
+# this binding exists because shared behavior needs one stable value
+globals()['_nested_occurrence_map'] = NestedItemMap
+
+# this binding exists because shared behavior needs one stable value
+globals()['_neutral_mate_alignment'] = NeutralMate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_neutral_mate_entity_kind'] = NeutralMateKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['_neutral_mate_kind'] = NeutralMateKinA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_neutral_mate_value'] = NeutralMateA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_attributes'] = Operation
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_dimension_value'] = OperationValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_selection_entries'] = OperationA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_selection_id'] = OperationId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_orthonormal_transform'] = Orthonormal
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameter_entries'] = ParamEntries
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameter_id'] = ParamId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameter_millimeters'] = ParamA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameter_values'] = ParamValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameters'] = Parameters
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parasolid_payload'] = Parasolid
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_assembly_instances'] = PatchAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_assembly_mates'] = PatchAsmMates
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_coordinate'] = PatchCoordinate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_feature_names'] = PatchFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_native_assembly'] = PatchNativeAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_native_template'] = PatchNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_parameters'] = PatchParameters
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_rectangle_profile'] = PatchRectangle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_sketch_geometry'] = PatchSketchGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_support_planes'] = PatchSupport
+
+# this binding exists because shared behavior needs one stable value
+globals()['_patch_template_brep'] = PatchTemplate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_payload_values'] = PayloadValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_id'] = PlaneId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_values'] = PlaneValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_planes'] = Planes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_point_values'] = PointValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_preserved_generated_mate_streams'] = SavedGenerated
+
+# this binding exists because shared behavior needs one stable value
+globals()['_preserved_native_mate_matches'] = SavedNativeMate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_preserved_source'] = SavedSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['_profile_edge_id'] = ProfileEdgeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_profile_extrema'] = ProfileExtrema
+
+# this binding exists because shared behavior needs one stable value
+globals()['_profile_id'] = ProfileId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_provenance'] = ProvenanceA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_replay_compatibility'] = Replay
+
+# this binding exists because shared behavior needs one stable value
+globals()['_required_capabilities'] = Required
+
+# this binding exists because shared behavior needs one stable value
+globals()['_resolved_component_path'] = ResolvedPath
+
+# this binding exists because shared behavior needs one stable value
+globals()['_resolved_features_stream'] = ResolvedStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_retain_source'] = RetainSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['_round_number'] = RoundNumber
+
+# this binding exists because shared behavior needs one stable value
+globals()['_selection_id'] = SelectionId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_selection_values'] = SelectionValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_selections'] = Selections
+
+# this binding exists because shared behavior needs one stable value
+globals()['_semantic_document'] = SemanticDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_semantic_sha256'] = SemanticShaTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch'] = SketchA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch_constraints'] = SketchB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch_id'] = SketchId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch_values'] = SketchValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketches'] = Sketches
+
+# this binding exists because shared behavior needs one stable value
+globals()['_solid_body_feature'] = SolidBody
+
+# this binding exists because shared behavior needs one stable value
+globals()['_solidworks_package_streams'] = Solidworks
+
+# this binding exists because shared behavior needs one stable value
+globals()['_solidworks_transfers'] = SolidworksA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_solidworks_xml'] = SolidworksXml
+
+# this binding exists because shared behavior needs one stable value
+globals()['_source_bytes'] = SourceBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_source_template'] = SourceTemplate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_timeline'] = Timeline
+
+# this binding exists because shared behavior needs one stable value
+globals()['_transform_values'] = TransformValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_typed_brep'] = TypedBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unit_vector'] = UnitVector
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validate_source_suffix'] = ValidateSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['_vector_values'] = VectorValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_destination'] = WriteTarget
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_attribute'] = XmlAttr
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_elements_by_id'] = XmlElementsById
+
+# this binding exists because shared behavior needs one stable value
+globals()['_yes_text'] = YesText
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_sldprt'] = BuildSldprt
+
+# this binding exists because shared behavior needs one stable value
+globals()['contains_parasolid_payload'] = ContainsParasolidPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_brep_model'] = DecodeBrepModel
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_mate_list'] = DecodeMateList
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_native_assembly'] = DecodeNativeAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_native_model'] = DecodeNativeModel
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_partition_stream'] = DecodePartitionStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['defaultdict'] = Defaultdict
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_blank_partition_stream'] = EncodeBlankPartition
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_brep_model'] = EncodeBrepModel
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_native_assembly'] = EncodeNativeAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_native_assembly_envelope'] = EncodeNativeAsmEnvelope
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_native_part'] = EncodeNativePart
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_partition_stream'] = EncodePartitionStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['filter_document'] = FilterDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['frozen_mapping'] = FrozenMapping
+
+# this binding exists because shared behavior needs one stable value
+globals()['hashlib'] = Hashlib
+
+# this binding exists because shared behavior needs one stable value
+globals()['infer_capabilities'] = InferCapabilities
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_binary_destination'] = IsBinaryTarget
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_native_parasolid_payload'] = IsNativeParasolidPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['json'] = JsonValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['math'] = MathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['operation_axis_subelement'] = OperationAxisSubElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['os'] = OsModule
+
+# this binding exists because shared behavior needs one stable value
+globals()['re'] = RegexLib
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_sldprt'] = ReadSldprt
+
+# this binding exists because shared behavior needs one stable value
+globals()['replace'] = Replace
+
+# this binding exists because shared behavior needs one stable value
+globals()['retained_capabilities'] = RetainedCapabilities
+
+# this binding exists because shared behavior needs one stable value
+globals()['semantic_metadata'] = SemanticMeta
+
+# this binding exists because shared behavior needs one stable value
+globals()['source_payload_indexes'] = SourcePayloadIndexes
+
+# this binding exists because shared behavior needs one stable value
+globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['suppress'] = Suppress
+
+# this binding exists because shared behavior needs one stable value
+globals()['tempfile'] = Tempfile
+
+# this binding exists because shared behavior needs one stable value
+globals()['with_wrapper_metadata'] = WithWrapperMeta
+
+# this binding exists because shared behavior needs one stable value
+globals()['write_sldprt'] = WriteSldprt

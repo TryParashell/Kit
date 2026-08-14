@@ -6,889 +6,703 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-import struct
-
-from convert.adapters.solidworks.container.Archive import CLASS_REFERENCE_KIND, DEFINITION_KIND, NULL_KIND, OBJECT_REFERENCE_KIND, Model, Node, encode_class_definition, encode_string
+from __future__ import annotations as Annotations
+from dataclasses import dataclass as Dataclass
+import struct as Struct
+from convert.adapters.solidworks.container.Archive import CLASS_REFERENCE_KIND as ClassRefKind, DEFINITION_KIND as DefinitionKind, NULL_KIND as NullKind, OBJECT_REFERENCE_KIND as ObjectRefKind, Model, Node as NodeValue, encode_class_definition as EncodeClassDefinition, encode_string as EncodeString
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
-CONFIGURATION_MANAGER_STREAM = "Contents/CMgr"
+# this binding exists because shared behavior needs one stable value
+KConfigManagerStream = 'Contents/CMgr'
 
-ROOT_CLASS = "moConfigurationMgr_c"
-CONFIGURATION_CLASS = "moPartConfiguration_c"
-NODE_NAME_CLASS = "moNodeName_c"
-VISUAL_CLASS = "moVisualProperties_c"
-LINK_CLASS = "moLinkedAtomIdNode_c"
-EXT_OBJECT_CLASS = "moExtObject_c"
-STRING_HANDLE_CLASS = "moCStringHandle_c"
-OBJECT_LIST_CLASS = "suObList"
-CLASS_SCHEMA = 1
-MAP_BASE = 3
+# this binding exists because shared behavior needs one stable value
+KRootClass = 'moConfigurationMgr_c'
 
-DOCUMENT_GENERATION = 18000
-DOCUMENT_BUILD = 2025268
-SESSION_COUNTER = 360108
-FIRST_ATOM_ID = 101
-DISPLAY_STATE_KIND = 5
-DISPLAY_STATE_REVISION = 2
-DISPLAY_STATE_MASK = 0x80400180
-DISPLAY_TAIL = (0x00, 0x00, 0x80, 0x9D, 0x9E, 0x25)
-DISPLAY_CHORD_RATIO = 0.99
-VIEW_STYLE_MODE = 3
-LINK_TERMINATOR = 2
-LINK_FLAG = 1
-OBJECT_LIST_KIND = 2
-NODE_NAME_SCALE = 2.0
-NODE_NAME_FLAGS = 512
-MANAGER_SCALE = 2.0
-STRING_HANDLE_KIND = 2
-DEFAULT_CONFIGURATION_NAME = "Default"
-DEFAULT_PART_NAME = "Part1"
-DEFAULT_RENDER_STYLE = 5
+# this binding exists because shared behavior needs one stable value
+KConfigClass = 'moPartConfiguration_c'
 
-FIRST_TREE_ID = 32
-TREE_ID_STEP = 8
-DOCUMENT_STAMP_HIGH = 0x01DD2399
-DOCUMENT_STAMP_LOW = 0x10000000
+# this binding exists because shared behavior needs one stable value
+KNodeNameClass = 'moNodeName_c'
 
-DISPLAY_GEOMETRY_CACHE_BYTES = 96
-DISPLAY_GEOMETRY_CACHE_DEFAULT = bytes(DISPLAY_GEOMETRY_CACHE_BYTES)
+# this binding exists because shared behavior needs one stable value
+KVisualClass = 'moVisualProperties_c'
 
-# the display cache is a recovered fixed-width reserved-zero field, not an opaque span
-RESIDUAL_SPANS: tuple[tuple[str, str, int], ...] = ()
+# this binding exists because shared behavior needs one stable value
+KLinkClass = 'moLinkedAtomIdNode_c'
 
-VISUAL_PROPERTIES = (
-    ("appearance_id", "u32", 15651274),
-    ("reserved_4", "zeros", 8),
-    ("appearance_library", "str", ""),
-    ("material_name", "str", "Steel"),
-    ("diffuse", "f64", 1.0),
-    ("specular", "f64", 1.0),
-    ("ambient", "f64", 0.5),
-    ("emission", "f64", 0.3125),
-    ("reserved_64", "zeros", 20),
-    ("use_material", "u32", 1),
-    ("reserved_86", "u32", 0),
-    ("use_appearance", "u32", 1),
-    ("use_texture", "u32", 1),
-    ("use_display", "u32", 1),
-    ("display_name", "str", ""),
-    ("visible", "u32", 1),
-    ("selectable", "u32", 1),
-    ("render_style", "u32", DEFAULT_RENDER_STYLE),
-    ("reserved_118", "u32", 0),
-    ("appearance_name", "str", "defaultplastic"),
-    ("optics_kind_and_id", "u32", 4006726147),
-    ("optics_head", "u32", 2147483648),
-    ("optics_scale", "u32", 63),
-    ("optics_zero_166", "zeros", 11),
-    ("optics_one_177", "u32", 16256),
-    ("optics_zero_181", "zeros", 16),
-    ("optics_one_197", "u32", 81792),
-    ("optics_highlight_201", "u32", 2577006592),
-    ("optics_highlight_205", "u32", 15897),
-    ("optics_zero_209", "u32", 0),
-    ("optics_minus_213", "u32", 49024),
-    ("optics_minus_217", "u32", 49024),
-    ("optics_minus_221", "u32", 49024),
-    ("optics_zero_225", "zeros", 10),
-    (
-        "texture_path",
-        "str",
-        "C:\\PROGRA~1\\SOLIDW~1\\SOLIDW~1\\data\\graphics\\materials\\color.p2m",
-    ),
-    ("texture_head", "f64", 9.765627351043803e-05),
-    ("texture_weight", "f32", 1.0),
-    ("texture_name", "str", ""),
-    ("texture_scale_u", "f32", 0.0010000000474974513),
-    ("texture_scale_v", "f32", 0.0010000000474974513),
-    ("texture_zero", "u32", 0),
-    ("texture_rows", "u32", 320),
-    ("matrix_zero_a", "zeros", 10),
-    ("matrix_one_a", "u32", 16256),
-    ("matrix_zero_b", "zeros", 12),
-    ("matrix_one_b", "u32", 16256),
-    ("matrix_zero_c", "zeros", 12),
-    ("matrix_one_c", "u32", 16256),
-    ("matrix_scale", "u32", 17076),
-    ("edge_one", "u32", 16256),
-    ("edge_minus_a", "u32", 49024),
-    ("edge_minus_b", "u8", 128),
-    ("edge_minus_c", "u16", 65471),
-    ("edge_pad_a", "u32", 65534),
-    ("edge_pad_b", "u16", 0),
-    ("edge_pad_c", "u16", 65280),
-    ("edge_pad_d", "u16", 65534),
-    ("edge_pad_e", "u16", 65280),
-    ("edge_pad_f", "u16", 65534),
-    ("edge_pad_g", "u16", 65280),
-    ("edge_pad_h", "u32", 65534),
-    ("reserved_478", "zeros", 91),
-    ("decal_name", "str", ""),
-    ("reserved_573", "zeros", 8),
-    ("scene_name", "str", ""),
-    ("scene_zero", "u32", 0),
-    ("scene_flag", "u32", 1),
-    ("light_name", "str", ""),
-    ("light_zero", "u32", 0),
-    ("light_flag", "u32", 1),
-    ("owner_handle", "u32", 4294967295),
-    ("identity_zero_a", "zeros", 20),
-    ("identity_atom", "u32", FIRST_ATOM_ID),
-    ("identity_zero_b", "zeros", 13),
-    ("identity_generation", "u32", DOCUMENT_GENERATION),
-    ("identity_zero_c", "zeros", 8),
-    ("identity_build", "u32", DOCUMENT_BUILD),
-)
+# this binding exists because shared behavior needs one stable value
+KExtObjectClass = 'moExtObject_c'
 
-ATOM_TABLE_HEAD = (
-    ("table_flags", "u32", 0),
-    ("table_kind", "u32", 65536),
-    ("table_zero_a", "zeros", 10),
-    ("table_chord", "f64", -0.007812500000000002),
-    ("table_minus_one", "f32", -1.0),
-    ("table_zero_b", "zeros", 8),
-    ("table_flag_a", "u32", 1),
-    ("table_zero_c", "zeros", 28),
-    ("table_flag_b", "u32", 1),
-    ("table_zero_d", "u32", 0),
-    ("table_owner", "u32", 4294967295),
-    ("table_flag_c", "u32", 1),
-    ("table_zero_e", "zeros", 12),
-)
+# this binding exists because shared behavior needs one stable value
+KStringHandleClass = 'moCStringHandle_c'
 
-VIEW_STYLE = (
-    ("style_name", "str", ""),
-    ("style_zero", "u8", 0),
-    ("style_mask", "u16", 65535),
-    ("style_pad", "u16", 0),
-    ("style_mode", "u8", VIEW_STYLE_MODE),
-    ("style_owner_a", "u32", 4294967295),
-    ("style_owner_b", "u32", 4294967295),
-    ("style_scale", "f32", -1.0),
-    ("style_offset", "f64", 0.0),
-)
+# this binding exists because shared behavior needs one stable value
+KObjectListClass = 'suObList'
 
-OBJECT_LIST_TAIL = (
-    ("list_zero_a", "zeros", 28),
-    ("list_kind", "u32", OBJECT_LIST_KIND),
-    ("list_zero_b", "zeros", 4),
-    ("list_name", "str", ""),
-    ("list_zero_c", "zeros", 12),
-    ("list_owner", "u32", 4294967295),
-    ("list_zero_d", "zeros", 8),
-)
+# this binding exists because shared behavior needs one stable value
+KClassSchema = 1
 
+# this binding exists because shared behavior needs one stable value
+KMapBase = 3
 
-@dataclass(frozen=True, slots=True)
+# this binding exists because shared behavior needs one stable value
+KDocGeneration = 18000
+
+# this binding exists because shared behavior needs one stable value
+KDocBuild = 2025268
+
+# this binding exists because shared behavior needs one stable value
+KSessionCounter = 360108
+
+# this binding exists because shared behavior needs one stable value
+KFirstAtomId = 101
+
+# this binding exists because shared behavior needs one stable value
+KDisplayStateKind = 5
+
+# this binding exists because shared behavior needs one stable value
+KDisplayStateRevision = 2
+
+# this binding exists because shared behavior needs one stable value
+KDisplayStateMask = 2151678336
+
+# this binding exists because shared behavior needs one stable value
+KDisplayTail = (0, 0, 128, 157, 158, 37)
+
+# this binding exists because shared behavior needs one stable value
+KDisplayChordRatio = 0.99
+
+# this binding exists because shared behavior needs one stable value
+KViewStyleMode = 3
+
+# this binding exists because shared behavior needs one stable value
+KLinkTerminator = 2
+
+# this binding exists because shared behavior needs one stable value
+KLinkFlag = 1
+
+# this binding exists because shared behavior needs one stable value
+KObjectListKind = 2
+
+# this binding exists because shared behavior needs one stable value
+KNodeNameScale = 2.0
+
+# this binding exists because shared behavior needs one stable value
+KNodeNameFlags = 512
+
+# this binding exists because shared behavior needs one stable value
+KManagerScale = 2.0
+
+# this binding exists because shared behavior needs one stable value
+KStringHandleKind = 2
+
+# this binding exists because shared behavior needs one stable value
+KDefaultConfigName = 'Default'
+
+# this binding exists because shared behavior needs one stable value
+KDefaultPartName = 'Part1'
+
+# this binding exists because shared behavior needs one stable value
+KDefaultRenderStyle = 5
+
+# this binding exists because shared behavior needs one stable value
+KFirstTreeId = 32
+
+# this binding exists because shared behavior needs one stable value
+KTreeIdStep = 8
+
+# this binding exists because shared behavior needs one stable value
+KDocStampHigh = 31269785
+
+# this binding exists because shared behavior needs one stable value
+KDocStampLow = 268435456
+
+# this binding exists because shared behavior needs one stable value
+KDisplayGeomCacheBytes = 96
+
+# this binding exists because shared behavior needs one stable value
+KDisplayGeomCacheDefault = bytes(KDisplayGeomCacheBytes)
+
+# this binding exists because shared behavior needs one stable value
+KResidualSpans: tuple[tuple[str, str, int], ...] = ()
+
+# this binding exists because shared behavior needs one stable value
+KVisualProperties = (('appearance_id', 'u32', 15651274), ('reserved_4', 'zeros', 8), ('appearance_library', 'str', ''), ('material_name', 'str', 'Steel'), ('diffuse', 'f64', 1.0), ('specular', 'f64', 1.0), ('ambient', 'f64', 0.5), ('emission', 'f64', 0.3125), ('reserved_64', 'zeros', 20), ('use_material', 'u32', 1), ('reserved_86', 'u32', 0), ('use_appearance', 'u32', 1), ('use_texture', 'u32', 1), ('use_display', 'u32', 1), ('display_name', 'str', ''), ('visible', 'u32', 1), ('selectable', 'u32', 1), ('render_style', 'u32', KDefaultRenderStyle), ('reserved_118', 'u32', 0), ('appearance_name', 'str', 'defaultplastic'), ('optics_kind_and_id', 'u32', 4006726147), ('optics_head', 'u32', 2147483648), ('optics_scale', 'u32', 63), ('optics_zero_166', 'zeros', 11), ('optics_one_177', 'u32', 16256), ('optics_zero_181', 'zeros', 16), ('optics_one_197', 'u32', 81792), ('optics_highlight_201', 'u32', 2577006592), ('optics_highlight_205', 'u32', 15897), ('optics_zero_209', 'u32', 0), ('optics_minus_213', 'u32', 49024), ('optics_minus_217', 'u32', 49024), ('optics_minus_221', 'u32', 49024), ('optics_zero_225', 'zeros', 10), ('texture_path', 'str', 'C:\\PROGRA~1\\SOLIDW~1\\SOLIDW~1\\data\\graphics\\materials\\color.p2m'), ('texture_head', 'f64', 9.765627351043803e-05), ('texture_weight', 'f32', 1.0), ('texture_name', 'str', ''), ('texture_scale_u', 'f32', 0.0010000000474974513), ('texture_scale_v', 'f32', 0.0010000000474974513), ('texture_zero', 'u32', 0), ('texture_rows', 'u32', 320), ('matrix_zero_a', 'zeros', 10), ('matrix_one_a', 'u32', 16256), ('matrix_zero_b', 'zeros', 12), ('matrix_one_b', 'u32', 16256), ('matrix_zero_c', 'zeros', 12), ('matrix_one_c', 'u32', 16256), ('matrix_scale', 'u32', 17076), ('edge_one', 'u32', 16256), ('edge_minus_a', 'u32', 49024), ('edge_minus_b', 'u8', 128), ('edge_minus_c', 'u16', 65471), ('edge_pad_a', 'u32', 65534), ('edge_pad_b', 'u16', 0), ('edge_pad_c', 'u16', 65280), ('edge_pad_d', 'u16', 65534), ('edge_pad_e', 'u16', 65280), ('edge_pad_f', 'u16', 65534), ('edge_pad_g', 'u16', 65280), ('edge_pad_h', 'u32', 65534), ('reserved_478', 'zeros', 91), ('decal_name', 'str', ''), ('reserved_573', 'zeros', 8), ('scene_name', 'str', ''), ('scene_zero', 'u32', 0), ('scene_flag', 'u32', 1), ('light_name', 'str', ''), ('light_zero', 'u32', 0), ('light_flag', 'u32', 1), ('owner_handle', 'u32', 4294967295), ('identity_zero_a', 'zeros', 20), ('identity_atom', 'u32', KFirstAtomId), ('identity_zero_b', 'zeros', 13), ('identity_generation', 'u32', KDocGeneration), ('identity_zero_c', 'zeros', 8), ('identity_build', 'u32', KDocBuild))
+
+# this binding exists because shared behavior needs one stable value
+KAtomTableHead = (('table_flags', 'u32', 0), ('table_kind', 'u32', 65536), ('table_zero_a', 'zeros', 10), ('table_chord', 'f64', -0.007812500000000002), ('table_minus_one', 'f32', -1.0), ('table_zero_b', 'zeros', 8), ('table_flag_a', 'u32', 1), ('table_zero_c', 'zeros', 28), ('table_flag_b', 'u32', 1), ('table_zero_d', 'u32', 0), ('table_owner', 'u32', 4294967295), ('table_flag_c', 'u32', 1), ('table_zero_e', 'zeros', 12))
+
+# this binding exists because shared behavior needs one stable value
+KViewStyle = (('style_name', 'str', ''), ('style_zero', 'u8', 0), ('style_mask', 'u16', 65535), ('style_pad', 'u16', 0), ('style_mode', 'u8', KViewStyleMode), ('style_owner_a', 'u32', 4294967295), ('style_owner_b', 'u32', 4294967295), ('style_scale', 'f32', -1.0), ('style_offset', 'f64', 0.0))
+
+# this binding exists because shared behavior needs one stable value
+KObjectListTail = (('list_zero_a', 'zeros', 28), ('list_kind', 'u32', KObjectListKind), ('list_zero_b', 'zeros', 4), ('list_name', 'str', ''), ('list_zero_c', 'zeros', 12), ('list_owner', 'u32', 4294967295), ('list_zero_d', 'zeros', 8))
+
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class Stamp:
-    high: int
-    low: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['high'] = 'int'
+    __annotations__['low'] = 'int'
 
-    def pack(self) -> bytes:
-        return struct.pack("<II", self.high, self.low)
+    # this definition exists because focused behavior needs one stable owner
+    def PackAction(Instance) -> bytes:
+        return Struct.pack('<II', Instance.high, Instance.low)
+    locals()['pack'] = PackAction
 
+# this binding exists because shared behavior needs one stable value
+KZeroStamp = Stamp(0, 0)
 
-ZERO_STAMP = Stamp(0, 0)
-DOCUMENT_STAMP = Stamp(DOCUMENT_STAMP_HIGH, DOCUMENT_STAMP_LOW)
-DEFAULT_FEATURE_TREE_IDS = (FIRST_TREE_ID,)
+# this binding exists because shared behavior needs one stable value
+KDocStamp = Stamp(KDocStampHigh, KDocStampLow)
 
+# this binding exists because shared behavior needs one stable value
+KDefaultFeatureTreeIds = (KFirstTreeId,)
 
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class FeatureStamp:
-    tree_id: int
-    stamp: Stamp = ZERO_STAMP
+    locals().setdefault('__annotations__', {})
+    __annotations__['tree_id'] = 'int'
+    __annotations__['stamp'] = 'Stamp'
+    locals()['stamp'] = KZeroStamp
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class CMgrParameters:
-    configuration_name: str
-    part_name: str
-    name_stamp: int
-    atom_ids: tuple[int, ...]
-    link_atom_ids: tuple[int, ...]
-    link_tree_ids: tuple[int, ...]
-    reverse_atom_ids: tuple[int, ...]
-    feature_stamps: tuple[FeatureStamp, ...]
-    display_stamp: Stamp
-    view_stamp: Stamp
-    max_tree_id: int
-    next_id_a: int
-    next_id_b: int
-    render_style: int
-    atom_head_count: int
-    chord_ratio: float
-    generation: int
-    build: int
-    session_counter: int
-    display_geometry_cache: bytes
-    connected_history: bool
-    terminal_parent_tree_id: int | None
+    locals().setdefault('__annotations__', {})
+    __annotations__['configuration_name'] = 'str'
+    __annotations__['part_name'] = 'str'
+    __annotations__['name_stamp'] = 'int'
+    __annotations__['atom_ids'] = 'tuple[int, ...]'
+    __annotations__['link_atom_ids'] = 'tuple[int, ...]'
+    __annotations__['link_tree_ids'] = 'tuple[int, ...]'
+    __annotations__['reverse_atom_ids'] = 'tuple[int, ...]'
+    __annotations__['feature_stamps'] = 'tuple[FeatureStamp, ...]'
+    __annotations__['display_stamp'] = 'Stamp'
+    __annotations__['view_stamp'] = 'Stamp'
+    __annotations__['max_tree_id'] = 'int'
+    __annotations__['next_id_a'] = 'int'
+    __annotations__['next_id_b'] = 'int'
+    __annotations__['render_style'] = 'int'
+    __annotations__['atom_head_count'] = 'int'
+    __annotations__['chord_ratio'] = 'float'
+    __annotations__['generation'] = 'int'
+    __annotations__['build'] = 'int'
+    __annotations__['session_counter'] = 'int'
+    __annotations__['display_geometry_cache'] = 'bytes'
+    __annotations__['connected_history'] = 'bool'
+    __annotations__['terminal_parent_tree_id'] = 'int | None'
 
-    def validate(self) -> None:
-        if not self.atom_ids:
-            raise SldprtFormatError(
-                "a SOLIDWORKS configuration manager needs at least one atom id"
-            )
-        if len(self.link_tree_ids) != len(self.link_atom_ids):
-            raise SldprtFormatError(
-                f"{len(self.link_atom_ids)} linked atoms need "
-                f"{len(self.link_atom_ids)} tree ids, got {len(self.link_tree_ids)}"
-            )
-        if self.display_geometry_cache != DISPLAY_GEOMETRY_CACHE_DEFAULT:
-            raise SldprtFormatError(
-                "display_geometry_cache must be the recovered "
-                f"{DISPLAY_GEOMETRY_CACHE_BYTES}-byte reserved-zero field"
-            )
-        if self.generation != DOCUMENT_GENERATION:
-            raise SldprtFormatError(
-                f"the recovered Contents/CMgr tables describe generation "
-                f"{DOCUMENT_GENERATION}, not {self.generation}"
-            )
-        if self.connected_history and len(self.link_atom_ids) not in {2, 3, 4}:
-            raise SldprtFormatError(
-                "the recovered connected-history CMgr shape requires two to four atoms"
-            )
-        if self.terminal_parent_tree_id is not None and (
-            self.connected_history
-            or len(self.atom_ids) != 1
-            or len(self.link_atom_ids) != 1
-            or len(self.link_tree_ids) != 1
-            or self.terminal_parent_tree_id <= 0
-            or self.terminal_parent_tree_id == self.link_tree_ids[0]
-        ):
-            raise SldprtFormatError(
-                "the recovered terminal-history CMgr shape requires one child atom "
-                "and one distinct parent tree"
-            )
+    # this definition exists because focused behavior needs one stable owner
+    def Validate(Instance) -> None:
+        if not Instance.atom_ids:
+            raise SldprtFormatError('a SOLIDWORKS configuration manager needs at least one atom id')
+        if len(Instance.link_tree_ids) != len(Instance.link_atom_ids):
+            raise SldprtFormatError(f'{len(Instance.link_atom_ids)} linked atoms need {len(Instance.link_atom_ids)} tree ids, got {len(Instance.link_tree_ids)}')
+        if Instance.display_geometry_cache != KDisplayGeomCacheDefault:
+            raise SldprtFormatError(f'display_geometry_cache must be the recovered {KDisplayGeomCacheBytes}-byte reserved-zero field')
+        if Instance.generation != KDocGeneration:
+            raise SldprtFormatError(f'the recovered Contents/CMgr tables describe generation {KDocGeneration}, not {Instance.generation}')
+        if Instance.connected_history and len(Instance.link_atom_ids) not in {2, 3, 4}:
+            raise SldprtFormatError('the recovered connected-history CMgr shape requires two to four atoms')
+        if Instance.terminal_parent_tree_id is not None and (Instance.connected_history or len(Instance.atom_ids) != 1 or len(Instance.link_atom_ids) != 1 or (len(Instance.link_tree_ids) != 1) or (Instance.terminal_parent_tree_id <= 0) or (Instance.terminal_parent_tree_id == Instance.link_tree_ids[0])):
+            raise SldprtFormatError('the recovered terminal-history CMgr shape requires one child atom and one distinct parent tree')
+    locals()['validate'] = Validate
 
+# this definition exists because focused behavior needs one stable owner
+def PackAction(KindValue: str, Value: object) -> bytes:
+    if KindValue == 'u8':
+        return Struct.pack('<B', int(Value))
+    if KindValue == 'u16':
+        return Struct.pack('<H', int(Value))
+    if KindValue == 'u32':
+        return Struct.pack('<I', int(Value))
+    if KindValue == 'f32':
+        return Struct.pack('<f', float(Value))
+    if KindValue == 'f64':
+        return Struct.pack('<d', float(Value))
+    if KindValue == 'str':
+        return EncodeString(str(Value))
+    if KindValue == 'zeros':
+        return bytes(int(Value))
+    raise SldprtFormatError(f'unsupported Contents/CMgr field kind {KindValue!r}')
 
-def _pack(kind: str, value: object) -> bytes:
-    if kind == "u8":
-        return struct.pack("<B", int(value))
-    if kind == "u16":
-        return struct.pack("<H", int(value))
-    if kind == "u32":
-        return struct.pack("<I", int(value))
-    if kind == "f32":
-        return struct.pack("<f", float(value))
-    if kind == "f64":
-        return struct.pack("<d", float(value))
-    if kind == "str":
-        return encode_string(str(value))
-    if kind == "zeros":
-        return bytes(int(value))
-    raise SldprtFormatError(f"unsupported Contents/CMgr field kind {kind!r}")
+# this definition exists because focused behavior needs one stable owner
+def Table(Fields: tuple[tuple[str, str, object], ...], Overrides: dict[str, object] | None=None) -> bytes:
+    OutValue = bytearray()
+    for NameValue, KindValue, Value in Fields:
+        if Overrides is not None and NameValue in Overrides:
+            Value = Overrides[NameValue]
+        OutValue += PackAction(KindValue, Value)
+    return bytes(OutValue)
 
+# this definition exists because focused behavior needs one stable owner
+def ManagerHead() -> bytes:
+    return PackAction('f64', KManagerScale) + PackAction('u32', 4294967295) + PackAction('u32', 0) + EncodeString('') + PackAction('u32', 0)
 
-def _table(
-    fields: tuple[tuple[str, str, object], ...],
-    overrides: dict[str, object] | None = None,
-) -> bytes:
-    out = bytearray()
-    for name, kind, value in fields:
-        if overrides is not None and name in overrides:
-            value = overrides[name]
-        out += _pack(kind, value)
-    return bytes(out)
+# this definition exists because focused behavior needs one stable owner
+def IdentityBlock(AtomId: int, Generation: int, Build: int) -> bytes:
+    return PackAction('u32', 0) + PackAction('u32', 0) + PackAction('u32', AtomId) + PackAction('u32', 0) + PackAction('u32', 0) + PackAction('u32', 0) + PackAction('u8', 0) + PackAction('u32', Generation) + PackAction('u32', 0) + PackAction('u32', 0) + PackAction('u32', Build)
 
+# this definition exists because focused behavior needs one stable owner
+def DisplayState(Stamp: Stamp, Session: int) -> bytes:
+    return PackAction('u32', 0) + PackAction('u32', KDisplayStateKind) + PackAction('u32', 0) + PackAction('u16', 0) + PackAction('u32', 4294967295) + Stamp.pack() + PackAction('u16', KDisplayStateRevision) + PackAction('u32', Session) + PackAction('u32', 1)
 
-def _manager_head() -> bytes:
-    return (
-        _pack("f64", MANAGER_SCALE)
-        + _pack("u32", 0xFFFFFFFF)
-        + _pack("u32", 0)
-        + encode_string("")
-        + _pack("u32", 0)
-    )
+# this definition exists because focused behavior needs one stable owner
+def DisplayStateA(Params: CMgrParameters) -> bytes:
+    return DisplayState(Params.view_stamp, Params.session_counter) + EncodeString('') + PackAction('u32', 4294967295) + PackAction('u32', KDisplayStateMask) + EncodeString('') + PackAction('u32', Params.max_tree_id) + PackAction('u32', Params.next_id_a) + PackAction('u32', Params.next_id_b) + bytes(Params.display_geometry_cache) + PackAction('u32', 1) + bytes(16) + PackAction('f64', Params.chord_ratio) + bytes(16) + EncodeString('') + EncodeString('') + bytes(28) + PackAction('f64', 1.0) + bytes(24) + PackAction('f64', 1.0) + bytes(24) + PackAction('f64', 1.0) + PackAction('u32', 1) + bytes(KDisplayTail)
 
+# this definition exists because focused behavior needs one stable owner
+def NodeName(NameValue: str) -> bytes:
+    return EncodeString(NameValue) + PackAction('f64', KNodeNameScale) + PackAction('u32', 0) + PackAction('u32', KNodeNameFlags) + EncodeString('') + PackAction('u32', 0)
 
-def _identity_block(atom_id: int, generation: int, build: int) -> bytes:
-    return (
-        _pack("u32", 0)
-        + _pack("u32", 0)
-        + _pack("u32", atom_id)
-        + _pack("u32", 0)
-        + _pack("u32", 0)
-        + _pack("u32", 0)
-        + _pack("u8", 0)
-        + _pack("u32", generation)
-        + _pack("u32", 0)
-        + _pack("u32", 0)
-        + _pack("u32", build)
-    )
+# this definition exists because focused behavior needs one stable owner
+def Visual(Params: CMgrParameters) -> bytes:
+    return Table(KVisualProperties, {'render_style': Params.render_style, 'identity_atom': Params.atom_ids[0], 'identity_generation': Params.generation, 'identity_build': Params.build})
 
+# this definition exists because focused behavior needs one stable owner
+def AtomHead(Count: int, Generation: int) -> bytes:
+    return PackAction('u16', 0) + PackAction('u16', Count) + PackAction('u32', 0) + PackAction('u16', 0) + PackAction('u16', Generation) + PackAction('u16', 0) + PackAction('u16', 1)
 
-def _display_state(stamp: Stamp, session: int) -> bytes:
-    return (
-        _pack("u32", 0)
-        + _pack("u32", DISPLAY_STATE_KIND)
-        + _pack("u32", 0)
-        + _pack("u16", 0)
-        + _pack("u32", 0xFFFFFFFF)
-        + stamp.pack()
-        + _pack("u16", DISPLAY_STATE_REVISION)
-        + _pack("u32", session)
-        + _pack("u32", 1)
-    )
+# this definition exists because focused behavior needs one stable owner
+def AtomTable(AtomIds: tuple[int, ...]) -> bytes:
+    OutValue = bytearray(Table(KAtomTableHead))
+    OutValue += PackAction('u32', len(AtomIds))
+    for AtomValue in AtomIds:
+        OutValue += PackAction('u32', AtomValue) + PackAction('u32', 0)
+    OutValue += bytes(30)
+    return bytes(OutValue)
 
-
-def _display_state_full(params: CMgrParameters) -> bytes:
-    return (
-        _display_state(params.view_stamp, params.session_counter)
-        + encode_string("")
-        + _pack("u32", 0xFFFFFFFF)
-        + _pack("u32", DISPLAY_STATE_MASK)
-        + encode_string("")
-        + _pack("u32", params.max_tree_id)
-        + _pack("u32", params.next_id_a)
-        + _pack("u32", params.next_id_b)
-        + bytes(params.display_geometry_cache)
-        + _pack("u32", 1)
-        + bytes(16)
-        + _pack("f64", params.chord_ratio)
-        + bytes(16)
-        + encode_string("")
-        + encode_string("")
-        + bytes(28)
-        + _pack("f64", 1.0)
-        + bytes(24)
-        + _pack("f64", 1.0)
-        + bytes(24)
-        + _pack("f64", 1.0)
-        + _pack("u32", 1)
-        + bytes(DISPLAY_TAIL)
-    )
-
-
-def _node_name(name: str) -> bytes:
-    return (
-        encode_string(name)
-        + _pack("f64", NODE_NAME_SCALE)
-        + _pack("u32", 0)
-        + _pack("u32", NODE_NAME_FLAGS)
-        + encode_string("")
-        + _pack("u32", 0)
-    )
-
-
-def _visual_properties(params: CMgrParameters) -> bytes:
-    return _table(
-        VISUAL_PROPERTIES,
-        {
-            "render_style": params.render_style,
-            "identity_atom": params.atom_ids[0],
-            "identity_generation": params.generation,
-            "identity_build": params.build,
-        },
-    )
-
-
-def _atom_head(count: int, generation: int) -> bytes:
-    return (
-        _pack("u16", 0)
-        + _pack("u16", count)
-        + _pack("u32", 0)
-        + _pack("u16", 0)
-        + _pack("u16", generation)
-        + _pack("u16", 0)
-        + _pack("u16", 1)
-    )
-
-
-def _atom_table(atom_ids: tuple[int, ...]) -> bytes:
-    out = bytearray(_table(ATOM_TABLE_HEAD))
-    out += _pack("u32", len(atom_ids))
-    for atom in atom_ids:
-        out += _pack("u32", atom) + _pack("u32", 0)
-    out += bytes(30)
-    return bytes(out)
-
-
-# connected histories carry the forward and reverse atom endpoints in the table tail
-def _ConnectedAtomTable(AtomIds: tuple[int, ...]) -> bytes:
+# this definition exists because focused behavior needs one stable owner
+def ConnectedAtom(AtomIds: tuple[int, ...]) -> bytes:
     if len(AtomIds) not in {2, 3, 4}:
-        raise SldprtFormatError(
-            "the recovered connected-history atom table requires two to four atoms"
-        )
-    OutputData = bytearray(_table(ATOM_TABLE_HEAD))
-    OutputData += _pack("u32", len(AtomIds))
+        raise SldprtFormatError('the recovered connected-history atom table requires two to four atoms')
+    OutputData = bytearray(Table(KAtomTableHead))
+    OutputData += PackAction('u32', len(AtomIds))
     for AtomId in AtomIds:
-        OutputData += _pack("u32", AtomId) + _pack("u32", 0)
+        OutputData += PackAction('u32', AtomId) + PackAction('u32', 0)
     OutputData += bytes(4)
-    OutputData += _pack("u32", len(AtomIds) - 1)
+    OutputData += PackAction('u32', len(AtomIds) - 1)
     for AtomIndex in range(len(AtomIds) - 1, 0, -1):
-        OutputData += _pack("u32", AtomIds[AtomIndex])
-        OutputData += _pack("u32", AtomIds[AtomIndex - 1])
+        OutputData += PackAction('u32', AtomIds[AtomIndex])
+        OutputData += PackAction('u32', AtomIds[AtomIndex - 1])
     OutputData += bytes(22)
     return bytes(OutputData)
 
+# this definition exists because focused behavior needs one stable owner
+def LinkHead(AtomIds: tuple[int, ...]) -> bytes:
+    return PackAction('u32', 0) + PackAction('u32', 0) + PackAction('u32', len(AtomIds)) + PackAction('u32', AtomIds[0] if AtomIds else 0)
 
-def _link_head(atom_ids: tuple[int, ...]) -> bytes:
-    return (
-        _pack("u32", 0)
-        + _pack("u32", 0)
-        + _pack("u32", len(atom_ids))
-        + _pack("u32", atom_ids[0] if atom_ids else 0)
-    )
+# this definition exists because focused behavior needs one stable owner
+def LinkBody(AtomId: int, TreeId: int, NextId: int | None) -> bytes:
+    HeadValue = PackAction('u32', AtomId) + PackAction('u16', KLinkFlag) + PackAction('u32', TreeId)
+    if NextId is None:
+        return HeadValue + bytes(34) + PackAction('u32', KLinkTerminator) + bytes(8)
+    return HeadValue + bytes(18) + PackAction('u32', NextId)
 
+# this definition exists because focused behavior needs one stable owner
+def TerminalLink(AtomId: int, ParentTreeId: int, ChildTreeId: int) -> bytes:
+    return b''.join((PackAction('u32', AtomId), PackAction('u16', KLinkFlag), PackAction('u32', ParentTreeId), PackAction('u32', 1), PackAction('u32', ChildTreeId), bytes(30), PackAction('u32', KLinkTerminator), bytes(8)))
 
-def _link_body(atom_id: int, tree_id: int, next_id: int | None) -> bytes:
-    head = _pack("u32", atom_id) + _pack("u16", LINK_FLAG) + _pack("u32", tree_id)
-    if next_id is None:
-        return head + bytes(34) + _pack("u32", LINK_TERMINATOR) + bytes(8)
-    return head + bytes(18) + _pack("u32", next_id)
-
-
-# terminal modifiers keep one configuration atom while naming their predecessor tree
-def _TerminalLinkBody(AtomId: int, ParentTreeId: int, ChildTreeId: int) -> bytes:
-    return b"".join(
-        (
-            _pack("u32", AtomId),
-            _pack("u16", LINK_FLAG),
-            _pack("u32", ParentTreeId),
-            _pack("u32", 1),
-            _pack("u32", ChildTreeId),
-            bytes(30),
-            _pack("u32", LINK_TERMINATOR),
-            bytes(8),
-        )
-    )
-
-
-# connected two-operation histories serialize predecessor links as child archive objects
-def _ConnectedLinkParts(
-    AtomIds: tuple[int, ...], TreeIds: tuple[int, ...]
-) -> tuple[tuple[bytes, tuple[bytes, ...]], ...]:
+# this definition exists because focused behavior needs one stable owner
+def ConnectedLink(AtomIds: tuple[int, ...], TreeIds: tuple[int, ...]) -> tuple[tuple[bytes, tuple[bytes, ...]], ...]:
     if len(AtomIds) == 3 and len(TreeIds) == 3:
         FirstAtom, SecondAtom, ThirdAtom = AtomIds
         FirstTree, SecondTree, ThirdTree = TreeIds
-        FirstHead = (
-            _pack("u32", FirstAtom) + _pack("u16", LINK_FLAG) + _pack("u32", FirstTree)
-        )
-        SecondHead = (
-            _pack("u32", SecondAtom)
-            + _pack("u16", LINK_FLAG)
-            + _pack("u32", SecondTree)
-        )
-        ThirdHead = (
-            _pack("u32", ThirdAtom) + _pack("u16", LINK_FLAG) + _pack("u32", ThirdTree)
-        )
-        return (
-            (
-                FirstHead + bytes(6) + _pack("u32", 1) + _pack("u32", SecondAtom),
-                (
-                    _pack("u32", 0) + _pack("u32", 2) + _pack("u32", SecondAtom),
-                    _pack("u32", ThirdAtom),
-                    _pack("u32", SecondAtom),
-                ),
-            ),
-            (
-                SecondHead + bytes(2) + _pack("u32", 1) + _pack("u32", FirstAtom),
-                (
-                    _pack("u32", 1) + _pack("u32", ThirdAtom),
-                    _pack("u32", 1) + _pack("u32", FirstAtom),
-                    _pack("u32", 1) + _pack("u32", ThirdAtom),
-                    _pack("u32", ThirdAtom),
-                ),
-            ),
-            (
-                ThirdHead + bytes(2) + _pack("u32", 1) + _pack("u32", SecondAtom),
-                (
-                    _pack("u32", 0) + _pack("u32", 2) + _pack("u32", FirstAtom),
-                    _pack("u32", SecondAtom),
-                    bytes(16)
-                    + _pack("u32", 2)
-                    + _pack("u32", SecondAtom)
-                    + _pack("u32", FirstAtom)
-                    + _pack("u32", ThirdAtom)
-                    + _pack("u32", SecondAtom)
-                    + _pack("u32", LINK_TERMINATOR)
-                    + bytes(8),
-                ),
-            ),
-        )
+        FirstHead = PackAction('u32', FirstAtom) + PackAction('u16', KLinkFlag) + PackAction('u32', FirstTree)
+        SecondHead = PackAction('u32', SecondAtom) + PackAction('u16', KLinkFlag) + PackAction('u32', SecondTree)
+        ThirdHead = PackAction('u32', ThirdAtom) + PackAction('u16', KLinkFlag) + PackAction('u32', ThirdTree)
+        return ((FirstHead + bytes(6) + PackAction('u32', 1) + PackAction('u32', SecondAtom), (PackAction('u32', 0) + PackAction('u32', 2) + PackAction('u32', SecondAtom), PackAction('u32', ThirdAtom), PackAction('u32', SecondAtom))), (SecondHead + bytes(2) + PackAction('u32', 1) + PackAction('u32', FirstAtom), (PackAction('u32', 1) + PackAction('u32', ThirdAtom), PackAction('u32', 1) + PackAction('u32', FirstAtom), PackAction('u32', 1) + PackAction('u32', ThirdAtom), PackAction('u32', ThirdAtom))), (ThirdHead + bytes(2) + PackAction('u32', 1) + PackAction('u32', SecondAtom), (PackAction('u32', 0) + PackAction('u32', 2) + PackAction('u32', FirstAtom), PackAction('u32', SecondAtom), bytes(16) + PackAction('u32', 2) + PackAction('u32', SecondAtom) + PackAction('u32', FirstAtom) + PackAction('u32', ThirdAtom) + PackAction('u32', SecondAtom) + PackAction('u32', KLinkTerminator) + bytes(8))))
     if len(AtomIds) != 2 or len(TreeIds) != 2:
-        raise SldprtFormatError(
-            "the recovered connected-history link graph requires two or three atoms"
-        )
+        raise SldprtFormatError('the recovered connected-history link graph requires two or three atoms')
     FirstAtom, SecondAtom = AtomIds
     FirstTree, SecondTree = TreeIds
-    FirstHead = (
-        _pack("u32", FirstAtom) + _pack("u16", LINK_FLAG) + _pack("u32", FirstTree)
-    )
-    SecondHead = (
-        _pack("u32", SecondAtom) + _pack("u16", LINK_FLAG) + _pack("u32", SecondTree)
-    )
-    return (
-        (
-            FirstHead + bytes(6) + _pack("u32", 1) + _pack("u32", SecondAtom),
-            (
-                _pack("u32", 0) + _pack("u32", 1) + _pack("u32", SecondAtom),
-                _pack("u32", SecondAtom),
-            ),
-        ),
-        (
-            SecondHead + bytes(2) + _pack("u32", 1) + _pack("u32", FirstAtom),
-            (
-                _pack("u32", 0) + _pack("u32", 1) + _pack("u32", FirstAtom),
-                bytes(16)
-                + _pack("u32", 1)
-                + _pack("u32", SecondAtom)
-                + _pack("u32", FirstAtom)
-                + _pack("u32", LINK_TERMINATOR)
-                + bytes(8),
-            ),
-        ),
-    )
+    FirstHead = PackAction('u32', FirstAtom) + PackAction('u16', KLinkFlag) + PackAction('u32', FirstTree)
+    SecondHead = PackAction('u32', SecondAtom) + PackAction('u16', KLinkFlag) + PackAction('u32', SecondTree)
+    return ((FirstHead + bytes(6) + PackAction('u32', 1) + PackAction('u32', SecondAtom), (PackAction('u32', 0) + PackAction('u32', 1) + PackAction('u32', SecondAtom), PackAction('u32', SecondAtom))), (SecondHead + bytes(2) + PackAction('u32', 1) + PackAction('u32', FirstAtom), (PackAction('u32', 0) + PackAction('u32', 1) + PackAction('u32', FirstAtom), bytes(16) + PackAction('u32', 1) + PackAction('u32', SecondAtom) + PackAction('u32', FirstAtom) + PackAction('u32', KLinkTerminator) + bytes(8))))
 
-
-# the four-operation link graph records every forward and predecessor adjacency
-def _ConnectedFourLinkParts(
-    AtomIds: tuple[int, ...], TreeIds: tuple[int, ...]
-) -> tuple[tuple[bytes, tuple[bytes, ...]], ...]:
+# this definition exists because focused behavior needs one stable owner
+def ConnectedFour(AtomIds: tuple[int, ...], TreeIds: tuple[int, ...]) -> tuple[tuple[bytes, tuple[bytes, ...]], ...]:
     if len(AtomIds) != 4 or len(TreeIds) != 4:
-        raise SldprtFormatError(
-            "the recovered four-operation link graph requires four atoms"
-        )
+        raise SldprtFormatError('the recovered four-operation link graph requires four atoms')
     FirstAtom, SecondAtom, ThirdAtom, FourthAtom = AtomIds
-    HeadsData = tuple(
-        _pack("u32", AtomId) + _pack("u16", LINK_FLAG) + _pack("u32", TreeId)
-        for AtomId, TreeId in zip(AtomIds, TreeIds, strict=True)
-    )
-    EdgeData = (
-        bytes(16)
-        + _pack("u32", 3)
-        + _pack("u32", SecondAtom)
-        + _pack("u32", FirstAtom)
-        + _pack("u32", ThirdAtom)
-        + _pack("u32", SecondAtom)
-        + _pack("u32", FourthAtom)
-        + _pack("u32", ThirdAtom)
-        + _pack("u32", LINK_TERMINATOR)
-        + bytes(8)
-    )
-    return (
-        (
-            HeadsData[0] + bytes(6) + _pack("u32", 1) + _pack("u32", SecondAtom),
-            (
-                _pack("u32", 0) + _pack("u32", 3) + _pack("u32", SecondAtom),
-                _pack("u32", ThirdAtom),
-                _pack("u32", FourthAtom),
-                _pack("u32", SecondAtom),
-            ),
-        ),
-        (
-            HeadsData[1] + bytes(2) + _pack("u32", 1) + _pack("u32", FirstAtom),
-            (
-                _pack("u32", 1) + _pack("u32", ThirdAtom),
-                _pack("u32", 1) + _pack("u32", FirstAtom),
-                _pack("u32", 2) + _pack("u32", ThirdAtom),
-                _pack("u32", FourthAtom),
-                _pack("u32", ThirdAtom),
-            ),
-        ),
-        (
-            HeadsData[2] + bytes(2) + _pack("u32", 1) + _pack("u32", SecondAtom),
-            (
-                _pack("u32", 1) + _pack("u32", FourthAtom),
-                _pack("u32", 2) + _pack("u32", FirstAtom),
-                _pack("u32", SecondAtom),
-                _pack("u32", 1) + _pack("u32", FourthAtom),
-                _pack("u32", FourthAtom),
-            ),
-        ),
-        (
-            HeadsData[3] + bytes(2) + _pack("u32", 1) + _pack("u32", ThirdAtom),
-            (
-                _pack("u32", 0) + _pack("u32", 3) + _pack("u32", FirstAtom),
-                _pack("u32", SecondAtom),
-                _pack("u32", ThirdAtom),
-                EdgeData,
-            ),
-        ),
-    )
+    HeadsData = tuple((PackAction('u32', AtomId) + PackAction('u16', KLinkFlag) + PackAction('u32', TreeId) for AtomId, TreeId in zip(AtomIds, TreeIds, strict=True)))
+    EdgeData = bytes(16) + PackAction('u32', 3) + PackAction('u32', SecondAtom) + PackAction('u32', FirstAtom) + PackAction('u32', ThirdAtom) + PackAction('u32', SecondAtom) + PackAction('u32', FourthAtom) + PackAction('u32', ThirdAtom) + PackAction('u32', KLinkTerminator) + bytes(8)
+    return ((HeadsData[0] + bytes(6) + PackAction('u32', 1) + PackAction('u32', SecondAtom), (PackAction('u32', 0) + PackAction('u32', 3) + PackAction('u32', SecondAtom), PackAction('u32', ThirdAtom), PackAction('u32', FourthAtom), PackAction('u32', SecondAtom))), (HeadsData[1] + bytes(2) + PackAction('u32', 1) + PackAction('u32', FirstAtom), (PackAction('u32', 1) + PackAction('u32', ThirdAtom), PackAction('u32', 1) + PackAction('u32', FirstAtom), PackAction('u32', 2) + PackAction('u32', ThirdAtom), PackAction('u32', FourthAtom), PackAction('u32', ThirdAtom))), (HeadsData[2] + bytes(2) + PackAction('u32', 1) + PackAction('u32', SecondAtom), (PackAction('u32', 1) + PackAction('u32', FourthAtom), PackAction('u32', 2) + PackAction('u32', FirstAtom), PackAction('u32', SecondAtom), PackAction('u32', 1) + PackAction('u32', FourthAtom), PackAction('u32', FourthAtom))), (HeadsData[3] + bytes(2) + PackAction('u32', 1) + PackAction('u32', ThirdAtom), (PackAction('u32', 0) + PackAction('u32', 3) + PackAction('u32', FirstAtom), PackAction('u32', SecondAtom), PackAction('u32', ThirdAtom), EdgeData)))
 
+# this definition exists because focused behavior needs one stable owner
+def ReverseTable(AtomIds: tuple[int, ...]) -> bytes:
+    OutValue = bytearray()
+    OutValue += PackAction('u32', 0)
+    OutValue += PackAction('u32', 4294967295)
+    OutValue += PackAction('u32', len(AtomIds))
+    for AtomValue in AtomIds:
+        OutValue += PackAction('u32', AtomValue) + PackAction('u32', 0)
+    OutValue += bytes(8)
+    OutValue += PackAction('u32', 4294967295)
+    OutValue += PackAction('u32', 4294967295)
+    OutValue += bytes(8)
+    return bytes(OutValue)
 
-def _reverse_table(atom_ids: tuple[int, ...]) -> bytes:
-    out = bytearray()
-    out += _pack("u32", 0)
-    out += _pack("u32", 0xFFFFFFFF)
-    out += _pack("u32", len(atom_ids))
-    for atom in atom_ids:
-        out += _pack("u32", atom) + _pack("u32", 0)
-    out += bytes(8)
-    out += _pack("u32", 0xFFFFFFFF)
-    out += _pack("u32", 0xFFFFFFFF)
-    out += bytes(8)
-    return bytes(out)
+# this definition exists because focused behavior needs one stable owner
+def StringHandle(Params: CMgrParameters) -> bytes:
+    return EncodeString(Params.part_name) + PackAction('u16', KStringHandleKind) + PackAction('u8', 0) + PackAction('u32', Params.name_stamp) + EncodeString('') + EncodeString('') + EncodeString('') + bytes(18) + EncodeString(Params.configuration_name) + bytes(20) + EncodeString('') + bytes(4)
 
+# this definition exists because focused behavior needs one stable owner
+def StampList(Stamps: tuple[FeatureStamp, ...]) -> bytes:
+    OutValue = bytearray()
+    OutValue += PackAction('u16', 0)
+    OutValue += PackAction('u32', len(Stamps))
+    for Entry in Stamps:
+        OutValue += PackAction('u32', Entry.tree_id) + Entry.stamp.pack()
+    OutValue += bytes(8)
+    OutValue += PackAction('u32', 1)
+    OutValue += bytes(8)
+    return bytes(OutValue)
 
-def _string_handle_body(params: CMgrParameters) -> bytes:
-    return (
-        encode_string(params.part_name)
-        + _pack("u16", STRING_HANDLE_KIND)
-        + _pack("u8", 0)
-        + _pack("u32", params.name_stamp)
-        + encode_string("")
-        + encode_string("")
-        + encode_string("")
-        + bytes(18)
-        + encode_string(params.configuration_name)
-        + bytes(20)
-        + encode_string("")
-        + bytes(4)
-    )
+# this definition exists because focused behavior needs one stable owner
+def BuildModel(Params: CMgrParameters) -> Model:
+    Params.validate()
+    Nodes: list[NodeValue] = []
 
+    # this definition exists because focused behavior needs one stable owner
+    def NullAction(BodyValue: bytes) -> None:
+        Nodes.append(NodeValue(kind=NullKind, body=BodyValue))
 
-def _stamp_list(stamps: tuple[FeatureStamp, ...]) -> bytes:
-    out = bytearray()
-    out += _pack("u16", 0)
-    out += _pack("u32", len(stamps))
-    for entry in stamps:
-        out += _pack("u32", entry.tree_id) + entry.stamp.pack()
-    out += bytes(8)
-    out += _pack("u32", 1)
-    out += bytes(8)
-    return bytes(out)
+    # this definition exists because focused behavior needs one stable owner
+    def Definition(NameValue: str, BodyValue: bytes) -> int:
+        Nodes.append(NodeValue(kind=DefinitionKind, body=BodyValue, schema=KClassSchema, class_name=NameValue))
+        return len(Nodes) - 1
 
+    # this definition exists because focused behavior needs one stable owner
+    def Classref(Target: int, BodyValue: bytes) -> None:
+        Nodes.append(NodeValue(kind=ClassRefKind, body=BodyValue, class_name=Nodes[Target].class_name, target=Target))
 
-def build_model(params: CMgrParameters) -> Model:
-    params.validate()
-    nodes: list[Node] = []
-
-    def null(body: bytes) -> None:
-        nodes.append(Node(kind=NULL_KIND, body=body))
-
-    def definition(name: str, body: bytes) -> int:
-        nodes.append(
-            Node(
-                kind=DEFINITION_KIND,
-                body=body,
-                schema=CLASS_SCHEMA,
-                class_name=name,
-            )
-        )
-        return len(nodes) - 1
-
-    def classref(target: int, body: bytes) -> None:
-        nodes.append(
-            Node(
-                kind=CLASS_REFERENCE_KIND,
-                body=body,
-                class_name=nodes[target].class_name,
-                target=target,
-            )
-        )
-
-    def objectref(target: int, body: bytes) -> None:
-        nodes.append(Node(kind=OBJECT_REFERENCE_KIND, body=body, target=target))
-
-    null(_manager_head())
-    null(_identity_block(params.atom_ids[0], params.generation, params.build))
-    null(_table(VIEW_STYLE))
-    null(_display_state(params.display_stamp, params.session_counter))
-    configuration = definition(CONFIGURATION_CLASS, b"")
-    definition(NODE_NAME_CLASS, _node_name(params.configuration_name))
-    definition(VISUAL_CLASS, _visual_properties(params))
-    null(_table(VIEW_STYLE))
-    null(_display_state_full(params))
-    null(_atom_head(params.atom_head_count, params.generation))
-    null(
-        _ConnectedAtomTable(params.atom_ids)
-        if params.connected_history
-        else _atom_table(params.atom_ids)
-    )
-    null(_link_head(params.link_atom_ids))
-    link = -1
-    if params.terminal_parent_tree_id is not None:
-        link = definition(
-            LINK_CLASS,
-            _TerminalLinkBody(
-                params.link_atom_ids[0],
-                params.terminal_parent_tree_id,
-                params.link_tree_ids[0],
-            ),
-        )
-    elif params.connected_history:
-        LinkParts = (
-            _ConnectedFourLinkParts(params.link_atom_ids, params.link_tree_ids)
-            if len(params.link_atom_ids) == 4
-            else _ConnectedLinkParts(params.link_atom_ids, params.link_tree_ids)
-        )
-        for position, (body, child_bodies) in enumerate(LinkParts):
-            if position == 0:
-                link = definition(LINK_CLASS, body)
+    # this definition exists because focused behavior needs one stable owner
+    def Objectref(Target: int, BodyValue: bytes) -> None:
+        Nodes.append(NodeValue(kind=ObjectRefKind, body=BodyValue, target=Target))
+    NullAction(ManagerHead())
+    NullAction(IdentityBlock(Params.atom_ids[0], Params.generation, Params.build))
+    NullAction(Table(KViewStyle))
+    NullAction(DisplayState(Params.display_stamp, Params.session_counter))
+    Config = Definition(KConfigClass, b'')
+    Definition(KNodeNameClass, NodeName(Params.configuration_name))
+    Definition(KVisualClass, Visual(Params))
+    NullAction(Table(KViewStyle))
+    NullAction(DisplayStateA(Params))
+    NullAction(AtomHead(Params.atom_head_count, Params.generation))
+    NullAction(ConnectedAtom(Params.atom_ids) if Params.connected_history else AtomTable(Params.atom_ids))
+    NullAction(LinkHead(Params.link_atom_ids))
+    LinkValue = -1
+    if Params.terminal_parent_tree_id is not None:
+        LinkValue = Definition(KLinkClass, TerminalLink(Params.link_atom_ids[0], Params.terminal_parent_tree_id, Params.link_tree_ids[0]))
+    elif Params.connected_history:
+        LinkParts = ConnectedFour(Params.link_atom_ids, Params.link_tree_ids) if len(Params.link_atom_ids) == 4 else ConnectedLink(Params.link_atom_ids, Params.link_tree_ids)
+        for Position, (BodyValue, ChildBodies) in enumerate(LinkParts):
+            if Position == 0:
+                LinkValue = Definition(KLinkClass, BodyValue)
             else:
-                classref(link, body)
-            for child_body in child_bodies:
-                null(child_body)
+                Classref(LinkValue, BodyValue)
+            for ChildBody in ChildBodies:
+                NullAction(ChildBody)
     else:
-        total = len(params.link_atom_ids)
-        for position, atom in enumerate(params.link_atom_ids):
-            following = (
-                params.link_atom_ids[position + 1] if position + 1 < total else None
-            )
-            body = _link_body(atom, params.link_tree_ids[position], following)
-            if position == 0:
-                link = definition(LINK_CLASS, body)
+        Total = len(Params.link_atom_ids)
+        for Position, AtomValue in enumerate(Params.link_atom_ids):
+            Following = Params.link_atom_ids[Position + 1] if Position + 1 < Total else None
+            BodyValue = LinkBody(AtomValue, Params.link_tree_ids[Position], Following)
+            if Position == 0:
+                LinkValue = Definition(KLinkClass, BodyValue)
             else:
-                classref(link, body)
-    null(_pack("u32", 0) + _pack("u32", 1) + _pack("u32", 0xFFFFFFFF))
-    null(b"")
-    null(bytes(36))
-    null(b"")
-    null(_pack("f64", -1.0))
-    null(_pack("f64", 0.0))
-    null(b"")
-    null(_reverse_table(params.reverse_atom_ids))
-    objectref(configuration, _pack("u32", 1) + _pack("u16", 1))
-    objectref(configuration, _pack("u32", 1))
-    definition(EXT_OBJECT_CLASS, b"")
-    handle = definition(STRING_HANDLE_CLASS, encode_string(""))
-    classref(handle, _string_handle_body(params))
-    obj_list = definition(OBJECT_LIST_CLASS, _stamp_list(params.feature_stamps))
-    classref(obj_list, _table(OBJECT_LIST_TAIL))
-    return Model(
-        header=encode_class_definition(ROOT_CLASS, CLASS_SCHEMA),
-        base=MAP_BASE,
-        nodes=nodes,
-    )
+                Classref(LinkValue, BodyValue)
+    NullAction(PackAction('u32', 0) + PackAction('u32', 1) + PackAction('u32', 4294967295))
+    NullAction(b'')
+    NullAction(bytes(36))
+    NullAction(b'')
+    NullAction(PackAction('f64', -1.0))
+    NullAction(PackAction('f64', 0.0))
+    NullAction(b'')
+    NullAction(ReverseTable(Params.reverse_atom_ids))
+    Objectref(Config, PackAction('u32', 1) + PackAction('u16', 1))
+    Objectref(Config, PackAction('u32', 1))
+    Definition(KExtObjectClass, b'')
+    Handle = Definition(KStringHandleClass, EncodeString(''))
+    Classref(Handle, StringHandle(Params))
+    ObjList = Definition(KObjectListClass, StampList(Params.feature_stamps))
+    Classref(ObjList, Table(KObjectListTail))
+    return Model(header=EncodeClassDefinition(KRootClass, KClassSchema), base=KMapBase, nodes=Nodes)
 
+# this definition exists because focused behavior needs one stable owner
+def AtomIdsFor(FeatureCount: int) -> tuple[int, ...]:
+    if FeatureCount < 1:
+        raise SldprtFormatError('a SOLIDWORKS part carries at least one solid feature')
+    return tuple((KFirstAtomId + Index for Index in range(FeatureCount)))
 
-def atom_ids_for(feature_count: int) -> tuple[int, ...]:
-    if feature_count < 1:
-        raise SldprtFormatError("a SOLIDWORKS part carries at least one solid feature")
-    return tuple(FIRST_ATOM_ID + index for index in range(feature_count))
+# this definition exists because focused behavior needs one stable owner
+def TreeIdsFor(FeatureCount: int) -> tuple[int, ...]:
+    if FeatureCount < 1:
+        raise SldprtFormatError('a SOLIDWORKS part carries at least one solid feature')
+    return tuple((KFirstTreeId + KTreeIdStep * Index for Index in range(FeatureCount)))
 
+# this definition exists because focused behavior needs one stable owner
+def EncodeCmgr(*, FeatureTreeIds: tuple[int, ...]=KDefaultFeatureTreeIds, ConfigName: str=KDefaultConfigName, PartName: str=KDefaultPartName, NameStamp: int=0, AtomIds: tuple[int, ...] | None=None, LinkAtomIds: tuple[int, ...] | None=None, LinkTreeIds: tuple[int, ...] | None=None, ReverseAtomIds: tuple[int, ...] | None=None, FeatureStamps: tuple[FeatureStamp, ...] | None=None, DocStamp: Stamp=KDocStamp, DisplayStamp: Stamp | None=None, ViewStamp: Stamp | None=None, MaxTreeId: int | None=None, NextIdA: int=0, NextIdB: int=0, RenderStyle: int=KDefaultRenderStyle, AtomHeadCount: int | None=None, ChordRatio: float=KDisplayChordRatio, SessionCounter: int=KSessionCounter, Generation: int=KDocGeneration, Build: int=KDocBuild, DisplayGeomCache: bytes=KDisplayGeomCacheDefault, ConnectedHistory: bool=False, TerminalParentTreeId: int | None=None) -> bytes:
+    Trees = tuple(FeatureTreeIds)
+    if not Trees:
+        raise SldprtFormatError('Contents/CMgr needs at least one solid feature tree id')
+    ResolvedAtoms = tuple(AtomIds) if AtomIds else AtomIdsFor(len(Trees))
+    ResolvedChain = tuple(LinkAtomIds) if LinkAtomIds is not None else ResolvedAtoms
+    ResolvedTrees = tuple(LinkTreeIds) if LinkTreeIds is not None else Trees
+    ResolvedReverse = tuple(ReverseAtomIds) if ReverseAtomIds is not None else tuple(reversed(ResolvedAtoms))
+    ResolvedStamps = tuple(FeatureStamps) if FeatureStamps is not None else tuple((FeatureStamp(tree_id=TreeId, stamp=Stamp(DocStamp.high, DocStamp.low + Index)) for Index, TreeId in enumerate(Trees)))
+    if ConnectedHistory and FeatureStamps is None:
+        StampOrders = {2: (1, 0), 3: (1, 2, 0), 4: (3, 1, 2, 0)}
+        ResolvedStamps = tuple((ResolvedStamps[IndexValue] for IndexValue in StampOrders[len(ResolvedStamps)]))
+    if TerminalParentTreeId is not None and FeatureStamps is None:
+        ResolvedStamps = (ResolvedStamps[0], FeatureStamp(tree_id=TerminalParentTreeId, stamp=Stamp(DocStamp.high, DocStamp.low + 1)))
+    ResolvedNextIdA = KFirstAtomId + 1 + 4 * len(ResolvedAtoms) if ConnectedHistory and NextIdA == 0 else NextIdA
+    ResolvedNextIdB = KFirstAtomId + 2 * len(ResolvedAtoms) if ConnectedHistory and NextIdB == 0 else NextIdB
+    Params = CMgrParameters(configuration_name=ConfigName, part_name=PartName, name_stamp=NameStamp, atom_ids=ResolvedAtoms, link_atom_ids=ResolvedChain, link_tree_ids=ResolvedTrees, reverse_atom_ids=ResolvedReverse, feature_stamps=ResolvedStamps, display_stamp=DocStamp if DisplayStamp is None else DisplayStamp, view_stamp=DocStamp if ViewStamp is None else ViewStamp, max_tree_id=max(Trees) if MaxTreeId is None else MaxTreeId, next_id_a=ResolvedNextIdA, next_id_b=ResolvedNextIdB, render_style=RenderStyle, atom_head_count=(1 if ConnectedHistory else len(ResolvedAtoms)) if AtomHeadCount is None else AtomHeadCount, chord_ratio=ChordRatio, generation=Generation, build=Build, session_counter=SessionCounter, display_geometry_cache=bytes(DisplayGeomCache), connected_history=ConnectedHistory, terminal_parent_tree_id=TerminalParentTreeId)
+    return BuildModel(Params).emit()
 
-def tree_ids_for(feature_count: int) -> tuple[int, ...]:
-    if feature_count < 1:
-        raise SldprtFormatError("a SOLIDWORKS part carries at least one solid feature")
-    return tuple(FIRST_TREE_ID + TREE_ID_STEP * index for index in range(feature_count))
+# this definition exists because focused behavior needs one stable owner
+def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
+    Stream = EncodeCmgr(**KwargValues)
+    Opaque = sum((Length for Ignored, Ignored, Length in KResidualSpans))
+    return {'stream_bytes': len(Stream), 'declared': len(Stream) - Opaque, 'opaque': Opaque, 'accounted': len(Stream), 'residual_spans': len(KResidualSpans)}
 
+# this binding exists because shared behavior needs one stable value
+globals()['ATOM_TABLE_HEAD'] = KAtomTableHead
 
-def encode_cmgr_stream(
-    *,
-    feature_tree_ids: tuple[int, ...] = DEFAULT_FEATURE_TREE_IDS,
-    configuration_name: str = DEFAULT_CONFIGURATION_NAME,
-    part_name: str = DEFAULT_PART_NAME,
-    name_stamp: int = 0,
-    atom_ids: tuple[int, ...] | None = None,
-    link_atom_ids: tuple[int, ...] | None = None,
-    link_tree_ids: tuple[int, ...] | None = None,
-    reverse_atom_ids: tuple[int, ...] | None = None,
-    feature_stamps: tuple[FeatureStamp, ...] | None = None,
-    document_stamp: Stamp = DOCUMENT_STAMP,
-    display_stamp: Stamp | None = None,
-    view_stamp: Stamp | None = None,
-    max_tree_id: int | None = None,
-    next_id_a: int = 0,
-    next_id_b: int = 0,
-    render_style: int = DEFAULT_RENDER_STYLE,
-    atom_head_count: int | None = None,
-    chord_ratio: float = DISPLAY_CHORD_RATIO,
-    session_counter: int = SESSION_COUNTER,
-    generation: int = DOCUMENT_GENERATION,
-    build: int = DOCUMENT_BUILD,
-    display_geometry_cache: bytes = DISPLAY_GEOMETRY_CACHE_DEFAULT,
-    connected_history: bool = False,
-    terminal_parent_tree_id: int | None = None,
-) -> bytes:
-    trees = tuple(feature_tree_ids)
-    if not trees:
-        raise SldprtFormatError(
-            "Contents/CMgr needs at least one solid feature tree id"
-        )
-    resolved_atoms = tuple(atom_ids) if atom_ids else atom_ids_for(len(trees))
-    resolved_chain = (
-        tuple(link_atom_ids) if link_atom_ids is not None else resolved_atoms
-    )
-    resolved_trees = tuple(link_tree_ids) if link_tree_ids is not None else trees
-    resolved_reverse = (
-        tuple(reverse_atom_ids)
-        if reverse_atom_ids is not None
-        else tuple(reversed(resolved_atoms))
-    )
-    resolved_stamps = (
-        tuple(feature_stamps)
-        if feature_stamps is not None
-        else tuple(
-            FeatureStamp(
-                tree_id=tree_id,
-                stamp=Stamp(document_stamp.high, document_stamp.low + index),
-            )
-            for index, tree_id in enumerate(trees)
-        )
-    )
-    if connected_history and feature_stamps is None:
-        StampOrders = {
-            2: (1, 0),
-            3: (1, 2, 0),
-            4: (3, 1, 2, 0),
-        }
-        resolved_stamps = tuple(
-            resolved_stamps[IndexValue]
-            for IndexValue in StampOrders[len(resolved_stamps)]
-        )
-    if terminal_parent_tree_id is not None and feature_stamps is None:
-        resolved_stamps = (
-            resolved_stamps[0],
-            FeatureStamp(
-                tree_id=terminal_parent_tree_id,
-                stamp=Stamp(document_stamp.high, document_stamp.low + 1),
-            ),
-        )
-    ResolvedNextIdA = (
-        FIRST_ATOM_ID + 1 + 4 * len(resolved_atoms)
-        if connected_history and next_id_a == 0
-        else next_id_a
-    )
-    ResolvedNextIdB = (
-        FIRST_ATOM_ID + 2 * len(resolved_atoms)
-        if connected_history and next_id_b == 0
-        else next_id_b
-    )
-    params = CMgrParameters(
-        configuration_name=configuration_name,
-        part_name=part_name,
-        name_stamp=name_stamp,
-        atom_ids=resolved_atoms,
-        link_atom_ids=resolved_chain,
-        link_tree_ids=resolved_trees,
-        reverse_atom_ids=resolved_reverse,
-        feature_stamps=resolved_stamps,
-        display_stamp=document_stamp if display_stamp is None else display_stamp,
-        view_stamp=document_stamp if view_stamp is None else view_stamp,
-        max_tree_id=max(trees) if max_tree_id is None else max_tree_id,
-        next_id_a=ResolvedNextIdA,
-        next_id_b=ResolvedNextIdB,
-        render_style=render_style,
-        atom_head_count=(
-            (1 if connected_history else len(resolved_atoms))
-            if atom_head_count is None
-            else atom_head_count
-        ),
-        chord_ratio=chord_ratio,
-        generation=generation,
-        build=build,
-        session_counter=session_counter,
-        display_geometry_cache=bytes(display_geometry_cache),
-        connected_history=connected_history,
-        terminal_parent_tree_id=terminal_parent_tree_id,
-    )
-    return build_model(params).emit()
+# this binding exists because shared behavior needs one stable value
+globals()['CLASS_REFERENCE_KIND'] = ClassRefKind
 
+# this binding exists because shared behavior needs one stable value
+globals()['CLASS_SCHEMA'] = KClassSchema
 
-def declared_opaque_split(**kwargs: object) -> dict[str, int]:
-    stream = encode_cmgr_stream(**kwargs)
-    opaque = sum(length for _, _, length in RESIDUAL_SPANS)
-    return {
-        "stream_bytes": len(stream),
-        "declared": len(stream) - opaque,
-        "opaque": opaque,
-        "accounted": len(stream),
-        "residual_spans": len(RESIDUAL_SPANS),
-    }
+# this binding exists because shared behavior needs one stable value
+globals()['CONFIGURATION_CLASS'] = KConfigClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONFIGURATION_MANAGER_STREAM'] = KConfigManagerStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFAULT_CONFIGURATION_NAME'] = KDefaultConfigName
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFAULT_FEATURE_TREE_IDS'] = KDefaultFeatureTreeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFAULT_PART_NAME'] = KDefaultPartName
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFAULT_RENDER_STYLE'] = KDefaultRenderStyle
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFINITION_KIND'] = DefinitionKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_CHORD_RATIO'] = KDisplayChordRatio
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_GEOMETRY_CACHE_BYTES'] = KDisplayGeomCacheBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_GEOMETRY_CACHE_DEFAULT'] = KDisplayGeomCacheDefault
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_STATE_KIND'] = KDisplayStateKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_STATE_MASK'] = KDisplayStateMask
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_STATE_REVISION'] = KDisplayStateRevision
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_TAIL'] = KDisplayTail
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_BUILD'] = KDocBuild
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_GENERATION'] = KDocGeneration
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_STAMP'] = KDocStamp
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_STAMP_HIGH'] = KDocStampHigh
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_STAMP_LOW'] = KDocStampLow
+
+# this binding exists because shared behavior needs one stable value
+globals()['EXT_OBJECT_CLASS'] = KExtObjectClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['FIRST_ATOM_ID'] = KFirstAtomId
+
+# this binding exists because shared behavior needs one stable value
+globals()['FIRST_TREE_ID'] = KFirstTreeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['LINK_CLASS'] = KLinkClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['LINK_FLAG'] = KLinkFlag
+
+# this binding exists because shared behavior needs one stable value
+globals()['LINK_TERMINATOR'] = KLinkTerminator
+
+# this binding exists because shared behavior needs one stable value
+globals()['MANAGER_SCALE'] = KManagerScale
+
+# this binding exists because shared behavior needs one stable value
+globals()['MAP_BASE'] = KMapBase
+
+# this binding exists because shared behavior needs one stable value
+globals()['NODE_NAME_CLASS'] = KNodeNameClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['NODE_NAME_FLAGS'] = KNodeNameFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['NODE_NAME_SCALE'] = KNodeNameScale
+
+# this binding exists because shared behavior needs one stable value
+globals()['NULL_KIND'] = NullKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['Node'] = NodeValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['OBJECT_LIST_CLASS'] = KObjectListClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['OBJECT_LIST_KIND'] = KObjectListKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['OBJECT_LIST_TAIL'] = KObjectListTail
+
+# this binding exists because shared behavior needs one stable value
+globals()['OBJECT_REFERENCE_KIND'] = ObjectRefKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['RESIDUAL_SPANS'] = KResidualSpans
+
+# this binding exists because shared behavior needs one stable value
+globals()['ROOT_CLASS'] = KRootClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['SESSION_COUNTER'] = KSessionCounter
+
+# this binding exists because shared behavior needs one stable value
+globals()['STRING_HANDLE_CLASS'] = KStringHandleClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['STRING_HANDLE_KIND'] = KStringHandleKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['TREE_ID_STEP'] = KTreeIdStep
+
+# this binding exists because shared behavior needs one stable value
+globals()['VIEW_STYLE'] = KViewStyle
+
+# this binding exists because shared behavior needs one stable value
+globals()['VIEW_STYLE_MODE'] = KViewStyleMode
+
+# this binding exists because shared behavior needs one stable value
+globals()['VISUAL_CLASS'] = KVisualClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['VISUAL_PROPERTIES'] = KVisualProperties
+
+# this binding exists because shared behavior needs one stable value
+globals()['ZERO_STAMP'] = KZeroStamp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ConnectedAtomTable'] = ConnectedAtom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ConnectedFourLinkParts'] = ConnectedFour
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ConnectedLinkParts'] = ConnectedLink
+
+# this binding exists because shared behavior needs one stable value
+globals()['_TerminalLinkBody'] = TerminalLink
+
+# this binding exists because shared behavior needs one stable value
+globals()['_atom_head'] = AtomHead
+
+# this binding exists because shared behavior needs one stable value
+globals()['_atom_table'] = AtomTable
+
+# this binding exists because shared behavior needs one stable value
+globals()['_display_state'] = DisplayState
+
+# this binding exists because shared behavior needs one stable value
+globals()['_display_state_full'] = DisplayStateA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_identity_block'] = IdentityBlock
+
+# this binding exists because shared behavior needs one stable value
+globals()['_link_body'] = LinkBody
+
+# this binding exists because shared behavior needs one stable value
+globals()['_link_head'] = LinkHead
+
+# this binding exists because shared behavior needs one stable value
+globals()['_manager_head'] = ManagerHead
+
+# this binding exists because shared behavior needs one stable value
+globals()['_node_name'] = NodeName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_pack'] = PackAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_reverse_table'] = ReverseTable
+
+# this binding exists because shared behavior needs one stable value
+globals()['_stamp_list'] = StampList
+
+# this binding exists because shared behavior needs one stable value
+globals()['_string_handle_body'] = StringHandle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_table'] = Table
+
+# this binding exists because shared behavior needs one stable value
+globals()['_visual_properties'] = Visual
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['atom_ids_for'] = AtomIdsFor
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_model'] = BuildModel
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['declared_opaque_split'] = DeclaredOpaque
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_class_definition'] = EncodeClassDefinition
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_cmgr_stream'] = EncodeCmgr
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_string'] = EncodeString
+
+# this binding exists because shared behavior needs one stable value
+globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['tree_ids_for'] = TreeIdsFor

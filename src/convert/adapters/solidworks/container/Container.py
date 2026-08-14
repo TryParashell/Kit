@@ -6,434 +6,439 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
-import struct
+from __future__ import annotations as Annotations
+from dataclasses import dataclass as Dataclass
+from pathlib import Path as PathValue
+import struct as Struct
 from typing import Iterable, Mapping
-import zlib
+import zlib as ZlibValue
+from convert.adapters.solidworks.container.Format import CONTENT_TYPES_STREAM as ContentTypesStream, CONTAINER_VERSIONS as ContainerVersions, RELATIONSHIPS_STREAM as RelationshipsStream
 
-from convert.adapters.solidworks.container.Format import CONTENT_TYPES_STREAM, CONTAINER_VERSIONS, RELATIONSHIPS_STREAM
+# this binding exists because shared behavior needs one stable value
+KLocalSignaturePrefix = bytes.fromhex('140006000800')
 
-_LOCAL_SIGNATURE_PREFIX = bytes.fromhex("140006000800")
-_LOCAL_SIGNATURE_SIZE = 10
-_DEFAULT_FILE_ID = 0xEC6E2386
-_DEFAULT_TYPE_ID = 0x1C34D281
-_TYPE_IDS_BY_NAME = {
-    "Header2": 0x1C74D22C,
-    "Preview": 0x1C74D22C,
-}
-DEFAULT_FILE_ID = _DEFAULT_FILE_ID
-DEFAULT_SIGNATURES = (
-    bytes.fromhex("64d80045"),
-    bytes.fromhex("ae0d4ef6"),
-    bytes.fromhex("54ce179a"),
-)
-_ARCHIVE_OFFSET = 8
-_MAX_STREAM_COUNT = 100_000
-_MAX_DIRECTORY_STREAM_COUNT = 0xFFFF
-_MAX_NAME_BYTES = 16_384
-_MAX_UNCOMPRESSED_STREAM = 1 << 31
-_MAX_ARCHIVE_OFFSET = 0xFFFFFFFF
+# this binding exists because shared behavior needs one stable value
+KLocalSignatureSize = 10
 
+# this binding exists because shared behavior needs one stable value
+KDefaultFileIdA = 3966641030
 
-class SldprtFormatError(ValueError):
-    __slots__ = ()
+# this binding exists because shared behavior needs one stable value
+KDefaultTypeId = 473223809
 
+# this binding exists because shared behavior needs one stable value
+KTypeIdsByName = {'Header2': 477418028, 'Preview': 477418028}
 
-def signature_triplet(file_id: int) -> tuple[bytes, bytes, bytes] | None:
-    if file_id == DEFAULT_FILE_ID:
-        return DEFAULT_SIGNATURES
+# this binding exists because shared behavior needs one stable value
+KDefaultFileId = KDefaultFileIdA
+
+# this binding exists because shared behavior needs one stable value
+KDefaultSignatures = (bytes.fromhex('64d80045'), bytes.fromhex('ae0d4ef6'), bytes.fromhex('54ce179a'))
+
+# this binding exists because shared behavior needs one stable value
+KArchiveOffset = 8
+
+# this binding exists because shared behavior needs one stable value
+KMaxStreamCount = 100000
+
+# this binding exists because shared behavior needs one stable value
+KMaxFolderStreamCount = 65535
+
+# this binding exists because shared behavior needs one stable value
+KMaxNameBytes = 16384
+
+# this binding exists because shared behavior needs one stable value
+KMaxUncompressedStream = 1 << 31
+
+# this binding exists because shared behavior needs one stable value
+KMaxArchiveOffset = 4294967295
+
+# this definition exists because focused behavior needs one stable owner
+class SldprtFormat(ValueError):
+    KSlots = ()
+
+# this definition exists because focused behavior needs one stable owner
+def Signature(FileId: int) -> tuple[bytes, bytes, bytes] | None:
+    if FileId == KDefaultFileId:
+        return KDefaultSignatures
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def Container(BlobValue: bytes | bytearray) -> tuple[bytes, bytes, bytes]:
+    DataValue = bytes(BlobValue)
+    Signatures, Ignored = TemplateFields(DataValue, SldprtArchive.from_bytes(DataValue))
+    return Signatures
 
-def container_signatures(blob: bytes | bytearray) -> tuple[bytes, bytes, bytes]:
-    data = bytes(blob)
-    signatures, _ = _template_fields(data, SldprtArchive.from_bytes(data))
-    return signatures
-
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class StreamRecord:
-    name: str
-    data: bytes
-    offset: int
-    payload_offset: int
-    compressed_size: int
-    uncompressed_size: int
-    crc32: int
-    signature: bytes
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = 'str'
+    __annotations__['data'] = 'bytes'
+    __annotations__['offset'] = 'int'
+    __annotations__['payload_offset'] = 'int'
+    __annotations__['compressed_size'] = 'int'
+    __annotations__['uncompressed_size'] = 'int'
+    __annotations__['crc32'] = 'int'
+    __annotations__['signature'] = 'bytes'
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class SldprtArchive:
-    path: Path
-    file_id: int
-    format_version: int
-    records: tuple[StreamRecord, ...]
+    locals().setdefault('__annotations__', {})
+    __annotations__['path'] = 'Path'
+    __annotations__['file_id'] = 'int'
+    __annotations__['format_version'] = 'int'
+    __annotations__['records'] = 'tuple[StreamRecord, ...]'
 
+    # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def open(cls, path: str | Path) -> SldprtArchive:
-        source = Path(path).expanduser().resolve()
+    def OpenAction(ClassType, PathValue: str | Path) -> SldprtArchive:
+        Source = PathValue(PathValue).expanduser().resolve()
         try:
-            blob = source.read_bytes()
+            BlobValue = Source.read_bytes()
         except OSError as exc:
-            raise SldprtFormatError(f"cannot read {source}: {exc}") from exc
-        return cls.from_bytes(blob, source)
+            raise SldprtFormat(f'cannot read {Source}: {exc}') from exc
+        return ClassType.from_bytes(BlobValue, Source)
 
+    # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def from_bytes(
-        cls, blob: bytes | bytearray, path: str | Path = "<memory>"
-    ) -> SldprtArchive:
-        source = Path(path)
-        data = bytes(blob)
-        if len(data) < 8:
-            raise SldprtFormatError("file is too short to contain an SLDPRT header")
-        file_id, format_version = struct.unpack_from(">II", data, 0)
-        if format_version not in CONTAINER_VERSIONS:
-            raise SldprtFormatError(
-                f"unsupported SLDPRT container version {format_version}"
-            )
-        records = _scan_records(data)
-        return cls(source, file_id, format_version, records)
+    def FromBytes(ClassType, BlobValue: bytes | bytearray, PathValue: str | Path='<memory>') -> SldprtArchive:
+        Source = PathValue(PathValue)
+        DataValue = bytes(BlobValue)
+        if len(DataValue) < 8:
+            raise SldprtFormat('file is too short to contain an SLDPRT header')
+        FileId, FormatVersion = Struct.unpack_from('>II', DataValue, 0)
+        if FormatVersion not in ContainerVersions:
+            raise SldprtFormat(f'unsupported SLDPRT container version {FormatVersion}')
+        Records = ScanRecords(DataValue)
+        return ClassType(Source, FileId, FormatVersion, Records)
 
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def streams(self) -> dict[str, bytes]:
-        return {record.name: record.data for record in self.records}
+    def Streams(Instance) -> dict[str, bytes]:
+        return {Record.name: Record.data for Record in Instance.records}
 
-    def get(self, name: str) -> bytes | None:
-        for record in self.records:
-            if record.name == name:
-                return record.data
+    # this definition exists because focused behavior needs one stable owner
+    def GetAction(Instance, NameValue: str) -> bytes | None:
+        for Record in Instance.records:
+            if Record.name == NameValue:
+                return Record.data
         return None
 
-    def require(self, name: str) -> bytes:
-        data = self.get(name)
-        if data is None:
-            raise SldprtFormatError(f"required stream is missing: {name}")
-        return data
+    # this definition exists because focused behavior needs one stable owner
+    def Require(Instance, NameValue: str) -> bytes:
+        DataValue = Instance.get(NameValue)
+        if DataValue is None:
+            raise SldprtFormat(f'required stream is missing: {NameValue}')
+        return DataValue
+    locals()['from_bytes'] = FromBytes
+    locals()['get'] = GetAction
+    locals()['open'] = OpenAction
+    locals()['require'] = Require
+    locals()['streams'] = Streams
 
-
-def build_sldprt(
-    streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]],
-    *,
-    file_id: int | None = None,
-    format_version: int = 4,
-    template: bytes | bytearray | None = None,
-    signatures: tuple[bytes, bytes, bytes] | None = None,
-) -> bytes:
-    type_ids: dict[str, int] = {}
-    if template is not None and signatures is not None:
-        raise ValueError("SLDPRT signatures cannot be given alongside a template")
-    if template is None and signatures is not None:
-        if len(signatures) != 3 or any(len(value) != 4 for value in signatures):
-            raise ValueError("SLDPRT signatures must be three four byte values")
-        if file_id is None:
-            raise ValueError("SLDPRT signatures require the paired file id")
-        signatures = tuple(bytes(value) for value in signatures)
-    elif template is None:
-        if file_id is None:
-            file_id = DEFAULT_FILE_ID
-        signatures = signature_triplet(file_id)
-        if signatures is None:
-            raise ValueError(
-                "SLDPRT file id has no known container signatures; "
-                "a native template with matching signatures is required"
-            )
+# this definition exists because focused behavior needs one stable owner
+def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, FileId: int | None=None, FormatVersion: int=4, Template: bytes | bytearray | None=None, Signatures: tuple[bytes, bytes, bytes] | None=None) -> bytes:
+    TypeIds: dict[str, int] = {}
+    if Template is not None and Signatures is not None:
+        raise ValueError('SLDPRT signatures cannot be given alongside a template')
+    if Template is None and Signatures is not None:
+        if len(Signatures) != 3 or any((len(Value) != 4 for Value in Signatures)):
+            raise ValueError('SLDPRT signatures must be three four byte values')
+        if FileId is None:
+            raise ValueError('SLDPRT signatures require the paired file id')
+        Signatures = tuple((bytes(Value) for Value in Signatures))
+    elif Template is None:
+        if FileId is None:
+            FileId = KDefaultFileId
+        Signatures = Signature(FileId)
+        if Signatures is None:
+            raise ValueError('SLDPRT file id has no known container signatures; a native template with matching signatures is required')
     else:
-        template_data = bytes(template)
-        archive = SldprtArchive.from_bytes(template_data)
-        if file_id is None:
-            file_id = archive.file_id
-        elif file_id != archive.file_id:
-            raise ValueError(
-                "SLDPRT template file id does not match the requested file id"
-            )
-        signatures, type_ids = _template_fields(template_data, archive)
-    if not 0 <= file_id <= 0xFFFFFFFF:
-        raise ValueError("SLDPRT file id must fit in 32 bits")
-    if format_version not in CONTAINER_VERSIONS:
-        raise ValueError("SLDPRT container version must be 3 or 4")
-    items = list(streams.items() if isinstance(streams, Mapping) else streams)
-    names = [name for name, _ in items]
-    if len(names) != len(set(names)):
-        raise ValueError("SLDPRT stream names must be unique")
-    if len(items) > _MAX_DIRECTORY_STREAM_COUNT:
-        raise ValueError("SLDPRT stream count must fit in the native directory")
-    local_signature, central_signature, end_signature = signatures
-    output = bytearray(struct.pack(">II", file_id, format_version))
-    encoded: list[tuple[int, str, int, int, int, int]] = []
-    for name, payload in items:
-        type_id = type_ids.get(name, _TYPE_IDS_BY_NAME.get(name, _DEFAULT_TYPE_ID))
-        data = bytes(payload)
-        local_offset = len(output) - _ARCHIVE_OFFSET
-        record, crc32_value, compressed_size = _encode_record(name, data, type_id)
-        output.extend(local_signature)
-        output.extend(record)
-        encoded.append(
-            (
-                type_id,
-                name,
-                crc32_value,
-                compressed_size,
-                len(data),
-                local_offset,
-            )
-        )
-    central_offset = len(output) - _ARCHIVE_OFFSET
-    if central_offset > _MAX_ARCHIVE_OFFSET:
-        raise ValueError("SLDPRT local records exceed the native offset range")
-    for record in encoded:
-        output.extend(_encode_directory_entry(*record, central_signature))
-    central_size = len(output) - _ARCHIVE_OFFSET - central_offset
-    if central_size > _MAX_ARCHIVE_OFFSET:
-        raise ValueError("SLDPRT directory exceeds the native size range")
-    output.extend(end_signature)
-    output.extend(
-        struct.pack(
-            "<HHHHIIH",
-            0,
-            0,
-            len(encoded),
-            len(encoded),
-            central_size,
-            central_offset,
-            0,
-        )
-    )
-    return bytes(output)
+        TemplateData = bytes(Template)
+        Archive = SldprtArchive.from_bytes(TemplateData)
+        if FileId is None:
+            FileId = Archive.file_id
+        elif FileId != Archive.file_id:
+            raise ValueError('SLDPRT template file id does not match the requested file id')
+        Signatures, TypeIds = TemplateFields(TemplateData, Archive)
+    if not 0 <= FileId <= 4294967295:
+        raise ValueError('SLDPRT file id must fit in 32 bits')
+    if FormatVersion not in ContainerVersions:
+        raise ValueError('SLDPRT container version must be 3 or 4')
+    Items = list(Streams.items() if isinstance(Streams, Mapping) else Streams)
+    Names = [NameValue for NameValue, Ignored in Items]
+    if len(Names) != len(set(Names)):
+        raise ValueError('SLDPRT stream names must be unique')
+    if len(Items) > KMaxFolderStreamCount:
+        raise ValueError('SLDPRT stream count must fit in the native directory')
+    LocalSignature, CentralSignature, EndSignature = Signatures
+    Output = bytearray(Struct.pack('>II', FileId, FormatVersion))
+    Encoded: list[tuple[int, str, int, int, int, int]] = []
+    for NameValue, Payload in Items:
+        TypeId = TypeIds.get(NameValue, KTypeIdsByName.get(NameValue, KDefaultTypeId))
+        DataValue = bytes(Payload)
+        LocalOffset = len(Output) - KArchiveOffset
+        Record, CrcThreeTwoValue, CompressedSize = EncodeRecord(NameValue, DataValue, TypeId)
+        Output.extend(LocalSignature)
+        Output.extend(Record)
+        Encoded.append((TypeId, NameValue, CrcThreeTwoValue, CompressedSize, len(DataValue), LocalOffset))
+    CentralOffset = len(Output) - KArchiveOffset
+    if CentralOffset > KMaxArchiveOffset:
+        raise ValueError('SLDPRT local records exceed the native offset range')
+    for Record in Encoded:
+        Output.extend(EncodeFolder(*Record, CentralSignature))
+    CentralSize = len(Output) - KArchiveOffset - CentralOffset
+    if CentralSize > KMaxArchiveOffset:
+        raise ValueError('SLDPRT directory exceeds the native size range')
+    Output.extend(EndSignature)
+    Output.extend(Struct.pack('<HHHHIIH', 0, 0, len(Encoded), len(Encoded), CentralSize, CentralOffset, 0))
+    return bytes(Output)
 
-
-def _scan_records(blob: bytes) -> tuple[StreamRecord, ...]:
-    candidates: list[StreamRecord] = []
-    cursor = 0
+# this definition exists because focused behavior needs one stable owner
+def ScanRecords(BlobValue: bytes) -> tuple[StreamRecord, ...]:
+    Candidates: list[StreamRecord] = []
+    Cursor = 0
     while True:
-        offset = blob.find(_LOCAL_SIGNATURE_PREFIX, cursor)
-        if offset < 0:
+        Offset = BlobValue.find(KLocalSignaturePrefix, Cursor)
+        if Offset < 0:
             break
-        cursor = offset + 1
-        signature_end = offset + _LOCAL_SIGNATURE_SIZE
-        if signature_end > len(blob):
+        Cursor = Offset + 1
+        SignatureEnd = Offset + KLocalSignatureSize
+        if SignatureEnd > len(BlobValue):
             continue
-        signature = blob[offset:signature_end]
-        record = _decode_scanned_candidate(blob, offset, signature)
-        if record is None:
+        Signature = BlobValue[Offset:SignatureEnd]
+        Record = DecodeScanned(BlobValue, Offset, Signature)
+        if Record is None:
             continue
-        candidates.append(record)
-        if len(candidates) > _MAX_STREAM_COUNT:
-            raise SldprtFormatError("unreasonable number of streams")
-    if not candidates:
-        raise SldprtFormatError("no valid compressed SLDPRT streams were found")
-    candidates.sort(key=lambda record: record.offset)
-    records: list[StreamRecord] = []
-    by_name: dict[str, StreamRecord] = {}
-    for candidate in candidates:
-        prior = by_name.get(candidate.name)
-        if prior is None:
-            by_name[candidate.name] = candidate
-            records.append(candidate)
-            continue
-        same = (
-            prior.crc32 == candidate.crc32
-            and prior.uncompressed_size == candidate.uncompressed_size
-            and prior.data == candidate.data
-        )
-        if not same:
-            raise SldprtFormatError(
-                f"ambiguous valid stream records for {candidate.name!r}"
-            )
-    return tuple(records)
+        Candidates.append(Record)
+        if len(Candidates) > KMaxStreamCount:
+            raise SldprtFormat('unreasonable number of streams')
+    if not Candidates:
+        raise SldprtFormat('no valid compressed SLDPRT streams were found')
 
+    # this callback exists because local behavior needs one focused transformation
+    Candidates.sort(key=lambda Record: Record.offset)
+    Records: list[StreamRecord] = []
+    ByName: dict[str, StreamRecord] = {}
+    for Choice in Candidates:
+        Prior = ByName.get(Choice.name)
+        if Prior is None:
+            ByName[Choice.name] = Choice
+            Records.append(Choice)
+            continue
+        SameValue = Prior.crc32 == Choice.crc32 and Prior.uncompressed_size == Choice.uncompressed_size and (Prior.data == Choice.data)
+        if not SameValue:
+            raise SldprtFormat(f'ambiguous valid stream records for {Choice.name!r}')
+    return tuple(Records)
 
-def _decode_scanned_candidate(
-    blob: bytes, offset: int, signature: bytes
-) -> StreamRecord | None:
-    header_offset = offset + len(signature)
-    if header_offset + 16 > len(blob):
+# this definition exists because focused behavior needs one stable owner
+def DecodeScanned(BlobValue: bytes, Offset: int, Signature: bytes) -> StreamRecord | None:
+    HeaderOffset = Offset + len(Signature)
+    if HeaderOffset + 16 > len(BlobValue):
         return None
-    crc32_value, compressed_size, uncompressed_size, name_size = struct.unpack_from(
-        "<IIII", blob, header_offset
-    )
-    if not 0 < name_size <= _MAX_NAME_BYTES:
+    CrcThreeTwoValue, CompressedSize, UncompressedSize, NameSize = Struct.unpack_from('<IIII', BlobValue, HeaderOffset)
+    if not 0 < NameSize <= KMaxNameBytes:
         return None
-    if not 0 <= uncompressed_size <= _MAX_UNCOMPRESSED_STREAM:
+    if not 0 <= UncompressedSize <= KMaxUncompressedStream:
         return None
-    name_offset = header_offset + 16
-    payload_offset = name_offset + name_size
-    payload_end = payload_offset + compressed_size
-    if payload_end > len(blob):
+    NameOffset = HeaderOffset + 16
+    PayloadOffset = NameOffset + NameSize
+    PayloadEnd = PayloadOffset + CompressedSize
+    if PayloadEnd > len(BlobValue):
         return None
     try:
-        name = _nibble_swap(blob[name_offset:payload_offset]).decode("utf-8")
+        NameValue = NibbleSwap(BlobValue[NameOffset:PayloadOffset]).decode('utf-8')
     except UnicodeDecodeError:
         return None
-    if not name or any(ord(character) < 0x20 for character in name):
+    if not NameValue or any((ord(Character) < 32 for Character in NameValue)):
         return None
     try:
-        data = zlib.decompress(blob[payload_offset:payload_end], wbits=-15)
-    except zlib.error:
+        DataValue = ZlibValue.decompress(BlobValue[PayloadOffset:PayloadEnd], wbits=-15)
+    except ZlibValue.error:
         return None
-    if len(data) != uncompressed_size:
+    if len(DataValue) != UncompressedSize:
         return None
-    if zlib.crc32(data) & 0xFFFFFFFF != crc32_value:
+    if ZlibValue.crc32(DataValue) & 4294967295 != CrcThreeTwoValue:
         return None
-    return StreamRecord(
-        name=name,
-        data=data,
-        offset=offset,
-        payload_offset=payload_offset,
-        compressed_size=compressed_size,
-        uncompressed_size=uncompressed_size,
-        crc32=crc32_value,
-        signature=signature,
-    )
+    return StreamRecord(name=NameValue, data=DataValue, offset=Offset, payload_offset=PayloadOffset, compressed_size=CompressedSize, uncompressed_size=UncompressedSize, crc32=CrcThreeTwoValue, signature=Signature)
 
+# this definition exists because focused behavior needs one stable owner
+def NibbleSwap(DataValue: bytes) -> bytes:
+    return bytes((Value >> 4 | (Value & 15) << 4 for Value in DataValue))
 
-def _nibble_swap(data: bytes) -> bytes:
-    return bytes(((value >> 4) | ((value & 0x0F) << 4)) for value in data)
+# this definition exists because focused behavior needs one stable owner
+def EncodedName(NameValue: str) -> bytes:
+    if not NameValue or any((ord(Character) < 32 for Character in NameValue)):
+        raise ValueError('SLDPRT stream name must contain printable characters')
+    Value = NameValue.encode('utf-8')
+    if len(Value) > KMaxNameBytes:
+        raise ValueError('SLDPRT stream name is too long')
+    return NibbleSwap(Value)
 
+# this definition exists because focused behavior needs one stable owner
+def EncodeRecord(NameValue: str, DataValue: bytes, TypeId: int) -> tuple[bytes, int, int]:
+    if len(DataValue) > KMaxUncompressedStream:
+        raise ValueError('SLDPRT stream is too large')
+    Compressor = ZlibValue.compressobj(level=1, wbits=-15)
+    Compressed = Compressor.compress(DataValue) + Compressor.flush()
+    EncodedName = EncodedName(NameValue)
+    CrcThreeTwoValue = ZlibValue.crc32(DataValue) & 4294967295
+    Record = b''.join((KLocalSignaturePrefix, Struct.pack('<I', TypeId), Struct.pack('<IIIHH', CrcThreeTwoValue, len(Compressed), len(DataValue), len(EncodedName), 0), EncodedName, Compressed))
+    return (Record, CrcThreeTwoValue, len(Compressed))
 
-def _encoded_name(name: str) -> bytes:
-    if not name or any(ord(character) < 0x20 for character in name):
-        raise ValueError("SLDPRT stream name must contain printable characters")
-    value = name.encode("utf-8")
-    if len(value) > _MAX_NAME_BYTES:
-        raise ValueError("SLDPRT stream name is too long")
-    return _nibble_swap(value)
+# this definition exists because focused behavior needs one stable owner
+def EncodeFolder(TypeId: int, NameValue: str, CrcThreeTwoValue: int, CompressedSize: int, SizeValue: int, LocalOffset: int, Signature: bytes) -> bytes:
+    EncodedName = EncodedName(NameValue)
+    PackageSection = int(NameValue == ContentTypesStream or NameValue == RelationshipsStream or NameValue.startswith('docProps/') or NameValue.startswith('swXmlContents/'))
+    return b''.join((Signature, Struct.pack('<H', 0), KLocalSignaturePrefix, Struct.pack('<I', TypeId), Struct.pack('<IIIHH', CrcThreeTwoValue, CompressedSize, SizeValue, len(EncodedName), 0), Struct.pack('<HHHII', 0, 0, PackageSection, 0, LocalOffset), EncodedName))
 
+# this definition exists because focused behavior needs one stable owner
+def TemplateFields(BlobValue: bytes, Archive: SldprtArchive) -> tuple[tuple[bytes, bytes, bytes], dict[str, int]]:
 
-def _encode_record(name: str, data: bytes, type_id: int) -> tuple[bytes, int, int]:
-    if len(data) > _MAX_UNCOMPRESSED_STREAM:
-        raise ValueError("SLDPRT stream is too large")
-    compressor = zlib.compressobj(level=1, wbits=-15)
-    compressed = compressor.compress(data) + compressor.flush()
-    encoded_name = _encoded_name(name)
-    crc32_value = zlib.crc32(data) & 0xFFFFFFFF
-    record = b"".join(
-        (
-            _LOCAL_SIGNATURE_PREFIX,
-            struct.pack("<I", type_id),
-            struct.pack(
-                "<IIIHH", crc32_value, len(compressed), len(data), len(encoded_name), 0
-            ),
-            encoded_name,
-            compressed,
-        )
-    )
-    return record, crc32_value, len(compressed)
-
-
-def _encode_directory_entry(
-    type_id: int,
-    name: str,
-    crc32_value: int,
-    compressed_size: int,
-    size: int,
-    local_offset: int,
-    signature: bytes,
-) -> bytes:
-    encoded_name = _encoded_name(name)
-    package_section = int(
-        name == CONTENT_TYPES_STREAM
-        or name == RELATIONSHIPS_STREAM
-        or name.startswith("docProps/")
-        or name.startswith("swXmlContents/")
-    )
-    return b"".join(
-        (
-            signature,
-            struct.pack("<H", 0),
-            _LOCAL_SIGNATURE_PREFIX,
-            struct.pack("<I", type_id),
-            struct.pack(
-                "<IIIHH", crc32_value, compressed_size, size, len(encoded_name), 0
-            ),
-            struct.pack("<HHHII", 0, 0, package_section, 0, local_offset),
-            encoded_name,
-        )
-    )
-
-
-def _template_fields(
-    blob: bytes, archive: SldprtArchive
-) -> tuple[tuple[bytes, bytes, bytes], dict[str, int]]:
-    records = tuple(sorted(archive.records, key=lambda item: item.offset))
-    local_signatures = {blob[item.offset - 4 : item.offset] for item in records}
-    if len(local_signatures) != 1 or any(len(value) != 4 for value in local_signatures):
-        raise ValueError("SLDPRT template has inconsistent local signatures")
-    expected = {
-        (item.name, item.crc32, item.compressed_size, item.uncompressed_size)
-        for item in records
-    }
-    central_markers: list[int] = []
-    cursor = max(item.payload_offset + item.compressed_size for item in records)
+    # this callback exists because local behavior needs one focused transformation
+    Records = tuple(sorted(Archive.records, key=lambda ItemValue: ItemValue.offset))
+    LocalSignatures = {BlobValue[ItemValue.offset - 4:ItemValue.offset] for ItemValue in Records}
+    if len(LocalSignatures) != 1 or any((len(Value) != 4 for Value in LocalSignatures)):
+        raise ValueError('SLDPRT template has inconsistent local signatures')
+    Expected = {(ItemValue.name, ItemValue.crc32, ItemValue.compressed_size, ItemValue.uncompressed_size) for ItemValue in Records}
+    CentralMarkers: list[int] = []
+    Cursor = max((ItemValue.payload_offset + ItemValue.compressed_size for ItemValue in Records))
     while True:
-        marker = blob.find(_LOCAL_SIGNATURE_PREFIX, cursor)
-        if marker < 0:
+        Marker = BlobValue.find(KLocalSignaturePrefix, Cursor)
+        if Marker < 0:
             break
-        cursor = marker + 1
-        if marker + 40 > len(blob):
+        Cursor = Marker + 1
+        if Marker + 40 > len(BlobValue):
             continue
-        crc32_value, compressed_size, size, name_size = struct.unpack_from(
-            "<IIII", blob, marker + 10
-        )
-        if not 0 < name_size <= _MAX_NAME_BYTES:
+        CrcThreeTwoValue, CompressedSize, SizeValue, NameSize = Struct.unpack_from('<IIII', BlobValue, Marker + 10)
+        if not 0 < NameSize <= KMaxNameBytes:
             continue
-        name_start = marker + 40
-        name_end = name_start + name_size
-        if name_end > len(blob):
+        NameStart = Marker + 40
+        NameEnd = NameStart + NameSize
+        if NameEnd > len(BlobValue):
             continue
         try:
-            name = _nibble_swap(blob[name_start:name_end]).decode("utf-8")
+            NameValue = NibbleSwap(BlobValue[NameStart:NameEnd]).decode('utf-8')
         except UnicodeDecodeError:
             continue
-        if (name, crc32_value, compressed_size, size) in expected:
-            central_markers.append(marker)
-    if len(central_markers) != len(records):
-        raise ValueError("SLDPRT template central directory is incomplete")
-    central_signatures = {
-        blob[marker - 6 : marker - 2]
-        for marker in central_markers
-        if blob[marker - 2 : marker] == b"\0\0"
-    }
-    if len(central_signatures) != 1:
-        raise ValueError("SLDPRT template has inconsistent central signatures")
-    central_start = central_markers[0] - 6
-    end_signature = _end_signature(blob, central_start, len(records))
-    type_ids = {
-        item.name: struct.unpack_from("<I", item.signature, 6)[0] for item in records
-    }
-    return (
-        (
-            next(iter(local_signatures)),
-            next(iter(central_signatures)),
-            end_signature,
-        ),
-        type_ids,
-    )
+        if (NameValue, CrcThreeTwoValue, CompressedSize, SizeValue) in Expected:
+            CentralMarkers.append(Marker)
+    if len(CentralMarkers) != len(Records):
+        raise ValueError('SLDPRT template central directory is incomplete')
+    CentralSignatures = {BlobValue[Marker - 6:Marker - 2] for Marker in CentralMarkers if BlobValue[Marker - 2:Marker] == b'\x00\x00'}
+    if len(CentralSignatures) != 1:
+        raise ValueError('SLDPRT template has inconsistent central signatures')
+    CentralStart = CentralMarkers[0] - 6
+    EndSignature = EndSignature(BlobValue, CentralStart, len(Records))
+    TypeIds = {ItemValue.name: Struct.unpack_from('<I', ItemValue.signature, 6)[0] for ItemValue in Records}
+    return ((next(iter(LocalSignatures)), next(iter(CentralSignatures)), EndSignature), TypeIds)
 
+# this definition exists because focused behavior needs one stable owner
+def EndSignature(BlobValue: bytes, CentralStart: int, Count: int) -> bytes:
+    CentralOffset = CentralStart - KArchiveOffset
+    for Offset in range(CentralStart, len(BlobValue) - 21):
+        DiskNumber, FolderDisk, DiskEntries, TotalEntries, FolderSize, FolderOffset, CommentSize = Struct.unpack_from('<HHHHIIH', BlobValue, Offset + 4)
+        if DiskNumber == 0 and FolderDisk == 0 and (DiskEntries == Count) and (TotalEntries == Count) and (FolderOffset == CentralOffset) and (KArchiveOffset + FolderOffset + FolderSize == Offset) and (Offset + 22 + CommentSize <= len(BlobValue)):
+            return BlobValue[Offset:Offset + 4]
+    raise ValueError('SLDPRT template end directory is missing')
 
-def _end_signature(blob: bytes, central_start: int, count: int) -> bytes:
-    central_offset = central_start - _ARCHIVE_OFFSET
-    for offset in range(central_start, len(blob) - 21):
-        (
-            disk_number,
-            directory_disk,
-            disk_entries,
-            total_entries,
-            directory_size,
-            directory_offset,
-            comment_size,
-        ) = struct.unpack_from("<HHHHIIH", blob, offset + 4)
-        if (
-            disk_number == 0
-            and directory_disk == 0
-            and disk_entries == count
-            and total_entries == count
-            and directory_offset == central_offset
-            and _ARCHIVE_OFFSET + directory_offset + directory_size == offset
-            and offset + 22 + comment_size <= len(blob)
-        ):
-            return blob[offset : offset + 4]
-    raise ValueError("SLDPRT template end directory is missing")
+# this binding exists because shared behavior needs one stable value
+globals()['CONTAINER_VERSIONS'] = ContainerVersions
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONTENT_TYPES_STREAM'] = ContentTypesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFAULT_FILE_ID'] = KDefaultFileId
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFAULT_SIGNATURES'] = KDefaultSignatures
+
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['RELATIONSHIPS_STREAM'] = RelationshipsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['SldprtFormatError'] = SldprtFormat
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ARCHIVE_OFFSET'] = KArchiveOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_DEFAULT_FILE_ID'] = KDefaultFileIdA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_DEFAULT_TYPE_ID'] = KDefaultTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_LOCAL_SIGNATURE_PREFIX'] = KLocalSignaturePrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_LOCAL_SIGNATURE_SIZE'] = KLocalSignatureSize
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_ARCHIVE_OFFSET'] = KMaxArchiveOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_DIRECTORY_STREAM_COUNT'] = KMaxFolderStreamCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_NAME_BYTES'] = KMaxNameBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_STREAM_COUNT'] = KMaxStreamCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_UNCOMPRESSED_STREAM'] = KMaxUncompressedStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_TYPE_IDS_BY_NAME'] = KTypeIdsByName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_decode_scanned_candidate'] = DecodeScanned
+
+# this binding exists because shared behavior needs one stable value
+globals()['_encode_directory_entry'] = EncodeFolder
+
+# this binding exists because shared behavior needs one stable value
+globals()['_encode_record'] = EncodeRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_encoded_name'] = EncodedName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_end_signature'] = EndSignature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_nibble_swap'] = NibbleSwap
+
+# this binding exists because shared behavior needs one stable value
+globals()['_scan_records'] = ScanRecords
+
+# this binding exists because shared behavior needs one stable value
+globals()['_template_fields'] = TemplateFields
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_sldprt'] = BuildSldprt
+
+# this binding exists because shared behavior needs one stable value
+globals()['container_signatures'] = Container
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['signature_triplet'] = Signature
+
+# this binding exists because shared behavior needs one stable value
+globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['zlib'] = ZlibValue

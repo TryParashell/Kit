@@ -6,150 +6,312 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
+from __future__ import annotations as Annotations
 from pathlib import PureWindowsPath
-import re
+import re as RegexLib
 from types import MappingProxyType
 from typing import Iterable
-
 from convert.adapters.base import AdapterInfo
 from interchange import Capability
 
-PART_FORMAT_ID = "solidworks.sldprt"
-ASSEMBLY_FORMAT_ID = "solidworks.sldasm"
-DRAWING_FORMAT_ID = "solidworks.slddrw"
-DRAWING_SUFFIX = ".slddrw"
-DRAWING_FORMAT_NAME = "SOLIDWORKS drawing"
-FORMAT_ID_BY_SUFFIX = MappingProxyType(
-    {
-        ".sldprt": PART_FORMAT_ID,
-        ".sldasm": ASSEMBLY_FORMAT_ID,
-    }
-)
-SUFFIX_BY_FORMAT_ID = MappingProxyType(
-    {format_id: suffix for suffix, format_id in FORMAT_ID_BY_SUFFIX.items()}
-)
-PART_SUFFIX = SUFFIX_BY_FORMAT_ID[PART_FORMAT_ID]
-ASSEMBLY_SUFFIX = SUFFIX_BY_FORMAT_ID[ASSEMBLY_FORMAT_ID]
-FORMAT_IDS = tuple(FORMAT_ID_BY_SUFFIX.values())
+# this binding exists because shared behavior needs one stable value
+KPartFormatId = 'solidworks.sldprt'
 
-INFO = AdapterInfo(
-    format_id=PART_FORMAT_ID,
-    name="SOLIDWORKS",
-    version="1.0",
-    extensions=tuple(FORMAT_ID_BY_SUFFIX),
-    aliases=(ASSEMBLY_FORMAT_ID,),
-    capabilities=frozenset(Capability),
-    media_types=(
-        "application/x-solidworks-part",
-        "application/x-solidworks-assembly",
-    ),
-    part_extensions=(PART_SUFFIX,),
-    assembly_extensions=(ASSEMBLY_SUFFIX,),
-)
-CONTAINER_VERSIONS = frozenset({3, 4})
+# this binding exists because shared behavior needs one stable value
+KAsmFormatId = 'solidworks.sldasm'
 
-COMPONENT_TREE_STREAM = "swXmlContents/COMPINSTANCETREE"
-DISPLAY_LISTS_STREAM = "Contents/DisplayLists"
-KEYWORDS_STREAM = "swXmlContents/KeyWords"
-FEATURES_STREAM = "swXmlContents/Features"
-RESOLVED_FEATURES_STREAM = "Contents/Config-0-ResolvedFeatures"
-CONFIGURATION_STREAM = "Contents/Config-0"
-PARTITION_STREAM = "Contents/Config-0-Partition"
-SOLIDWORKS_STREAM = "Contents/SolidWorks"
-KIT_DOCUMENT_STREAM = "Kit/Interchange"
-KIT_NATIVE_STREAM = "Kit/Native"
-KIT_RESOLVED_STREAM = "Kit/ResolvedFeatures"
-CONTENT_TYPES_STREAM = "[Content_Types].xml"
-RELATIONSHIPS_STREAM = "_rels/.rels"
-MATES_STREAM_NAME = "MatesList"
-MATES_STREAM_SUFFIX = f"-{MATES_STREAM_NAME}"
-_RESOLVED_LANE_PREFIX, _RESOLVED_LANE_SUFFIX = RESOLVED_FEATURES_STREAM.split("0", 1)
-RESOLVED_FEATURES_LANE = re.compile(
-    rf"^{re.escape(_RESOLVED_LANE_PREFIX)}(\d+){re.escape(_RESOLVED_LANE_SUFFIX)}$"
-)
-DRAWING_STREAM_TOKENS = frozenset(
-    {"drsheet", "drview", "drawingsheet", "drawingview", "sheetformat"}
-)
+# this binding exists because shared behavior needs one stable value
+KDrawingFormatId = 'solidworks.slddrw'
 
-CLASS_MARKER = bytes.fromhex("ffff0100")
-SERIALIZED_STRING_MARKER = bytes.fromhex("fffeff")
-DIMENSION_SCALAR_HEADERS = (
-    bytes.fromhex("0000000000000040ffffffff00000000fffeff000000"),
-    bytes.fromhex("0000000000000040ffffffff000000000000"),
-)
+# this binding exists because shared behavior needs one stable value
+KDrawingSuffix = '.slddrw'
 
-CANONICAL_PLANE_FEATURE_TYPE = "plane"
-OFFICIAL_REFERENCE_PLANE_FEATURE_TYPES = frozenset({"refplane"})
-PLANE_FEATURE_TYPES = OFFICIAL_REFERENCE_PLANE_FEATURE_TYPES | {
-    CANONICAL_PLANE_FEATURE_TYPE
-}
-SOLID_BODY_FEATURE_TYPES = frozenset({"featsolidbodyfolder", "solidbodyfolder"})
+# this binding exists because shared behavior needs one stable value
+KDrawingFormatName = 'SOLIDWORKS drawing'
 
+# this binding exists because shared behavior needs one stable value
+KFormatIdBySuffix = MappingProxyType({'.sldprt': KPartFormatId, '.sldasm': KAsmFormatId})
 
-def dimension_scalar_value_offset(
-    data: bytes,
-    text_end: int,
-    end: int,
-    *,
-    trailing_bytes: int = 0,
-) -> int | None:
-    for header in DIMENSION_SCALAR_HEADERS:
-        if data[text_end : text_end + len(header)] != header:
+# this binding exists because shared behavior needs one stable value
+KSuffixByFormatId = MappingProxyType({FormatId: Suffix for Suffix, FormatId in KFormatIdBySuffix.items()})
+
+# this binding exists because shared behavior needs one stable value
+KPartSuffix = KSuffixByFormatId[KPartFormatId]
+
+# this binding exists because shared behavior needs one stable value
+KAsmSuffix = KSuffixByFormatId[KAsmFormatId]
+
+# this binding exists because shared behavior needs one stable value
+KFormatIds = tuple(KFormatIdBySuffix.values())
+
+# this binding exists because shared behavior needs one stable value
+KInfoValue = AdapterInfo(format_id=KPartFormatId, name='SOLIDWORKS', version='1.0', extensions=tuple(KFormatIdBySuffix), aliases=(KAsmFormatId,), capabilities=frozenset(Capability), media_types=('application/x-solidworks-part', 'application/x-solidworks-assembly'), part_extensions=(KPartSuffix,), assembly_extensions=(KAsmSuffix,))
+
+# this binding exists because shared behavior needs one stable value
+KContainerVersions = frozenset({3, 4})
+
+# this binding exists because shared behavior needs one stable value
+KComponentTreeStream = 'swXmlContents/COMPINSTANCETREE'
+
+# this binding exists because shared behavior needs one stable value
+KDisplayListsStream = 'Contents/DisplayLists'
+
+# this binding exists because shared behavior needs one stable value
+KeywordsStream = 'swXmlContents/KeyWords'
+
+# this binding exists because shared behavior needs one stable value
+KFeaturesStream = 'swXmlContents/Features'
+
+# this binding exists because shared behavior needs one stable value
+KResolvedFeaturesStream = 'Contents/Config-0-ResolvedFeatures'
+
+# this binding exists because shared behavior needs one stable value
+KConfigStream = 'Contents/Config-0'
+
+# this binding exists because shared behavior needs one stable value
+KPartitionStream = 'Contents/Config-0-Partition'
+
+# this binding exists because shared behavior needs one stable value
+KSolidworksStream = 'Contents/SolidWorks'
+
+# this binding exists because shared behavior needs one stable value
+KitDocStream = 'Kit/Interchange'
+
+# this binding exists because shared behavior needs one stable value
+KitNativeStream = 'Kit/Native'
+
+# this binding exists because shared behavior needs one stable value
+KitResolvedStream = 'Kit/ResolvedFeatures'
+
+# this binding exists because shared behavior needs one stable value
+KContentTypesStream = '[Content_Types].xml'
+
+# this binding exists because shared behavior needs one stable value
+KRelationshipsStream = '_rels/.rels'
+
+# this binding exists because shared behavior needs one stable value
+KMatesStreamName = 'MatesList'
+
+# this binding exists because shared behavior needs one stable value
+KMatesStreamSuffix = f'-{KMatesStreamName}'
+
+# this binding exists because shared behavior needs one stable value
+KResolvedLanePrefix, KResolvedLaneSuffix = KResolvedFeaturesStream.split('0', 1)
+
+# this binding exists because shared behavior needs one stable value
+KResolvedFeaturesLane = RegexLib.compile(f'^{RegexLib.escape(KResolvedLanePrefix)}(\\d+){RegexLib.escape(KResolvedLaneSuffix)}$')
+
+# this binding exists because shared behavior needs one stable value
+KDrawingStreamTokens = frozenset({'drsheet', 'drview', 'drawingsheet', 'drawingview', 'sheetformat'})
+
+# this binding exists because shared behavior needs one stable value
+KClassMarker = bytes.fromhex('ffff0100')
+
+# this binding exists because shared behavior needs one stable value
+KSerializedStringMarker = bytes.fromhex('fffeff')
+
+# this binding exists because shared behavior needs one stable value
+KDimensionScalarHeaders = (bytes.fromhex('0000000000000040ffffffff00000000fffeff000000'), bytes.fromhex('0000000000000040ffffffff000000000000'))
+
+# this binding exists because shared behavior needs one stable value
+KCanonicalPlaneFeatureTyA = 'plane'
+
+# this binding exists because shared behavior needs one stable value
+KOfficialRefPlaneFeature = frozenset({'refplane'})
+
+# this binding exists because shared behavior needs one stable value
+KPlaneFeatureTypes = KOfficialRefPlaneFeature | {KCanonicalPlaneFeatureTyA}
+
+# this binding exists because shared behavior needs one stable value
+KSolidBodyFeatureTypes = frozenset({'featsolidbodyfolder', 'solidbodyfolder'})
+
+# this definition exists because focused behavior needs one stable owner
+def DimensionScalar(DataValue: bytes, TextEnd: int, EndValue: int, *, TrailingBytes: int=0) -> int | None:
+    for Header in KDimensionScalarHeaders:
+        if DataValue[TextEnd:TextEnd + len(Header)] != Header:
             continue
-        value_offset = text_end + len(header)
-        if value_offset + 8 + trailing_bytes <= end:
-            return value_offset
+        ValueOffset = TextEnd + len(Header)
+        if ValueOffset + 8 + TrailingBytes <= EndValue:
+            return ValueOffset
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def IsCadPath(Value: str) -> bool:
+    return PureWindowsPath(Value).suffix.casefold() in KFormatIdBySuffix
 
-def is_cad_path(value: str) -> bool:
-    return PureWindowsPath(value).suffix.casefold() in FORMAT_ID_BY_SUFFIX
+# this definition exists because focused behavior needs one stable owner
+def IsDrawingPath(Value: str) -> bool:
+    return PureWindowsPath(Value).suffix.casefold() == KDrawingSuffix
 
+# this definition exists because focused behavior needs one stable owner
+def PartLaneNames(Names: Iterable[str]) -> tuple[str, ...]:
+    return tuple((NameValue for NameValue in Names if KResolvedFeaturesLane.fullmatch(NameValue)))
 
-def is_drawing_path(value: str) -> bool:
-    return PureWindowsPath(value).suffix.casefold() == DRAWING_SUFFIX
+# this definition exists because focused behavior needs one stable owner
+def DrawingStream(Names: Iterable[str]) -> tuple[str, ...]:
+    return tuple((NameValue for NameValue in Names if any((Token in NameValue.casefold() for Token in KDrawingStreamTokens))))
 
+# this definition exists because focused behavior needs one stable owner
+def UnsupportedDoc(Names: Iterable[str]) -> str:
+    Values = tuple(Names)
+    if PartLaneNames(Values) or KComponentTreeStream in Values:
+        return ''
+    if DrawingStream(Values):
+        return f'{KDrawingFormatName} content ({KDrawingFormatId}) is not supported; SOLIDWORKS reading requires a part or assembly container'
+    return f'SOLIDWORKS container carries neither a part lane ({KResolvedFeaturesStream}) nor an assembly lane ({KComponentTreeStream})'
 
-def part_lane_names(names: Iterable[str]) -> tuple[str, ...]:
-    return tuple(name for name in names if RESOLVED_FEATURES_LANE.fullmatch(name))
-
-
-def drawing_stream_names(names: Iterable[str]) -> tuple[str, ...]:
-    return tuple(
-        name
-        for name in names
-        if any(token in name.casefold() for token in DRAWING_STREAM_TOKENS)
-    )
-
-
-def unsupported_document_reason(names: Iterable[str]) -> str:
-    values = tuple(names)
-    if part_lane_names(values) or COMPONENT_TREE_STREAM in values:
-        return ""
-    if drawing_stream_names(values):
-        return (
-            f"{DRAWING_FORMAT_NAME} content ({DRAWING_FORMAT_ID}) is not supported; "
-            "SOLIDWORKS reading requires a part or assembly container"
-        )
-    return (
-        "SOLIDWORKS container carries neither a part lane "
-        f"({RESOLVED_FEATURES_STREAM}) nor an assembly lane "
-        f"({COMPONENT_TREE_STREAM})"
-    )
-
-
-def is_component_path(value: str) -> bool:
-    if "^" in value or is_cad_path(value):
+# this definition exists because focused behavior needs one stable owner
+def IsComponentPath(Value: str) -> bool:
+    if '^' in Value or IsCadPath(Value):
         return False
-    segments = value.split("/")
-    if not segments:
+    Segments = Value.split('/')
+    if not Segments:
         return False
-    for segment in segments:
-        if segment.count("@") != 1:
+    for Segment in Segments:
+        if Segment.count('@') != 1:
             return False
-        instance, owner = segment.split("@", 1)
-        if not instance.strip() or not owner.strip():
+        Instance, Owner = Segment.split('@', 1)
+        if not Instance.strip() or not Owner.strip():
             return False
     return True
+
+# this binding exists because shared behavior needs one stable value
+globals()['ASSEMBLY_FORMAT_ID'] = KAsmFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['ASSEMBLY_SUFFIX'] = KAsmSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['CANONICAL_PLANE_FEATURE_TYPE'] = KCanonicalPlaneFeatureTyA
+
+# this binding exists because shared behavior needs one stable value
+globals()['CLASS_MARKER'] = KClassMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['COMPONENT_TREE_STREAM'] = KComponentTreeStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONFIGURATION_STREAM'] = KConfigStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONTAINER_VERSIONS'] = KContainerVersions
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONTENT_TYPES_STREAM'] = KContentTypesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['DIMENSION_SCALAR_HEADERS'] = KDimensionScalarHeaders
+
+# this binding exists because shared behavior needs one stable value
+globals()['DISPLAY_LISTS_STREAM'] = KDisplayListsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['DRAWING_FORMAT_ID'] = KDrawingFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['DRAWING_FORMAT_NAME'] = KDrawingFormatName
+
+# this binding exists because shared behavior needs one stable value
+globals()['DRAWING_STREAM_TOKENS'] = KDrawingStreamTokens
+
+# this binding exists because shared behavior needs one stable value
+globals()['DRAWING_SUFFIX'] = KDrawingSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['FEATURES_STREAM'] = KFeaturesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['FORMAT_IDS'] = KFormatIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['FORMAT_ID_BY_SUFFIX'] = KFormatIdBySuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['INFO'] = KInfoValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['KEYWORDS_STREAM'] = KeywordsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_DOCUMENT_STREAM'] = KitDocStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_NATIVE_STREAM'] = KitNativeStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_RESOLVED_STREAM'] = KitResolvedStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATES_STREAM_NAME'] = KMatesStreamName
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATES_STREAM_SUFFIX'] = KMatesStreamSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['OFFICIAL_REFERENCE_PLANE_FEATURE_TYPES'] = KOfficialRefPlaneFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['PARTITION_STREAM'] = KPartitionStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['PART_FORMAT_ID'] = KPartFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['PART_SUFFIX'] = KPartSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['PLANE_FEATURE_TYPES'] = KPlaneFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['RELATIONSHIPS_STREAM'] = KRelationshipsStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['RESOLVED_FEATURES_LANE'] = KResolvedFeaturesLane
+
+# this binding exists because shared behavior needs one stable value
+globals()['RESOLVED_FEATURES_STREAM'] = KResolvedFeaturesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['SERIALIZED_STRING_MARKER'] = KSerializedStringMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['SOLIDWORKS_STREAM'] = KSolidworksStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['SOLID_BODY_FEATURE_TYPES'] = KSolidBodyFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['SUFFIX_BY_FORMAT_ID'] = KSuffixByFormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_RESOLVED_LANE_PREFIX'] = KResolvedLanePrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_RESOLVED_LANE_SUFFIX'] = KResolvedLaneSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['dimension_scalar_value_offset'] = DimensionScalar
+
+# this binding exists because shared behavior needs one stable value
+globals()['drawing_stream_names'] = DrawingStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_cad_path'] = IsCadPath
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_component_path'] = IsComponentPath
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_drawing_path'] = IsDrawingPath
+
+# this binding exists because shared behavior needs one stable value
+globals()['part_lane_names'] = PartLaneNames
+
+# this binding exists because shared behavior needs one stable value
+globals()['re'] = RegexLib
+
+# this binding exists because shared behavior needs one stable value
+globals()['unsupported_document_reason'] = UnsupportedDoc

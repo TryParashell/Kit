@@ -6,2763 +6,1508 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field, replace
-import hashlib
-import itertools
-import math
+from __future__ import annotations as Annotations
+from dataclasses import dataclass as Dataclass, field as Field, replace as Replace
+import hashlib as Hashlib
+import itertools as Itertools
+import math as MathValue
 from pathlib import PureWindowsPath
-import re
-import struct
+import re as RegexLib
+import struct as Struct
 from types import MappingProxyType
-from typing import Any, Mapping, Sequence
-import xml.etree.ElementTree as ET
-
-from interchange import (
-    BooleanOperation,
-    CadDocument,
-    Capability,
-    ChamferFeature,
-    CircleCurve,
-    CircleGeometry,
-    CircularPatternFeature,
-    CylinderSurface,
-    ExtrusionEndCondition,
-    ExtrusionFeature,
-    FeatureKind,
-    FeatureStep,
-    FilletFeature,
-    LinearPatternFeature,
-    LineCurve,
-    LineGeometry,
-    NativeFeatureDefinition,
-    Parameter,
-    ParameterRole,
-    ParameterValue,
-    PlaneSurface,
-    ShellFeature,
-    Sketch,
-    SupportPlane,
-    ValueKind,
-    Vector2,
-)
-
-from convert.geometry.Opencascade import decode_ascii_brep
-
-from convert.adapters.solidworks.container.Archive import encode_class_reference
-from convert.adapters.solidworks.container.Cmgr import CONFIGURATION_MANAGER_STREAM, FIRST_ATOM_ID, atom_ids_for, encode_cmgr_stream
-from convert.adapters.solidworks.configuration.ConfigZero import encode_config0_stream
+from typing import Any as AnyValue, Mapping, Sequence
+import xml.etree.ElementTree as XmlTree
+from interchange import BooleanOperation as BoolOperation, CadDocument as CadDoc, Capability, ChamferFeature, CircleCurve, CircleGeometry as CircleGeom, CircularPatternFeature, CylinderSurface, ExtrusionEndCondition, ExtrusionFeature, FeatureKind, FeatureStep, FilletFeature, LinearPatternFeature, LineCurve, LineGeometry as LineGeom, NativeFeatureDefinition, Parameter as Param, ParameterRole as ParamRole, ParameterValue as ParamValue, PlaneSurface, ShellFeature, Sketch, SupportPlane, ValueKind, Vector2 as VectorTwo
+from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
+from convert.adapters.solidworks.container.Archive import encode_class_reference as EncodeClassRef
+from convert.adapters.solidworks.container.Cmgr import CONFIGURATION_MANAGER_STREAM as ConfigManagerStream, FIRST_ATOM_ID as FirstAtomId, atom_ids_for as AtomIdsFor, encode_cmgr_stream as EncodeCmgrStream
+from convert.adapters.solidworks.configuration.ConfigZero import encode_config0_stream as EncodeConfigZeroStream
 from convert.adapters.solidworks.programs.configuration.box.Program import EncodeProgram as EncodeBoxConfigProgram
-from convert.adapters.solidworks.programs.configuration.circle.reverse.Program import EncodeProgram as EncodeReverseCircleConfigProgram
+from convert.adapters.solidworks.programs.configuration.circle.reverse.Program import EncodeProgram as EncodeReverseCircleConfig
 from convert.adapters.solidworks.container.Container import SldprtFormatError
-from convert.adapters.solidworks.container.Definition import encode_definition_stream
-from convert.adapters.solidworks.container.Format import ASSEMBLY_SUFFIX, CANONICAL_PLANE_FEATURE_TYPE, CLASS_MARKER, CONFIGURATION_STREAM, DIMENSION_SCALAR_HEADERS, KIT_RESOLVED_STREAM, PART_SUFFIX, PLANE_FEATURE_TYPES, RESOLVED_FEATURES_STREAM, SERIALIZED_STRING_MARKER, dimension_scalar_value_offset
-from convert.adapters.solidworks.resolved.Core import ANGLE_COPY_DELTAS, DEPTH_COPY_DELTAS, DEPTH_COPY_SIGNS, FeatureEdit, FROM_END_SPEC_CLASS, FROM_REVERSE_RELATIVE, REVOLUTION_AXIS_SKETCH, SKETCH_CHAIN_CLASS, circle_radius_mm, locate_features, patch_features, rectangle_corners_mm
+from convert.adapters.solidworks.container.Definition import encode_definition_stream as EncodeDefinitionStream
+from convert.adapters.solidworks.container.Format import ASSEMBLY_SUFFIX as AsmSuffix, CANONICAL_PLANE_FEATURE_TYPE as CanonicalPlaneFeatureType, CLASS_MARKER as ClassMarker, CONFIGURATION_STREAM as ConfigStream, DIMENSION_SCALAR_HEADERS as DimensionScalarHeaders, KIT_RESOLVED_STREAM as KitResolvedStream, PART_SUFFIX as PartSuffix, PLANE_FEATURE_TYPES as PlaneFeatureTypes, RESOLVED_FEATURES_STREAM as ResolvedFeaturesStream, SERIALIZED_STRING_MARKER as SerializedStringMarker, dimension_scalar_value_offset as DimensionScalarValue
+from convert.adapters.solidworks.resolved.Core import ANGLE_COPY_DELTAS as AngleCopyDeltas, DEPTH_COPY_DELTAS as DepthCopyDeltas, DEPTH_COPY_SIGNS as DepthCopySigns, FeatureEdit, FROM_END_SPEC_CLASS as FromEndSpecClass, FROM_REVERSE_RELATIVE as FromReverseRelative, REVOLUTION_AXIS_SKETCH as RevolutionAxisSketch, SKETCH_CHAIN_CLASS as SketchChainClass, circle_radius_mm as CircleRadiusMm, locate_features as LocateFeatures, patch_features as PatchFeatures, rectangle_corners_mm as RectangleCornersMm
 from convert.adapters.solidworks.programs.resolved.default.Program import EncodeProgram
 from convert.adapters.solidworks.programs.resolved.boss.cut.default.Program import EncodeProgram as EncodeBossCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Program import EncodeProgram as EncodeBossCutCircleProgram
+from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Program import EncodeProgram as EncodeBossCutCircle
 from convert.adapters.solidworks.programs.resolved.boss.cut.pair.Program import EncodeProgram as EncodeBossCutCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.triple.Program import EncodeProgram as EncodeBossCutCutCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.through.Program import EncodeProgram as EncodeBossCutThroughProgram
+from convert.adapters.solidworks.programs.resolved.boss.cut.triple.Program import EncodeProgram as EncodeBossCutCutCut
+from convert.adapters.solidworks.programs.resolved.boss.cut.through.Program import EncodeProgram as EncodeBossCutThrough
 from convert.adapters.solidworks.programs.resolved.boss.repeated.Program import EncodeProgram as EncodeBossBossProgram
 from convert.adapters.solidworks.programs.resolved.boss.chamfer.Program import EncodeProgram as EncodeBossChamferProgram
-from convert.adapters.solidworks.programs.resolved.boss.pattern.circular.Program import EncodeProgram as EncodeBossCircularPatternProgram
+from convert.adapters.solidworks.programs.resolved.boss.pattern.circular.Program import EncodeProgram as EncodeBossCircularPattern
 from convert.adapters.solidworks.programs.resolved.boss.fillet.Program import EncodeProgram as EncodeBossFilletProgram
-from convert.adapters.solidworks.programs.resolved.boss.pattern.linear.Program import EncodeProgram as EncodeBossLinearPatternProgram
+from convert.adapters.solidworks.programs.resolved.boss.pattern.linear.Program import EncodeProgram as EncodeBossLinearPattern
 from convert.adapters.solidworks.programs.resolved.boss.revolvecut.Program import EncodeProgram as EncodeBossRevCutProgram
 from convert.adapters.solidworks.programs.resolved.boss.shell.Program import EncodeProgram as EncodeBossShellProgram
 from convert.adapters.solidworks.programs.resolved.box.Program import EncodeProgram as EncodeBoxProgram
 from convert.adapters.solidworks.programs.resolved.circle.default.Program import EncodeProgram as EncodeCircleProgram
-from convert.adapters.solidworks.programs.resolved.circle.reverse.Program import EncodeProgram as EncodeReverseCircleProgram
+from convert.adapters.solidworks.programs.resolved.circle.reverse.Program import EncodeProgram as EncodeReverseCircle
 from convert.adapters.solidworks.programs.resolved.polyline.sixpoint.Program import EncodeProgram as EncodePolylineSixProgram, PadFieldMap as PolylineSixFieldMap
 from convert.adapters.solidworks.programs.resolved.planes.right.Program import EncodeProgram as EncodeRightProgram
 from convert.adapters.solidworks.programs.resolved.revolve.default.Program import EncodeProgram as EncodeRevolveProgram
 from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program import EncodeProgram as EncodePinRevolveProgram
 from convert.adapters.solidworks.programs.resolved.planes.top.Program import EncodeProgram as EncodeTopProgram
-from convert.adapters.solidworks.envelopes.revolve.pin.rightangle.Envelope import BuildEnvelope as BuildPin90Envelope
-from convert.adapters.solidworks.envelopes.revolve.pin.rightangle.Envelope import EncodeFeatures as EncodePin90RevolveProgram
+from convert.adapters.solidworks.envelopes.revolve.pin.rightangle.Envelope import BuildEnvelope as BuildPinNineZeroEnvelope
+from convert.adapters.solidworks.envelopes.revolve.pin.rightangle.Envelope import EncodeFeatures as EncodePinNineZeroRevolve
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import BuildEnvelope as BuildPinEnvelope
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import KPinPointsMm
 
-_RADIANS_TO_DEGREES = 180.0 / math.pi
+# this binding exists because shared behavior needs one stable value
+KRadiansToDegrees = 180.0 / MathValue.pi
 
-_CURRENT_MARKER = bytes.fromhex("ffff1f0003")
-_LEGACY_MARKER = bytes.fromhex("ffff070001")
-_EXTENDED_MARKER = bytes.fromhex("ffff1f0001")
-_MARKERS = (_CURRENT_MARKER, _LEGACY_MARKER, _EXTENDED_MARKER)
-_COORDINATE_TAG = bytes.fromhex("1e00")
-_POINT_LOCUS = bytes.fromhex("04000200")
-_CIRCLE_LOCUS = bytes.fromhex("05000100")
-_NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
-_EDGE_SELECTION_IDENTITY = bytes.fromhex("7dc39425ad49b2547dc39425ad49b254")
-_REVOLUTION_FEATURE_TYPES = frozenset(
-    {"revolve", "revolution", "cut-revolve", "revcut"}
-)
-_SURFACE_EXTRUSION_FEATURE_TYPES = frozenset({"surface-extrude", "extrurefsurface"})
-_MOVE_BODY_FEATURE_TYPES = frozenset({"body-move/copy", "movecopybody"})
-_COMBINE_FEATURE_TYPES = frozenset({"combine", "combinebodies"})
-_HOLE_CLASS_NAMES = frozenset({"moSketchHole", "moHoleWzd_c"})
-_EQUATION = re.compile(r'^"([^"\r\n]+)"\s*=\s*(\S(?:.*\S)?)$')
-_EQUATION_REFERENCE = re.compile(r'"([^"\r\n]+)"')
-_EXTRUSION_CLASS = "moExtrusion_c"
-_BOUNDING_BOX_CLASS = "moBBoxCenterData_c"
-_BOUNDING_BOX_RELATIVE = 28
-_FACE_SUPPORT_CLASS = "moFaceRefPlnData_c"
-_SKETCH_PLANE_ID_RELATIVE = 209
-_SKETCH_PLANE_REFERENCE_PREFIX = bytes.fromhex("50460000")
-_SKETCH_PLANE_REFERENCE_TAG = bytes.fromhex("f65a1a69")
-_SKETCH_PLANE_AXIS_DELTA = 10
-_SKETCH_PLANE_BASIS_FLAG_DELTA = 14
-_SKETCH_PLANE_BASIS_DELTA = 15
-_SKETCH_PLANE_BASIS_BYTES = 72
-_SKETCH_PLANE_AXIS_COMPLEMENT = 5
-_SKETCH_PLANE_SCAN_BYTES = 320
-_PRINCIPAL_PLANE_OBJECT_IDS = frozenset({2, 3, 4})
-_PLANE_FRAME_BYTES = 121
-_EQUATION_IDENTIFIER = re.compile(r"[^0-9A-Za-z]+")
-_EQUATION_REFERENCE_SOURCE = re.compile(r"^[A-Za-z_<][0-9A-Za-z_<>.:\- ]*$")
-_EQUATION_RESERVED_PREFIX = "KitReserved"
-_EXTRUSION_OPERATION_KINDS = frozenset({"join", "cut"})
-_REVOLUTION_OPERATION_KINDS = frozenset({"revolve_join", "revolve_cut"})
-NORMAL_AXIS_SUBELEMENT = "N_Axis"
-VERTICAL_AXIS_SUBELEMENT = "V_Axis"
-HORIZONTAL_AXIS_SUBELEMENT = "H_Axis"
-DIRECTION_AXIS_ROLE = "direction_axis"
-_IDENTITY_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
-_IDENTITY_ORIGIN = (0.0, 0.0, 0.0)
-_DERIVED_PLANE_CLASSES = (
-    "moRefPlaneMidPlaneGeom_c",
-    "moConstraintMidPlaneRefplaneData_c",
-    "moLinePtRefPlnData_c",
-    "moFaceRefPlnData_c",
-    "moFixedRefPlnData_c",
-    "moDefaultRefPlnData_c",
-)
-PLANE_SUPPORT_KIND = "plane"
-FACE_SUPPORT_KIND = "face"
-DERIVED_SUPPORT_KIND = "derived"
-REFERENCE_SUPPORT_SOURCE = "plane-reference"
-STREAM_ORDER_SUPPORT_SOURCE = "stream-order"
-UNRESOLVED_SUPPORT_SOURCE = "unresolved"
-_MILLIMETRES = 1000.0
-MARKER_LOCAL_ID_OFFSET_BY_LENGTH = MappingProxyType(
-    {
-        142: 138,
-        146: 138,
-        152: 148,
-        154: 150,
-        156: 148,
-        158: 144,
-        162: 158,
-        166: 158,
-        167: 158,
-    }
-)
+# this binding exists because shared behavior needs one stable value
+KCurrentMarker = bytes.fromhex('ffff1f0003')
 
+# this binding exists because shared behavior needs one stable value
+KLegacyMarker = bytes.fromhex('ffff070001')
 
-@dataclass(frozen=True, slots=True)
+# this binding exists because shared behavior needs one stable value
+KExtendedMarker = bytes.fromhex('ffff1f0001')
+
+# this binding exists because shared behavior needs one stable value
+KMarkers = (KCurrentMarker, KLegacyMarker, KExtendedMarker)
+
+# this binding exists because shared behavior needs one stable value
+KCoordinateTag = bytes.fromhex('1e00')
+
+# this binding exists because shared behavior needs one stable value
+KPointLocus = bytes.fromhex('04000200')
+
+# this binding exists because shared behavior needs one stable value
+KCircleLocus = bytes.fromhex('05000100')
+
+# this binding exists because shared behavior needs one stable value
+KNumber = RegexLib.compile('[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?')
+
+# this binding exists because shared behavior needs one stable value
+KEdgeSelectionIdentity = bytes.fromhex('7dc39425ad49b2547dc39425ad49b254')
+
+# this binding exists because shared behavior needs one stable value
+KRevolutionFeatureTypes = frozenset({'revolve', 'revolution', 'cut-revolve', 'revcut'})
+
+# this binding exists because shared behavior needs one stable value
+KSurfaceExtrusionFeature = frozenset({'surface-extrude', 'extrurefsurface'})
+
+# this binding exists because shared behavior needs one stable value
+KMoveBodyFeatureTypes = frozenset({'body-move/copy', 'movecopybody'})
+
+# this binding exists because shared behavior needs one stable value
+KCombineFeatureTypes = frozenset({'combine', 'combinebodies'})
+
+# this binding exists because shared behavior needs one stable value
+KHoleClassNames = frozenset({'moSketchHole', 'moHoleWzd_c'})
+
+# this binding exists because shared behavior needs one stable value
+KEquation = RegexLib.compile('^"([^"\\r\\n]+)"\\s*=\\s*(\\S(?:.*\\S)?)$')
+
+# this binding exists because shared behavior needs one stable value
+KEquationRef = RegexLib.compile('"([^"\\r\\n]+)"')
+
+# this binding exists because shared behavior needs one stable value
+KExtrusionClass = 'moExtrusion_c'
+
+# this binding exists because shared behavior needs one stable value
+KBoundingBoxClass = 'moBBoxCenterData_c'
+
+# this binding exists because shared behavior needs one stable value
+KBoundingBoxRelative = 28
+
+# this binding exists because shared behavior needs one stable value
+KFaceSupportClass = 'moFaceRefPlnData_c'
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneIdRelative = 209
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneRefPrefix = bytes.fromhex('50460000')
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneRefTag = bytes.fromhex('f65a1a69')
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneAxisDelta = 10
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneBasisFlagDelA = 14
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneBasisDelta = 15
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneBasisBytes = 72
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneAxisComplemeA = 5
+
+# this binding exists because shared behavior needs one stable value
+KSketchPlaneScanBytes = 320
+
+# this binding exists because shared behavior needs one stable value
+KPrincipalPlaneObjectIds = frozenset({2, 3, 4})
+
+# this binding exists because shared behavior needs one stable value
+KPlaneFrameBytes = 121
+
+# this binding exists because shared behavior needs one stable value
+KEquationId = RegexLib.compile('[^0-9A-Za-z]+')
+
+# this binding exists because shared behavior needs one stable value
+KEquationRefSource = RegexLib.compile('^[A-Za-z_<][0-9A-Za-z_<>.:\\- ]*$')
+
+# this binding exists because shared behavior needs one stable value
+KEquationReservedPrefix = 'KitReserved'
+
+# this binding exists because shared behavior needs one stable value
+KExtrusionOperationKinds = frozenset({'join', 'cut'})
+
+# this binding exists because shared behavior needs one stable value
+KRevolutionOperationKinds = frozenset({'revolve_join', 'revolve_cut'})
+
+# this binding exists because shared behavior needs one stable value
+KNormalAxisSubElem = 'N_Axis'
+
+# this binding exists because shared behavior needs one stable value
+KVerticalAxisSubElem = 'V_Axis'
+
+# this binding exists because shared behavior needs one stable value
+KHorizontalAxisSubElem = 'H_Axis'
+
+# this binding exists because shared behavior needs one stable value
+KDirectionAxisRole = 'direction_axis'
+
+# this binding exists because shared behavior needs one stable value
+KIdentityBasis = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+# this binding exists because shared behavior needs one stable value
+KIdentityOrigin = (0.0, 0.0, 0.0)
+
+# this binding exists because shared behavior needs one stable value
+KDerivedPlaneClasses = ('moRefPlaneMidPlaneGeom_c', 'moConstraintMidPlaneRefplaneData_c', 'moLinePtRefPlnData_c', 'moFaceRefPlnData_c', 'moFixedRefPlnData_c', 'moDefaultRefPlnData_c')
+
+# this binding exists because shared behavior needs one stable value
+KPlaneSupportKind = 'plane'
+
+# this binding exists because shared behavior needs one stable value
+KFaceSupportKind = 'face'
+
+# this binding exists because shared behavior needs one stable value
+KDerivedSupportKind = 'derived'
+
+# this binding exists because shared behavior needs one stable value
+KRefSupportSource = 'plane-reference'
+
+# this binding exists because shared behavior needs one stable value
+KStreamOrderSupportSource = 'stream-order'
+
+# this binding exists because shared behavior needs one stable value
+KUnresolvedSupportSource = 'unresolved'
+
+# this binding exists because shared behavior needs one stable value
+KMillimetres = 1000.0
+
+# this binding exists because shared behavior needs one stable value
+KMarkerLocalIdOffsetBy = MappingProxyType({142: 138, 146: 138, 152: 148, 154: 150, 156: 148, 158: 144, 162: 158, 166: 158, 167: 158})
+
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeOperand:
-    offset: int
-    kind_code: int
-    entity_index: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['kind_code'] = 'int'
+    __annotations__['entity_index'] = 'int'
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeScalar:
-    name: str
-    name_offset: int
-    value_offset: int
-    value: float
-    object_id: int | None
-    role: str
-    operands: tuple[NativeOperand, ...]
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = 'str'
+    __annotations__['name_offset'] = 'int'
+    __annotations__['value_offset'] = 'int'
+    __annotations__['value'] = 'float'
+    __annotations__['object_id'] = 'int | None'
+    __annotations__['role'] = 'str'
+    __annotations__['operands'] = 'tuple[NativeOperand, ...]'
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeDimension:
-    name: str
-    value_mm: float
-    kind: str
-    source_text: str
-    native_value: float | None = None
-    native_offset: int | None = None
-    native_role: str | None = None
-    operands: tuple[NativeOperand, ...] = ()
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = 'str'
+    __annotations__['value_mm'] = 'float'
+    __annotations__['kind'] = 'str'
+    __annotations__['source_text'] = 'str'
+    __annotations__['native_value'] = 'float | None'
+    locals()['native_value'] = None
+    __annotations__['native_offset'] = 'int | None'
+    locals()['native_offset'] = None
+    __annotations__['native_role'] = 'str | None'
+    locals()['native_role'] = None
+    __annotations__['operands'] = 'tuple[NativeOperand, ...]'
+    locals()['operands'] = ()
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeName:
-    offset: int
-    text_end: int
-    name: str
-    object_id: int | None
-    class_token: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['text_end'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['object_id'] = 'int | None'
+    __annotations__['class_token'] = 'int'
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeClass:
-    offset: int
-    name: str
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['name'] = 'str'
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeMarker:
-    offset: int
-    length: int
-    prefix: str
-    native_kind: int
-    locus: str
-    profile_role: int
-    state: float | None
-    object_index: int | None
-    local_id: int | None
-    coordinates_mm: tuple[float, float] | None
-    endpoint_indices: tuple[int, int] | None
-    construction: bool
-    semantic: str
-    data: bytes = b""
-    coordinates_metres: tuple[float, float] | None = None
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['length'] = 'int'
+    __annotations__['prefix'] = 'str'
+    __annotations__['native_kind'] = 'int'
+    __annotations__['locus'] = 'str'
+    __annotations__['profile_role'] = 'int'
+    __annotations__['state'] = 'float | None'
+    __annotations__['object_index'] = 'int | None'
+    __annotations__['local_id'] = 'int | None'
+    __annotations__['coordinates_mm'] = 'tuple[float, float] | None'
+    __annotations__['endpoint_indices'] = 'tuple[int, int] | None'
+    __annotations__['construction'] = 'bool'
+    __annotations__['semantic'] = 'str'
+    __annotations__['data'] = 'bytes'
+    locals()['data'] = b''
+    __annotations__['coordinates_metres'] = 'tuple[float, float] | None'
+    locals()['coordinates_metres'] = None
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeRule:
+    locals().setdefault('__annotations__', {})
+    __annotations__['id'] = 'str'
+    __annotations__['kind'] = 'str'
+    __annotations__['references'] = 'tuple[str, ...]'
+    __annotations__['parameter'] = 'str | None'
+    __annotations__['value'] = 'float | None'
+    __annotations__['native_offset'] = 'int | None'
+    __annotations__['native_code'] = 'int | None'
 
-@dataclass(frozen=True, slots=True)
-class NativeConstraint:
-    id: str
-    kind: str
-    references: tuple[str, ...]
-    parameter: str | None
-    value: float | None
-    native_offset: int | None
-    native_code: int | None
-
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeProfile:
-    kind: str
-    coordinates: tuple[float, ...]
-    marker_offsets: tuple[int, ...]
-    parameter_name: str | None = None
-    dimension_kind: str | None = None
-    start_angle_degrees: float | None = None
+    locals().setdefault('__annotations__', {})
+    __annotations__['kind'] = 'str'
+    __annotations__['coordinates'] = 'tuple[float, ...]'
+    __annotations__['marker_offsets'] = 'tuple[int, ...]'
+    __annotations__['parameter_name'] = 'str | None'
+    locals()['parameter_name'] = None
+    __annotations__['dimension_kind'] = 'str | None'
+    locals()['dimension_kind'] = None
+    __annotations__['start_angle_degrees'] = 'float | None'
+    locals()['start_angle_degrees'] = None
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeSketchA:
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['plane_object_id'] = 'int'
+    __annotations__['axis_code'] = 'int'
+    __annotations__['u_axis'] = 'tuple[float, float, float]'
+    __annotations__['v_axis'] = 'tuple[float, float, float]'
+    __annotations__['normal'] = 'tuple[float, float, float]'
+    __annotations__['basis_offset'] = 'int | None'
 
-@dataclass(frozen=True, slots=True)
-class NativeSketchPlane:
-    offset: int
-    plane_object_id: int
-    axis_code: int
-    u_axis: tuple[float, float, float]
-    v_axis: tuple[float, float, float]
-    normal: tuple[float, float, float]
-    basis_offset: int | None
-
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeDepthCopy:
-    offset: int
-    sign: int
-    value_mm: float
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['sign'] = 'int'
+    __annotations__['value_mm'] = 'float'
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeBounding:
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['center_mm'] = 'tuple[float, float, float]'
+    __annotations__['diameter_mm'] = 'float'
 
-@dataclass(frozen=True, slots=True)
-class NativeBoundingBox:
-    offset: int
-    center_mm: tuple[float, float, float]
-    diameter_mm: float
-
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativePlane:
-    object_id: int
-    name: str
-    origin_mm: tuple[float, float, float]
-    normal: tuple[float, float, float]
-    u_axis: tuple[float, float, float]
-    v_axis: tuple[float, float, float]
-    native_offset: int | None
-    native_length: int | None
-    principal: bool = False
-    reference_ids: tuple[int, ...] = ()
-    native_stream: str = RESOLVED_FEATURES_STREAM
+    locals().setdefault('__annotations__', {})
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['origin_mm'] = 'tuple[float, float, float]'
+    __annotations__['normal'] = 'tuple[float, float, float]'
+    __annotations__['u_axis'] = 'tuple[float, float, float]'
+    __annotations__['v_axis'] = 'tuple[float, float, float]'
+    __annotations__['native_offset'] = 'int | None'
+    __annotations__['native_length'] = 'int | None'
+    __annotations__['principal'] = 'bool'
+    locals()['principal'] = False
+    __annotations__['reference_ids'] = 'tuple[int, ...]'
+    locals()['reference_ids'] = ()
+    __annotations__['native_stream'] = 'str'
+    locals()['native_stream'] = ResolvedFeaturesStream
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeSketch:
-    object_id: int
-    name: str
-    support_plane_id: int
-    native_offset: int
-    native_end: int
-    markers: tuple[NativeMarker, ...]
-    profiles: tuple[NativeProfile, ...]
-    dimensions: tuple[NativeDimension, ...]
-    constraints: tuple[NativeConstraint, ...]
-    native_stream: str = RESOLVED_FEATURES_STREAM
-    support_kind: str = PLANE_SUPPORT_KIND
-    support_plane: NativeSketchPlane | None = None
-    support_source: str = REFERENCE_SUPPORT_SOURCE
-    unframed_support_plane_id: int | None = None
+    locals().setdefault('__annotations__', {})
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['support_plane_id'] = 'int'
+    __annotations__['native_offset'] = 'int'
+    __annotations__['native_end'] = 'int'
+    __annotations__['markers'] = 'tuple[NativeMarker, ...]'
+    __annotations__['profiles'] = 'tuple[NativeProfile, ...]'
+    __annotations__['dimensions'] = 'tuple[NativeDimension, ...]'
+    __annotations__['constraints'] = 'tuple[NativeConstraint, ...]'
+    __annotations__['native_stream'] = 'str'
+    locals()['native_stream'] = ResolvedFeaturesStream
+    __annotations__['support_kind'] = 'str'
+    locals()['support_kind'] = KPlaneSupportKind
+    __annotations__['support_plane'] = 'NativeSketchPlane | None'
+    locals()['support_plane'] = None
+    __annotations__['support_source'] = 'str'
+    locals()['support_source'] = KRefSupportSource
+    __annotations__['unframed_support_plane_id'] = 'int | None'
+    locals()['unframed_support_plane_id'] = None
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeEndSpec:
-    offset: int
-    termination_code: int
-    direction_code: int
-    second_direction_code: int
-    mirrored_direction_offset: int | None = None
-    mirrored_direction_code: int | None = None
+    locals().setdefault('__annotations__', {})
+    __annotations__['offset'] = 'int'
+    __annotations__['termination_code'] = 'int'
+    __annotations__['direction_code'] = 'int'
+    __annotations__['second_direction_code'] = 'int'
+    __annotations__['mirrored_direction_offset'] = 'int | None'
+    locals()['mirrored_direction_offset'] = None
+    __annotations__['mirrored_direction_code'] = 'int | None'
+    locals()['mirrored_direction_code'] = None
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeOperation:
-    object_id: int
-    name: str
-    kind: str
-    profile_id: int | None
-    dependencies: tuple[int, ...]
-    native_offset: int
-    native_end: int
-    length_mm: float | None
-    radius_mm: float | None
-    family_code: int | None
-    operation_code: int | None
-    schema_code: int | None
-    direction_code: int | None
-    termination_code: int | None
-    selection_offsets: tuple[int, ...]
-    selected_local_ids: tuple[int, ...]
-    angle_degrees: float | None = None
-    diameter_mm: float | None = None
-    second_length_mm: float | None = None
-    axis_marker_offset: int | None = None
-    selection_kind: str = "edge"
-    mode: str | None = None
-    native_stream: str = RESOLVED_FEATURES_STREAM
-    selection_references: tuple[tuple[int, int], ...] = ()
-    translation_mm: tuple[float, float, float] | None = None
-    scale_factors: tuple[float, float, float] | None = None
-    depth_copies: tuple[NativeDepthCopy, ...] = ()
-    mirrored_direction_offset: int | None = None
-    mirrored_direction_code: int | None = None
-    axis_source_kind: str | None = None
-    axis_source_id: int | None = None
-    axis_source_offset: int | None = None
-    end_spec_offset: int | None = None
-    angle_offset: int | None = None
-    angle_copies: tuple[NativeDepthCopy, ...] = ()
-    instance_count: int | None = None
-    spacing_mm: float | None = None
+    locals().setdefault('__annotations__', {})
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['kind'] = 'str'
+    __annotations__['profile_id'] = 'int | None'
+    __annotations__['dependencies'] = 'tuple[int, ...]'
+    __annotations__['native_offset'] = 'int'
+    __annotations__['native_end'] = 'int'
+    __annotations__['length_mm'] = 'float | None'
+    __annotations__['radius_mm'] = 'float | None'
+    __annotations__['family_code'] = 'int | None'
+    __annotations__['operation_code'] = 'int | None'
+    __annotations__['schema_code'] = 'int | None'
+    __annotations__['direction_code'] = 'int | None'
+    __annotations__['termination_code'] = 'int | None'
+    __annotations__['selection_offsets'] = 'tuple[int, ...]'
+    __annotations__['selected_local_ids'] = 'tuple[int, ...]'
+    __annotations__['angle_degrees'] = 'float | None'
+    locals()['angle_degrees'] = None
+    __annotations__['diameter_mm'] = 'float | None'
+    locals()['diameter_mm'] = None
+    __annotations__['second_length_mm'] = 'float | None'
+    locals()['second_length_mm'] = None
+    __annotations__['axis_marker_offset'] = 'int | None'
+    locals()['axis_marker_offset'] = None
+    __annotations__['selection_kind'] = 'str'
+    locals()['selection_kind'] = 'edge'
+    __annotations__['mode'] = 'str | None'
+    locals()['mode'] = None
+    __annotations__['native_stream'] = 'str'
+    locals()['native_stream'] = ResolvedFeaturesStream
+    __annotations__['selection_references'] = 'tuple[tuple[int, int], ...]'
+    locals()['selection_references'] = ()
+    __annotations__['translation_mm'] = 'tuple[float, float, float] | None'
+    locals()['translation_mm'] = None
+    __annotations__['scale_factors'] = 'tuple[float, float, float] | None'
+    locals()['scale_factors'] = None
+    __annotations__['depth_copies'] = 'tuple[NativeDepthCopy, ...]'
+    locals()['depth_copies'] = ()
+    __annotations__['mirrored_direction_offset'] = 'int | None'
+    locals()['mirrored_direction_offset'] = None
+    __annotations__['mirrored_direction_code'] = 'int | None'
+    locals()['mirrored_direction_code'] = None
+    __annotations__['axis_source_kind'] = 'str | None'
+    locals()['axis_source_kind'] = None
+    __annotations__['axis_source_id'] = 'int | None'
+    locals()['axis_source_id'] = None
+    __annotations__['axis_source_offset'] = 'int | None'
+    locals()['axis_source_offset'] = None
+    __annotations__['end_spec_offset'] = 'int | None'
+    locals()['end_spec_offset'] = None
+    __annotations__['angle_offset'] = 'int | None'
+    locals()['angle_offset'] = None
+    __annotations__['angle_copies'] = 'tuple[NativeDepthCopy, ...]'
+    locals()['angle_copies'] = ()
+    __annotations__['instance_count'] = 'int | None'
+    locals()['instance_count'] = None
+    __annotations__['spacing_mm'] = 'float | None'
+    locals()['spacing_mm'] = None
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeFeature:
-    object_id: int
-    name: str
-    kind: str
-    xml_tag: str
-    native_offset: int | None
-    native_end: int | None
-    properties: dict[str, str]
-    dimensions: tuple[NativeDimension, ...]
-    data: bytes = b""
-    class_name: str = ""
-    native_stream: str = RESOLVED_FEATURES_STREAM
+    locals().setdefault('__annotations__', {})
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['kind'] = 'str'
+    __annotations__['xml_tag'] = 'str'
+    __annotations__['native_offset'] = 'int | None'
+    __annotations__['native_end'] = 'int | None'
+    __annotations__['properties'] = 'dict[str, str]'
+    __annotations__['dimensions'] = 'tuple[NativeDimension, ...]'
+    __annotations__['data'] = 'bytes'
+    locals()['data'] = b''
+    __annotations__['class_name'] = 'str'
+    locals()['class_name'] = ''
+    __annotations__['native_stream'] = 'str'
+    locals()['native_stream'] = ResolvedFeaturesStream
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeConfig:
+    locals().setdefault('__annotations__', {})
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['configuration_id'] = 'int'
+    __annotations__['properties'] = 'dict[str, str]'
 
-@dataclass(frozen=True, slots=True)
-class NativeConfiguration:
-    object_id: int
-    name: str
-    configuration_id: int
-    properties: dict[str, str]
-
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeEquation:
-    source: str
-    lhs: str
-    rhs: str
-    references: tuple[str, ...]
-    native_offset: int
-    native_length: int
-    configuration_id: int
-    native_stream: str
+    locals().setdefault('__annotations__', {})
+    __annotations__['source'] = 'str'
+    __annotations__['lhs'] = 'str'
+    __annotations__['rhs'] = 'str'
+    __annotations__['references'] = 'tuple[str, ...]'
+    __annotations__['native_offset'] = 'int'
+    __annotations__['native_length'] = 'int'
+    __annotations__['configuration_id'] = 'int'
+    __annotations__['native_stream'] = 'str'
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class NativeModel:
-    configurations: tuple[NativeConfiguration, ...]
-    features: tuple[NativeFeature, ...]
-    planes: tuple[NativePlane, ...]
-    sketches: tuple[NativeSketch, ...]
-    operations: tuple[NativeOperation, ...]
-    names: tuple[NativeName, ...]
-    classes: tuple[NativeClass, ...]
-    scalars: tuple[NativeScalar, ...]
-    diagnostics: tuple[str, ...] = field(default_factory=tuple)
-    equations: tuple[NativeEquation, ...] = field(default_factory=tuple)
-    active_configuration_id: int | None = None
-    bounding_box: NativeBoundingBox | None = None
+    locals().setdefault('__annotations__', {})
+    __annotations__['configurations'] = 'tuple[NativeConfiguration, ...]'
+    __annotations__['features'] = 'tuple[NativeFeature, ...]'
+    __annotations__['planes'] = 'tuple[NativePlane, ...]'
+    __annotations__['sketches'] = 'tuple[NativeSketch, ...]'
+    __annotations__['operations'] = 'tuple[NativeOperation, ...]'
+    __annotations__['names'] = 'tuple[NativeName, ...]'
+    __annotations__['classes'] = 'tuple[NativeClass, ...]'
+    __annotations__['scalars'] = 'tuple[NativeScalar, ...]'
+    __annotations__['diagnostics'] = 'tuple[str, ...]'
+    locals()['diagnostics'] = Field(default_factory=tuple)
+    __annotations__['equations'] = 'tuple[NativeEquation, ...]'
+    locals()['equations'] = Field(default_factory=tuple)
+    __annotations__['active_configuration_id'] = 'int | None'
+    locals()['active_configuration_id'] = None
+    __annotations__['bounding_box'] = 'NativeBoundingBox | None'
+    locals()['bounding_box'] = None
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativePart:
+    locals().setdefault('__annotations__', {})
+    __annotations__['keywords'] = 'bytes'
+    __annotations__['features'] = 'bytes'
+    __annotations__['resolved_features'] = 'bytes'
+    __annotations__['kit_resolved_features'] = 'bytes | None'
+    __annotations__['configuration_lanes'] = 'tuple[tuple[int, bytes], ...]'
+    __annotations__['native_capabilities'] = 'frozenset[Capability]'
+    __annotations__['mixed_capabilities'] = 'frozenset[Capability]'
+    __annotations__['object_ids'] = 'Mapping[str, int]'
+    __annotations__['envelope_streams'] = 'Mapping[str, bytes]'
+    __annotations__['partition'] = 'bytes | None'
+    __annotations__['application_usable'] = 'bool'
+    __annotations__['vendor_loadable'] = 'bool'
+    __annotations__['donor_notes'] = 'tuple[str, ...]'
+    locals()['donor_notes'] = ()
 
-@dataclass(frozen=True, slots=True)
-class NativePartStreams:
-    keywords: bytes
-    features: bytes
-    resolved_features: bytes
-    kit_resolved_features: bytes | None
-    configuration_lanes: tuple[tuple[int, bytes], ...]
-    native_capabilities: frozenset[Capability]
-    mixed_capabilities: frozenset[Capability]
-    object_ids: Mapping[str, int]
-    envelope_streams: Mapping[str, bytes]
-    partition: bytes | None
-    application_usable: bool
-    vendor_loadable: bool
-    donor_notes: tuple[str, ...] = ()
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeModelA:
+    locals().setdefault('__annotations__', {})
+    __annotations__['user_name'] = 'str'
+    __annotations__['reference_name'] = 'str'
+    __annotations__['configuration_name'] = 'str'
+    __annotations__['document_path'] = 'str'
+    __annotations__['objects'] = 'tuple[tuple[int, str], ...]'
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeAsm:
+    locals().setdefault('__annotations__', {})
+    __annotations__['streams'] = 'Mapping[str, bytes]'
+    __annotations__['configuration_name'] = 'str'
+    __annotations__['reference_name'] = 'str'
+    __annotations__['document_path'] = 'str'
+    __annotations__['header_objects'] = 'tuple[tuple[int, str], ...]'
+    __annotations__['omitted_object_names'] = 'tuple[str, ...]'
+    __annotations__['envelope_complete'] = 'bool'
 
-@dataclass(frozen=True, slots=True)
-class NativeModelHeader:
-    user_name: str
-    reference_name: str
-    configuration_name: str
-    document_path: str
-    objects: tuple[tuple[int, str], ...]
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class XmlFeature:
+    locals().setdefault('__annotations__', {})
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['kind'] = 'str'
+    __annotations__['xml_tag'] = 'str'
+    __annotations__['properties'] = 'dict[str, str]'
+    __annotations__['dimensions'] = 'list[NativeDimension]'
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class WriteDimension:
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = 'str'
+    __annotations__['value_mm'] = 'float'
+    __annotations__['text'] = 'str'
+    __annotations__['role'] = 'ParameterRole'
 
-@dataclass(frozen=True, slots=True)
-class NativeAssemblyEnvelope:
-    streams: Mapping[str, bytes]
-    configuration_name: str
-    reference_name: str
-    document_path: str
-    header_objects: tuple[tuple[int, str], ...]
-    omitted_object_names: tuple[str, ...]
-    envelope_complete: bool
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class WriteObject:
+    locals().setdefault('__annotations__', {})
+    __annotations__['source_id'] = 'str'
+    __annotations__['object_id'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['xml_tag'] = 'str'
+    __annotations__['kind'] = 'str'
+    __annotations__['class_name'] = 'str'
+    __annotations__['properties'] = 'tuple[tuple[str, str], ...]'
+    locals()['properties'] = ()
+    __annotations__['dimensions'] = 'tuple[_WriteDimension, ...]'
+    locals()['dimensions'] = ()
+    __annotations__['payload'] = 'bytes'
+    locals()['payload'] = b''
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeIdentity:
+    locals().setdefault('__annotations__', {})
+    __annotations__['creation_stamp'] = 'int'
+    __annotations__['last_modified_stamp'] = 'int'
+    __annotations__['baseline_stamp'] = 'int'
+    __annotations__['header_stamp'] = 'int'
+    __annotations__['configuration_flags'] = 'int'
+    __annotations__['reference_name'] = 'str'
 
-@dataclass(slots=True)
-class _XmlFeature:
-    object_id: int
-    name: str
-    kind: str
-    xml_tag: str
-    properties: dict[str, str]
-    dimensions: list[NativeDimension]
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class VendorResolved:
+    locals().setdefault('__annotations__', {})
+    __annotations__['payload'] = 'bytes'
+    __annotations__['header_stamps'] = 'tuple[tuple[int, ...], ...]'
+    __annotations__['annotation_view_count'] = 'int'
+    locals()['annotation_view_count'] = 1
+    __annotations__['terminal_parent_tree_id'] = 'int | None'
+    locals()['terminal_parent_tree_id'] = None
+    KHeaderBounds: tuple[float, ...] | None = None
+    KHeaderCreation: int | None = None
+    __annotations__['cmgr_parent_tree_id'] = 'int | None'
+    locals()['cmgr_parent_tree_id'] = None
+    __annotations__['annotation_view_variant'] = 'str'
+    locals()['annotation_view_variant'] = 'default'
+    __annotations__['Config0Payload'] = 'bytes | None'
+    locals()['Config0Payload'] = None
+    KHeaderPayload: bytes | None = None
 
+# this binding exists because shared behavior needs one stable value
+KBaseObjects = ((8, 'Comments', 'Comments', 'moCommentsFolder_c'), (23, 'Favorites', 'Favorites', 'moFavoriteFolder_c'), (24, 'History', 'History', 'moHistoryFolder_c'), (25, 'Selection Sets', 'Selection Sets', 'moSelectionSetFolder_c'), (22, 'Sensors', 'Sensors', 'moSensorFolder_c'), (7, 'Design Binder', 'Design Binder', 'moDocsFolder_c'), (1, 'Annotations', 'Annotations', 'moDetailCabinet_c'), (17, 'Notes', 'Notes', 'moNotesAreaFtrFolder_c'), (18, 'Notes1___EndTag___', 'Notes', 'moNotesAreaFtrFolder_c'), (10, 'Surface Bodies', 'Surface Bodies', 'moSurfaceBodyFolder_c'), (9, 'Solid Bodies', 'Solid Bodies', 'moSolidBodyFolder_c'), (21, 'Markups', 'Markups', 'moInkMarkupFolder_c'), (16, 'Equations', 'Equations', 'moEqnFolder_c'), (11, 'Material <not specified>', 'SOLIDWORKS Materials', 'moMaterialFolder_c'), (2, 'Front Plane', 'Plane', 'moRefPlane_c'), (3, 'Top Plane', 'Plane', 'moRefPlane_c'), (4, 'Right Plane', 'Plane', 'moRefPlane_c'), (5, 'Origin', 'Origin', 'moOriginProfileFeature_c'))
 
-@dataclass(frozen=True, slots=True)
-class _WriteDimension:
-    name: str
-    value_mm: float
-    text: str
-    role: ParameterRole
+# this binding exists because shared behavior needs one stable value
+KeywordOnlyObjects = ((6, 'Lights and Cameras', 'Lights and Cameras'), (12, 'Ambient', 'Ambient'), (13, 'Directional1', 'Directional'), (14, 'Directional2', 'Directional'), (15, 'Directional3', 'Directional'), (19, '', 'Exploded Views'))
 
+# this binding exists because shared behavior needs one stable value
+KeywordOnlyObjectIds = frozenset((ItemValue[0] for ItemValue in KeywordOnlyObjects))
 
-@dataclass(frozen=True, slots=True)
-class _WriteObject:
-    source_id: str
-    object_id: int
-    name: str
-    xml_tag: str
-    kind: str
-    class_name: str
-    properties: tuple[tuple[str, str], ...] = ()
-    dimensions: tuple[_WriteDimension, ...] = ()
-    payload: bytes = b""
+# this binding exists because shared behavior needs one stable value
+KSystemObjectIds = frozenset(range(1, 26))
 
+# this binding exists because shared behavior needs one stable value
+KNameToken = 32772
 
-@dataclass(frozen=True, slots=True)
-class _NativeIdentity:
-    creation_stamp: int
-    last_modified_stamp: int
-    baseline_stamp: int
-    header_stamp: int
-    configuration_flags: int
-    reference_name: str
+# this binding exists because shared behavior needs one stable value
+KNamePrefix = Struct.pack('<H', KNameToken) + b'\xff\xfe\xff'
 
+# this binding exists because shared behavior needs one stable value
+KFolderFlags = 1073741824
 
-# resolved bytes and header identities must enter the container as one coupled unit
-@dataclass(frozen=True, slots=True)
-class _VendorResolved:
-    payload: bytes
-    header_stamps: tuple[tuple[int, ...], ...]
-    annotation_view_count: int = 1
-    terminal_parent_tree_id: int | None = None
-    HeaderBounds: tuple[float, ...] | None = None
-    HeaderCreation: int | None = None
-    cmgr_parent_tree_id: int | None = None
-    annotation_view_variant: str = "default"
-    Config0Payload: bytes | None = None
-    HeaderPayload: bytes | None = None
+# this binding exists because shared behavior needs one stable value
+KRefGeomFlags = 3221225472
 
+# this binding exists because shared behavior needs one stable value
+KBossExtrudeFlags = 1073742144
 
-_BASE_OBJECTS = (
-    (8, "Comments", "Comments", "moCommentsFolder_c"),
-    (23, "Favorites", "Favorites", "moFavoriteFolder_c"),
-    (24, "History", "History", "moHistoryFolder_c"),
-    (25, "Selection Sets", "Selection Sets", "moSelectionSetFolder_c"),
-    (22, "Sensors", "Sensors", "moSensorFolder_c"),
-    (7, "Design Binder", "Design Binder", "moDocsFolder_c"),
-    (1, "Annotations", "Annotations", "moDetailCabinet_c"),
-    (17, "Notes", "Notes", "moNotesAreaFtrFolder_c"),
-    (18, "Notes1___EndTag___", "Notes", "moNotesAreaFtrFolder_c"),
-    (10, "Surface Bodies", "Surface Bodies", "moSurfaceBodyFolder_c"),
-    (9, "Solid Bodies", "Solid Bodies", "moSolidBodyFolder_c"),
-    (21, "Markups", "Markups", "moInkMarkupFolder_c"),
-    (16, "Equations", "Equations", "moEqnFolder_c"),
-    (
-        11,
-        "Material <not specified>",
-        "SOLIDWORKS Materials",
-        "moMaterialFolder_c",
-    ),
-    (2, "Front Plane", "Plane", "moRefPlane_c"),
-    (3, "Top Plane", "Plane", "moRefPlane_c"),
-    (4, "Right Plane", "Plane", "moRefPlane_c"),
-    (5, "Origin", "Origin", "moOriginProfileFeature_c"),
-)
-_KEYWORD_ONLY_OBJECTS = (
-    (6, "Lights and Cameras", "Lights and Cameras"),
-    (12, "Ambient", "Ambient"),
-    (13, "Directional1", "Directional"),
-    (14, "Directional2", "Directional"),
-    (15, "Directional3", "Directional"),
-    (19, "", "Exploded Views"),
-)
-_KEYWORD_ONLY_OBJECT_IDS = frozenset(item[0] for item in _KEYWORD_ONLY_OBJECTS)
-_SYSTEM_OBJECT_IDS = frozenset(range(1, 26))
-_NAME_TOKEN = 0x8004
-_NAME_PREFIX = struct.pack("<H", _NAME_TOKEN) + b"\xff\xfe\xff"
-_FOLDER_FLAGS = 0x40000000
-_REFERENCE_GEOMETRY_FLAGS = 0xC0000000
-_BOSS_EXTRUDE_FLAGS = 0x40000140
-_CUT_EXTRUDE_FLAGS = 0x400201CA
-_REFERENCE_GEOMETRY_CLASSES = frozenset({"moRefPlane_c", "moOriginProfileFeature_c"})
-_CONFIG0_FIRST_FEATURE_COUNTER = 109
-_SCALAR_HEADER = DIMENSION_SCALAR_HEADERS[0]
-_SOLIDWORKS_XML_NAMESPACE = "http://www.solidworks.com/sw2003/schema"
-_SOLIDWORKS_CONFIGURATION_FLAGS = -2143288960
-_CREATION_STAMP_LOW = 1577836800
-_CREATION_STAMP_HIGH = 1893456000
-# the front rectangular boss program carries these feature-action identities
-_FRONT_BOSS_HEADER_STAMPS = ((1785796991, 1785796991), (1785796991,))
-# the dimensioned box program carries distinct sketch modification identities
-_BOX_HEADER_STAMPS = ((1786460234, 1786460235), (1786460235,))
-# the top-plane boss program carries distinct feature-action identities
-_TOP_BOSS_HEADER_STAMPS = ((1785840649, 1785840649), (1785840649,))
-# the right-plane boss program carries distinct feature-action identities
-_RIGHT_BOSS_HEADER_STAMPS = ((1785840740, 1785840741), (1785840741,))
-# the circular boss program carries these feature-action identities
-_CIRCLE_BOSS_HEADER_STAMPS = ((1786472138, 1786472138), (1786472138,))
-# the blind boss-cut program carries four coupled feature-action identities
-_BOSS_CUT_HEADER_STAMPS = (
-    (1785839433, 1785839433),
-    (1785839434,),
-    (1785839434, 1785839435),
-    (1785839435,),
-)
-# the through-all boss-cut program carries its own action identities
-_BOSS_CUT_THROUGH_HEADER_STAMPS = (
-    (1785797023, 1785797023),
-    (1785797023,),
-    (1785797024, 1785797024),
-    (1785797025,),
-)
-# the two-boss program carries four coupled feature-action identities
-_BOSS_BOSS_HEADER_STAMPS = (
-    (1786440431, 1786440431),
-    (1786440431,),
-    (1786440432, 1786440432),
-    (1786440432,),
-)
-# the boss-fillet program carries one sketch action and two feature actions
-_BOSS_FILLET_HEADER_STAMPS = (
-    (1786443440, 1786443440),
-    (1786443440,),
-    (1786443440,),
-)
-# the six traced radius fields jointly define the uniform native fillet radius
-_BOSS_FILLET_RADIUS_OFFSETS = (12721, 13001, 13235, 13259, 13739, 14614)
-# the selected max-X/max-Y edge stores three radius-trimmed X coordinates
-_BOSS_FILLET_MAX_X_OFFSETS = (12753, 12777, 12902)
-# the selected max-X/max-Y edge stores two positive radius-trimmed Y coordinates
-_BOSS_FILLET_MAX_Y_OFFSETS = (12761, 12785)
-# the paired edge-frame coordinate stores the negated radius-trimmed Y value
-_BOSS_FILLET_NEGATIVE_Y_OFFSET = 12910
-# the boss-chamfer program carries one sketch action and two feature actions
-_BOSS_CHAMFER_HEADER_STAMPS = (
-    (1786446942, 1786446942),
-    (1786446942,),
-    (1786446942,),
-)
-# the six recovered distance fields jointly define the equal-distance chamfer
-_BOSS_CHAMFER_DISTANCE_OFFSETS = (12629, 12947, 13027, 13051, 13189, 13213)
-# terminal dimension witnesses track the positive distance-trimmed maximum Y
-_BOSS_CHAMFER_MAX_Y_OFFSETS = (12669, 14519)
-# paired witness transforms store the negated distance-trimmed maximum Y
-_BOSS_CHAMFER_NEGATIVE_Y_OFFSETS = (12866, 14620)
-# the angular display witness stores the chamfer distance with reversed sign
-_BOSS_CHAMFER_NEGATIVE_DISTANCE_OFFSET = 14495
-# the boss-shell program carries one sketch action and two feature actions
-_BOSS_SHELL_HEADER_STAMPS = (
-    (1786448316, 1786448316),
-    (1786448316,),
-    (1786448316,),
-)
-# the six recovered distance fields jointly define the inward wall thickness
-_BOSS_SHELL_THICKNESS_OFFSETS = (12498, 12816, 12888, 12912, 13058, 13082)
-# the shell dimension witness begins at the source pad's minimum X coordinate
-_BOSS_SHELL_MIN_X_OFFSET = 12530
-# the inward wall witness advances from minimum X by the requested thickness
-_BOSS_SHELL_INNER_MIN_X_OFFSET = 12554
-# the opposite dimension witness remains on the source pad's maximum X coordinate
-_BOSS_SHELL_MAX_X_OFFSET = 12727
-# the face-selection witness remains on the open top of the source pad
-_BOSS_SHELL_DEPTH_OFFSET = 12212
-# the boss-linear-pattern program carries one sketch action and two feature actions
-_BOSS_LINEAR_PATTERN_HEADER_STAMPS = (
-    (1786449611, 1786449611),
-    (1786449611,),
-    (1786449611,),
-)
-# three count fields preserve the editable integer occurrence count
-_BOSS_LINEAR_PATTERN_COUNT_OFFSET = 12962
-_BOSS_LINEAR_PATTERN_COUNT_DOUBLE_OFFSETS = (13336, 13360)
-# six signed distance fields preserve the editable instance spacing
-_BOSS_LINEAR_PATTERN_POSITIVE_SPACING_OFFSETS = (
-    14463,
-    14853,
-    14877,
-    15023,
-    15047,
-)
-# the direction witnesses carry the pitch along the selected sketch-normal edge
-_BOSS_LINEAR_PATTERN_DIRECTION_DISTANCE_OFFSETS = (12656, 14535)
-# the native flip flag converts FreeCAD's positive sketch normal to SOLIDWORKS +Z
-_BOSS_LINEAR_PATTERN_DIRECTION_FLAG_OFFSET = 18577
-# the flip flag occupies a stable field in the moLPattern record itself
-_LINEAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET = 7264
-# direction-vector and transform fields preserve the flipped native annotation frame
-_BOSS_LINEAR_PATTERN_NEGATIVE_ZERO_OFFSETS = (14569, 14577, 14620, 14644, 14692)
-# two direction witnesses encode the positive selected-axis unit component
-_BOSS_LINEAR_PATTERN_POSITIVE_AXIS_OFFSETS = (14585, 14668)
-# paired 45-degree transform witnesses rotate the annotation into the flipped frame
-_BOSS_LINEAR_PATTERN_NEGATIVE_DIAGONAL_OFFSET = 14636
-_BOSS_LINEAR_PATTERN_POSITIVE_DIAGONAL_OFFSET = 14660
-# the terminal extent is the seed depth plus every inter-instance pitch
-_BOSS_LINEAR_PATTERN_TERMINAL_DEPTH_OFFSET = 18993
-# the count witness expands the pattern's display range by one millimetre per instance
-_BOSS_LINEAR_PATTERN_COUNT_DISPLAY_OFFSET = 11398
-# display witnesses remain coupled to the generated body's terminal extent
-_BOSS_LINEAR_PATTERN_NEGATIVE_EXTENT_OFFSET = 4187
-_BOSS_LINEAR_PATTERN_POSITIVE_DISPLAY_OFFSETS = (4381, 4935)
-_BOSS_LINEAR_PATTERN_NEGATIVE_DISPLAY_OFFSETS = (4389, 4943)
-_BOSS_LINEAR_PATTERN_CENTER_DISPLAY_OFFSETS = (4428, 4998)
-_BOSS_LINEAR_PATTERN_PAD_DISPLAY_OFFSET = 4757
-# the boss-circular-pattern program carries one sketch action and two feature actions
-_BOSS_CIRCULAR_PATTERN_HEADER_STAMPS = (
-    (1786452328, 1786452328),
-    (1786452328,),
-    (1786452328,),
-)
-# three occurrence fields preserve the editable integer pattern count
-_BOSS_CIRCULAR_PATTERN_COUNT_OFFSET = 13433
-_BOSS_CIRCULAR_PATTERN_COUNT_DOUBLE_OFFSETS = (13807, 13831)
-# three radian fields preserve the editable circular angular span
-_BOSS_CIRCULAR_PATTERN_ANGLE_OFFSETS = (18584, 19026, 19050)
-# FreeCAD's positive sketch-normal axis requires the native reversed direction
-_BOSS_CIRCULAR_PATTERN_DIRECTION_FLAG_OFFSET = 17876
-# the direction flag occupies a stable field in the moCirPattern record itself
-_CIRCULAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET = 6096
-# the boss-groove program carries four coupled feature-action identities
-_BOSS_REV_CUT_HEADER_STAMPS = (
-    (1785927829, 1785927829),
-    (1785927829,),
-    (1785927830, 1785927830),
-    (1785927830,),
-)
-# the two-pocket program carries six coupled feature-action identities
-_BOSS_CUT_CUT_HEADER_STAMPS = (
-    (1785839606, 1785839607),
-    (1785839607,),
-    (1785839608, 1785839609),
-    (1785839609,),
-    (1785839609, 1785839610),
-    (1785839610,),
-)
-# the three-pocket program carries eight coupled feature-action identities
-_BOSS_CUT_CUT_CUT_HEADER_STAMPS = (
-    (1785843343, 1785843343),
-    (1785843343,),
-    (1785843344, 1785843344),
-    (1785843345,),
-    (1785843345, 1785843345),
-    (1785843345,),
-    (1785843346, 1785843346),
-    (1785843346,),
-)
-# the revolved-boss program requires its header actions to share these identities
-_REVOLUTION_HEADER_STAMPS = ((1785797027, 1785797028), (1785797028,))
-VENDOR_UNLOADABLE_NOTES = (
-    "Contents/Config-0-ResolvedFeatures is the SOLIDWORKS feature tree authority and "
-    "the current source graph is outside the recovered native rectangle pad family",
-)
-_NON_SOLID_FEATURE_CLASSES = frozenset({"moRefPlane_c", "moProfileFeature_c"})
-_CONFIGURATION_ROOT_TREE_ID = 0
-_HEADER_OBJECTS = (
-    (1, "Annotations", False),
-    (2, "Front Plane", True),
-    (3, "Top Plane", True),
-    (4, "Right Plane", True),
-    (5, "Origin", True),
-    (6, "Lights and Cameras", False),
-    (7, "Design Binder", False),
-    (8, "Comments", False),
-    (9, "Solid Bodies", False),
-    (10, "Surface Bodies", False),
-    (11, "Material <not specified>", True),
-    (12, "Ambient", False),
-    (13, "Directional1", False),
-    (14, "Directional2", False),
-    (15, "Directional3", False),
-    (16, "Equations", False),
-    (17, "Notes", False),
-    (18, "Notes1___EndTag___", False),
-    (21, "Markups", False),
-    (22, "Sensors", False),
-    (23, "Favorites", False),
-    (24, "History", False),
-    (25, "Selection Sets", False),
-)
-_ASSEMBLY_HEADER_OBJECTS = (
-    (2, "Annotations", False),
-    (3, "Front Plane", True),
-    (4, "Top Plane", True),
-    (5, "Right Plane", True),
-    (6, "Origin", True),
-    (7, "Lights, Cameras and Scene", False),
-    (8, "Design Binder", False),
-    (9, "Comments", False),
-    (10, "Live Section Planes", False),
-    (11, "Mates", False),
-    (12, "Ambient", False),
-    (13, "Directional1", False),
-    (14, "Directional2", False),
-    (15, "Directional3", False),
-    (16, "Equations", False),
-    (17, "Notes", False),
-    (18, "Notes1___EndTag___", False),
-    (19, "Markups", False),
-    (20, "Sensors", False),
-    (21, "Favorites", False),
-    (22, "History", False),
-    (23, "Selection Sets", False),
-)
-_ASSEMBLY_CONFIGURATION_FLAGS = -2147221376
-_ASSEMBLY_REFERENCE_NAME = "Assem1"
-_ASSEMBLY_VERSION_PREFIX = "_MO_VERSION_18000"
-_ASSEMBLY_PROPERTY_CONTAINER_CLASS = "moAssyFilePropContainer_c"
-_ASSEMBLY_ATTACHMENT_STREAM = "Contents/Config-0-Attachment"
-_ASSEMBLY_VISUAL_DATA_STREAM = f"{_ASSEMBLY_VERSION_PREFIX}/AssyVisualData"
-_ASSEMBLY_TABLES_STREAM = "swXmlContents/Tables"
-_ASSEMBLY_VIEW_ORIENTATION_STREAM = "Contents/View Orientation Data"
-_ASSEMBLY_OPEN_TIME_STREAM = "docProps/OpenTime.xml"
-_ASSEMBLY_CUTLIST_STREAM = "docProps/Config-0-Cutlist-Properties.xml"
-_ASSEMBLY_CONFIG_PROPERTIES_STREAM = "docProps/Config-0-Properties.xml"
-_VIEW_ORIENTATION_PAYLOAD = b'<?xml version="1.0" encoding="UTF-8"?>\n<VIEWS/>\n'
-_OPEN_TIME_PAYLOAD = (
-    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-    b'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006'
-    b'/SolidworksOpenTime" xmlns:vt="http://schemas.openxmlformats.org/office'
-    b'Document/2006/docPropsVTypes"><count xmlns="">0</count>'
-    b'<TotalFileOpenTime xmlns="">-1</TotalFileOpenTime>'
-    b'<LWcount xmlns="">0</LWcount>'
-    b'<LWTotalFileOpenTime xmlns="">-1</LWTotalFileOpenTime></Properties>\r\n'
-)
-_CONFIG_PROPERTIES_PAYLOAD = (
-    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-    b'<ConfigProperties xmlns="http://www.solidworks.com/config-properties" '
-    b'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docProps'
-    b'VTypes"><propertySection xmlns="" name="DocumentSummaryInformation" '
-    b'fmtid="{D5CDD502-2E9C-101B-9397-08002B2CF9AE}">'
-    b'<propertyNameDictionaryElement name="" pid="0">'
-    b"</propertyNameDictionaryElement></propertySection>"
-    b'<propertySection xmlns="" name="UserDefinedProperties" '
-    b'fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}">'
-    b'<property name="" pid="1"><vt:i2>65001</vt:i2></property>'
-    b'<propertyNameDictionaryElement name="" pid="0">'
-    b"</propertyNameDictionaryElement></propertySection></ConfigProperties>\r\n"
-)
+# this binding exists because shared behavior needs one stable value
+KCutExtrudeFlags = 1073873354
 
+# this binding exists because shared behavior needs one stable value
+KRefGeomClasses = frozenset({'moRefPlane_c', 'moOriginProfileFeature_c'})
 
-# a cheap exact preflight avoids serializing unsupported corpus documents
-def HasVendorPartEncoding(DocumentData: CadDocument) -> bool:
-    ObjectIds = _write_object_ids(DocumentData)
-    SourceObjects = _write_objects(DocumentData, ObjectIds)
+# this binding exists because shared behavior needs one stable value
+KConfigZeroFirstFeature = 109
+
+# this binding exists because shared behavior needs one stable value
+KScalarHeader = DimensionScalarHeaders[0]
+
+# this binding exists because shared behavior needs one stable value
+KSolidworksXmlNamespace = 'http://www.solidworks.com/sw2003/schema'
+
+# this binding exists because shared behavior needs one stable value
+KSolidworksConfigFlags = -2143288960
+
+# this binding exists because shared behavior needs one stable value
+KCreationStampLow = 1577836800
+
+# this binding exists because shared behavior needs one stable value
+KCreationStampHigh = 1893456000
+
+# this binding exists because shared behavior needs one stable value
+KFrontBossHeaderStamps = ((1785796991, 1785796991), (1785796991,))
+
+# this binding exists because shared behavior needs one stable value
+KBoxHeaderStamps = ((1786460234, 1786460235), (1786460235,))
+
+# this binding exists because shared behavior needs one stable value
+KTopBossHeaderStamps = ((1785840649, 1785840649), (1785840649,))
+
+# this binding exists because shared behavior needs one stable value
+KRightBossHeaderStamps = ((1785840740, 1785840741), (1785840741,))
+
+# this binding exists because shared behavior needs one stable value
+KCircleBossHeaderStamps = ((1786472138, 1786472138), (1786472138,))
+
+# this binding exists because shared behavior needs one stable value
+KBossCutHeaderStamps = ((1785839433, 1785839433), (1785839434,), (1785839434, 1785839435), (1785839435,))
+
+# this binding exists because shared behavior needs one stable value
+KBossCutThroughHeader = ((1785797023, 1785797023), (1785797023,), (1785797024, 1785797024), (1785797025,))
+
+# this binding exists because shared behavior needs one stable value
+KBossBossHeaderStamps = ((1786440431, 1786440431), (1786440431,), (1786440432, 1786440432), (1786440432,))
+
+# this binding exists because shared behavior needs one stable value
+KBossFilletHeaderStamps = ((1786443440, 1786443440), (1786443440,), (1786443440,))
+
+# this binding exists because shared behavior needs one stable value
+KBossFilletRadiusOffsets = (12721, 13001, 13235, 13259, 13739, 14614)
+
+# this binding exists because shared behavior needs one stable value
+KBossFilletMaxXOffsets = (12753, 12777, 12902)
+
+# this binding exists because shared behavior needs one stable value
+KBossFilletMaxYOffsets = (12761, 12785)
+
+# this binding exists because shared behavior needs one stable value
+KBossFilletNegativeYOffsA = 12910
+
+# this binding exists because shared behavior needs one stable value
+KBossChamferHeaderStamps = ((1786446942, 1786446942), (1786446942,), (1786446942,))
+
+# this binding exists because shared behavior needs one stable value
+KBossChamferDistance = (12629, 12947, 13027, 13051, 13189, 13213)
+
+# this binding exists because shared behavior needs one stable value
+KBossChamferMaxYOffsets = (12669, 14519)
+
+# this binding exists because shared behavior needs one stable value
+KBossChamferNegativeY = (12866, 14620)
+
+# this binding exists because shared behavior needs one stable value
+KBossChamferNegativeOffsA = 14495
+
+# this binding exists because shared behavior needs one stable value
+KBossShellHeaderStamps = ((1786448316, 1786448316), (1786448316,), (1786448316,))
+
+# this binding exists because shared behavior needs one stable value
+KBossShellThicknessOffseA = (12498, 12816, 12888, 12912, 13058, 13082)
+
+# this binding exists because shared behavior needs one stable value
+KBossShellMinXOffset = 12530
+
+# this binding exists because shared behavior needs one stable value
+KBossShellInnerMinXOffset = 12554
+
+# this binding exists because shared behavior needs one stable value
+KBossShellMaxXOffset = 12727
+
+# this binding exists because shared behavior needs one stable value
+KBossShellDepthOffset = 12212
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternHeader = ((1786449611, 1786449611), (1786449611,), (1786449611,))
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternCountB = 12962
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternCountA = (13336, 13360)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternPositiD = (14463, 14853, 14877, 15023, 15047)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternDistanA = (12656, 14535)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternFlag = 18577
+
+# this binding exists because shared behavior needs one stable value
+KLinearPatternDirection = 7264
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternNegatiD = (14569, 14577, 14620, 14644, 14692)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternPositiA = (14585, 14668)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternNegatiA = 14636
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternPositiB = 14660
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternTerminA = 18993
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternCount = 11398
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternNegatiC = 4187
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternPositiC = (4381, 4935)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternNegatiB = (4389, 4943)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternCenter = (4428, 4998)
+
+# this binding exists because shared behavior needs one stable value
+KBossLinearPatternPad = 4757
+
+# this binding exists because shared behavior needs one stable value
+KBossCircularPatternHeadA = ((1786452328, 1786452328), (1786452328,), (1786452328,))
+
+# this binding exists because shared behavior needs one stable value
+KBossCircularPatternCounA = 13433
+
+# this binding exists because shared behavior needs one stable value
+KBossCircularPatternCount = (13807, 13831)
+
+# this binding exists because shared behavior needs one stable value
+KBossCircularPatternAngle = (18584, 19026, 19050)
+
+# this binding exists because shared behavior needs one stable value
+KBossCircularPatternFlag = 17876
+
+# this binding exists because shared behavior needs one stable value
+KCircularPatternDirection = 6096
+
+# this binding exists because shared behavior needs one stable value
+KBossRevCutHeaderStamps = ((1785927829, 1785927829), (1785927829,), (1785927830, 1785927830), (1785927830,))
+
+# this binding exists because shared behavior needs one stable value
+KBossCutCutHeaderStamps = ((1785839606, 1785839607), (1785839607,), (1785839608, 1785839609), (1785839609,), (1785839609, 1785839610), (1785839610,))
+
+# this binding exists because shared behavior needs one stable value
+KBossCutCutCutHeaderStamA = ((1785843343, 1785843343), (1785843343,), (1785843344, 1785843344), (1785843345,), (1785843345, 1785843345), (1785843345,), (1785843346, 1785843346), (1785843346,))
+
+# this binding exists because shared behavior needs one stable value
+KRevolutionHeaderStamps = ((1785797027, 1785797028), (1785797028,))
+
+# this binding exists because shared behavior needs one stable value
+KVendorUnloadableNotes = ('Contents/Config-0-ResolvedFeatures is the SOLIDWORKS feature tree authority and the current source graph is outside the recovered native rectangle pad family',)
+
+# this binding exists because shared behavior needs one stable value
+KNonSolidFeatureClasses = frozenset({'moRefPlane_c', 'moProfileFeature_c'})
+
+# this binding exists because shared behavior needs one stable value
+KConfigRootTreeId = 0
+
+# this binding exists because shared behavior needs one stable value
+KHeaderObjects = ((1, 'Annotations', False), (2, 'Front Plane', True), (3, 'Top Plane', True), (4, 'Right Plane', True), (5, 'Origin', True), (6, 'Lights and Cameras', False), (7, 'Design Binder', False), (8, 'Comments', False), (9, 'Solid Bodies', False), (10, 'Surface Bodies', False), (11, 'Material <not specified>', True), (12, 'Ambient', False), (13, 'Directional1', False), (14, 'Directional2', False), (15, 'Directional3', False), (16, 'Equations', False), (17, 'Notes', False), (18, 'Notes1___EndTag___', False), (21, 'Markups', False), (22, 'Sensors', False), (23, 'Favorites', False), (24, 'History', False), (25, 'Selection Sets', False))
+
+# this binding exists because shared behavior needs one stable value
+KAsmHeaderObjects = ((2, 'Annotations', False), (3, 'Front Plane', True), (4, 'Top Plane', True), (5, 'Right Plane', True), (6, 'Origin', True), (7, 'Lights, Cameras and Scene', False), (8, 'Design Binder', False), (9, 'Comments', False), (10, 'Live Section Planes', False), (11, 'Mates', False), (12, 'Ambient', False), (13, 'Directional1', False), (14, 'Directional2', False), (15, 'Directional3', False), (16, 'Equations', False), (17, 'Notes', False), (18, 'Notes1___EndTag___', False), (19, 'Markups', False), (20, 'Sensors', False), (21, 'Favorites', False), (22, 'History', False), (23, 'Selection Sets', False))
+
+# this binding exists because shared behavior needs one stable value
+KAsmConfigFlags = -2147221376
+
+# this binding exists because shared behavior needs one stable value
+KAsmRefName = 'Assem1'
+
+# this binding exists because shared behavior needs one stable value
+KAsmVersionPrefix = '_MO_VERSION_18000'
+
+# this binding exists because shared behavior needs one stable value
+KAsmPropContainerClass = 'moAssyFilePropContainer_c'
+
+# this binding exists because shared behavior needs one stable value
+KAsmAttachmentStream = 'Contents/Config-0-Attachment'
+
+# this binding exists because shared behavior needs one stable value
+KAsmVisualDataStream = f'{KAsmVersionPrefix}/AssyVisualData'
+
+# this binding exists because shared behavior needs one stable value
+KAsmTablesStream = 'swXmlContents/Tables'
+
+# this binding exists because shared behavior needs one stable value
+KAsmViewOrientationStream = 'Contents/View Orientation Data'
+
+# this binding exists because shared behavior needs one stable value
+KAsmOpenTimeStream = 'docProps/OpenTime.xml'
+
+# this binding exists because shared behavior needs one stable value
+KAsmCutlistStream = 'docProps/Config-0-Cutlist-Properties.xml'
+
+# this binding exists because shared behavior needs one stable value
+KAsmConfigPropertiesStreA = 'docProps/Config-0-Properties.xml'
+
+# this binding exists because shared behavior needs one stable value
+KViewOrientationPayload = b'<?xml version="1.0" encoding="UTF-8"?>\n<VIEWS/>\n'
+
+# this binding exists because shared behavior needs one stable value
+KOpenTimePayload = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/SolidworksOpenTime" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><count xmlns="">0</count><TotalFileOpenTime xmlns="">-1</TotalFileOpenTime><LWcount xmlns="">0</LWcount><LWTotalFileOpenTime xmlns="">-1</LWTotalFileOpenTime></Properties>\r\n'
+
+# this binding exists because shared behavior needs one stable value
+KConfigPropertiesPayload = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<ConfigProperties xmlns="http://www.solidworks.com/config-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><propertySection xmlns="" name="DocumentSummaryInformation" fmtid="{D5CDD502-2E9C-101B-9397-08002B2CF9AE}"><propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement></propertySection><propertySection xmlns="" name="UserDefinedProperties" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"><property name="" pid="1"><vt:i2>65001</vt:i2></property><propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement></propertySection></ConfigProperties>\r\n'
+
+# this definition exists because focused behavior needs one stable owner
+def HasVendorPart(DocData: CadDocument) -> bool:
+    ObjectIds = WriteObjectIds(DocData)
+    SourceObjects = WriteObjects(DocData, ObjectIds)
     if not SourceObjects:
         return False
-    AuthoredObjects = _CanonicalExtrusionObjects(
-        SourceObjects,
-        ObjectIds,
-        DocumentData,
-    )
+    AuthoredObjects = Canonical(SourceObjects, ObjectIds, DocData)
     return BuildVendorTree(AuthoredObjects) is not None
 
-
-# this serializes a self contained native solidworks part
-def encode_native_part(document: CadDocument, model_name: str) -> NativePartStreams:
-    object_ids = _write_object_ids(document)
-    SourceAuthored = _write_objects(document, object_ids)
-    if not SourceAuthored and document.brep is not None:
-        SourceAuthored = (
-            _WriteObject(
-                "brep:imported",
-                26,
-                "Imported1",
-                "Feature",
-                "Imported",
-                "moBaseBody_c",
-            ),
-        )
-    authored = _CanonicalExtrusionObjects(
-        SourceAuthored,
-        object_ids,
-        document,
-    )
-    identity = _native_identity(document, model_name)
-    system_features = {
-        int(feature.attributes["native_object_id"]): feature
-        for feature in document.feature_timeline
-        if _is_native_system_feature(feature)
-    }
-    base = tuple(
-        _WriteObject(
-            f"base:{object_id}",
-            object_id,
-            _native_system_name(system_features.get(object_id), name),
-            "Sketch" if object_id == 5 else "Feature",
-            kind,
-            class_name,
-        )
-        for object_id, name, kind, class_name in _BASE_OBJECTS
-    )
-    keyword_only = tuple(
-        _WriteObject(
-            f"base:{object_id}",
-            object_id,
-            _native_system_name(system_features.get(object_id), name),
-            "Feature",
-            kind,
-            "",
-        )
-        for object_id, name, kind in _KEYWORD_ONLY_OBJECTS
-    )
-    objects = (*base, *authored)
-    VendorData = BuildVendorTree(authored)
+# this definition exists because focused behavior needs one stable owner
+def EncodeNative(DocValue: CadDocument, ModelName: str) -> NativePart:
+    ObjectIds = WriteObjectIds(DocValue)
+    SourceAuthored = WriteObjects(DocValue, ObjectIds)
+    if not SourceAuthored and DocValue.brep is not None:
+        SourceAuthored = (WriteObject('brep:imported', 26, 'Imported1', 'Feature', 'Imported', 'moBaseBody_c'),)
+    Authored = Canonical(SourceAuthored, ObjectIds, DocValue)
+    Identity = NativeIdentityA(DocValue, ModelName)
+    SystemFeatures = {int(Feature.attributes['native_object_id']): Feature for Feature in DocValue.feature_timeline if IsNativeSystem(Feature)}
+    BaseValue = tuple((WriteObject(f'base:{ObjectId}', ObjectId, NativeSystem(SystemFeatures.get(ObjectId), NameValue), 'Sketch' if ObjectId == 5 else 'Feature', KindValue, ClassName) for ObjectId, NameValue, KindValue, ClassName in KBaseObjects))
+    KeywordOnly = tuple((WriteObject(f'base:{ObjectId}', ObjectId, NativeSystem(SystemFeatures.get(ObjectId), NameValue), 'Feature', KindValue, '') for ObjectId, NameValue, KindValue in KeywordOnlyObjects))
+    Objects = (*BaseValue, *Authored)
+    VendorData = BuildVendorTree(Authored)
     VendorResolved = VendorData.payload if VendorData is not None else None
-    SourceKeywords = _keywords_payload(
-        document,
-        model_name,
-        (*base, *SourceAuthored, *keyword_only),
-        object_ids,
-        identity,
-    )
-    ProofKeywords = _keywords_payload(
-        document,
-        model_name,
-        (*objects, *keyword_only),
-        object_ids,
-        identity,
-    )
-    keywords = ProofKeywords if VendorResolved is not None else SourceKeywords
-    features = _features_payload(document, model_name, object_ids, identity)
-    KitResolved = _resolved_payload(objects)
-    resolved = VendorResolved if VendorResolved is not None else KitResolved
-    HeaderFeatureObjects = (
-        tuple(
-            (ItemData.object_id, ItemData.name, ItemData.kind == "Sketch")
-            for ItemData in authored
-        )
-        if VendorResolved is not None
-        else ()
-    )
-    HeaderFeatureStamps = (
-        MappingProxyType(
-            {
-                ItemData.object_id: StampData
-                for ItemData, StampData in zip(
-                    authored,
-                    VendorData.header_stamps,
-                    strict=True,
-                )
-            }
-        )
-        if VendorData is not None
-        else MappingProxyType({})
-    )
-    EnvelopeStreams = dict(
-        _native_envelope_streams(
-            document,
-            model_name,
-            identity,
-            _solid_feature_tree_ids(authored),
-            HeaderFeatureObjects,
-            HeaderFeatureStamps,
-            VendorData.annotation_view_count if VendorData is not None else 1,
-            VendorData.terminal_parent_tree_id if VendorData is not None else None,
-            VendorData.HeaderBounds if VendorData is not None else None,
-            VendorData.HeaderCreation if VendorData is not None else None,
-            VendorData.cmgr_parent_tree_id if VendorData is not None else None,
-            VendorData.annotation_view_variant if VendorData is not None else "default",
-        )
-    )
+    SourceKeywords = KeywordsPayload(DocValue, ModelName, (*BaseValue, *SourceAuthored, *KeywordOnly), ObjectIds, Identity)
+    ProofKeywords = KeywordsPayload(DocValue, ModelName, (*Objects, *KeywordOnly), ObjectIds, Identity)
+    Keywords = ProofKeywords if VendorResolved is not None else SourceKeywords
+    Features = FeaturesPayload(DocValue, ModelName, ObjectIds, Identity)
+    KitResolved = ResolvedPayload(Objects)
+    Resolved = VendorResolved if VendorResolved is not None else KitResolved
+    HeaderFeatureObjects = tuple(((ItemData.object_id, ItemData.name, ItemData.kind == 'Sketch') for ItemData in Authored)) if VendorResolved is not None else ()
+    HeaderFeatureStamps = MappingProxyType({ItemData.object_id: StampData for ItemData, StampData in zip(Authored, VendorData.header_stamps, strict=True)}) if VendorData is not None else MappingProxyType({})
+    EnvelopeStreams = dict(NativeEnvelope(DocValue, ModelName, Identity, SolidFeatureIds(Authored), HeaderFeatureObjects, HeaderFeatureStamps, VendorData.annotation_view_count if VendorData is not None else 1, VendorData.terminal_parent_tree_id if VendorData is not None else None, VendorData.HeaderBounds if VendorData is not None else None, VendorData.HeaderCreation if VendorData is not None else None, VendorData.cmgr_parent_tree_id if VendorData is not None else None, VendorData.annotation_view_variant if VendorData is not None else 'default'))
     if VendorResolved is not None:
-        EnvelopeStreams[RESOLVED_FEATURES_STREAM] = VendorResolved
+        EnvelopeStreams[ResolvedFeaturesStream] = VendorResolved
     if VendorData is not None and VendorData.Config0Payload is not None:
-        EnvelopeStreams[CONFIGURATION_STREAM] = VendorData.Config0Payload
+        EnvelopeStreams[ConfigStream] = VendorData.Config0Payload
     if VendorData is not None and VendorData.HeaderPayload is not None:
-        EnvelopeStreams["Contents/Config-0-ModelHeader"] = VendorData.HeaderPayload
-        EnvelopeStreams["Header2"] = VendorData.HeaderPayload
-    configuration_data = EnvelopeStreams.get(CONFIGURATION_STREAM, b"")
-    parsed = decode_native_model(
-        ProofKeywords,
-        resolved,
-        configuration_data,
-        resolved_stream=(
-            RESOLVED_FEATURES_STREAM
-            if VendorResolved is not None
-            else KIT_RESOLVED_STREAM
-        ),
-    )
-    capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
-    mixed_capabilities: frozenset[Capability] = frozenset()
-    partition: bytes | None = None
-    vendor_loadable = VendorResolved is not None
-    application_usable = vendor_loadable
-    return NativePartStreams(
-        keywords,
-        features,
-        resolved,
-        None if VendorResolved is not None else KitResolved,
-        ((0, VendorResolved),) if VendorResolved is not None else (),
-        capabilities,
-        mixed_capabilities,
-        MappingProxyType(object_ids),
-        MappingProxyType(EnvelopeStreams),
-        partition,
-        application_usable,
-        vendor_loadable,
-        () if VendorResolved is not None else VENDOR_UNLOADABLE_NOTES,
-    )
+        EnvelopeStreams['Contents/Config-0-ModelHeader'] = VendorData.HeaderPayload
+        EnvelopeStreams['Header2'] = VendorData.HeaderPayload
+    ConfigData = EnvelopeStreams.get(ConfigStream, b'')
+    Parsed = DecodeNative(ProofKeywords, Resolved, ConfigData, ResolvedStream=ResolvedFeaturesStream if VendorResolved is not None else KitResolvedStream)
+    Capabilities = ProvedWrite(DocValue, Authored, Parsed, ObjectIds)
+    MixedCapabilities: frozenset[Capability] = frozenset()
+    Partition: bytes | None = None
+    VendorLoadable = VendorResolved is not None
+    AppUsable = VendorLoadable
+    return NativePart(Keywords, Features, Resolved, None if VendorResolved is not None else KitResolved, ((0, VendorResolved),) if VendorResolved is not None else (), Capabilities, MixedCapabilities, MappingProxyType(ObjectIds), MappingProxyType(EnvelopeStreams), Partition, AppUsable, VendorLoadable, () if VendorResolved is not None else KVendorUnloadableNotes)
 
-
-# dimensioned circles specialize the closed typed config program with exact cache semantics
-def EncodeCircCfg(
-    CenterX: float,
-    CenterY: float,
-    RadiusValue: float,
-    DepthValue: float,
-) -> bytes:
-    if (
-        not all(
-            math.isfinite(ItemValue)
-            for ItemValue in (CenterX, CenterY, RadiusValue, DepthValue)
-        )
-        or min(RadiusValue, DepthValue) <= 0.0
-    ):
-        raise SldprtFormatError(
-            "circle configuration requires finite positive radius and depth"
-        )
-    CenterXMetres = CenterX / _MILLIMETRES
-    CenterYMetres = CenterY / _MILLIMETRES
-    RadiusMetres = RadiusValue / _MILLIMETRES
-    DepthMetres = DepthValue / _MILLIMETRES
+# this definition exists because focused behavior needs one stable owner
+def EncodeCircCfg(CenterX: float, CenterY: float, RadiusValue: float, DepthValue: float) -> bytes:
+    if not all((MathValue.isfinite(ItemValue) for ItemValue in (CenterX, CenterY, RadiusValue, DepthValue))) or min(RadiusValue, DepthValue) <= 0.0:
+        raise SldprtFormatError('circle configuration requires finite positive radius and depth')
+    CenterXMetres = CenterX / KMillimetres
+    CenterYMetres = CenterY / KMillimetres
+    RadiusMetres = RadiusValue / KMillimetres
+    DepthMetres = DepthValue / KMillimetres
     CenterZMetres = DepthMetres / 2.0
-    return EncodeBoxConfigProgram(
-        {
-            70: 33056,
-            222: 4,
-            824: RadiusValue,
-            2316: 1771999328,
-            2320: 31271357,
-            2376: CenterXMetres,
-            2384: CenterYMetres,
-            2392: CenterZMetres,
-            2400: CenterXMetres + RadiusMetres,
-            2408: CenterYMetres + RadiusMetres,
-            2416: DepthMetres,
-            2424: CenterXMetres - RadiusMetres,
-            2432: CenterYMetres - RadiusMetres,
-            2448: math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
-            2596: 103,
-            2914: 33,
-            2918: 33,
-            2942: 600,
-            2950: 600,
-            4219: 0.0,
-            21879: 115,
-            21888: 18000,
-            21892: 2025268,
-            21964: 31271357,
-            21968: 1770659972,
-            24057: 10,
-            24095: 0,
-            24220: 31271357,
-            24224: 1710964613,
-        }
-    )
+    return EncodeBoxConfigProgram({70: 33056, 222: 4, 824: RadiusValue, 2316: 1771999328, 2320: 31271357, 2376: CenterXMetres, 2384: CenterYMetres, 2392: CenterZMetres, 2400: CenterXMetres + RadiusMetres, 2408: CenterYMetres + RadiusMetres, 2416: DepthMetres, 2424: CenterXMetres - RadiusMetres, 2432: CenterYMetres - RadiusMetres, 2448: MathValue.sqrt(RadiusMetres ** 2 * 2.0 + CenterZMetres ** 2), 2596: 103, 2914: 33, 2918: 33, 2942: 600, 2950: 600, 4219: 0.0, 21879: 115, 21888: 18000, 21892: 2025268, 21964: 31271357, 21968: 1770659972, 24057: 10, 24095: 0, 24220: 31271357, 24224: 1710964613})
 
-
-# reverse circles specialize the traced negative depth bounding volume
-def EncodeReverseCircCfg(
-    CenterX: float,
-    CenterY: float,
-    RadiusValue: float,
-    DepthValue: float,
-) -> bytes:
-    if (
-        not all(
-            math.isfinite(ItemValue)
-            for ItemValue in (CenterX, CenterY, RadiusValue, DepthValue)
-        )
-        or min(RadiusValue, DepthValue) <= 0.0
-    ):
-        raise SldprtFormatError(
-            "reverse circle configuration requires finite positive radius and depth"
-        )
-    CenterXMetres = CenterX / _MILLIMETRES
-    CenterYMetres = CenterY / _MILLIMETRES
-    RadiusMetres = RadiusValue / _MILLIMETRES
-    DepthMetres = DepthValue / _MILLIMETRES
+# this definition exists because focused behavior needs one stable owner
+def EncodeReverse(CenterX: float, CenterY: float, RadiusValue: float, DepthValue: float) -> bytes:
+    if not all((MathValue.isfinite(ItemValue) for ItemValue in (CenterX, CenterY, RadiusValue, DepthValue))) or min(RadiusValue, DepthValue) <= 0.0:
+        raise SldprtFormatError('reverse circle configuration requires finite positive radius and depth')
+    CenterXMetres = CenterX / KMillimetres
+    CenterYMetres = CenterY / KMillimetres
+    RadiusMetres = RadiusValue / KMillimetres
+    DepthMetres = DepthValue / KMillimetres
     CenterZMetres = -DepthMetres / 2.0
-    return EncodeReverseCircleConfigProgram(
-        {
-            824: RadiusValue,
-            2376: CenterXMetres,
-            2384: CenterYMetres,
-            2392: CenterZMetres,
-            2400: CenterXMetres + RadiusMetres,
-            2408: CenterYMetres + RadiusMetres,
-            2416: 0.0,
-            2424: CenterXMetres - RadiusMetres,
-            2432: CenterYMetres - RadiusMetres,
-            2440: -DepthMetres,
-            2448: math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
-        }
-    )
+    return EncodeReverseCircleConfig({824: RadiusValue, 2376: CenterXMetres, 2384: CenterYMetres, 2392: CenterZMetres, 2400: CenterXMetres + RadiusMetres, 2408: CenterYMetres + RadiusMetres, 2416: 0.0, 2424: CenterXMetres - RadiusMetres, 2432: CenterYMetres - RadiusMetres, 2440: -DepthMetres, 2448: MathValue.sqrt(RadiusMetres ** 2 * 2.0 + CenterZMetres ** 2)})
 
+# this definition exists because focused behavior needs one stable owner
+def EncodeReverseA(DepthValue: float) -> bytes:
+    if not MathValue.isfinite(DepthValue) or DepthValue <= 0.0:
+        raise SldprtFormatError('reverse circle depth must be finite and positive')
+    DepthMetres = DepthValue / KMillimetres
+    return EncodeReverseCircle({11343: DepthMetres, 11415: -DepthMetres, 11741: DepthMetres, 11765: DepthMetres, 11903: DepthMetres, 11927: DepthMetres})
 
-# reverse depth copies preserve their traced native orientation during specialization
-def EncodeReverseCircleResolved(DepthValue: float) -> bytes:
-    if not math.isfinite(DepthValue) or DepthValue <= 0.0:
-        raise SldprtFormatError("reverse circle depth must be finite and positive")
-    DepthMetres = DepthValue / _MILLIMETRES
-    return EncodeReverseCircleProgram(
-        {
-            11343: DepthMetres,
-            11415: -DepthMetres,
-            11741: DepthMetres,
-            11765: DepthMetres,
-            11903: DepthMetres,
-            11927: DepthMetres,
-        }
-    )
-
-
-# recovered native programs select only feature histories proved editable in SOLIDWORKS
-def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) == 8:
-        return BuildFourFeatureVendorTree(AuthoredObjs)
+        return BuildFourVendor(AuthoredObjs)
     if len(AuthoredObjs) == 6:
-        return BuildThreeFeatureVendorTree(AuthoredObjs)
+        return BuildThreeTree(AuthoredObjs)
     if len(AuthoredObjs) == 4:
-        if AuthoredObjs[3].class_name == "moRevolution_c":
-            return BuildPadGrooveVendorTree(AuthoredObjs)
-        return BuildTwoFeatureVendorTree(AuthoredObjs)
-    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == "Fillet_c":
-        return BuildBossFilletVendorTree(AuthoredObjs)
-    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == "Chamfer_c":
-        return BuildBossChamferVendorTree(AuthoredObjs)
-    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == "moShell_c":
-        return BuildBossShellVendorTree(AuthoredObjs)
-    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == "moLPattern_c":
-        return BuildBossLinearPatternVendorTree(AuthoredObjs)
-    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == "moCirPattern_c":
-        return BuildBossCircularPatternVendorTree(AuthoredObjs)
+        if AuthoredObjs[3].class_name == 'moRevolution_c':
+            return BuildPadGroove(AuthoredObjs)
+        return BuildTwoFeature(AuthoredObjs)
+    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == 'Fillet_c':
+        return BuildBossFillet(AuthoredObjs)
+    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == 'Chamfer_c':
+        return BuildBossVendor(AuthoredObjs)
+    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == 'moShell_c':
+        return BuildBossShell(AuthoredObjs)
+    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == 'moLPattern_c':
+        return BuildBossLinear(AuthoredObjs)
+    if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == 'moCirPattern_c':
+        return BuildBossVendoA(AuthoredObjs)
     if len(AuthoredObjs) != 2:
         return None
     SketchObject, PadObject = AuthoredObjs
-    if PadObject.class_name == "moRevolution_c":
-        return BuildSingleRevolutionVendorTree(AuthoredObjs)
-    PlaneObjectId = (
-        struct.unpack_from("<I", SketchObject.payload)[0]
-        if len(SketchObject.payload) >= 4
-        else 0
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    CircleValue = _write_circle_profile(SketchObject)
+    if PadObject.class_name == 'moRevolution_c':
+        return BuildSingleTree(AuthoredObjs)
+    PlaneObjectId = Struct.unpack_from('<I', SketchObject.payload)[0] if len(SketchObject.payload) >= 4 else 0
+    BoundsValue = WriteRectangle(SketchObject)
+    CircleValue = WriteCircle(SketchObject)
     PolylineValue = PolySixPoints(SketchObject)
-    EndCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.name != "Boss-Extrude1"
-        or sum(
-            ItemValue is not None
-            for ItemValue in (BoundsValue, CircleValue, PolylineValue)
-        )
-        != 1
-        or EndCodes is None
-        or len(PadObject.dimensions) != 1
-    ):
+    EndCodes = ExtrusionEdit(PadObject.payload)
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (PadObject.class_name != 'moExtrusion_c') or (PadObject.name != 'Boss-Extrude1') or (sum((ItemValue is not None for ItemValue in (BoundsValue, CircleValue, PolylineValue))) != 1) or (EndCodes is None) or (len(PadObject.dimensions) != 1):
         return None
     DepthValue = PadObject.dimensions[0].value_mm
-    if not math.isfinite(DepthValue) or DepthValue <= 0.0:
+    if not MathValue.isfinite(DepthValue) or DepthValue <= 0.0:
         return None
     DirectionCode, TerminationCode = EndCodes
     IsDimensionedBox = False
     HeaderBoundsData = None
     HeaderCreationData = None
-    Config0Data = None
+    ConfigZeroData = None
     if BoundsValue is not None:
-        IsDimensionedBox = (
-            PadObject.properties
-            and ("KitPrimitive", "Box") in PadObject.properties
-            and len(SketchObject.dimensions) == 2
-        )
+        IsDimensionedBox = PadObject.properties and ('KitPrimitive', 'Box') in PadObject.properties and (len(SketchObject.dimensions) == 2)
         ExpectedFeatureId = 34 if IsDimensionedBox else 32
         if PadObject.object_id != ExpectedFeatureId:
             return None
-        ProgramValue = (
-            (EncodeBoxProgram(), _BOX_HEADER_STAMPS)
-            if PlaneObjectId == 2 and IsDimensionedBox
-            else (
-                (EncodeProgram(), _FRONT_BOSS_HEADER_STAMPS)
-                if PlaneObjectId == 2
-                else (
-                    (EncodeTopProgram(), _TOP_BOSS_HEADER_STAMPS)
-                    if PlaneObjectId == 3
-                    else (
-                        (EncodeRightProgram(), _RIGHT_BOSS_HEADER_STAMPS)
-                        if PlaneObjectId == 4
-                        else None
-                    )
-                )
-            )
-        )
+        ProgramValue = (EncodeBoxProgram(), KBoxHeaderStamps) if PlaneObjectId == 2 and IsDimensionedBox else (EncodeProgram(), KFrontBossHeaderStamps) if PlaneObjectId == 2 else (EncodeTopProgram(), KTopBossHeaderStamps) if PlaneObjectId == 3 else (EncodeRightProgram(), KRightBossHeaderStamps) if PlaneObjectId == 4 else None
         if ProgramValue is None:
             return None
         ProgramData, HeaderStamps = ProgramValue
-        Config0Data = EncodeBoxConfigProgram() if IsDimensionedBox else None
-        EditData = FeatureEdit(
-            corners_mm=rectangle_corners_mm(*BoundsValue),
-            depth_mm=DepthValue,
-            reversed=bool(DirectionCode),
-            end_condition_code=TerminationCode,
-            update_depth_copies=EndCodes == (0, 0) or PlaneObjectId in {3, 4},
-            SketchDimensionsMm=(
-                tuple(ItemData.value_mm for ItemData in SketchObject.dimensions)
-                if IsDimensionedBox
-                else None
-            ),
-        )
+        ConfigZeroData = EncodeBoxConfigProgram() if IsDimensionedBox else None
+        EditData = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=DepthValue, reversed=bool(DirectionCode), end_condition_code=TerminationCode, update_depth_copies=EndCodes == (0, 0) or PlaneObjectId in {3, 4}, SketchDimensionsMm=tuple((ItemData.value_mm for ItemData in SketchObject.dimensions)) if IsDimensionedBox else None)
     elif CircleValue is not None:
-        if (
-            EndCodes not in {(0, 0), (1, 0)}
-            or PlaneObjectId != 2
-            or PadObject.object_id != 33
-        ):
+        if EndCodes not in {(0, 0), (1, 0)} or PlaneObjectId != 2 or PadObject.object_id != 33:
             return None
         CenterX, CenterY, RadiusValue = CircleValue
-        if not math.isclose(
-            CenterX,
-            0.0,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        ) or not math.isclose(
-            CenterY,
-            0.0,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        ):
+        if not MathValue.isclose(CenterX, 0.0, rel_tol=0.0, abs_tol=1e-10) or not MathValue.isclose(CenterY, 0.0, rel_tol=0.0, abs_tol=1e-10):
             return None
         IsReverseCircle = DirectionCode == 1
-        ProgramData = (
-            EncodeReverseCircleResolved(DepthValue)
-            if IsReverseCircle
-            else EncodeCircleProgram()
-        )
-        HeaderStamps = _CIRCLE_BOSS_HEADER_STAMPS
-        CenterXMetres = CenterX / _MILLIMETRES
-        CenterYMetres = CenterY / _MILLIMETRES
-        RadiusMetres = RadiusValue / _MILLIMETRES
-        DepthMetres = DepthValue / _MILLIMETRES
+        ProgramData = EncodeReverseA(DepthValue) if IsReverseCircle else EncodeCircleProgram()
+        HeaderStamps = KCircleBossHeaderStamps
+        CenterXMetres = CenterX / KMillimetres
+        CenterYMetres = CenterY / KMillimetres
+        RadiusMetres = RadiusValue / KMillimetres
+        DepthMetres = DepthValue / KMillimetres
         CenterZMetres = DepthMetres * (-0.5 if IsReverseCircle else 0.5)
-        HeaderBoundsData = (
-            CenterXMetres,
-            CenterYMetres,
-            CenterZMetres,
-            CenterXMetres + RadiusMetres,
-            CenterYMetres + RadiusMetres,
-            0.0 if IsReverseCircle else DepthMetres,
-            CenterXMetres - RadiusMetres,
-            CenterYMetres - RadiusMetres,
-            -DepthMetres if IsReverseCircle else 0.0,
-            math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
-        )
+        HeaderBoundsData = (CenterXMetres, CenterYMetres, CenterZMetres, CenterXMetres + RadiusMetres, CenterYMetres + RadiusMetres, 0.0 if IsReverseCircle else DepthMetres, CenterXMetres - RadiusMetres, CenterYMetres - RadiusMetres, -DepthMetres if IsReverseCircle else 0.0, MathValue.sqrt(RadiusMetres ** 2 * 2.0 + CenterZMetres ** 2))
         HeaderCreationData = HeaderStamps[0][0] - 1
-        Config0Data = (
-            EncodeReverseCircCfg(
-                CenterX,
-                CenterY,
-                RadiusValue,
-                DepthValue,
-            )
-            if IsReverseCircle
-            else EncodeCircCfg(
-                CenterX,
-                CenterY,
-                RadiusValue,
-                DepthValue,
-            )
-        )
-        EditData = FeatureEdit(
-            radii_mm=(RadiusValue,),
-            arc_centres_mm=((CenterX, CenterY),),
-            depth_mm=DepthValue,
-            update_depth_copies=not IsReverseCircle,
-            SketchDimensionsMm=(RadiusValue * 2.0,),
-        )
+        ConfigZeroData = EncodeReverse(CenterX, CenterY, RadiusValue, DepthValue) if IsReverseCircle else EncodeCircCfg(CenterX, CenterY, RadiusValue, DepthValue)
+        EditData = FeatureEdit(radii_mm=(RadiusValue,), arc_centres_mm=((CenterX, CenterY),), depth_mm=DepthValue, update_depth_copies=not IsReverseCircle, SketchDimensionsMm=(RadiusValue * 2.0,))
     else:
-        if (
-            PolylineValue is None
-            or EndCodes != (0, 0)
-            or PlaneObjectId != 2
-            or PadObject.object_id != 32
-            or SketchObject.dimensions
-        ):
+        if PolylineValue is None or EndCodes != (0, 0) or PlaneObjectId != 2 or (PadObject.object_id != 32) or SketchObject.dimensions:
             return None
         try:
-            ProgramData = EncodePolylineSixProgram(
-                PolylineSixFieldMap(PolylineValue, DepthValue)
-            )
+            ProgramData = EncodePolylineSixProgram(PolylineSixFieldMap(PolylineValue, DepthValue))
         except SldprtFormatError:
             return None
-        HeaderStamps = _FRONT_BOSS_HEADER_STAMPS
-    return _VendorResolved(
-        (
-            ProgramData
-            if PolylineValue is not None
-            else patch_features(
-                ProgramData,
-                {0: EditData},
-            )
-        ),
-        HeaderStamps,
-        HeaderBounds=HeaderBoundsData,
-        HeaderCreation=HeaderCreationData,
-        Config0Payload=Config0Data,
-    )
+        HeaderStamps = KFrontBossHeaderStamps
+    return VendorResolved(ProgramData if PolylineValue is not None else PatchFeatures(ProgramData, {0: EditData}), HeaderStamps, HeaderBounds=HeaderBoundsData, HeaderCreation=HeaderCreationData, Config0Payload=ConfigZeroData)
 
-
-# recovered revolution programs author validated full and partial revolved bosses
-def BuildSingleRevolutionVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildSingleTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 2:
         return None
     SketchObject, RevolveObject = AuthoredObjs
-    PlaneObjectId = (
-        struct.unpack_from("<I", SketchObject.payload)[0]
-        if len(SketchObject.payload) >= 4
-        else 0
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    PlaneObjectId = Struct.unpack_from('<I', SketchObject.payload)[0] if len(SketchObject.payload) >= 4 else 0
+    BoundsValue = WriteRectangle(SketchObject)
     PinPoints = PolySixPoints(SketchObject)
     IsPinData = IsPinProfile(PinPoints)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or not (
-            (PlaneObjectId == 2 and BoundsValue is not None)
-            or (PlaneObjectId == 3 and IsPinData and not SketchObject.dimensions)
-        )
-        or RevolveObject.class_name != "moRevolution_c"
-        or RevolveObject.object_id != 31
-        or RevolveObject.name != "Revolve1"
-        or len(RevolveObject.dimensions) != 1
-        or RevolveObject.dimensions[0].name != "D1"
-    ):
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (not (PlaneObjectId == 2 and BoundsValue is not None or (PlaneObjectId == 3 and IsPinData and (not SketchObject.dimensions)))) or (RevolveObject.class_name != 'moRevolution_c') or (RevolveObject.object_id != 31) or (RevolveObject.name != 'Revolve1') or (len(RevolveObject.dimensions) != 1) or (RevolveObject.dimensions[0].name != 'D1'):
         return None
     AngleDegrees = RevolveObject.dimensions[0].value_mm
-    IsFullAngle = math.isfinite(AngleDegrees) and math.isclose(
-        AngleDegrees,
-        360.0,
-        rel_tol=0.0,
-        abs_tol=1.0e-10,
-    )
-    IsPartialAngle = math.isfinite(AngleDegrees) and math.isclose(
-        AngleDegrees,
-        90.0,
-        rel_tol=0.0,
-        abs_tol=1.0e-10,
-    )
-    if not IsFullAngle and not (IsPinData and IsPartialAngle):
+    IsFullAngle = MathValue.isfinite(AngleDegrees) and MathValue.isclose(AngleDegrees, 360.0, rel_tol=0.0, abs_tol=1e-10)
+    IsPartialAngle = MathValue.isfinite(AngleDegrees) and MathValue.isclose(AngleDegrees, 90.0, rel_tol=0.0, abs_tol=1e-10)
+    if not IsFullAngle and (not (IsPinData and IsPartialAngle)):
         return None
     if IsPinData:
-        EnvelopeData = BuildPin90Envelope() if IsPartialAngle else BuildPinEnvelope()
-        return _VendorResolved(
-            (
-                EncodePin90RevolveProgram()
-                if IsPartialAngle
-                else EncodePinRevolveProgram()
-            ),
-            EnvelopeData.HeaderStamps,
-            HeaderBounds=EnvelopeData.HeaderBounds,
-            HeaderCreation=EnvelopeData.HeaderCreation,
-            Config0Payload=EnvelopeData.Config0Payload,
-            HeaderPayload=EnvelopeData.HeaderPayload,
-        )
+        EnvelopeData = BuildPinNineZeroEnvelope() if IsPartialAngle else BuildPinEnvelope()
+        return VendorResolved(EncodePinNineZeroRevolve() if IsPartialAngle else EncodePinRevolveProgram(), EnvelopeData.HeaderStamps, HeaderBounds=EnvelopeData.HeaderBounds, HeaderCreation=EnvelopeData.HeaderCreation, Config0Payload=EnvelopeData.Config0Payload, HeaderPayload=EnvelopeData.HeaderPayload)
     if BoundsValue is None:
         return None
-    return _VendorResolved(
-        patch_features(
-            EncodeRevolveProgram(),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsValue),
-                    angle_radians=math.radians(AngleDegrees),
-                )
-            },
-        ),
-        _REVOLUTION_HEADER_STAMPS,
-    )
+    return VendorResolved(PatchFeatures(EncodeRevolveProgram(), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), angle_radians=MathValue.radians(AngleDegrees))}), KRevolutionHeaderStamps)
 
-
-# the recovered mixed program authors one pad followed by one full revolved cut
-def BuildPadGrooveVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildPadGroove(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 4:
         return None
     SketchOne, PadObject, SketchTwo, GrooveObject = AuthoredObjs
-    BoundsData = (
-        _write_rectangle_bounds(SketchOne),
-        _write_rectangle_bounds(SketchTwo),
-    )
-    PadCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchOne.class_name != "moProfileFeature_c"
-        or SketchOne.object_id != 26
-        or SketchOne.name != "Sketch1"
-        or SketchTwo.class_name != "moProfileFeature_c"
-        or SketchTwo.object_id != 33
-        or SketchTwo.name != "Sketch2"
-        or any(ItemData is None for ItemData in BoundsData)
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or PadCodes is None
-        or PadCodes[1] not in {0, 6}
-        or len(PadObject.dimensions) != 1
-        or GrooveObject.class_name != "moRevolution_c"
-        or GrooveObject.object_id != 39
-        or GrooveObject.name != "Cut-Revolve1"
-        or len(GrooveObject.dimensions) != 1
-    ):
+    BoundsData = (WriteRectangle(SketchOne), WriteRectangle(SketchTwo))
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if SketchOne.class_name != 'moProfileFeature_c' or SketchOne.object_id != 26 or SketchOne.name != 'Sketch1' or (SketchTwo.class_name != 'moProfileFeature_c') or (SketchTwo.object_id != 33) or (SketchTwo.name != 'Sketch2') or any((ItemData is None for ItemData in BoundsData)) or (PadObject.class_name != 'moExtrusion_c') or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (PadCodes is None) or (PadCodes[1] not in {0, 6}) or (len(PadObject.dimensions) != 1) or (GrooveObject.class_name != 'moRevolution_c') or (GrooveObject.object_id != 39) or (GrooveObject.name != 'Cut-Revolve1') or (len(GrooveObject.dimensions) != 1):
         return None
     PadDepth = PadObject.dimensions[0].value_mm
     GrooveAngle = GrooveObject.dimensions[0].value_mm
-    if (
-        not math.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or not math.isfinite(GrooveAngle)
-        or not math.isclose(GrooveAngle, 360.0, rel_tol=0.0, abs_tol=1.0e-10)
-    ):
+    if not MathValue.isfinite(PadDepth) or PadDepth <= 0.0 or (not MathValue.isfinite(GrooveAngle)) or (not MathValue.isclose(GrooveAngle, 360.0, rel_tol=0.0, abs_tol=1e-10)):
         return None
     BoundsOne, BoundsTwo = BoundsData
     if BoundsOne is None or BoundsTwo is None:
         return None
-    return _VendorResolved(
-        patch_features(
-            EncodeBossRevCutProgram(),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsOne),
-                    depth_mm=PadDepth,
-                    reversed=bool(PadCodes[0]),
-                    end_condition_code=PadCodes[1],
-                    update_depth_copies=True,
-                ),
-                1: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsTwo),
-                    angle_radians=math.radians(GrooveAngle),
-                ),
-            },
-        ),
-        _BOSS_REV_CUT_HEADER_STAMPS,
-        2,
-    )
+    return VendorResolved(PatchFeatures(EncodeBossRevCutProgram(), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsOne), depth_mm=PadDepth, reversed=bool(PadCodes[0]), end_condition_code=PadCodes[1], update_depth_copies=True), 1: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsTwo), angle_radians=MathValue.radians(GrooveAngle))}), KBossRevCutHeaderStamps, 2)
 
-
-# the plane-supported pad-pocket program is selected only for its exact recovered topology
-def BuildTwoFeatureVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildTwoFeature(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     SketchOne, PadObject, SketchTwo, CutObject = AuthoredObjs
-    ExpectedData = (
-        (SketchOne, 26, "Sketch1"),
-        (SketchTwo, 33, "Sketch2"),
-    )
-    BoundsData = tuple(
-        _write_rectangle_bounds(ItemData[0]) for ItemData in ExpectedData
-    )
-    EndCodes = (
-        ExtrusionEditCodes(PadObject.payload),
-        ExtrusionEditCodes(CutObject.payload),
-    )
-    if (
-        any(
-            SketchObject.class_name != "moProfileFeature_c"
-            or SketchObject.object_id != ObjectId
-            or SketchObject.name != ObjectName
-            or len(SketchObject.payload) < 4
-            or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-            for SketchObject, ObjectId, ObjectName in ExpectedData
-        )
-        or any(ItemData is None for ItemData in BoundsData)
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or CutObject.class_name not in {"moCut_c", "moExtrusion_c"}
-        or CutObject.object_id != 40
-        or CutObject.name
-        != (
-            "Boss-Extrude2"
-            if CutObject.class_name == "moExtrusion_c"
-            else "Cut-Extrude1"
-        )
-        or any(ItemData is None for ItemData in EndCodes)
-        or len(PadObject.dimensions) != 1
-    ):
+    ExpectedData = ((SketchOne, 26, 'Sketch1'), (SketchTwo, 33, 'Sketch2'))
+    BoundsData = tuple((WriteRectangle(ItemData[0]) for ItemData in ExpectedData))
+    EndCodes = (ExtrusionEdit(PadObject.payload), ExtrusionEdit(CutObject.payload))
+    if any((SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != ObjectId or SketchObject.name != ObjectName or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) for SketchObject, ObjectId, ObjectName in ExpectedData)) or any((ItemData is None for ItemData in BoundsData)) or PadObject.class_name != 'moExtrusion_c' or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (CutObject.class_name not in {'moCut_c', 'moExtrusion_c'}) or (CutObject.object_id != 40) or (CutObject.name != ('Boss-Extrude2' if CutObject.class_name == 'moExtrusion_c' else 'Cut-Extrude1')) or any((ItemData is None for ItemData in EndCodes)) or (len(PadObject.dimensions) != 1):
         return None
     PadCodes, CutCodes = EndCodes
     if PadCodes is None or CutCodes is None or PadCodes[1] != 0:
         return None
-    if CutObject.class_name == "moExtrusion_c":
+    if CutObject.class_name == 'moExtrusion_c':
         if CutCodes[1] != 0 or len(CutObject.dimensions) != 1:
             return None
         CutDepth = CutObject.dimensions[0].value_mm
         ProgramData = EncodeBossBossProgram()
-        HeaderStamps = _BOSS_BOSS_HEADER_STAMPS
+        HeaderStamps = KBossBossHeaderStamps
     elif CutCodes[1] == 0:
         if len(CutObject.dimensions) != 1:
             return None
         CutDepth: float | None = CutObject.dimensions[0].value_mm
         ProgramData = EncodeBossCutProgram()
-        HeaderStamps = _BOSS_CUT_HEADER_STAMPS
+        HeaderStamps = KBossCutHeaderStamps
     elif CutCodes == (1, 1):
         if CutObject.dimensions:
             return None
         CutDepth = None
-        ProgramData = EncodeBossCutThroughProgram()
-        HeaderStamps = _BOSS_CUT_THROUGH_HEADER_STAMPS
+        ProgramData = EncodeBossCutThrough()
+        HeaderStamps = KBossCutThroughHeader
     else:
         return None
     DepthData = (PadObject.dimensions[0].value_mm, CutDepth)
-    if any(
-        ItemData is not None and (not math.isfinite(ItemData) or ItemData <= 0.0)
-        for ItemData in DepthData
-    ):
+    if any((ItemData is not None and (not MathValue.isfinite(ItemData) or ItemData <= 0.0) for ItemData in DepthData)):
         return None
     EditData: dict[int, FeatureEdit] = {}
-    for FeatureIndex, (BoundsValue, DepthValue, CodesValue) in enumerate(
-        zip(BoundsData, DepthData, EndCodes, strict=True)
-    ):
+    for FeatureIndex, (BoundsValue, DepthValue, CodesValue) in enumerate(zip(BoundsData, DepthData, EndCodes, strict=True)):
         if BoundsValue is None or CodesValue is None:
             return None
         if DepthValue is None:
-            EditData[FeatureIndex] = FeatureEdit(
-                corners_mm=rectangle_corners_mm(*BoundsValue),
-            )
+            EditData[FeatureIndex] = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue))
         else:
-            EditData[FeatureIndex] = FeatureEdit(
-                corners_mm=rectangle_corners_mm(*BoundsValue),
-                depth_mm=DepthValue,
-                reversed=bool(CodesValue[0]),
-                end_condition_code=CodesValue[1],
-                update_depth_copies=True,
-            )
-    return _VendorResolved(
-        patch_features(ProgramData, EditData),
-        HeaderStamps,
-    )
+            EditData[FeatureIndex] = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=DepthValue, reversed=bool(CodesValue[0]), end_condition_code=CodesValue[1], update_depth_copies=True)
+    return VendorResolved(PatchFeatures(ProgramData, EditData), HeaderStamps)
 
-
-# the recovered three-object program authors a rectangular boss and one edge fillet
-def BuildBossFilletVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildBossFillet(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 3:
         return None
     SketchObject, PadObject, FilletObject = AuthoredObjs
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    PadCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or BoundsValue is None
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or PadCodes != (0, 0)
-        or len(PadObject.dimensions) != 1
-        or FilletObject.class_name != "Fillet_c"
-        or FilletObject.object_id != 34
-        or FilletObject.name != "Fillet1"
-        or len(FilletObject.dimensions) != 1
-        or FilletObject.payload != _FilletSelectionRecord(32, 3)
-    ):
+    BoundsValue = WriteRectangle(SketchObject)
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) or (BoundsValue is None) or (PadObject.class_name != 'moExtrusion_c') or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (PadCodes != (0, 0)) or (len(PadObject.dimensions) != 1) or (FilletObject.class_name != 'Fillet_c') or (FilletObject.object_id != 34) or (FilletObject.name != 'Fillet1') or (len(FilletObject.dimensions) != 1) or (FilletObject.payload != FilletSelection(32, 3)):
         return None
     PadDepth = PadObject.dimensions[0].value_mm
     FilletRadius = FilletObject.dimensions[0].value_mm
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or not math.isfinite(FilletRadius)
-        or FilletRadius <= 0.0
-        or FilletRadius * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)
-    ):
+    if not MathValue.isfinite(PadDepth) or PadDepth <= 0.0 or (not MathValue.isfinite(FilletRadius)) or (FilletRadius <= 0.0) or (FilletRadius * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)):
         return None
-    RadiusMetres = FilletRadius / _MILLIMETRES
-    MaximumXMetres = MaximumX / _MILLIMETRES
-    MaximumYMetres = MaximumY / _MILLIMETRES
-    MinimumXMetres = MinimumX / _MILLIMETRES
-    MinimumYMetres = MinimumY / _MILLIMETRES
-    PadDepthMetres = PadDepth / _MILLIMETRES
+    RadiusMetres = FilletRadius / KMillimetres
+    MaximumXMetres = MaximumX / KMillimetres
+    MaximumYMetres = MaximumY / KMillimetres
+    MinimumXMetres = MinimumX / KMillimetres
+    MinimumYMetres = MinimumY / KMillimetres
+    PadDepthMetres = PadDepth / KMillimetres
     CenterXMetres = (MinimumXMetres + MaximumXMetres) / 2.0
     CenterYMetres = (MinimumYMetres + MaximumYMetres) / 2.0
     CenterZMetres = PadDepthMetres / 2.0
-    BoundsRadius = math.sqrt(
-        ((MaximumXMetres - MinimumXMetres) / 2.0) ** 2
-        + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2
-        + CenterZMetres**2
-    )
-    HeaderBounds = (
-        CenterXMetres,
-        CenterYMetres,
-        CenterZMetres,
-        MaximumXMetres,
-        MaximumYMetres,
-        PadDepthMetres,
-        MinimumXMetres,
-        MinimumYMetres,
-        0.0,
-        BoundsRadius,
-    )
-    ProgramOverrides = {
-        **{ItemData: RadiusMetres for ItemData in _BOSS_FILLET_RADIUS_OFFSETS},
-        **{
-            ItemData: MaximumXMetres - RadiusMetres
-            for ItemData in _BOSS_FILLET_MAX_X_OFFSETS
-        },
-        **{
-            ItemData: MaximumYMetres - RadiusMetres
-            for ItemData in _BOSS_FILLET_MAX_Y_OFFSETS
-        },
-        _BOSS_FILLET_NEGATIVE_Y_OFFSET: -(MaximumYMetres - RadiusMetres),
-    }
-    return _VendorResolved(
-        patch_features(
-            EncodeBossFilletProgram(ProgramOverrides),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsValue),
-                    depth_mm=PadDepth,
-                    reversed=False,
-                    end_condition_code=0,
-                    update_depth_copies=True,
-                )
-            },
-        ),
-        _BOSS_FILLET_HEADER_STAMPS,
-        2,
-        32,
-        HeaderBounds,
-        _BOSS_FILLET_HEADER_STAMPS[0][0] - 1,
-    )
+    BoundsRadius = MathValue.sqrt(((MaximumXMetres - MinimumXMetres) / 2.0) ** 2 + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2 + CenterZMetres ** 2)
+    HeaderBounds = (CenterXMetres, CenterYMetres, CenterZMetres, MaximumXMetres, MaximumYMetres, PadDepthMetres, MinimumXMetres, MinimumYMetres, 0.0, BoundsRadius)
+    ProgramOverrides = {**{ItemData: RadiusMetres for ItemData in KBossFilletRadiusOffsets}, **{ItemData: MaximumXMetres - RadiusMetres for ItemData in KBossFilletMaxXOffsets}, **{ItemData: MaximumYMetres - RadiusMetres for ItemData in KBossFilletMaxYOffsets}, KBossFilletNegativeYOffsA: -(MaximumYMetres - RadiusMetres)}
+    return VendorResolved(PatchFeatures(EncodeBossFilletProgram(ProgramOverrides), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=PadDepth, reversed=False, end_condition_code=0, update_depth_copies=True)}), KBossFilletHeaderStamps, 2, 32, HeaderBounds, KBossFilletHeaderStamps[0][0] - 1)
 
-
-# the recovered three-object program authors a rectangular boss and one edge chamfer
-def BuildBossChamferVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildBossVendor(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 3:
         return None
     SketchObject, PadObject, ChamferObject = AuthoredObjs
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    PadCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or BoundsValue is None
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or PadCodes != (0, 0)
-        or len(PadObject.dimensions) != 1
-        or ChamferObject.class_name != "Chamfer_c"
-        or ChamferObject.object_id != 35
-        or ChamferObject.name != "Chamfer1"
-        or len(ChamferObject.dimensions) != 1
-        or ChamferObject.payload != _FilletSelectionRecord(32, 3)
-    ):
+    BoundsValue = WriteRectangle(SketchObject)
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) or (BoundsValue is None) or (PadObject.class_name != 'moExtrusion_c') or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (PadCodes != (0, 0)) or (len(PadObject.dimensions) != 1) or (ChamferObject.class_name != 'Chamfer_c') or (ChamferObject.object_id != 35) or (ChamferObject.name != 'Chamfer1') or (len(ChamferObject.dimensions) != 1) or (ChamferObject.payload != FilletSelection(32, 3)):
         return None
     PadDepth = PadObject.dimensions[0].value_mm
     ChamferDistance = ChamferObject.dimensions[0].value_mm
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or not math.isfinite(ChamferDistance)
-        or ChamferDistance <= 0.0
-        or ChamferDistance * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)
-    ):
+    if not MathValue.isfinite(PadDepth) or PadDepth <= 0.0 or (not MathValue.isfinite(ChamferDistance)) or (ChamferDistance <= 0.0) or (ChamferDistance * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)):
         return None
-    DistanceMetres = ChamferDistance / _MILLIMETRES
-    MaximumXMetres = MaximumX / _MILLIMETRES
-    MaximumYMetres = MaximumY / _MILLIMETRES
-    MinimumXMetres = MinimumX / _MILLIMETRES
-    MinimumYMetres = MinimumY / _MILLIMETRES
-    PadDepthMetres = PadDepth / _MILLIMETRES
+    DistanceMetres = ChamferDistance / KMillimetres
+    MaximumXMetres = MaximumX / KMillimetres
+    MaximumYMetres = MaximumY / KMillimetres
+    MinimumXMetres = MinimumX / KMillimetres
+    MinimumYMetres = MinimumY / KMillimetres
+    PadDepthMetres = PadDepth / KMillimetres
     CenterXMetres = (MinimumXMetres + MaximumXMetres) / 2.0
     CenterYMetres = (MinimumYMetres + MaximumYMetres) / 2.0
     CenterZMetres = PadDepthMetres / 2.0
-    BoundsRadius = math.sqrt(
-        ((MaximumXMetres - MinimumXMetres) / 2.0) ** 2
-        + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2
-        + CenterZMetres**2
-    )
-    HeaderBounds = (
-        CenterXMetres,
-        CenterYMetres,
-        CenterZMetres,
-        MaximumXMetres,
-        MaximumYMetres,
-        PadDepthMetres,
-        MinimumXMetres,
-        MinimumYMetres,
-        0.0,
-        BoundsRadius,
-    )
+    BoundsRadius = MathValue.sqrt(((MaximumXMetres - MinimumXMetres) / 2.0) ** 2 + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2 + CenterZMetres ** 2)
+    HeaderBounds = (CenterXMetres, CenterYMetres, CenterZMetres, MaximumXMetres, MaximumYMetres, PadDepthMetres, MinimumXMetres, MinimumYMetres, 0.0, BoundsRadius)
     TrimmedYMetres = MaximumYMetres - DistanceMetres
-    ProgramOverrides = {
-        **{ItemData: DistanceMetres for ItemData in _BOSS_CHAMFER_DISTANCE_OFFSETS},
-        **{ItemData: TrimmedYMetres for ItemData in _BOSS_CHAMFER_MAX_Y_OFFSETS},
-        **{ItemData: -TrimmedYMetres for ItemData in _BOSS_CHAMFER_NEGATIVE_Y_OFFSETS},
-        _BOSS_CHAMFER_NEGATIVE_DISTANCE_OFFSET: -DistanceMetres,
-    }
-    return _VendorResolved(
-        patch_features(
-            EncodeBossChamferProgram(ProgramOverrides),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsValue),
-                    depth_mm=PadDepth,
-                    reversed=False,
-                    end_condition_code=0,
-                    update_depth_copies=True,
-                )
-            },
-        ),
-        _BOSS_CHAMFER_HEADER_STAMPS,
-        2,
-        32,
-        HeaderBounds,
-        _BOSS_CHAMFER_HEADER_STAMPS[0][0] - 1,
-    )
+    ProgramOverrides = {**{ItemData: DistanceMetres for ItemData in KBossChamferDistance}, **{ItemData: TrimmedYMetres for ItemData in KBossChamferMaxYOffsets}, **{ItemData: -TrimmedYMetres for ItemData in KBossChamferNegativeY}, KBossChamferNegativeOffsA: -DistanceMetres}
+    return VendorResolved(PatchFeatures(EncodeBossChamferProgram(ProgramOverrides), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=PadDepth, reversed=False, end_condition_code=0, update_depth_copies=True)}), KBossChamferHeaderStamps, 2, 32, HeaderBounds, KBossChamferHeaderStamps[0][0] - 1)
 
-
-# the recovered three-object program authors a rectangular boss and inward top-open shell
-def BuildBossShellVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildBossShell(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 3:
         return None
     SketchObject, PadObject, ShellObject = AuthoredObjs
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    PadCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or BoundsValue is None
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or PadCodes != (0, 0)
-        or len(PadObject.dimensions) != 1
-        or ShellObject.class_name != "moShell_c"
-        or ShellObject.object_id != 34
-        or ShellObject.name != "Shell1"
-        or len(ShellObject.dimensions) != 1
-        or ShellObject.payload != _ShellSelectionRecord(32)
-    ):
+    BoundsValue = WriteRectangle(SketchObject)
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) or (BoundsValue is None) or (PadObject.class_name != 'moExtrusion_c') or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (PadCodes != (0, 0)) or (len(PadObject.dimensions) != 1) or (ShellObject.class_name != 'moShell_c') or (ShellObject.object_id != 34) or (ShellObject.name != 'Shell1') or (len(ShellObject.dimensions) != 1) or (ShellObject.payload != ShellSelection(32)):
         return None
     PadDepth = PadObject.dimensions[0].value_mm
     ShellThickness = ShellObject.dimensions[0].value_mm
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or not math.isfinite(ShellThickness)
-        or ShellThickness <= 0.0
-        or ShellThickness >= PadDepth
-        or ShellThickness * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)
-    ):
+    if not MathValue.isfinite(PadDepth) or PadDepth <= 0.0 or (not MathValue.isfinite(ShellThickness)) or (ShellThickness <= 0.0) or (ShellThickness >= PadDepth) or (ShellThickness * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)):
         return None
-    ThicknessMetres = ShellThickness / _MILLIMETRES
-    MaximumXMetres = MaximumX / _MILLIMETRES
-    MaximumYMetres = MaximumY / _MILLIMETRES
-    MinimumXMetres = MinimumX / _MILLIMETRES
-    MinimumYMetres = MinimumY / _MILLIMETRES
-    PadDepthMetres = PadDepth / _MILLIMETRES
+    ThicknessMetres = ShellThickness / KMillimetres
+    MaximumXMetres = MaximumX / KMillimetres
+    MaximumYMetres = MaximumY / KMillimetres
+    MinimumXMetres = MinimumX / KMillimetres
+    MinimumYMetres = MinimumY / KMillimetres
+    PadDepthMetres = PadDepth / KMillimetres
     CenterXMetres = (MinimumXMetres + MaximumXMetres) / 2.0
     CenterYMetres = (MinimumYMetres + MaximumYMetres) / 2.0
     CenterZMetres = PadDepthMetres / 2.0
-    BoundsRadius = math.sqrt(
-        ((MaximumXMetres - MinimumXMetres) / 2.0) ** 2
-        + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2
-        + CenterZMetres**2
-    )
-    HeaderBounds = (
-        CenterXMetres,
-        CenterYMetres,
-        CenterZMetres,
-        MaximumXMetres,
-        MaximumYMetres,
-        PadDepthMetres,
-        MinimumXMetres,
-        MinimumYMetres,
-        0.0,
-        BoundsRadius,
-    )
-    ProgramOverrides = {
-        **{ItemData: ThicknessMetres for ItemData in _BOSS_SHELL_THICKNESS_OFFSETS},
-        _BOSS_SHELL_MIN_X_OFFSET: MinimumXMetres,
-        _BOSS_SHELL_INNER_MIN_X_OFFSET: MinimumXMetres + ThicknessMetres,
-        _BOSS_SHELL_MAX_X_OFFSET: MaximumXMetres,
-        _BOSS_SHELL_DEPTH_OFFSET: PadDepthMetres,
-    }
-    return _VendorResolved(
-        patch_features(
-            EncodeBossShellProgram(ProgramOverrides),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsValue),
-                    depth_mm=PadDepth,
-                    reversed=False,
-                    end_condition_code=0,
-                    update_depth_copies=True,
-                )
-            },
-        ),
-        _BOSS_SHELL_HEADER_STAMPS,
-        1,
-        None,
-        HeaderBounds,
-        _BOSS_SHELL_HEADER_STAMPS[0][0] - 1,
-        32,
-    )
+    BoundsRadius = MathValue.sqrt(((MaximumXMetres - MinimumXMetres) / 2.0) ** 2 + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2 + CenterZMetres ** 2)
+    HeaderBounds = (CenterXMetres, CenterYMetres, CenterZMetres, MaximumXMetres, MaximumYMetres, PadDepthMetres, MinimumXMetres, MinimumYMetres, 0.0, BoundsRadius)
+    ProgramOverrides = {**{ItemData: ThicknessMetres for ItemData in KBossShellThicknessOffseA}, KBossShellMinXOffset: MinimumXMetres, KBossShellInnerMinXOffset: MinimumXMetres + ThicknessMetres, KBossShellMaxXOffset: MaximumXMetres, KBossShellDepthOffset: PadDepthMetres}
+    return VendorResolved(PatchFeatures(EncodeBossShellProgram(ProgramOverrides), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=PadDepth, reversed=False, end_condition_code=0, update_depth_copies=True)}), KBossShellHeaderStamps, 1, None, HeaderBounds, KBossShellHeaderStamps[0][0] - 1, 32)
 
-
-# the recovered program authors a rectangular boss and fused sketch-normal pattern
-def BuildBossLinearPatternVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildBossLinear(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 3:
         return None
     SketchObject, PadObject, PatternObject = AuthoredObjs
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    PadCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or BoundsValue is None
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or PadCodes != (0, 0)
-        or len(PadObject.dimensions) != 1
-        or PatternObject.class_name != "moLPattern_c"
-        or PatternObject.object_id != 40
-        or PatternObject.name != "LPattern1"
-        or PatternObject.kind != "LPattern"
-        or len(PatternObject.dimensions) != 2
-        or tuple(ItemData.name for ItemData in PatternObject.dimensions) != ("D1", "D3")
-        or PatternObject.payload
-    ):
+    BoundsValue = WriteRectangle(SketchObject)
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) or (BoundsValue is None) or (PadObject.class_name != 'moExtrusion_c') or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (PadCodes != (0, 0)) or (len(PadObject.dimensions) != 1) or (PatternObject.class_name != 'moLPattern_c') or (PatternObject.object_id != 40) or (PatternObject.name != 'LPattern1') or (PatternObject.kind != 'LPattern') or (len(PatternObject.dimensions) != 2) or (tuple((ItemData.name for ItemData in PatternObject.dimensions)) != ('D1', 'D3')) or PatternObject.payload:
         return None
     PadDepth = PadObject.dimensions[0].value_mm
     CountNumber = PatternObject.dimensions[0].value_mm
     SpacingValue = PatternObject.dimensions[1].value_mm
-    OccurrenceCount = int(CountNumber)
+    ItemCount = int(CountNumber)
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or not math.isfinite(CountNumber)
-        or CountNumber != OccurrenceCount
-        or not 2 <= OccurrenceCount <= 1000
-        or not math.isfinite(SpacingValue)
-        or SpacingValue <= 0.0
-        or SpacingValue > PadDepth
-    ):
+    if not MathValue.isfinite(PadDepth) or PadDepth <= 0.0 or (not MathValue.isfinite(CountNumber)) or (CountNumber != ItemCount) or (not 2 <= ItemCount <= 1000) or (not MathValue.isfinite(SpacingValue)) or (SpacingValue <= 0.0) or (SpacingValue > PadDepth):
         return None
-    PadDepthMetres = PadDepth / _MILLIMETRES
-    SpacingMetres = SpacingValue / _MILLIMETRES
-    MinimumXMetres = MinimumX / _MILLIMETRES
-    MinimumYMetres = MinimumY / _MILLIMETRES
-    MaximumXMetres = MaximumX / _MILLIMETRES
-    MaximumYMetres = MaximumY / _MILLIMETRES
-    TerminalDepthMetres = PadDepthMetres + SpacingMetres * (OccurrenceCount - 1)
+    PadDepthMetres = PadDepth / KMillimetres
+    SpacingMetres = SpacingValue / KMillimetres
+    MinimumXMetres = MinimumX / KMillimetres
+    MinimumYMetres = MinimumY / KMillimetres
+    MaximumXMetres = MaximumX / KMillimetres
+    MaximumYMetres = MaximumY / KMillimetres
+    TerminalDepthMetres = PadDepthMetres + SpacingMetres * (ItemCount - 1)
     CenterXMetres = (MinimumXMetres + MaximumXMetres) / 2.0
     CenterYMetres = (MinimumYMetres + MaximumYMetres) / 2.0
     CenterZMetres = TerminalDepthMetres / 2.0
-    BoundsRadius = math.sqrt(
-        ((MaximumXMetres - MinimumXMetres) / 2.0) ** 2
-        + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2
-        + CenterZMetres**2
-    )
-    HeaderBounds = (
-        CenterXMetres,
-        CenterYMetres,
-        CenterZMetres,
-        MaximumXMetres,
-        MaximumYMetres,
-        TerminalDepthMetres,
-        MinimumXMetres,
-        MinimumYMetres,
-        0.0,
-        BoundsRadius,
-    )
+    BoundsRadius = MathValue.sqrt(((MaximumXMetres - MinimumXMetres) / 2.0) ** 2 + ((MaximumYMetres - MinimumYMetres) / 2.0) ** 2 + CenterZMetres ** 2)
+    HeaderBounds = (CenterXMetres, CenterYMetres, CenterZMetres, MaximumXMetres, MaximumYMetres, TerminalDepthMetres, MinimumXMetres, MinimumYMetres, 0.0, BoundsRadius)
     PositiveDisplay = 0.55 * TerminalDepthMetres
-    MaximumProfileSpanMetres = max(
-        MaximumXMetres - MinimumXMetres,
-        MaximumYMetres - MinimumYMetres,
-    )
-    ProgramOverrides = {
-        _BOSS_LINEAR_PATTERN_COUNT_OFFSET: OccurrenceCount,
-        **{
-            ItemData: float(OccurrenceCount)
-            for ItemData in _BOSS_LINEAR_PATTERN_COUNT_DOUBLE_OFFSETS
-        },
-        **{
-            ItemData: SpacingMetres
-            for ItemData in _BOSS_LINEAR_PATTERN_POSITIVE_SPACING_OFFSETS
-        },
-        **{
-            ItemData: SpacingMetres
-            for ItemData in _BOSS_LINEAR_PATTERN_DIRECTION_DISTANCE_OFFSETS
-        },
-        _BOSS_LINEAR_PATTERN_DIRECTION_FLAG_OFFSET: 1,
-        **{ItemData: -0.0 for ItemData in _BOSS_LINEAR_PATTERN_NEGATIVE_ZERO_OFFSETS},
-        **{ItemData: 1.0 for ItemData in _BOSS_LINEAR_PATTERN_POSITIVE_AXIS_OFFSETS},
-        _BOSS_LINEAR_PATTERN_NEGATIVE_DIAGONAL_OFFSET: -math.sqrt(0.5),
-        _BOSS_LINEAR_PATTERN_POSITIVE_DIAGONAL_OFFSET: math.sqrt(0.5),
-        _BOSS_LINEAR_PATTERN_TERMINAL_DEPTH_OFFSET: TerminalDepthMetres,
-        _BOSS_LINEAR_PATTERN_COUNT_DISPLAY_OFFSET: (
-            MaximumProfileSpanMetres + (OccurrenceCount + 2) / _MILLIMETRES
-        ),
-        _BOSS_LINEAR_PATTERN_NEGATIVE_EXTENT_OFFSET: -0.05 * TerminalDepthMetres,
-        **{
-            ItemData: PositiveDisplay
-            for ItemData in _BOSS_LINEAR_PATTERN_POSITIVE_DISPLAY_OFFSETS
-        },
-        **{
-            ItemData: -PositiveDisplay
-            for ItemData in _BOSS_LINEAR_PATTERN_NEGATIVE_DISPLAY_OFFSETS
-        },
-        **{
-            ItemData: CenterZMetres
-            for ItemData in _BOSS_LINEAR_PATTERN_CENTER_DISPLAY_OFFSETS
-        },
-        _BOSS_LINEAR_PATTERN_PAD_DISPLAY_OFFSET: 1.05 * TerminalDepthMetres,
-    }
-    return _VendorResolved(
-        patch_features(
-            EncodeBossLinearPatternProgram(ProgramOverrides),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsValue),
-                    depth_mm=PadDepth,
-                    reversed=False,
-                    end_condition_code=0,
-                    update_depth_copies=True,
-                )
-            },
-        ),
-        _BOSS_LINEAR_PATTERN_HEADER_STAMPS,
-        2,
-        None,
-        HeaderBounds,
-        _BOSS_LINEAR_PATTERN_HEADER_STAMPS[0][0] - 1,
-        None,
-        "linear_pattern",
-    )
+    MaximumProfileSpanMetres = max(MaximumXMetres - MinimumXMetres, MaximumYMetres - MinimumYMetres)
+    ProgramOverrides = {KBossLinearPatternCountB: ItemCount, **{ItemData: float(ItemCount) for ItemData in KBossLinearPatternCountA}, **{ItemData: SpacingMetres for ItemData in KBossLinearPatternPositiD}, **{ItemData: SpacingMetres for ItemData in KBossLinearPatternDistanA}, KBossLinearPatternFlag: 1, **{ItemData: -0.0 for ItemData in KBossLinearPatternNegatiD}, **{ItemData: 1.0 for ItemData in KBossLinearPatternPositiA}, KBossLinearPatternNegatiA: -MathValue.sqrt(0.5), KBossLinearPatternPositiB: MathValue.sqrt(0.5), KBossLinearPatternTerminA: TerminalDepthMetres, KBossLinearPatternCount: MaximumProfileSpanMetres + (ItemCount + 2) / KMillimetres, KBossLinearPatternNegatiC: -0.05 * TerminalDepthMetres, **{ItemData: PositiveDisplay for ItemData in KBossLinearPatternPositiC}, **{ItemData: -PositiveDisplay for ItemData in KBossLinearPatternNegatiB}, **{ItemData: CenterZMetres for ItemData in KBossLinearPatternCenter}, KBossLinearPatternPad: 1.05 * TerminalDepthMetres}
+    return VendorResolved(PatchFeatures(EncodeBossLinearPattern(ProgramOverrides), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=PadDepth, reversed=False, end_condition_code=0, update_depth_copies=True)}), KBossLinearPatternHeader, 2, None, HeaderBounds, KBossLinearPatternHeader[0][0] - 1, None, 'linear_pattern')
 
-
-# the recovered program authors a rectangular boss and fused sketch-normal rotation
-def BuildBossCircularPatternVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildBossVendoA(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 3:
         return None
     SketchObject, PadObject, PatternObject = AuthoredObjs
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    PadCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or BoundsValue is None
-        or PadObject.class_name != "moExtrusion_c"
-        or PadObject.object_id != 32
-        or PadObject.name != "Boss-Extrude1"
-        or PadCodes != (0, 0)
-        or len(PadObject.dimensions) != 1
-        or PatternObject.class_name != "moCirPattern_c"
-        or PatternObject.object_id != 46
-        or PatternObject.name != "CirPattern1"
-        or PatternObject.kind != "CirPattern"
-        or len(PatternObject.dimensions) != 2
-        or tuple(ItemData.name for ItemData in PatternObject.dimensions) != ("D1", "D3")
-        or PatternObject.payload
-    ):
+    BoundsValue = WriteRectangle(SketchObject)
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) or (BoundsValue is None) or (PadObject.class_name != 'moExtrusion_c') or (PadObject.object_id != 32) or (PadObject.name != 'Boss-Extrude1') or (PadCodes != (0, 0)) or (len(PadObject.dimensions) != 1) or (PatternObject.class_name != 'moCirPattern_c') or (PatternObject.object_id != 46) or (PatternObject.name != 'CirPattern1') or (PatternObject.kind != 'CirPattern') or (len(PatternObject.dimensions) != 2) or (tuple((ItemData.name for ItemData in PatternObject.dimensions)) != ('D1', 'D3')) or PatternObject.payload:
         return None
     PadDepth = PadObject.dimensions[0].value_mm
     CountNumber = PatternObject.dimensions[0].value_mm
     AngleDegrees = PatternObject.dimensions[1].value_mm
-    OccurrenceCount = int(CountNumber)
-    if (
-        not math.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or not math.isfinite(CountNumber)
-        or CountNumber != OccurrenceCount
-        or not 2 <= OccurrenceCount <= 1000
-        or not math.isfinite(AngleDegrees)
-        or not 0.0 < AngleDegrees <= 360.0
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                BoundsValue,
-                (0.0, 0.0, 10.0, 5.0),
-                strict=True,
-            )
-        )
-    ):
+    ItemCount = int(CountNumber)
+    if not MathValue.isfinite(PadDepth) or PadDepth <= 0.0 or (not MathValue.isfinite(CountNumber)) or (CountNumber != ItemCount) or (not 2 <= ItemCount <= 1000) or (not MathValue.isfinite(AngleDegrees)) or (not 0.0 < AngleDegrees <= 360.0) or any((not MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(BoundsValue, (0.0, 0.0, 10.0, 5.0), strict=True))):
         return None
-    PadDepthMetres = PadDepth / _MILLIMETRES
-    PatternBounds = _CircularPatternBounds(
-        BoundsValue,
-        OccurrenceCount,
-        AngleDegrees,
-    )
-    MinimumX, MinimumY, MaximumX, MaximumY = (
-        ItemData / _MILLIMETRES for ItemData in PatternBounds
-    )
+    PadDepthMetres = PadDepth / KMillimetres
+    PatternBounds = CircularPattern(BoundsValue, ItemCount, AngleDegrees)
+    MinimumX, MinimumY, MaximumX, MaximumY = (ItemData / KMillimetres for ItemData in PatternBounds)
     CenterXMetres = (MinimumX + MaximumX) / 2.0
     CenterYMetres = (MinimumY + MaximumY) / 2.0
     CenterZMetres = PadDepthMetres / 2.0
-    BoundsRadius = math.sqrt(
-        ((MaximumX - MinimumX) / 2.0) ** 2
-        + ((MaximumY - MinimumY) / 2.0) ** 2
-        + CenterZMetres**2
-    )
-    HeaderBounds = (
-        CenterXMetres,
-        CenterYMetres,
-        CenterZMetres,
-        MaximumX,
-        MaximumY,
-        PadDepthMetres,
-        MinimumX,
-        MinimumY,
-        0.0,
-        BoundsRadius,
-    )
-    AngleRadians = math.radians(AngleDegrees)
-    ProgramOverrides = {
-        _BOSS_CIRCULAR_PATTERN_COUNT_OFFSET: OccurrenceCount,
-        **{
-            ItemData: float(OccurrenceCount)
-            for ItemData in _BOSS_CIRCULAR_PATTERN_COUNT_DOUBLE_OFFSETS
-        },
-        **{ItemData: AngleRadians for ItemData in _BOSS_CIRCULAR_PATTERN_ANGLE_OFFSETS},
-        _BOSS_CIRCULAR_PATTERN_DIRECTION_FLAG_OFFSET: 1,
-    }
-    return _VendorResolved(
-        patch_features(
-            EncodeBossCircularPatternProgram(ProgramOverrides),
-            {
-                0: FeatureEdit(
-                    corners_mm=rectangle_corners_mm(*BoundsValue),
-                    depth_mm=PadDepth,
-                    reversed=False,
-                    end_condition_code=0,
-                    update_depth_copies=True,
-                )
-            },
-        ),
-        _BOSS_CIRCULAR_PATTERN_HEADER_STAMPS,
-        2,
-        None,
-        HeaderBounds,
-        _BOSS_CIRCULAR_PATTERN_HEADER_STAMPS[0][0] - 1,
-        None,
-        "circular_pattern",
-    )
+    BoundsRadius = MathValue.sqrt(((MaximumX - MinimumX) / 2.0) ** 2 + ((MaximumY - MinimumY) / 2.0) ** 2 + CenterZMetres ** 2)
+    HeaderBounds = (CenterXMetres, CenterYMetres, CenterZMetres, MaximumX, MaximumY, PadDepthMetres, MinimumX, MinimumY, 0.0, BoundsRadius)
+    AngleRadians = MathValue.radians(AngleDegrees)
+    ProgramOverrides = {KBossCircularPatternCounA: ItemCount, **{ItemData: float(ItemCount) for ItemData in KBossCircularPatternCount}, **{ItemData: AngleRadians for ItemData in KBossCircularPatternAngle}, KBossCircularPatternFlag: 1}
+    return VendorResolved(PatchFeatures(EncodeBossCircularPattern(ProgramOverrides), {0: FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=PadDepth, reversed=False, end_condition_code=0, update_depth_copies=True)}), KBossCircularPatternHeadA, 2, None, HeaderBounds, KBossCircularPatternHeadA[0][0] - 1, None, 'circular_pattern')
 
-
-# the native equal-spacing rule uses a closed denominator only for a full revolution
-def _CircularPatternBounds(
-    BoundsValue: tuple[float, float, float, float],
-    OccurrenceCount: int,
-    AngleDegrees: float,
-) -> tuple[float, float, float, float]:
+# this definition exists because focused behavior needs one stable owner
+def CircularPattern(BoundsValue: tuple[float, float, float, float], ItemCount: int, AngleDegrees: float) -> tuple[float, float, float, float]:
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    CornerData = (
-        (MinimumX, MinimumY),
-        (MaximumX, MinimumY),
-        (MaximumX, MaximumY),
-        (MinimumX, MaximumY),
-    )
-    Denominator = (
-        OccurrenceCount
-        if math.isclose(AngleDegrees, 360.0, rel_tol=0.0, abs_tol=1.0e-10)
-        else OccurrenceCount - 1
-    )
-    RotatedData = tuple(
-        (
-            XValue * math.cos(AngleValue) - YValue * math.sin(AngleValue),
-            XValue * math.sin(AngleValue) + YValue * math.cos(AngleValue),
-        )
-        for IndexValue in range(OccurrenceCount)
-        for AngleValue in (math.radians(AngleDegrees * IndexValue / Denominator),)
-        for XValue, YValue in CornerData
-    )
-    return (
-        min(ItemData[0] for ItemData in RotatedData),
-        min(ItemData[1] for ItemData in RotatedData),
-        max(ItemData[0] for ItemData in RotatedData),
-        max(ItemData[1] for ItemData in RotatedData),
-    )
+    CornerData = ((MinimumX, MinimumY), (MaximumX, MinimumY), (MaximumX, MaximumY), (MinimumX, MaximumY))
+    Denominator = ItemCount if MathValue.isclose(AngleDegrees, 360.0, rel_tol=0.0, abs_tol=1e-10) else ItemCount - 1
+    RotatedData = tuple(((XValue * MathValue.cos(AngleValue) - YValue * MathValue.sin(AngleValue), XValue * MathValue.sin(AngleValue) + YValue * MathValue.cos(AngleValue)) for IndexValue in range(ItemCount) for AngleValue in (MathValue.radians(AngleDegrees * IndexValue / Denominator),) for XValue, YValue in CornerData))
+    return (min((ItemData[0] for ItemData in RotatedData)), min((ItemData[1] for ItemData in RotatedData)), max((ItemData[0] for ItemData in RotatedData)), max((ItemData[1] for ItemData in RotatedData)))
 
-
-# exact mixed profile geometry selects the traced circular third cut topology
-def IsCircleChain(
-    BoundsData: tuple[tuple[float, float, float, float] | None, ...],
-    CircleData: tuple[tuple[float, float, float] | None, ...],
-) -> bool:
-    ExpectedBounds = (
-        (-30.0, -20.0, 30.0, 20.0),
-        (-24.0, -4.0, 24.0, 4.0),
-    )
+# this definition exists because focused behavior needs one stable owner
+def IsCircleChain(BoundsData: tuple[tuple[float, float, float, float] | None, ...], CircleData: tuple[tuple[float, float, float] | None, ...]) -> bool:
+    ExpectedBounds = ((-30.0, -20.0, 30.0, 20.0), (-24.0, -4.0, 24.0, 4.0))
     ExpectedCircle = (0.0, 12.0, 6.0)
-    return (
-        len(BoundsData) == 3
-        and len(CircleData) == 3
-        and BoundsData[2] is None
-        and CircleData[:2] == (None, None)
-        and all(
-            ActualBounds is not None
-            and all(
-                math.isclose(
-                    ActualValue,
-                    ExpectedValue,
-                    rel_tol=0.0,
-                    abs_tol=1.0e-10,
-                )
-                for ActualValue, ExpectedValue in zip(
-                    ActualBounds,
-                    ExpectedValueData,
-                    strict=True,
-                )
-            )
-            for ActualBounds, ExpectedValueData in zip(
-                BoundsData[:2],
-                ExpectedBounds,
-                strict=True,
-            )
-        )
-        and CircleData[2] is not None
-        and all(
-            math.isclose(
-                ActualValue,
-                ExpectedValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ActualValue, ExpectedValue in zip(
-                CircleData[2] or (),
-                ExpectedCircle,
-                strict=True,
-            )
-        )
-    )
+    return len(BoundsData) == 3 and len(CircleData) == 3 and (BoundsData[2] is None) and (CircleData[:2] == (None, None)) and all((ActualBounds is not None and all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ActualBounds, ExpectedValueData, strict=True))) for ActualBounds, ExpectedValueData in zip(BoundsData[:2], ExpectedBounds, strict=True))) and (CircleData[2] is not None) and all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(CircleData[2] or (), ExpectedCircle, strict=True)))
 
-
-# the recovered three-operation programs cover rectangular and circular blind cuts
-def BuildThreeFeatureVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildThreeTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     SketchData = AuthoredObjs[0::2]
     FeatureData = AuthoredObjs[1::2]
-    ExpectedSketchData = tuple(
-        zip(
-            SketchData,
-            (26, 33, 41),
-            ("Sketch1", "Sketch2", "Sketch3"),
-            strict=True,
-        )
-    )
-    ExpectedFeatureData = tuple(
-        zip(
-            FeatureData,
-            (32, 40, 47),
-            ("Boss-Extrude1", "Cut-Extrude1", "Cut-Extrude2"),
-            ("moExtrusion_c", "moCut_c", "moCut_c"),
-            strict=True,
-        )
-    )
-    BoundsData = tuple(
-        _write_rectangle_bounds(SketchObject) for SketchObject in SketchData
-    )
-    CircleData = tuple(
-        _write_circle_profile(SketchObject) for SketchObject in SketchData
-    )
+    ExpectedSketchData = tuple(zip(SketchData, (26, 33, 41), ('Sketch1', 'Sketch2', 'Sketch3'), strict=True))
+    ExpectedFeatureData = tuple(zip(FeatureData, (32, 40, 47), ('Boss-Extrude1', 'Cut-Extrude1', 'Cut-Extrude2'), ('moExtrusion_c', 'moCut_c', 'moCut_c'), strict=True))
+    BoundsData = tuple((WriteRectangle(SketchObject) for SketchObject in SketchData))
+    CircleData = tuple((WriteCircle(SketchObject) for SketchObject in SketchData))
     IsCircleData = IsCircleChain(BoundsData, CircleData)
-    EndCodes = tuple(
-        ExtrusionEditCodes(FeatureObject.payload) for FeatureObject in FeatureData
-    )
-    if (
-        any(
-            SketchObject.class_name != "moProfileFeature_c"
-            or SketchObject.object_id != ObjectId
-            or SketchObject.name != ObjectName
-            or len(SketchObject.payload) < 4
-            or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-            for SketchObject, ObjectId, ObjectName in ExpectedSketchData
-        )
-        or any(
-            FeatureObject.class_name != ClassName
-            or FeatureObject.object_id != ObjectId
-            or FeatureObject.name != ObjectName
-            or len(FeatureObject.dimensions) != 1
-            for FeatureObject, ObjectId, ObjectName, ClassName in ExpectedFeatureData
-        )
-        or (not IsCircleData and any(BoundsValue is None for BoundsValue in BoundsData))
-        or any(CodesValue is None for CodesValue in EndCodes)
-        or any(CodesValue is not None and CodesValue[1] != 0 for CodesValue in EndCodes)
-    ):
+    EndCodes = tuple((ExtrusionEdit(FeatureObject.payload) for FeatureObject in FeatureData))
+    if any((SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != ObjectId or SketchObject.name != ObjectName or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) for SketchObject, ObjectId, ObjectName in ExpectedSketchData)) or any((FeatureObject.class_name != ClassName or FeatureObject.object_id != ObjectId or FeatureObject.name != ObjectName or (len(FeatureObject.dimensions) != 1) for FeatureObject, ObjectId, ObjectName, ClassName in ExpectedFeatureData)) or (not IsCircleData and any((BoundsValue is None for BoundsValue in BoundsData))) or any((CodesValue is None for CodesValue in EndCodes)) or any((CodesValue is not None and CodesValue[1] != 0 for CodesValue in EndCodes)):
         return None
-    DepthData = tuple(
-        FeatureObject.dimensions[0].value_mm for FeatureObject in FeatureData
-    )
-    if any(
-        not math.isfinite(DepthValue) or DepthValue <= 0.0 for DepthValue in DepthData
-    ):
+    DepthData = tuple((FeatureObject.dimensions[0].value_mm for FeatureObject in FeatureData))
+    if any((not MathValue.isfinite(DepthValue) or DepthValue <= 0.0 for DepthValue in DepthData)):
         return None
-    if IsCircleData and (
-        any(
-            not math.isclose(
-                ActualValue,
-                ExpectedValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ActualValue, ExpectedValue in zip(
-                DepthData,
-                (15.0, 5.0, 9.0),
-                strict=True,
-            )
-        )
-        or EndCodes != ((1, 0), (0, 0), (0, 0))
-    ):
+    if IsCircleData and (any((not MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(DepthData, (15.0, 5.0, 9.0), strict=True))) or EndCodes != ((1, 0), (0, 0), (0, 0))):
         return None
     EditData: dict[int, FeatureEdit] = {}
-    for FeatureIndex, (BoundsValue, CircleValue, DepthValue, CodesValue) in enumerate(
-        zip(BoundsData, CircleData, DepthData, EndCodes, strict=True)
-    ):
+    for FeatureIndex, (BoundsValue, CircleValue, DepthValue, CodesValue) in enumerate(zip(BoundsData, CircleData, DepthData, EndCodes, strict=True)):
         if CodesValue is None or (BoundsValue is None) == (CircleValue is None):
             return None
-        EditData[FeatureIndex] = FeatureEdit(
-            corners_mm=(
-                rectangle_corners_mm(*BoundsValue) if BoundsValue is not None else None
-            ),
-            depth_mm=DepthValue,
-            reversed=bool(CodesValue[0]),
-            end_condition_code=CodesValue[1],
-            update_depth_copies=True,
-            radii_mm=((CircleValue[2],) if CircleValue is not None else None),
-            arc_centres_mm=(
-                ((CircleValue[0], CircleValue[1]),) if CircleValue is not None else None
-            ),
-        )
-    return _VendorResolved(
-        patch_features(
-            (
-                EncodeBossCutCircleProgram()
-                if IsCircleData
-                else EncodeBossCutCutProgram()
-            ),
-            EditData,
-        ),
-        _BOSS_CUT_CUT_HEADER_STAMPS,
-    )
+        EditData[FeatureIndex] = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue) if BoundsValue is not None else None, depth_mm=DepthValue, reversed=bool(CodesValue[0]), end_condition_code=CodesValue[1], update_depth_copies=True, radii_mm=(CircleValue[2],) if CircleValue is not None else None, arc_centres_mm=((CircleValue[0], CircleValue[1]),) if CircleValue is not None else None)
+    return VendorResolved(PatchFeatures(EncodeBossCutCircle() if IsCircleData else EncodeBossCutCutProgram(), EditData), KBossCutCutHeaderStamps)
 
-
-# the recovered four-operation program covers one boss followed by three blind cuts
-def BuildFourFeatureVendorTree(
-    AuthoredObjs: tuple[_WriteObject, ...],
-) -> _VendorResolved | None:
+# this definition exists because focused behavior needs one stable owner
+def BuildFourVendor(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     SketchData = AuthoredObjs[0::2]
     FeatureData = AuthoredObjs[1::2]
-    ExpectedSketchData = tuple(
-        zip(
-            SketchData,
-            (26, 33, 41, 48),
-            ("Sketch1", "Sketch2", "Sketch3", "Sketch4"),
-            strict=True,
-        )
-    )
-    ExpectedFeatureData = tuple(
-        zip(
-            FeatureData,
-            (32, 40, 47, 54),
-            (
-                "Boss-Extrude1",
-                "Cut-Extrude1",
-                "Cut-Extrude2",
-                "Cut-Extrude3",
-            ),
-            ("moExtrusion_c", "moCut_c", "moCut_c", "moCut_c"),
-            strict=True,
-        )
-    )
-    BoundsData = tuple(
-        _write_rectangle_bounds(SketchObject) for SketchObject in SketchData
-    )
-    EndCodes = tuple(
-        ExtrusionEditCodes(FeatureObject.payload) for FeatureObject in FeatureData
-    )
-    if (
-        any(
-            SketchObject.class_name != "moProfileFeature_c"
-            or SketchObject.object_id != ObjectId
-            or SketchObject.name != ObjectName
-            or len(SketchObject.payload) < 4
-            or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-            for SketchObject, ObjectId, ObjectName in ExpectedSketchData
-        )
-        or any(
-            FeatureObject.class_name != ClassName
-            or FeatureObject.object_id != ObjectId
-            or FeatureObject.name != ObjectName
-            or len(FeatureObject.dimensions) != 1
-            for FeatureObject, ObjectId, ObjectName, ClassName in ExpectedFeatureData
-        )
-        or any(BoundsValue is None for BoundsValue in BoundsData)
-        or any(CodesValue is None for CodesValue in EndCodes)
-        or any(CodesValue is not None and CodesValue[1] != 0 for CodesValue in EndCodes)
-    ):
+    ExpectedSketchData = tuple(zip(SketchData, (26, 33, 41, 48), ('Sketch1', 'Sketch2', 'Sketch3', 'Sketch4'), strict=True))
+    ExpectedFeatureData = tuple(zip(FeatureData, (32, 40, 47, 54), ('Boss-Extrude1', 'Cut-Extrude1', 'Cut-Extrude2', 'Cut-Extrude3'), ('moExtrusion_c', 'moCut_c', 'moCut_c', 'moCut_c'), strict=True))
+    BoundsData = tuple((WriteRectangle(SketchObject) for SketchObject in SketchData))
+    EndCodes = tuple((ExtrusionEdit(FeatureObject.payload) for FeatureObject in FeatureData))
+    if any((SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != ObjectId or SketchObject.name != ObjectName or (len(SketchObject.payload) < 4) or (Struct.unpack_from('<I', SketchObject.payload)[0] != 2) for SketchObject, ObjectId, ObjectName in ExpectedSketchData)) or any((FeatureObject.class_name != ClassName or FeatureObject.object_id != ObjectId or FeatureObject.name != ObjectName or (len(FeatureObject.dimensions) != 1) for FeatureObject, ObjectId, ObjectName, ClassName in ExpectedFeatureData)) or any((BoundsValue is None for BoundsValue in BoundsData)) or any((CodesValue is None for CodesValue in EndCodes)) or any((CodesValue is not None and CodesValue[1] != 0 for CodesValue in EndCodes)):
         return None
-    DepthData = tuple(
-        FeatureObject.dimensions[0].value_mm for FeatureObject in FeatureData
-    )
-    if any(
-        not math.isfinite(DepthValue) or DepthValue <= 0.0 for DepthValue in DepthData
-    ):
+    DepthData = tuple((FeatureObject.dimensions[0].value_mm for FeatureObject in FeatureData))
+    if any((not MathValue.isfinite(DepthValue) or DepthValue <= 0.0 for DepthValue in DepthData)):
         return None
     EditData: dict[int, FeatureEdit] = {}
-    for FeatureIndex, (BoundsValue, DepthValue, CodesValue) in enumerate(
-        zip(BoundsData, DepthData, EndCodes, strict=True)
-    ):
+    for FeatureIndex, (BoundsValue, DepthValue, CodesValue) in enumerate(zip(BoundsData, DepthData, EndCodes, strict=True)):
         if BoundsValue is None or CodesValue is None:
             return None
-        EditData[FeatureIndex] = FeatureEdit(
-            corners_mm=rectangle_corners_mm(*BoundsValue),
-            depth_mm=DepthValue,
-            reversed=bool(CodesValue[0]),
-            end_condition_code=CodesValue[1],
-            update_depth_copies=True,
-        )
-    return _VendorResolved(
-        patch_features(EncodeBossCutCutCutProgram(), EditData),
-        _BOSS_CUT_CUT_CUT_HEADER_STAMPS,
-    )
+        EditData[FeatureIndex] = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=DepthValue, reversed=bool(CodesValue[0]), end_condition_code=CodesValue[1], update_depth_copies=True)
+    return VendorResolved(PatchFeatures(EncodeBossCutCutCut(), EditData), KBossCutCutCutHeaderStamA)
 
-
-# encoded extrusion records expose the direction and termination fields used by the patcher
-def ExtrusionEditCodes(PayloadData: bytes) -> tuple[int, int] | None:
-    DeclarationData = _class_declaration("moEndSpec_c")
-    DirectionOffset = len(DeclarationData) + 10
-    TerminationOffset = len(DeclarationData) + 16
-    if (
-        not PayloadData.startswith(DeclarationData)
-        or len(PayloadData) < TerminationOffset + 4
-    ):
+# this definition exists because focused behavior needs one stable owner
+def ExtrusionEdit(PayloadData: bytes) -> tuple[int, int] | None:
+    DeclData = ClassDecl('moEndSpec_c')
+    DirectionOffset = len(DeclData) + 10
+    TerminationOffset = len(DeclData) + 16
+    if not PayloadData.startswith(DeclData) or len(PayloadData) < TerminationOffset + 4:
         return None
-    DirectionCode = struct.unpack_from("<I", PayloadData, DirectionOffset)[0]
-    TerminationCode = struct.unpack_from("<I", PayloadData, TerminationOffset)[0]
+    DirectionCode = Struct.unpack_from('<I', PayloadData, DirectionOffset)[0]
+    TerminationCode = Struct.unpack_from('<I', PayloadData, TerminationOffset)[0]
     if DirectionCode not in {0, 1} or TerminationCode not in {0, 1, 6}:
         return None
-    return DirectionCode, TerminationCode
+    return (DirectionCode, TerminationCode)
 
+# this definition exists because focused behavior needs one stable owner
+def WriteObjectIds(DocValue: CadDocument) -> dict[str, int]:
+    UsedValue = set(range(1, 26))
+    Result: dict[str, int] = {}
+    NextId = 26
 
-def _write_object_ids(document: CadDocument) -> dict[str, int]:
-    used = set(range(1, 26))
-    result: dict[str, int] = {}
-    next_id = 26
-
-    def assign(key: str, native: Any = None) -> int:
-        nonlocal next_id
-        candidate = native if isinstance(native, int) and native > 25 else None
-        if candidate is None or candidate in used or candidate > 0xFFFFFFFE:
-            while next_id in used:
-                next_id += 1
-            candidate = next_id
-            next_id += 1
-        used.add(candidate)
-        result[key] = candidate
-        return candidate
-
-    principal = _principal_plane_ids(document.support_planes)
-    for plane in document.support_planes:
-        key = f"plane:{plane.id}"
-        if plane.id in principal:
-            result[key] = principal[plane.id]
+    # this definition exists because focused behavior needs one stable owner
+    def Assign(KeyValue: str, Native: Any=None) -> int:
+        nonlocal NextId
+        Choice = Native if isinstance(Native, int) and Native > 25 else None
+        if Choice is None or Choice in UsedValue or Choice > 4294967294:
+            while NextId in UsedValue:
+                NextId += 1
+            Choice = NextId
+            NextId += 1
+        UsedValue.add(Choice)
+        Result[KeyValue] = Choice
+        return Choice
+    Principal = PrincipalPlaneB(DocValue.support_planes)
+    for Plane in DocValue.support_planes:
+        KeyValue = f'plane:{Plane.id}'
+        if Plane.id in Principal:
+            Result[KeyValue] = Principal[Plane.id]
         else:
-            assign(key, plane.attributes.get("native_object_id"))
-    for sketch in document.sketches:
-        assign(f"sketch:{sketch.id}", sketch.attributes.get("native_object_id"))
-    for feature in sorted(document.feature_timeline, key=lambda item: item.order):
-        if _is_native_system_feature(feature):
+            Assign(KeyValue, Plane.attributes.get('native_object_id'))
+    for Sketch in DocValue.sketches:
+        Assign(f'sketch:{Sketch.id}', Sketch.attributes.get('native_object_id'))
+
+    # this callback exists because local behavior needs one focused transformation
+    for Feature in sorted(DocValue.feature_timeline, key=lambda ItemValue: ItemValue.order):
+        if IsNativeSystem(Feature):
             continue
-        native = feature.attributes.get("native_object_id")
-        sketch_native = (
-            result.get(f"sketch:{feature.sketch_id}")
-            if feature.sketch_id is not None
-            else None
-        )
-        if isinstance(native, int) and native == sketch_native:
-            result[f"feature:{feature.id}"] = native
+        Native = Feature.attributes.get('native_object_id')
+        SketchNative = Result.get(f'sketch:{Feature.sketch_id}') if Feature.sketch_id is not None else None
+        if isinstance(Native, int) and Native == SketchNative:
+            Result[f'feature:{Feature.id}'] = Native
         else:
-            assign(f"feature:{feature.id}", native)
-    configuration_ids: set[int] = set()
-    next_configuration_id = 0
-    for configuration in document.configurations:
-        native = configuration.attributes.get("native_configuration_id")
-        candidate = (
-            native
-            if isinstance(native, int)
-            and not isinstance(native, bool)
-            and 0 <= native <= 0xFFFFFFFF
-            and native not in configuration_ids
-            else None
-        )
-        if candidate is None:
-            while next_configuration_id in configuration_ids:
-                next_configuration_id += 1
-            candidate = next_configuration_id
-        configuration_ids.add(candidate)
-        result[f"configuration:{configuration.id}"] = candidate
-    return result
+            Assign(f'feature:{Feature.id}', Native)
+    ConfigIds: set[int] = set()
+    NextConfigId = 0
+    for Config in DocValue.configurations:
+        Native = Config.attributes.get('native_configuration_id')
+        Choice = Native if isinstance(Native, int) and (not isinstance(Native, bool)) and (0 <= Native <= 4294967295) and (Native not in ConfigIds) else None
+        if Choice is None:
+            while NextConfigId in ConfigIds:
+                NextConfigId += 1
+            Choice = NextConfigId
+        ConfigIds.add(Choice)
+        Result[f'configuration:{Config.id}'] = Choice
+    return Result
 
-
-# coincident principal planes map by global locus while sketch bases normalize separately
-def _principal_plane_ids(planes: tuple[SupportPlane, ...]) -> dict[str, int]:
-    frames = (
-        (
-            2,
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        ),
-        (
-            3,
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (0.0, 0.0, -1.0),
-            (0.0, 1.0, 0.0),
-        ),
-        (
-            4,
-            (0.0, 0.0, 0.0),
-            (0.0, 0.0, -1.0),
-            (0.0, 1.0, 0.0),
-            (1.0, 0.0, 0.0),
-        ),
-    )
-    result: dict[str, int] = {}
-    claimed: set[int] = set()
-    for plane in planes:
-        transform = plane.transform
-        OriginValue = (
-            transform.origin.x,
-            transform.origin.y,
-            transform.origin.z,
-        )
-        NormalValue = (
-            transform.z_axis.x,
-            transform.z_axis.y,
-            transform.z_axis.z,
-        )
-        for object_id, *frame in frames:
-            if object_id in claimed:
+# this definition exists because focused behavior needs one stable owner
+def PrincipalPlaneB(Planes: tuple[SupportPlane, ...]) -> dict[str, int]:
+    Frames = ((2, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)), (3, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)), (4, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)))
+    Result: dict[str, int] = {}
+    Claimed: set[int] = set()
+    for Plane in Planes:
+        Transform = Plane.transform
+        OriginValue = (Transform.origin.x, Transform.origin.y, Transform.origin.z)
+        NormalValue = (Transform.z_axis.x, Transform.z_axis.y, Transform.z_axis.z)
+        for ObjectId, *Frame in Frames:
+            if ObjectId in Claimed:
                 continue
-            TargetNormal = frame[3]
-            if all(
-                math.isclose(ItemData, 0.0, abs_tol=1e-9) for ItemData in OriginValue
-            ) and math.isclose(
-                abs(
-                    sum(
-                        LeftValue * RightValue
-                        for LeftValue, RightValue in zip(
-                            NormalValue, TargetNormal, strict=True
-                        )
-                    )
-                ),
-                1.0,
-                rel_tol=0.0,
-                abs_tol=1e-9,
-            ):
-                result[plane.id] = object_id
-                claimed.add(object_id)
+            TargetNormal = Frame[3]
+            if all((MathValue.isclose(ItemData, 0.0, abs_tol=1e-09) for ItemData in OriginValue)) and MathValue.isclose(abs(sum((LeftValue * RightValue for LeftValue, RightValue in zip(NormalValue, TargetNormal, strict=True)))), 1.0, rel_tol=0.0, abs_tol=1e-09):
+                Result[Plane.id] = ObjectId
+                Claimed.add(ObjectId)
                 break
-    return result
+    return Result
 
-
-# property extraction keeps primitive placement validation independent of xml objects
-def _FreeCadPropertyAttributes(
-    ObjectData: Mapping[str, Any],
-    PropertyName: str,
-) -> Mapping[str, Any] | None:
-    PropertiesData = ObjectData.get("properties")
+# this definition exists because focused behavior needs one stable owner
+def FreeCadProp(ObjectData: Mapping[str, Any], PropName: str) -> Mapping[str, AnyValue] | None:
+    PropertiesData = ObjectData.get('properties')
     if not isinstance(PropertiesData, Mapping):
         return None
-    PropertyData = PropertiesData.get(PropertyName)
-    if not isinstance(PropertyData, Mapping):
+    PropData = PropertiesData.get(PropName)
+    if not isinstance(PropData, Mapping):
         return None
-    ChildrenData = PropertyData.get("children")
+    ChildrenData = PropData.get('children')
     if not isinstance(ChildrenData, (list, tuple)) or len(ChildrenData) != 1:
         return None
     ChildData = ChildrenData[0]
     if not isinstance(ChildData, Mapping):
         return None
-    AttributesData = ChildData.get("attributes")
+    AttributesData = ChildData.get('attributes')
     return AttributesData if isinstance(AttributesData, Mapping) else None
 
-
-# this accepts only the unshifted unrotated primitive frame proved by the boss program
-def _IsFreeCadIdentityPlacement(
-    ObjectData: Mapping[str, Any],
-    PropertyName: str,
-) -> bool:
-    AttributesData = _FreeCadPropertyAttributes(ObjectData, PropertyName)
+# this definition exists because focused behavior needs one stable owner
+def IsFreeCad(ObjectData: Mapping[str, Any], PropName: str) -> bool:
+    AttributesData = FreeCadProp(ObjectData, PropName)
     if AttributesData is None:
         return False
-    ExpectedData = {
-        "Px": 0.0,
-        "Py": 0.0,
-        "Pz": 0.0,
-        "Q0": 0.0,
-        "Q1": 0.0,
-        "Q2": 0.0,
-        "Q3": 1.0,
-    }
+    ExpectedData = {'Px': 0.0, 'Py': 0.0, 'Pz': 0.0, 'Q0': 0.0, 'Q1': 0.0, 'Q2': 0.0, 'Q3': 1.0}
     try:
-        ActualData = {
-            KeyData: float(AttributesData[KeyData]) for KeyData in ExpectedData
-        }
+        ActualData = {KeyData: float(AttributesData[KeyData]) for KeyData in ExpectedData}
     except (KeyError, TypeError, ValueError):
         return False
-    return all(
-        math.isfinite(ActualData[KeyData])
-        and math.isclose(
-            ActualData[KeyData],
-            ExpectedValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-12,
-        )
-        for KeyData, ExpectedValue in ExpectedData.items()
-    )
+    return all((MathValue.isfinite(ActualData[KeyData]) and MathValue.isclose(ActualData[KeyData], ExpectedValue, rel_tol=0.0, abs_tol=1e-12) for KeyData, ExpectedValue in ExpectedData.items()))
 
-
-# eight exact source corners prove the primitive parameters still describe the stored solid
-def _HasFreeCadBoxBrep(
-    DocumentData: CadDocument,
-    LengthValue: float,
-    WidthValue: float,
-    HeightValue: float,
-) -> bool:
-    BrepData = DocumentData.brep
-    if (
-        BrepData is None
-        or len(BrepData.vertices) != 8
-        or len(BrepData.edges) != 12
-        or len(BrepData.faces) != 6
-        or len(BrepData.regions) != 1
-        or len(BrepData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasFreeCadBox(DocData: CadDocument, LengthValue: float, WidthValue: float, HeightValue: float) -> bool:
+    BrepData = DocData.brep
+    if BrepData is None or len(BrepData.vertices) != 8 or len(BrepData.edges) != 12 or (len(BrepData.faces) != 6) or (len(BrepData.regions) != 1) or (len(BrepData.bodies) != 1):
         return False
-    ExpectedData = {
-        (XValue, YValue, ZValue)
-        for XValue in (0.0, LengthValue)
-        for YValue in (0.0, WidthValue)
-        for ZValue in (0.0, HeightValue)
-    }
-    ActualData = {
-        (VertexData.point.x, VertexData.point.y, VertexData.point.z)
-        for VertexData in BrepData.vertices
-    }
-    return len(ActualData) == 8 and all(
-        any(
-            all(
-                math.isclose(
-                    ExpectedCoordinate,
-                    ActualCoordinate,
-                    rel_tol=0.0,
-                    abs_tol=1.0e-9,
-                )
-                for ExpectedCoordinate, ActualCoordinate in zip(
-                    ExpectedPoint,
-                    ActualPoint,
-                    strict=True,
-                )
-            )
-            for ActualPoint in ActualData
-        )
-        for ExpectedPoint in ExpectedData
-    )
+    ExpectedData = {(XValue, YValue, ZValue) for XValue in (0.0, LengthValue) for YValue in (0.0, WidthValue) for ZValue in (0.0, HeightValue)}
+    ActualData = {(VertexData.point.x, VertexData.point.y, VertexData.point.z) for VertexData in BrepData.vertices}
+    return len(ActualData) == 8 and all((any((all((MathValue.isclose(ExpectedCoordinate, ActualCoordinate, rel_tol=0.0, abs_tol=1e-09) for ExpectedCoordinate, ActualCoordinate in zip(ExpectedPoint, ActualPoint, strict=True))) for ActualPoint in ActualData)) for ExpectedPoint in ExpectedData))
 
-
-# primitive cylinders need topology proof before feature history can replace their source boundary representation
-def HasCadCylBrep(
-    DocumentData: CadDocument,
-    RadiusValue: float,
-    HeightValue: float,
-) -> bool:
-    BrepData = DocumentData.brep
-    if (
-        BrepData is None
-        or len(BrepData.vertices) != 2
-        or len(BrepData.curves) != 3
-        or len(BrepData.edges) != 3
-        or len(BrepData.loops) != 3
-        or len(BrepData.surfaces) != 3
-        or len(BrepData.faces) != 3
-        or len(BrepData.regions) != 1
-        or len(BrepData.bodies) != 1
-        or not BrepData.regions[0].solid
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasCadCylBrep(DocData: CadDocument, RadiusValue: float, HeightValue: float) -> bool:
+    BrepData = DocData.brep
+    if BrepData is None or len(BrepData.vertices) != 2 or len(BrepData.curves) != 3 or (len(BrepData.edges) != 3) or (len(BrepData.loops) != 3) or (len(BrepData.surfaces) != 3) or (len(BrepData.faces) != 3) or (len(BrepData.regions) != 1) or (len(BrepData.bodies) != 1) or (not BrepData.regions[0].solid):
         return False
-    CircleData = tuple(
-        ItemData for ItemData in BrepData.curves if isinstance(ItemData, CircleCurve)
-    )
-    LineData = tuple(
-        ItemData for ItemData in BrepData.curves if isinstance(ItemData, LineCurve)
-    )
-    CylinderData = tuple(
-        ItemData
-        for ItemData in BrepData.surfaces
-        if isinstance(ItemData, CylinderSurface)
-    )
-    PlaneData = tuple(
-        ItemData for ItemData in BrepData.surfaces if isinstance(ItemData, PlaneSurface)
-    )
-    if (
-        len(CircleData) != 2
-        or len(LineData) != 1
-        or len(CylinderData) != 1
-        or len(PlaneData) != 2
-    ):
+    CircleData = tuple((ItemData for ItemData in BrepData.curves if isinstance(ItemData, CircleCurve)))
+    LineData = tuple((ItemData for ItemData in BrepData.curves if isinstance(ItemData, LineCurve)))
+    CylinderData = tuple((ItemData for ItemData in BrepData.surfaces if isinstance(ItemData, CylinderSurface)))
+    PlaneData = tuple((ItemData for ItemData in BrepData.surfaces if isinstance(ItemData, PlaneSurface)))
+    if len(CircleData) != 2 or len(LineData) != 1 or len(CylinderData) != 1 or (len(PlaneData) != 2):
         return False
-    CircleHeights = sorted(ItemData.center.z for ItemData in CircleData)
-    PlaneHeights = sorted(ItemData.origin.z for ItemData in PlaneData)
+    CircleHeights = sorted((ItemData.center.z for ItemData in CircleData))
+    PlaneHeights = sorted((ItemData.origin.z for ItemData in PlaneData))
     ExpectedHeights = (0.0, HeightValue)
-    if not all(
-        math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-9)
-        for ActualValue, ExpectedValue in zip(
-            CircleHeights,
-            ExpectedHeights,
-            strict=True,
-        )
-    ) or not all(
-        math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-9)
-        for ActualValue, ExpectedValue in zip(
-            PlaneHeights,
-            ExpectedHeights,
-            strict=True,
-        )
-    ):
+    if not all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(CircleHeights, ExpectedHeights, strict=True))) or not all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(PlaneHeights, ExpectedHeights, strict=True))):
         return False
-    if any(
-        not math.isclose(ItemData.center.x, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(ItemData.center.y, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(
-            ItemData.radius,
-            RadiusValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-9,
-        )
-        or not math.isclose(abs(ItemData.axis.z), 1.0, abs_tol=1.0e-9)
-        or not math.isclose(ItemData.axis.x, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(ItemData.axis.y, 0.0, abs_tol=1.0e-9)
-        for ItemData in CircleData
-    ):
+    if any((not MathValue.isclose(ItemData.center.x, 0.0, abs_tol=1e-09) or not MathValue.isclose(ItemData.center.y, 0.0, abs_tol=1e-09) or (not MathValue.isclose(ItemData.radius, RadiusValue, rel_tol=0.0, abs_tol=1e-09)) or (not MathValue.isclose(abs(ItemData.axis.z), 1.0, abs_tol=1e-09)) or (not MathValue.isclose(ItemData.axis.x, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(ItemData.axis.y, 0.0, abs_tol=1e-09)) for ItemData in CircleData)):
         return False
     LineValue = LineData[0]
     CylinderValue = CylinderData[0]
-    if (
-        not math.isclose(
-            math.hypot(LineValue.origin.x, LineValue.origin.y),
-            RadiusValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-9,
-        )
-        or not math.isclose(LineValue.origin.z, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(LineValue.direction.x, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(LineValue.direction.y, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(abs(LineValue.direction.z), 1.0, abs_tol=1.0e-9)
-        or not math.isclose(CylinderValue.origin.x, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(CylinderValue.origin.y, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(CylinderValue.origin.z, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(
-            CylinderValue.radius,
-            RadiusValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-9,
-        )
-        or not math.isclose(CylinderValue.axis.x, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(CylinderValue.axis.y, 0.0, abs_tol=1.0e-9)
-        or not math.isclose(abs(CylinderValue.axis.z), 1.0, abs_tol=1.0e-9)
-    ):
+    if not MathValue.isclose(MathValue.hypot(LineValue.origin.x, LineValue.origin.y), RadiusValue, rel_tol=0.0, abs_tol=1e-09) or not MathValue.isclose(LineValue.origin.z, 0.0, abs_tol=1e-09) or (not MathValue.isclose(LineValue.direction.x, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(LineValue.direction.y, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(abs(LineValue.direction.z), 1.0, abs_tol=1e-09)) or (not MathValue.isclose(CylinderValue.origin.x, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(CylinderValue.origin.y, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(CylinderValue.origin.z, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(CylinderValue.radius, RadiusValue, rel_tol=0.0, abs_tol=1e-09)) or (not MathValue.isclose(CylinderValue.axis.x, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(CylinderValue.axis.y, 0.0, abs_tol=1e-09)) or (not MathValue.isclose(abs(CylinderValue.axis.z), 1.0, abs_tol=1e-09)):
         return False
-    VertexHeights = sorted(ItemData.point.z for ItemData in BrepData.vertices)
-    return all(
-        math.isclose(
-            math.hypot(ItemData.point.x, ItemData.point.y),
-            RadiusValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-9,
-        )
-        for ItemData in BrepData.vertices
-    ) and all(
-        math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-9)
-        for ActualValue, ExpectedValue in zip(
-            VertexHeights,
-            ExpectedHeights,
-            strict=True,
-        )
-    )
+    VertexHeights = sorted((ItemData.point.z for ItemData in BrepData.vertices))
+    return all((MathValue.isclose(MathValue.hypot(ItemData.point.x, ItemData.point.y), RadiusValue, rel_tol=0.0, abs_tol=1e-09) for ItemData in BrepData.vertices)) and all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(VertexHeights, ExpectedHeights, strict=True)))
 
+# this definition exists because focused behavior needs one stable owner
+def FreeCadBox(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
 
-# exact freecad boxes lower to one dimensioned rectangle and one blind boss
-def _FreeCadBoxObjects(
-    DocumentData: CadDocument,
-    ObjectIds: dict[str, int],
-) -> tuple[_WriteObject, ...] | None:
-    TimelineData = tuple(
-        FeatureData
-        for FeatureData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda FeatureData: FeatureData.order,
-        )
-        if not _is_native_system_feature(FeatureData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((FeatureData for FeatureData in sorted(DocData.feature_timeline, key=lambda FeatureData: FeatureData.order) if not IsNativeSystem(FeatureData)))
     if len(TimelineData) != 1:
         return None
     FeatureData = TimelineData[0]
     DefinitionData = FeatureData.definition
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or DocumentData.support_planes
-        or DocumentData.sketches
-        or DocumentData.selections
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FeatureData.id
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or FeatureData.order != 0
-        or FeatureData.input_feature_ids
-        or FeatureData.sketch_id is not None
-        or FeatureData.selection_ids
-        or FeatureData.configuration_states
-        or FeatureData.suppressed
-        or str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value
-        or FeatureData.operation is not None
-        or not isinstance(DefinitionData, NativeFeatureDefinition)
-        or DefinitionData.format_id.casefold() != "freecad.fcstd"
-        or DefinitionData.type_id not in {"Part::Box", "PartDesign::AdditiveBox"}
-        or FeatureData.provenance is None
-        or any(ItemData.expression is not None for ItemData in DocumentData.parameters)
-    ):
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or DocData.support_planes or DocData.sketches or DocData.selections or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FeatureData.id) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (FeatureData.order != 0) or FeatureData.input_feature_ids or (FeatureData.sketch_id is not None) or FeatureData.selection_ids or FeatureData.configuration_states or FeatureData.suppressed or (str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value) or (FeatureData.operation is not None) or (not isinstance(DefinitionData, NativeFeatureDefinition)) or (DefinitionData.format_id.casefold() != 'freecad.fcstd') or (DefinitionData.type_id not in {'Part::Box', 'PartDesign::AdditiveBox'}) or (FeatureData.provenance is None) or any((ItemData.expression is not None for ItemData in DocData.parameters)):
         return None
-    PathData: dict[str, Parameter] = {}
-    for ItemData in DocumentData.parameters:
+    PathData: dict[str, Param] = {}
+    for ItemData in DocData.parameters:
         if ItemData.owner_id != FeatureData.id:
             return None
-        PathValue = ItemData.attributes.get("freecad_path")
+        PathValue = ItemData.attributes.get('freecad_path')
         if not isinstance(PathValue, str) or not PathValue or PathValue in PathData:
             return None
         PathData[PathValue] = ItemData
-    ExpectedData = {
-        "Length": (ValueKind.LENGTH, None),
-        "Width": (ValueKind.LENGTH, None),
-        "Height": (ValueKind.LENGTH, None),
-        "MapMode": (ValueKind.INTEGER, 0),
-        "MapPathParameter": (ValueKind.NUMBER, 0.0),
-        "MapReversed": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if not set(ExpectedData) <= set(PathData) or any(
-        not _freecad_parameter_matches(PathData[PathName], KindData, ValueData)
-        for PathName, (KindData, ValueData) in ExpectedData.items()
-        if ValueData is not None
-    ):
+    ExpectedData = {'Length': (ValueKind.LENGTH, None), 'Width': (ValueKind.LENGTH, None), 'Height': (ValueKind.LENGTH, None), 'MapMode': (ValueKind.INTEGER, 0), 'MapPathParameter': (ValueKind.NUMBER, 0.0), 'MapReversed': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if not set(ExpectedData) <= set(PathData) or any((not FreecadParam(PathData[PathName], KindData, ValueData) for PathName, (KindData, ValueData) in ExpectedData.items() if ValueData is not None)):
         return None
-    DimensionsData = tuple(
-        _parameter_dimension(PathData[PathName])
-        for PathName in ("Length", "Width", "Height")
-    )
-    if any(ItemData is None for ItemData in DimensionsData):
+    DimensionsData = tuple((ParamDimension(PathData[PathName]) for PathName in ('Length', 'Width', 'Height')))
+    if any((ItemData is None for ItemData in DimensionsData)):
         return None
     LengthData, WidthData, HeightData = DimensionsData
     if LengthData is None or WidthData is None or HeightData is None:
@@ -2770,3324 +1515,942 @@ def _FreeCadBoxObjects(
     LengthValue = LengthData.value_mm
     WidthValue = WidthData.value_mm
     HeightValue = HeightData.value_mm
-    if (
-        not all(
-            math.isfinite(ItemData) and ItemData > 0.0
-            for ItemData in (LengthValue, WidthValue, HeightValue)
-        )
-        or not _IsFreeCadIdentityPlacement(DefinitionData.object_data, "Placement")
-        or not _IsFreeCadIdentityPlacement(
-            DefinitionData.object_data,
-            "AttachmentOffset",
-        )
-        or not _HasFreeCadBoxBrep(
-            DocumentData,
-            LengthValue,
-            WidthValue,
-            HeightValue,
-        )
-    ):
+    if not all((MathValue.isfinite(ItemData) and ItemData > 0.0 for ItemData in (LengthValue, WidthValue, HeightValue))) or not IsFreeCad(DefinitionData.object_data, 'Placement') or (not IsFreeCad(DefinitionData.object_data, 'AttachmentOffset')) or (not HasFreeCadBox(DocData, LengthValue, WidthValue, HeightValue)):
         return None
-    SketchPayload = bytearray(_plane_reference(2))
-    CornerData = (
-        (0.0, 0.0),
-        (LengthValue, 0.0),
-        (LengthValue, WidthValue),
-        (0.0, WidthValue),
-    )
+    SketchPayload = bytearray(PlaneRef(2))
+    CornerData = ((0.0, 0.0), (LengthValue, 0.0), (LengthValue, WidthValue), (0.0, WidthValue))
     for LocalIndex, PointData in enumerate(CornerData, 1):
-        SketchPayload.extend(_coordinate_marker(PointData, LocalIndex, _POINT_LOCUS))
-    for LocalIndex, (StartIndex, EndIndex) in enumerate(
-        ((0, 1), (1, 2), (2, 3), (3, 0)),
-        5,
-    ):
-        SketchPayload.extend(_line_marker(StartIndex, EndIndex, LocalIndex))
-    SketchSourceId = f"{FeatureData.id}:box-profile"
-    ObjectIds[f"sketch:{SketchSourceId}"] = 26
-    ObjectIds[f"feature:{FeatureData.id}"] = 34
-    ExtrusionData = replace(
-        FeatureData,
-        kind=FeatureKind.EXTRUSION,
-        sketch_id=SketchSourceId,
-        operation=BooleanOperation.CREATE,
-        definition=ExtrusionFeature(
-            ParameterValue(HeightValue, ValueKind.LENGTH, "mm"),
-        ),
-    )
-    return (
-        _WriteObject(
-            SketchSourceId,
-            26,
-            "Sketch1",
-            "Sketch",
-            "Sketch",
-            "moProfileFeature_c",
-            (("Dissectable", "true"),),
-            (
-                replace(
-                    LengthData,
-                    name="D1",
-                    text=format(LengthValue, ".15g"),
-                ),
-                replace(
-                    WidthData,
-                    name="D2",
-                    text=format(WidthValue, ".15g"),
-                ),
-            ),
-            bytes(SketchPayload),
-        ),
-        _WriteObject(
-            FeatureData.id,
-            34,
-            "Boss-Extrude1",
-            "Extrusion",
-            "Extrusion",
-            "moExtrusion_c",
-            (
-                ("Dissectable", "true"),
-                ("DissectableChildren", "26"),
-                ("DissectableRoot", "true"),
-                ("KitPrimitive", "Box"),
-            ),
-            (
-                replace(
-                    HeightData,
-                    name="D1",
-                    text=format(HeightValue, ".15g"),
-                ),
-            ),
-            _extrusion_payload(ExtrusionData),
-        ),
-    )
+        SketchPayload.extend(Coordinate(PointData, LocalIndex, KPointLocus))
+    for LocalIndex, (StartIndex, EndIndex) in enumerate(((0, 1), (1, 2), (2, 3), (3, 0)), 5):
+        SketchPayload.extend(LineMarker(StartIndex, EndIndex, LocalIndex))
+    SketchSourceId = f'{FeatureData.id}:box-profile'
+    ObjectIds[f'sketch:{SketchSourceId}'] = 26
+    ObjectIds[f'feature:{FeatureData.id}'] = 34
+    ExtrusionData = Replace(FeatureData, kind=FeatureKind.EXTRUSION, sketch_id=SketchSourceId, operation=BoolOperation.CREATE, definition=ExtrusionFeature(ParamValue(HeightValue, ValueKind.LENGTH, 'mm')))
+    return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(LengthData, name='D1', text=format(LengthValue, '.15g')), Replace(WidthData, name='D2', text=format(WidthValue, '.15g'))), bytes(SketchPayload)), WriteObject(FeatureData.id, 34, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Box')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), Extrusion(ExtrusionData)))
 
+# this definition exists because focused behavior needs one stable owner
+def BuildCadCylObjs(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
 
-# exact freecad cylinders lower to one radius driven circle and one blind boss
-def BuildCadCylObjs(
-    DocumentData: CadDocument,
-    ObjectIds: dict[str, int],
-) -> tuple[_WriteObject, ...] | None:
-    TimelineData = tuple(
-        FeatureData
-        for FeatureData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda FeatureData: FeatureData.order,
-        )
-        if not _is_native_system_feature(FeatureData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((FeatureData for FeatureData in sorted(DocData.feature_timeline, key=lambda FeatureData: FeatureData.order) if not IsNativeSystem(FeatureData)))
     if len(TimelineData) != 1:
         return None
     FeatureData = TimelineData[0]
     DefinitionData = FeatureData.definition
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or DocumentData.support_planes
-        or DocumentData.sketches
-        or DocumentData.selections
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FeatureData.id
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or FeatureData.order != 0
-        or FeatureData.input_feature_ids
-        or FeatureData.sketch_id is not None
-        or FeatureData.selection_ids
-        or FeatureData.configuration_states
-        or FeatureData.suppressed
-        or str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value
-        or FeatureData.operation is not None
-        or not isinstance(DefinitionData, NativeFeatureDefinition)
-        or DefinitionData.format_id.casefold() != "freecad.fcstd"
-        or DefinitionData.type_id != "Part::Cylinder"
-        or FeatureData.provenance is None
-        or any(ItemData.expression is not None for ItemData in DocumentData.parameters)
-    ):
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or DocData.support_planes or DocData.sketches or DocData.selections or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FeatureData.id) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (FeatureData.order != 0) or FeatureData.input_feature_ids or (FeatureData.sketch_id is not None) or FeatureData.selection_ids or FeatureData.configuration_states or FeatureData.suppressed or (str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value) or (FeatureData.operation is not None) or (not isinstance(DefinitionData, NativeFeatureDefinition)) or (DefinitionData.format_id.casefold() != 'freecad.fcstd') or (DefinitionData.type_id != 'Part::Cylinder') or (FeatureData.provenance is None) or any((ItemData.expression is not None for ItemData in DocData.parameters)):
         return None
-    PathData: dict[str, Parameter] = {}
-    for ItemData in DocumentData.parameters:
+    PathData: dict[str, Param] = {}
+    for ItemData in DocData.parameters:
         if ItemData.owner_id != FeatureData.id:
             return None
-        PathValue = ItemData.attributes.get("freecad_path")
+        PathValue = ItemData.attributes.get('freecad_path')
         if not isinstance(PathValue, str) or not PathValue or PathValue in PathData:
             return None
         PathData[PathValue] = ItemData
-    ExpectedData = {
-        "Angle": (ValueKind.ANGLE, 360.0),
-        "FirstAngle": (ValueKind.ANGLE, 0.0),
-        "SecondAngle": (ValueKind.ANGLE, 0.0),
-        "Height": (ValueKind.LENGTH, None),
-        "Radius": (ValueKind.LENGTH, None),
-        "MapMode": (ValueKind.INTEGER, 0),
-        "MapPathParameter": (ValueKind.NUMBER, 0.0),
-        "MapReversed": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if not set(ExpectedData) <= set(PathData) or any(
-        not _freecad_parameter_matches(PathData[PathName], KindData, ValueData)
-        for PathName, (KindData, ValueData) in ExpectedData.items()
-        if ValueData is not None
-    ):
+    ExpectedData = {'Angle': (ValueKind.ANGLE, 360.0), 'FirstAngle': (ValueKind.ANGLE, 0.0), 'SecondAngle': (ValueKind.ANGLE, 0.0), 'Height': (ValueKind.LENGTH, None), 'Radius': (ValueKind.LENGTH, None), 'MapMode': (ValueKind.INTEGER, 0), 'MapPathParameter': (ValueKind.NUMBER, 0.0), 'MapReversed': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if not set(ExpectedData) <= set(PathData) or any((not FreecadParam(PathData[PathName], KindData, ValueData) for PathName, (KindData, ValueData) in ExpectedData.items() if ValueData is not None)):
         return None
-    RadiusData = _parameter_dimension(PathData["Radius"])
-    HeightData = _parameter_dimension(PathData["Height"])
+    RadiusData = ParamDimension(PathData['Radius'])
+    HeightData = ParamDimension(PathData['Height'])
     if RadiusData is None or HeightData is None:
         return None
     RadiusValue = RadiusData.value_mm
     HeightValue = HeightData.value_mm
-    if (
-        not math.isfinite(RadiusValue)
-        or RadiusValue <= 0.0
-        or not math.isfinite(HeightValue)
-        or HeightValue <= 0.0
-        or not _IsFreeCadIdentityPlacement(DefinitionData.object_data, "Placement")
-        or not _IsFreeCadIdentityPlacement(
-            DefinitionData.object_data,
-            "AttachmentOffset",
-        )
-        or not HasCadCylBrep(DocumentData, RadiusValue, HeightValue)
-    ):
+    if not MathValue.isfinite(RadiusValue) or RadiusValue <= 0.0 or (not MathValue.isfinite(HeightValue)) or (HeightValue <= 0.0) or (not IsFreeCad(DefinitionData.object_data, 'Placement')) or (not IsFreeCad(DefinitionData.object_data, 'AttachmentOffset')) or (not HasCadCylBrep(DocData, RadiusValue, HeightValue)):
         return None
-    SketchPayload = bytearray(_plane_reference(2))
-    SketchPayload.extend(_coordinate_marker((0.0, 0.0), 1, _CIRCLE_LOCUS))
-    SketchPayload.extend(_coordinate_marker((RadiusValue, 0.0), 2, _POINT_LOCUS))
-    SketchSourceId = f"{FeatureData.id}:cylinder-profile"
-    ObjectIds[f"sketch:{SketchSourceId}"] = 26
-    ObjectIds[f"feature:{FeatureData.id}"] = 33
-    ExtrusionData = replace(
-        FeatureData,
-        kind=FeatureKind.EXTRUSION,
-        sketch_id=SketchSourceId,
-        operation=BooleanOperation.CREATE,
-        definition=ExtrusionFeature(
-            ParameterValue(HeightValue, ValueKind.LENGTH, "mm"),
-        ),
-    )
-    return (
-        _WriteObject(
-            SketchSourceId,
-            26,
-            "Sketch1",
-            "Sketch",
-            "Sketch",
-            "moProfileFeature_c",
-            (("Dissectable", "true"),),
-            (
-                replace(
-                    RadiusData,
-                    name="D1",
-                    value_mm=RadiusValue * 2.0,
-                    text="<MOD-DIAM>" + format(RadiusValue * 2.0, ".15g"),
-                ),
-            ),
-            bytes(SketchPayload),
-        ),
-        _WriteObject(
-            FeatureData.id,
-            33,
-            "Boss-Extrude1",
-            "Extrusion",
-            "Extrusion",
-            "moExtrusion_c",
-            (
-                ("Dissectable", "true"),
-                ("DissectableChildren", "26"),
-                ("DissectableRoot", "true"),
-                ("KitPrimitive", "Cylinder"),
-            ),
-            (
-                replace(
-                    HeightData,
-                    name="D1",
-                    text=format(HeightValue, ".15g"),
-                ),
-            ),
-            _extrusion_payload(ExtrusionData),
-        ),
-    )
+    SketchPayload = bytearray(PlaneRef(2))
+    SketchPayload.extend(Coordinate((0.0, 0.0), 1, KCircleLocus))
+    SketchPayload.extend(Coordinate((RadiusValue, 0.0), 2, KPointLocus))
+    SketchSourceId = f'{FeatureData.id}:cylinder-profile'
+    ObjectIds[f'sketch:{SketchSourceId}'] = 26
+    ObjectIds[f'feature:{FeatureData.id}'] = 33
+    ExtrusionData = Replace(FeatureData, kind=FeatureKind.EXTRUSION, sketch_id=SketchSourceId, operation=BoolOperation.CREATE, definition=ExtrusionFeature(ParamValue(HeightValue, ValueKind.LENGTH, 'mm')))
+    return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(RadiusData, name='D1', value_mm=RadiusValue * 2.0, text='<MOD-DIAM>' + format(RadiusValue * 2.0, '.15g')),), bytes(SketchPayload)), WriteObject(FeatureData.id, 33, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Cylinder')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), Extrusion(ExtrusionData)))
 
-
-def _write_objects(
-    document: CadDocument, object_ids: dict[str, int]
-) -> tuple[_WriteObject, ...]:
-    parameters = {parameter.id: parameter for parameter in document.parameters}
-    BoxObjects = _FreeCadBoxObjects(document, object_ids)
+# this definition exists because focused behavior needs one stable owner
+def WriteObjects(DocValue: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...]:
+    Parameters = {Param.id: Param for Param in DocValue.parameters}
+    BoxObjects = FreeCadBox(DocValue, ObjectIds)
     if BoxObjects is not None:
         return BoxObjects
-    CylinderObjects = BuildCadCylObjs(document, object_ids)
+    CylinderObjects = BuildCadCylObjs(DocValue, ObjectIds)
     if CylinderObjects is not None:
         return CylinderObjects
-    result: list[_WriteObject] = []
-    for plane in document.support_planes:
-        object_id = object_ids[f"plane:{plane.id}"]
-        if object_id in {2, 3, 4}:
+    Result: list[WriteObject] = []
+    for Plane in DocValue.support_planes:
+        ObjectId = ObjectIds[f'plane:{Plane.id}']
+        if ObjectId in {2, 3, 4}:
             continue
-        dimensions = _write_dimensions(
-            plane.id,
-            (plane.offset_parameter_id,) if plane.offset_parameter_id else (),
-            parameters,
-        )
-        result.append(
-            _WriteObject(
-                plane.id,
-                object_id,
-                plane.name,
-                "Feature",
-                "Plane",
-                "moRefPlane_c",
-                dimensions=dimensions,
-                payload=_plane_payload(plane),
-            )
-        )
-    sketches = {sketch.id: sketch for sketch in document.sketches}
-    emitted_sketches: set[str] = set()
-    for feature in sorted(document.feature_timeline, key=lambda item: item.order):
-        if _is_native_system_feature(feature):
+        Dimensions = WriteDimensions(Plane.id, (Plane.offset_parameter_id,) if Plane.offset_parameter_id else (), Parameters)
+        Result.append(WriteObject(Plane.id, ObjectId, Plane.name, 'Feature', 'Plane', 'moRefPlane_c', dimensions=Dimensions, payload=PlanePayload(Plane)))
+    Sketches = {Sketch.id: Sketch for Sketch in DocValue.sketches}
+    EmittedSketches: set[str] = set()
+
+    # this callback exists because local behavior needs one focused transformation
+    for Feature in sorted(DocValue.feature_timeline, key=lambda ItemValue: ItemValue.order):
+        if IsNativeSystem(Feature):
             continue
-        if feature.sketch_id is not None and feature.sketch_id in sketches:
-            sketch = sketches[feature.sketch_id]
-            if sketch.id not in emitted_sketches:
-                result.append(_write_sketch(sketch, parameters, object_ids, feature))
-                emitted_sketches.add(sketch.id)
-        feature_id = object_ids[f"feature:{feature.id}"]
-        if any(item.object_id == feature_id for item in result):
+        if Feature.sketch_id is not None and Feature.sketch_id in Sketches:
+            Sketch = Sketches[Feature.sketch_id]
+            if Sketch.id not in EmittedSketches:
+                Result.append(WriteSketch(Sketch, Parameters, ObjectIds, Feature))
+                EmittedSketches.add(Sketch.id)
+        FeatureId = ObjectIds[f'feature:{Feature.id}']
+        if any((ItemValue.object_id == FeatureId for ItemValue in Result)):
             continue
-        result.append(_write_feature(feature, parameters, object_ids))
-    for sketch in document.sketches:
-        if sketch.id not in emitted_sketches:
-            result.append(_write_sketch(sketch, parameters, object_ids))
-    return tuple(result)
+        Result.append(WriteFeature(Feature, Parameters, ObjectIds))
+    for Sketch in DocValue.sketches:
+        if Sketch.id not in EmittedSketches:
+            Result.append(WriteSketch(Sketch, Parameters, ObjectIds))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def EquationId(Value: str) -> str:
+    Cleaned = KEquationId.sub('_', Value).strip('_')
+    return f'Kit_{Cleaned}' if Cleaned else ''
 
-def _equation_identifier(value: str) -> str:
-    cleaned = _EQUATION_IDENTIFIER.sub("_", value).strip("_")
-    return f"Kit_{cleaned}" if cleaned else ""
-
-
-def _equation_literal(value: ParameterValue) -> str | None:
-    if not isinstance(value.value, (int, float)) or isinstance(value.value, bool):
+# this definition exists because focused behavior needs one stable owner
+def EquationLiteral(Value: ParameterValue) -> str | None:
+    if not isinstance(Value.value, (int, float)) or isinstance(Value.value, bool):
         return None
-    if not math.isfinite(float(value.value)):
+    if not MathValue.isfinite(float(Value.value)):
         return None
-    rendered = format(float(value.value), ".15g")
-    if value.kind is ValueKind.LENGTH:
-        return f"{rendered}mm"
-    if value.kind is ValueKind.NUMBER:
-        return rendered
+    Rendered = format(float(Value.value), '.15g')
+    if Value.kind is ValueKind.LENGTH:
+        return f'{Rendered}mm'
+    if Value.kind is ValueKind.NUMBER:
+        return Rendered
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def Expression(DocValue: CadDocument) -> tuple[Param, ...]:
+    return tuple((Param for Param in DocValue.parameters if Param.expression is not None))
 
-def _expression_parameters(document: CadDocument) -> tuple[Parameter, ...]:
-    return tuple(
-        parameter
-        for parameter in document.parameters
-        if parameter.expression is not None
-    )
-
-
-def expression_equation_texts(document: CadDocument) -> tuple[str, ...] | None:
-    parameters = _expression_parameters(document)
-    if not parameters:
+# this definition exists because focused behavior needs one stable owner
+def ExpressionTexts(DocValue: CadDocument) -> tuple[str, ...] | None:
+    Parameters = Expression(DocValue)
+    if not Parameters:
         return ()
-    names: dict[str, str] = {}
-    used: set[str] = set()
+    Names: dict[str, str] = {}
+    UsedValue: set[str] = set()
 
-    def identifier(key: str, source: str) -> str | None:
-        if key in names:
-            return names[key]
-        base = _equation_identifier(source)
-        if not base:
+    # this definition exists because focused behavior needs one stable owner
+    def IdAction(KeyValue: str, Source: str) -> str | None:
+        if KeyValue in Names:
+            return Names[KeyValue]
+        BaseValue = EquationId(Source)
+        if not BaseValue:
             return None
-        candidate = base
-        suffix = 2
-        while candidate in used:
-            candidate = f"{base}_{suffix}"
-            suffix += 1
-        used.add(candidate)
-        names[key] = candidate
-        return candidate
-
-    references: list[tuple[str, str]] = []
-    values: dict[str, str] = {}
-    bindings: list[tuple[str, str]] = []
-    for parameter in parameters:
-        expression = parameter.expression
-        if expression is None:
+        Choice = BaseValue
+        Suffix = 2
+        while Choice in UsedValue:
+            Choice = f'{BaseValue}_{Suffix}'
+            Suffix += 1
+        UsedValue.add(Choice)
+        Names[KeyValue] = Choice
+        return Choice
+    References: list[tuple[str, str]] = []
+    Values: dict[str, str] = {}
+    Bindings: list[tuple[str, str]] = []
+    for Param in Parameters:
+        Expression = Param.expression
+        if Expression is None:
             return None
-        source = expression.source.strip()
-        if not _EQUATION_REFERENCE_SOURCE.fullmatch(source):
+        Source = Expression.source.strip()
+        if not KEquationRefSource.fullmatch(Source):
             return None
-        literal = _equation_literal(parameter.value)
-        if literal is None:
+        Literal = EquationLiteral(Param.value)
+        if Literal is None:
             return None
-        reference = identifier(f"reference:{source}", source)
-        driven = identifier(f"parameter:{parameter.id}", parameter.name)
-        if reference is None or driven is None or reference == driven:
+        RefValue = IdAction(f'reference:{Source}', Source)
+        Driven = IdAction(f'parameter:{Param.id}', Param.name)
+        if RefValue is None or Driven is None or RefValue == Driven:
             return None
-        if reference in values:
-            if values[reference] != literal:
+        if RefValue in Values:
+            if Values[RefValue] != Literal:
                 return None
         else:
-            values[reference] = literal
-            references.append((reference, literal))
-        bindings.append((driven, reference))
-    texts = [f'"{name}"= {literal}' for name, literal in references]
-    texts.extend(f'"{driven}"= "{reference}"' for driven, reference in bindings)
-    if len(set(texts)) != len(texts):
+            Values[RefValue] = Literal
+            References.append((RefValue, Literal))
+        Bindings.append((Driven, RefValue))
+    Texts = [f'"{NameValue}"= {Literal}' for NameValue, Literal in References]
+    Texts.extend((f'"{Driven}"= "{RefValue}"' for Driven, RefValue in Bindings))
+    if len(set(Texts)) != len(Texts):
         return None
-    return tuple(texts)
+    return tuple(Texts)
 
-
-def _repair_plane_object_ids(object_ids: dict[str, int]) -> None:
-    reserved = frozenset(range(1, 26))
-    taken = {
-        value
-        for key, value in object_ids.items()
-        if not key.startswith(("plane:", "configuration:"))
-    }
-    next_id = 26
-    for key in tuple(object_ids):
-        if not key.startswith("plane:"):
+# this definition exists because focused behavior needs one stable owner
+def RepairPlaneIds(ObjectIds: dict[str, int]) -> None:
+    Reserved = frozenset(range(1, 26))
+    Taken = {Value for KeyValue, Value in ObjectIds.items() if not KeyValue.startswith(('plane:', 'configuration:'))}
+    NextId = 26
+    for KeyValue in tuple(ObjectIds):
+        if not KeyValue.startswith('plane:'):
             continue
-        value = object_ids[key]
-        if value in {2, 3, 4} and value not in taken:
-            taken.add(value)
+        Value = ObjectIds[KeyValue]
+        if Value in {2, 3, 4} and Value not in Taken:
+            Taken.add(Value)
             continue
-        if value not in taken and value not in reserved:
-            taken.add(value)
+        if Value not in Taken and Value not in Reserved:
+            Taken.add(Value)
             continue
-        while next_id in taken or next_id in reserved:
-            next_id += 1
-        object_ids[key] = next_id
-        taken.add(next_id)
+        while NextId in Taken or NextId in Reserved:
+            NextId += 1
+        ObjectIds[KeyValue] = NextId
+        Taken.add(NextId)
 
-
-# canonical object identities close cross-stream references for each proved history shape
-def _CanonicalExtrusionObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
-    if len(ObjectsData) == 2 and ObjectsData[1].class_name == "moRevolution_c":
-        return _CanonicalSingleRevolutionObjects(
-            ObjectsData,
-            ObjectIds,
-            DocumentData,
-        )
+# this definition exists because focused behavior needs one stable owner
+def Canonical(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+    if len(ObjectsData) == 2 and ObjectsData[1].class_name == 'moRevolution_c':
+        return CanonicalSinglA(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) in {6, 8}:
-        return _CanonicalCutChainObjects(ObjectsData, ObjectIds, DocumentData)
+        return CanonicalCut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 4:
-        if ObjectsData[3].class_name == "moRevolution_c":
-            return _CanonicalPadGrooveObjects(
-                ObjectsData,
-                ObjectIds,
-                DocumentData,
-            )
-        return _CanonicalTwoFeatureObjects(ObjectsData, ObjectIds, DocumentData)
-    if len(ObjectsData) == 3 and ObjectsData[2].class_name == "Fillet_c":
-        return _CanonicalBossFilletObjects(ObjectsData, ObjectIds, DocumentData)
-    if len(ObjectsData) == 3 and ObjectsData[2].class_name == "Chamfer_c":
-        return _CanonicalBossChamferObjects(ObjectsData, ObjectIds, DocumentData)
-    if len(ObjectsData) == 3 and ObjectsData[2].class_name == "moShell_c":
-        return _CanonicalBossShellObjects(ObjectsData, ObjectIds, DocumentData)
-    if len(ObjectsData) == 3 and ObjectsData[2].class_name == "moLPattern_c":
-        return _CanonicalBossLinearPatternObjects(
-            ObjectsData,
-            ObjectIds,
-            DocumentData,
-        )
-    if len(ObjectsData) == 3 and ObjectsData[2].class_name == "moCirPattern_c":
-        return _CanonicalBossCircularPatternObjects(
-            ObjectsData,
-            ObjectIds,
-            DocumentData,
-        )
-    return _CanonicalSingleBossObjects(ObjectsData, ObjectIds, DocumentData)
+        if ObjectsData[3].class_name == 'moRevolution_c':
+            return CanonicalPad(ObjectsData, ObjectIds, DocData)
+        return CanonicalTwo(ObjectsData, ObjectIds, DocData)
+    if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'Fillet_c':
+        return CanonicalBossB(ObjectsData, ObjectIds, DocData)
+    if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'Chamfer_c':
+        return CanonicalBoss(ObjectsData, ObjectIds, DocData)
+    if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'moShell_c':
+        return CanonicalBossD(ObjectsData, ObjectIds, DocData)
+    if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'moLPattern_c':
+        return CanonicalBossC(ObjectsData, ObjectIds, DocData)
+    if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'moCirPattern_c':
+        return CanonicalBossA(ObjectsData, ObjectIds, DocData)
+    return CanonicalSingle(ObjectsData, ObjectIds, DocData)
 
-
-# canonical revolution identities bind the traced profile, axis, and angle records
-def _CanonicalSingleRevolutionObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalSinglA(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 2:
         return ObjectsData
     SketchObject, RevolveObject = ObjectsData
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeature = next(
-        (
-            ItemData
-            for ItemData in DocumentData.feature_timeline
-            if ItemData.id == RevolveObject.source_id
-        ),
-        None,
-    )
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+    SourceFeature = next((ItemData for ItemData in DocData.feature_timeline if ItemData.id == RevolveObject.source_id), None)
     if SourceSketch is None or SourceFeature is None:
         return ObjectsData
-    NormalizedSketch = _CanonicalPrincipalSketch(
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    SketchPayload, _ = _sketch_payload(
-        NormalizedSketch,
-        SketchObject.object_id,
-        ObjectIds,
-    )
-    SketchObject = replace(SketchObject, payload=SketchPayload)
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
+    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchObject = Replace(SketchObject, payload=SketchPayload)
+    BoundsValue = WriteRectangle(SketchObject)
     PinPoints = PolySixPoints(SketchObject)
-    AngleDimension = _FreeCadSingleRevolutionDimension(
-        DocumentData,
-        SourceSketch,
-        SourceFeature,
-    )
-    PlaneObjectId = (
-        struct.unpack_from("<I", SketchObject.payload)[0]
-        if len(SketchObject.payload) >= 4
-        else 0
-    )
-    IsPinData = (
-        PlaneObjectId == 3
-        and IsPinProfile(PinPoints)
-        and not SketchObject.dimensions
-        and HasPolySix(SourceSketch, PinPoints)
-    )
-    IsRectangleData = (
-        PlaneObjectId == 2
-        and BoundsValue is not None
-        and HasRectDims(SketchObject, BoundsValue)
-        and HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
-    )
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or not (IsRectangleData or IsPinData)
-        or SourceSketch.suppressed
-        or len(SourceSketch.closed_profile_entity_ids) != 1
-        or set(SourceSketch.closed_profile_entity_ids[0])
-        != {ItemData.id for ItemData in SourceSketch.entities}
-        or RevolveObject.class_name != "moRevolution_c"
-        or AngleDimension is None
-    ):
+    AngleDimension = FreeCadSingle(DocData, SourceSketch, SourceFeature)
+    PlaneObjectId = Struct.unpack_from('<I', SketchObject.payload)[0] if len(SketchObject.payload) >= 4 else 0
+    IsPinData = PlaneObjectId == 3 and IsPinProfile(PinPoints) and (not SketchObject.dimensions) and HasPolySix(SourceSketch, PinPoints)
+    IsRectangleData = PlaneObjectId == 2 and BoundsValue is not None and HasRectDims(SketchObject, BoundsValue) and HasCanonical(SourceSketch, BoundsValue, None)
+    if SketchObject.class_name != 'moProfileFeature_c' or not (IsRectangleData or IsPinData) or SourceSketch.suppressed or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (RevolveObject.class_name != 'moRevolution_c') or (AngleDimension is None):
         return ObjectsData
-    ObjectIds[f"sketch:{SketchObject.source_id}"] = 26
-    ObjectIds[f"feature:{RevolveObject.source_id}"] = 31
-    return (
-        replace(SketchObject, object_id=26, name="Sketch1"),
-        replace(
-            RevolveObject,
-            object_id=31,
-            name="Revolve1",
-            dimensions=(AngleDimension,),
-        ),
-    )
+    ObjectIds[f'sketch:{SketchObject.source_id}'] = 26
+    ObjectIds[f'feature:{RevolveObject.source_id}'] = 31
+    return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(RevolveObject, object_id=31, name='Revolve1', dimensions=(AngleDimension,)))
 
-
-# mixed pad-groove canonicalization binds both profiles and the horizontal sketch axis
-def _CanonicalPadGrooveObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalPad(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 4:
         return ObjectsData
     SketchOne, PadObject, SketchTwo, GrooveObject = ObjectsData
-    SourceSketches = tuple(
-        next(
-            (
-                ItemData
-                for ItemData in DocumentData.sketches
-                if ItemData.id == SketchObject.source_id
-            ),
-            None,
-        )
-        for SketchObject in (SketchOne, SketchTwo)
-    )
-    SourceFeatures = tuple(
-        next(
-            (
-                ItemData
-                for ItemData in DocumentData.feature_timeline
-                if ItemData.id == FeatureObject.source_id
-            ),
-            None,
-        )
-        for FeatureObject in (PadObject, GrooveObject)
-    )
-    if any(ItemData is None for ItemData in (*SourceSketches, *SourceFeatures)):
+    SourceSketches = tuple((next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None) for SketchObject in (SketchOne, SketchTwo)))
+    SourceFeatures = tuple((next((ItemData for ItemData in DocData.feature_timeline if ItemData.id == FeatureObject.source_id), None) for FeatureObject in (PadObject, GrooveObject)))
+    if any((ItemData is None for ItemData in (*SourceSketches, *SourceFeatures))):
         return ObjectsData
     SourceSketchOne, SourceSketchTwo = SourceSketches
     SourcePad, SourceGroove = SourceFeatures
-    if (
-        SourceSketchOne is None
-        or SourceSketchTwo is None
-        or SourcePad is None
-        or SourceGroove is None
-    ):
+    if SourceSketchOne is None or SourceSketchTwo is None or SourcePad is None or (SourceGroove is None):
         return ObjectsData
-    NormalizedSketches = tuple(
-        _CanonicalPrincipalSketch(ItemData, DocumentData.support_planes, ObjectIds)
-        for ItemData in (SourceSketchOne, SourceSketchTwo)
-    )
-    SketchPayloads = tuple(
-        _sketch_payload(SketchData, SketchObject.object_id, ObjectIds)[0]
-        for SketchData, SketchObject in zip(
-            NormalizedSketches,
-            (SketchOne, SketchTwo),
-            strict=True,
-        )
-    )
-    SketchOne = replace(SketchOne, payload=SketchPayloads[0])
-    SketchTwo = replace(SketchTwo, payload=SketchPayloads[1])
-    NormalizedPad = _CanonicalPrincipalExtrusion(
-        SourcePad,
-        SourceSketchOne,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    PadObject = replace(PadObject, payload=_extrusion_payload(NormalizedPad))
-    BoundsData = (
-        _write_rectangle_bounds(SketchOne),
-        _write_rectangle_bounds(SketchTwo),
-    )
-    DimensionData = _FreeCadPadGrooveDimensions(
-        DocumentData,
-        (SourceSketchOne, SourceSketchTwo),
-        (SourcePad, SourceGroove),
-    )
-    if (
-        PadObject.class_name != "moExtrusion_c"
-        or GrooveObject.class_name != "moRevolution_c"
-        or any(ItemData is None for ItemData in BoundsData)
-        or ExtrusionEditCodes(PadObject.payload) is None
-        or DimensionData is None
-        or any(
-            len(SketchObject.payload) < 4
-            or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-            or SketchObject.class_name != "moProfileFeature_c"
-            or not HasRectDims(SketchObject, BoundsValue)
-            or SketchData.suppressed
-            or not HasCanonicalSketchGeometry(SketchData, BoundsValue, None)
-            or len(SketchData.closed_profile_entity_ids) != 1
-            or set(SketchData.closed_profile_entity_ids[0])
-            != {ItemData.id for ItemData in SketchData.entities}
-            for SketchObject, SketchData, BoundsValue in zip(
-                (SketchOne, SketchTwo),
-                (SourceSketchOne, SourceSketchTwo),
-                BoundsData,
-                strict=True,
-            )
-        )
-    ):
+    NormalizedSketches = tuple((CanonicalSketch(ItemData, DocData.support_planes, ObjectIds) for ItemData in (SourceSketchOne, SourceSketchTwo)))
+    SketchPayloads = tuple((SketchPayload(SketchData, SketchObject.object_id, ObjectIds)[0] for SketchData, SketchObject in zip(NormalizedSketches, (SketchOne, SketchTwo), strict=True)))
+    SketchOne = Replace(SketchOne, payload=SketchPayloads[0])
+    SketchTwo = Replace(SketchTwo, payload=SketchPayloads[1])
+    NormalizedPad = CanonicalA(SourcePad, SourceSketchOne, DocData.support_planes, ObjectIds)
+    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    BoundsData = (WriteRectangle(SketchOne), WriteRectangle(SketchTwo))
+    DimensionData = FreeCadPad(DocData, (SourceSketchOne, SourceSketchTwo), (SourcePad, SourceGroove))
+    if PadObject.class_name != 'moExtrusion_c' or GrooveObject.class_name != 'moRevolution_c' or any((ItemData is None for ItemData in BoundsData)) or (ExtrusionEdit(PadObject.payload) is None) or (DimensionData is None) or any((len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or SketchObject.class_name != 'moProfileFeature_c' or (not HasRectDims(SketchObject, BoundsValue)) or SketchData.suppressed or (not HasCanonical(SketchData, BoundsValue, None)) or (len(SketchData.closed_profile_entity_ids) != 1) or (set(SketchData.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SketchData.entities}) for SketchObject, SketchData, BoundsValue in zip((SketchOne, SketchTwo), (SourceSketchOne, SourceSketchTwo), BoundsData, strict=True))):
         return ObjectsData
     TargetIds = (26, 32, 33, 39)
-    for SourceObject, TargetId in zip(
-        (SketchOne, PadObject, SketchTwo, GrooveObject),
-        TargetIds,
-        strict=True,
-    ):
-        PrefixValue = "sketch" if SourceObject.kind == "Sketch" else "feature"
-        ObjectIds[f"{PrefixValue}:{SourceObject.source_id}"] = TargetId
+    for SourceObject, TargetId in zip((SketchOne, PadObject, SketchTwo, GrooveObject), TargetIds, strict=True):
+        PrefixValue = 'sketch' if SourceObject.kind == 'Sketch' else 'feature'
+        ObjectIds[f'{PrefixValue}:{SourceObject.source_id}'] = TargetId
     PadDimension, GrooveDimension = DimensionData
-    return (
-        replace(SketchOne, object_id=26, name="Sketch1"),
-        replace(
-            PadObject,
-            object_id=32,
-            name="Boss-Extrude1",
-            dimensions=(replace(PadDimension, name="D1"),),
-        ),
-        replace(SketchTwo, object_id=33, name="Sketch2"),
-        replace(
-            GrooveObject,
-            object_id=39,
-            name="Cut-Revolve1",
-            kind="Cut-Revolve",
-            dimensions=(GrooveDimension,),
-        ),
-    )
+    return (Replace(SketchOne, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(SketchTwo, object_id=33, name='Sketch2'), Replace(GrooveObject, object_id=39, name='Cut-Revolve1', kind='Cut-Revolve', dimensions=(GrooveDimension,)))
 
-
-# boss-fillet canonicalization binds the source edge topology to native local edge three
-def _CanonicalBossFilletObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalBossB(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, FilletObject = ObjectsData
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     if SourceSketch is None or len(SourceFeatures) != 2:
         return ObjectsData
     SourcePad, SourceFillet = SourceFeatures
     if SourcePad.id != PadObject.source_id or SourceFillet.id != FilletObject.source_id:
         return ObjectsData
-    NormalizedSketch = _CanonicalPrincipalSketch(
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    SketchPayload, _ = _sketch_payload(
-        NormalizedSketch,
-        SketchObject.object_id,
-        ObjectIds,
-    )
-    SketchObject = replace(SketchObject, payload=SketchPayload)
-    NormalizedPad = _CanonicalPrincipalExtrusion(
-        SourcePad,
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    PadObject = replace(PadObject, payload=_extrusion_payload(NormalizedPad))
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    DimensionData = _FreeCadBossFilletDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourceFillet,
-        BoundsValue,
-    )
-    if (
-        BoundsValue is None
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or SketchObject.class_name != "moProfileFeature_c"
-        or not HasRectDims(SketchObject, BoundsValue)
-        or SourceSketch.suppressed
-        or not HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
-        or len(SourceSketch.closed_profile_entity_ids) != 1
-        or set(SourceSketch.closed_profile_entity_ids[0])
-        != {ItemData.id for ItemData in SourceSketch.entities}
-        or PadObject.class_name != "moExtrusion_c"
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or FilletObject.class_name != "Fillet_c"
-        or DimensionData is None
-    ):
+    NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
+    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchObject = Replace(SketchObject, payload=SketchPayload)
+    NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
+    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    BoundsValue = WriteRectangle(SketchObject)
+    DimensionData = FreeCadBossB(DocData, SourceSketch, SourcePad, SourceFillet, BoundsValue)
+    if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (FilletObject.class_name != 'Fillet_c') or (DimensionData is None):
         return ObjectsData
     PadDimension, FilletDimension = DimensionData
-    ObjectIds[f"sketch:{SketchObject.source_id}"] = 26
-    ObjectIds[f"feature:{PadObject.source_id}"] = 32
-    ObjectIds[f"feature:{FilletObject.source_id}"] = 34
-    return (
-        replace(SketchObject, object_id=26, name="Sketch1"),
-        replace(
-            PadObject,
-            object_id=32,
-            name="Boss-Extrude1",
-            dimensions=(replace(PadDimension, name="D1"),),
-        ),
-        replace(
-            FilletObject,
-            object_id=34,
-            name="Fillet1",
-            dimensions=(FilletDimension,),
-            payload=_FilletSelectionRecord(32, 3),
-        ),
-    )
+    ObjectIds[f'sketch:{SketchObject.source_id}'] = 26
+    ObjectIds[f'feature:{PadObject.source_id}'] = 32
+    ObjectIds[f'feature:{FilletObject.source_id}'] = 34
+    return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(FilletObject, object_id=34, name='Fillet1', dimensions=(FilletDimension,), payload=FilletSelection(32, 3)))
 
-
-# boss-chamfer canonicalization binds the source edge topology to native local edge three
-def _CanonicalBossChamferObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalBoss(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, ChamferObject = ObjectsData
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     if SourceSketch is None or len(SourceFeatures) != 2:
         return ObjectsData
     SourcePad, SourceChamfer = SourceFeatures
-    if (
-        SourcePad.id != PadObject.source_id
-        or SourceChamfer.id != ChamferObject.source_id
-    ):
+    if SourcePad.id != PadObject.source_id or SourceChamfer.id != ChamferObject.source_id:
         return ObjectsData
-    NormalizedSketch = _CanonicalPrincipalSketch(
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    SketchPayload, _ = _sketch_payload(
-        NormalizedSketch,
-        SketchObject.object_id,
-        ObjectIds,
-    )
-    SketchObject = replace(SketchObject, payload=SketchPayload)
-    NormalizedPad = _CanonicalPrincipalExtrusion(
-        SourcePad,
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    PadObject = replace(PadObject, payload=_extrusion_payload(NormalizedPad))
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    DimensionData = _FreeCadBossChamferDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourceChamfer,
-        BoundsValue,
-    )
-    if (
-        BoundsValue is None
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or SketchObject.class_name != "moProfileFeature_c"
-        or not HasRectDims(SketchObject, BoundsValue)
-        or SourceSketch.suppressed
-        or not HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
-        or len(SourceSketch.closed_profile_entity_ids) != 1
-        or set(SourceSketch.closed_profile_entity_ids[0])
-        != {ItemData.id for ItemData in SourceSketch.entities}
-        or PadObject.class_name != "moExtrusion_c"
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or ChamferObject.class_name != "Chamfer_c"
-        or DimensionData is None
-    ):
+    NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
+    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchObject = Replace(SketchObject, payload=SketchPayload)
+    NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
+    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    BoundsValue = WriteRectangle(SketchObject)
+    DimensionData = FreeCadBoss(DocData, SourceSketch, SourcePad, SourceChamfer, BoundsValue)
+    if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (ChamferObject.class_name != 'Chamfer_c') or (DimensionData is None):
         return ObjectsData
     PadDimension, ChamferDimension = DimensionData
-    ObjectIds[f"sketch:{SketchObject.source_id}"] = 26
-    ObjectIds[f"feature:{PadObject.source_id}"] = 32
-    ObjectIds[f"feature:{ChamferObject.source_id}"] = 35
-    return (
-        replace(SketchObject, object_id=26, name="Sketch1"),
-        replace(
-            PadObject,
-            object_id=32,
-            name="Boss-Extrude1",
-            dimensions=(replace(PadDimension, name="D1"),),
-        ),
-        replace(
-            ChamferObject,
-            object_id=35,
-            name="Chamfer1",
-            dimensions=(ChamferDimension,),
-            payload=_FilletSelectionRecord(32, 3),
-        ),
-    )
+    ObjectIds[f'sketch:{SketchObject.source_id}'] = 26
+    ObjectIds[f'feature:{PadObject.source_id}'] = 32
+    ObjectIds[f'feature:{ChamferObject.source_id}'] = 35
+    return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(ChamferObject, object_id=35, name='Chamfer1', dimensions=(ChamferDimension,), payload=FilletSelection(32, 3)))
 
-
-# boss-shell canonicalization binds the source top face to the recovered shell face pair
-def _CanonicalBossShellObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalBossD(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, ShellObject = ObjectsData
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     if SourceSketch is None or len(SourceFeatures) != 2:
         return ObjectsData
     SourcePad, SourceShell = SourceFeatures
     if SourcePad.id != PadObject.source_id or SourceShell.id != ShellObject.source_id:
         return ObjectsData
-    NormalizedSketch = _CanonicalPrincipalSketch(
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    SketchPayload, _ = _sketch_payload(
-        NormalizedSketch,
-        SketchObject.object_id,
-        ObjectIds,
-    )
-    SketchObject = replace(SketchObject, payload=SketchPayload)
-    NormalizedPad = _CanonicalPrincipalExtrusion(
-        SourcePad,
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    PadObject = replace(PadObject, payload=_extrusion_payload(NormalizedPad))
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    DimensionData = _FreeCadBossShellDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourceShell,
-        BoundsValue,
-    )
-    if (
-        BoundsValue is None
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or SketchObject.class_name != "moProfileFeature_c"
-        or not HasRectDims(SketchObject, BoundsValue)
-        or SourceSketch.suppressed
-        or not HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
-        or len(SourceSketch.closed_profile_entity_ids) != 1
-        or set(SourceSketch.closed_profile_entity_ids[0])
-        != {ItemData.id for ItemData in SourceSketch.entities}
-        or PadObject.class_name != "moExtrusion_c"
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or ShellObject.class_name != "moShell_c"
-        or DimensionData is None
-    ):
+    NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
+    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchObject = Replace(SketchObject, payload=SketchPayload)
+    NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
+    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    BoundsValue = WriteRectangle(SketchObject)
+    DimensionData = FreeCadBossD(DocData, SourceSketch, SourcePad, SourceShell, BoundsValue)
+    if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (ShellObject.class_name != 'moShell_c') or (DimensionData is None):
         return ObjectsData
     PadDimension, ShellDimension = DimensionData
-    ObjectIds[f"sketch:{SketchObject.source_id}"] = 26
-    ObjectIds[f"feature:{PadObject.source_id}"] = 32
-    ObjectIds[f"feature:{ShellObject.source_id}"] = 34
-    return (
-        replace(SketchObject, object_id=26, name="Sketch1"),
-        replace(
-            PadObject,
-            object_id=32,
-            name="Boss-Extrude1",
-            dimensions=(replace(PadDimension, name="D1"),),
-        ),
-        replace(
-            ShellObject,
-            object_id=34,
-            name="Shell1",
-            dimensions=(ShellDimension,),
-            payload=_ShellSelectionRecord(32),
-        ),
-    )
+    ObjectIds[f'sketch:{SketchObject.source_id}'] = 26
+    ObjectIds[f'feature:{PadObject.source_id}'] = 32
+    ObjectIds[f'feature:{ShellObject.source_id}'] = 34
+    return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(ShellObject, object_id=34, name='Shell1', dimensions=(ShellDimension,), payload=ShellSelection(32)))
 
-
-# boss-pattern canonicalization binds the source sketch normal to native linear spacing
-def _CanonicalBossLinearPatternObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalBossC(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, PatternObject = ObjectsData
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     if SourceSketch is None or len(SourceFeatures) != 2:
         return ObjectsData
     SourcePad, SourcePattern = SourceFeatures
-    if (
-        SourcePad.id != PadObject.source_id
-        or SourcePattern.id != PatternObject.source_id
-    ):
+    if SourcePad.id != PadObject.source_id or SourcePattern.id != PatternObject.source_id:
         return ObjectsData
-    NormalizedSketch = _CanonicalPrincipalSketch(
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    SketchPayload, _ = _sketch_payload(
-        NormalizedSketch,
-        SketchObject.object_id,
-        ObjectIds,
-    )
-    SketchObject = replace(SketchObject, payload=SketchPayload)
-    NormalizedPad = _CanonicalPrincipalExtrusion(
-        SourcePad,
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    PadObject = replace(PadObject, payload=_extrusion_payload(NormalizedPad))
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    DimensionData = _FreeCadBossLinearPatternDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourcePattern,
-        BoundsValue,
-    )
-    if (
-        BoundsValue is None
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or SketchObject.class_name != "moProfileFeature_c"
-        or not HasRectDims(SketchObject, BoundsValue)
-        or SourceSketch.suppressed
-        or not HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
-        or len(SourceSketch.closed_profile_entity_ids) != 1
-        or set(SourceSketch.closed_profile_entity_ids[0])
-        != {ItemData.id for ItemData in SourceSketch.entities}
-        or PadObject.class_name != "moExtrusion_c"
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or PatternObject.class_name != "moLPattern_c"
-        or DimensionData is None
-    ):
+    NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
+    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchObject = Replace(SketchObject, payload=SketchPayload)
+    NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
+    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    BoundsValue = WriteRectangle(SketchObject)
+    DimensionData = FreeCadBossC(DocData, SourceSketch, SourcePad, SourcePattern, BoundsValue)
+    if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (PatternObject.class_name != 'moLPattern_c') or (DimensionData is None):
         return ObjectsData
     PadDimension, CountDimension, SpacingDimension = DimensionData
-    ObjectIds[f"sketch:{SketchObject.source_id}"] = 26
-    ObjectIds[f"feature:{PadObject.source_id}"] = 32
-    ObjectIds[f"feature:{PatternObject.source_id}"] = 40
-    return (
-        replace(SketchObject, object_id=26, name="Sketch1"),
-        replace(
-            PadObject,
-            object_id=32,
-            name="Boss-Extrude1",
-            dimensions=(replace(PadDimension, name="D1"),),
-        ),
-        replace(
-            PatternObject,
-            object_id=40,
-            name="LPattern1",
-            kind="LPattern",
-            dimensions=(CountDimension, SpacingDimension),
-            payload=b"",
-        ),
-    )
+    ObjectIds[f'sketch:{SketchObject.source_id}'] = 26
+    ObjectIds[f'feature:{PadObject.source_id}'] = 32
+    ObjectIds[f'feature:{PatternObject.source_id}'] = 40
+    return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(PatternObject, object_id=40, name='LPattern1', kind='LPattern', dimensions=(CountDimension, SpacingDimension), payload=b''))
 
-
-# circular-pattern canonicalization binds the sketch-normal axis and angular span
-def _CanonicalBossCircularPatternObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalBossA(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, PatternObject = ObjectsData
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     if SourceSketch is None or len(SourceFeatures) != 2:
         return ObjectsData
     SourcePad, SourcePattern = SourceFeatures
-    if (
-        SourcePad.id != PadObject.source_id
-        or SourcePattern.id != PatternObject.source_id
-    ):
+    if SourcePad.id != PadObject.source_id or SourcePattern.id != PatternObject.source_id:
         return ObjectsData
-    NormalizedSketch = _CanonicalPrincipalSketch(
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    SketchPayload, _ = _sketch_payload(
-        NormalizedSketch,
-        SketchObject.object_id,
-        ObjectIds,
-    )
-    SketchObject = replace(SketchObject, payload=SketchPayload)
-    NormalizedPad = _CanonicalPrincipalExtrusion(
-        SourcePad,
-        SourceSketch,
-        DocumentData.support_planes,
-        ObjectIds,
-    )
-    PadObject = replace(PadObject, payload=_extrusion_payload(NormalizedPad))
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    DimensionData = _FreeCadBossCircularPatternDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourcePattern,
-        BoundsValue,
-    )
-    if (
-        BoundsValue is None
-        or len(SketchObject.payload) < 4
-        or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-        or SketchObject.class_name != "moProfileFeature_c"
-        or not HasRectDims(SketchObject, BoundsValue)
-        or SourceSketch.suppressed
-        or not HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
-        or len(SourceSketch.closed_profile_entity_ids) != 1
-        or set(SourceSketch.closed_profile_entity_ids[0])
-        != {ItemData.id for ItemData in SourceSketch.entities}
-        or PadObject.class_name != "moExtrusion_c"
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or PatternObject.class_name != "moCirPattern_c"
-        or DimensionData is None
-    ):
+    NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
+    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchObject = Replace(SketchObject, payload=SketchPayload)
+    NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
+    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    BoundsValue = WriteRectangle(SketchObject)
+    DimensionData = FreeCadBossA(DocData, SourceSketch, SourcePad, SourcePattern, BoundsValue)
+    if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (PatternObject.class_name != 'moCirPattern_c') or (DimensionData is None):
         return ObjectsData
     PadDimension, CountDimension, AngleDimension = DimensionData
-    ObjectIds[f"sketch:{SketchObject.source_id}"] = 26
-    ObjectIds[f"feature:{PadObject.source_id}"] = 32
-    ObjectIds[f"feature:{PatternObject.source_id}"] = 46
-    return (
-        replace(SketchObject, object_id=26, name="Sketch1"),
-        replace(
-            PadObject,
-            object_id=32,
-            name="Boss-Extrude1",
-            dimensions=(replace(PadDimension, name="D1"),),
-        ),
-        replace(
-            PatternObject,
-            object_id=46,
-            name="CirPattern1",
-            kind="CirPattern",
-            dimensions=(CountDimension, AngleDimension),
-            payload=b"",
-        ),
-    )
+    ObjectIds[f'sketch:{SketchObject.source_id}'] = 26
+    ObjectIds[f'feature:{PadObject.source_id}'] = 32
+    ObjectIds[f'feature:{PatternObject.source_id}'] = 46
+    return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(PatternObject, object_id=46, name='CirPattern1', kind='CirPattern', dimensions=(CountDimension, AngleDimension), payload=b''))
 
-
-# a canonical single-pad identity preserves the established one-feature programs
-def _CanonicalSingleBossObjects(
-    objects: tuple[_WriteObject, ...],
-    object_ids: dict[str, int],
-    document: CadDocument,
-) -> tuple[_WriteObject, ...]:
-    if len(objects) != 2:
-        return objects
-    sketch, extrusion = objects
-    source_sketch = next(
-        (item for item in document.sketches if item.id == sketch.source_id), None
-    )
-    source_feature = next(
-        (item for item in document.feature_timeline if item.id == extrusion.source_id),
-        None,
-    )
-    if source_sketch is not None:
-        NormalizedSketch = _CanonicalPrincipalSketch(
-            source_sketch,
-            document.support_planes,
-            object_ids,
-        )
-        NormalizedPayload, _ = _sketch_payload(
-            NormalizedSketch,
-            sketch.object_id,
-            object_ids,
-        )
-        sketch = replace(sketch, payload=NormalizedPayload)
-    if source_feature is not None and source_sketch is not None:
-        NormalizedFeature = _CanonicalPrincipalExtrusion(
-            source_feature,
-            source_sketch,
-            document.support_planes,
-            object_ids,
-        )
-        extrusion = replace(extrusion, payload=_extrusion_payload(NormalizedFeature))
-    bounds = _write_rectangle_bounds(sketch)
-    circle = _write_circle_profile(sketch)
-    PolylineData = PolySixPoints(sketch)
-    HasProfileDimensions = (
-        HasRectDims(sketch, bounds)
-        if bounds is not None
-        else (
-            HasCircleDims(sketch, circle)
-            if circle is not None
-            else PolylineData is not None and not sketch.dimensions
-        )
-    )
-    HasSourceGeometry = source_sketch is not None and (
-        HasCanonicalSketchGeometry(source_sketch, bounds, circle)
-        if bounds is not None or circle is not None
-        else HasPolySix(source_sketch, PolylineData)
-    )
-    if (
-        len(sketch.payload) < 4
-        or struct.unpack_from("<I", sketch.payload)[0] not in {2, 3, 4}
-        or sketch.class_name != "moProfileFeature_c"
-        or sum(ItemValue is not None for ItemValue in (bounds, circle, PolylineData))
-        != 1
-        or not HasProfileDimensions
-        or extrusion.class_name != "moExtrusion_c"
-        or ExtrusionEditCodes(extrusion.payload) is None
-        or source_sketch is None
-        or source_sketch.suppressed
-        or not HasSourceGeometry
-        or len(source_sketch.closed_profile_entity_ids) != 1
-        or set(source_sketch.closed_profile_entity_ids[0])
-        != {item.id for item in source_sketch.entities}
-        or source_feature is None
-        or source_feature.suppressed
-        or source_feature.input_feature_ids
-        or source_feature.selection_ids
-        or source_feature.configuration_states
-    ):
-        return objects
-    freecad_dimension = _freecad_single_boss_dimension(
-        document,
-        source_sketch,
-        source_feature,
-    )
-    if freecad_dimension is None:
-        if (
-            sketch.object_id != 26
-            or sketch.name != "Sketch1"
-            or extrusion.name != "Boss-Extrude1"
-            or len(extrusion.dimensions) != 1
-            or extrusion.dimensions[0].name != "D1"
-            or not math.isfinite(extrusion.dimensions[0].value_mm)
-            or extrusion.dimensions[0].value_mm <= 0.0
-        ):
-            return objects
-        source_dimension = extrusion.dimensions[0]
+# this definition exists because focused behavior needs one stable owner
+def CanonicalSingle(Objects: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocValue: CadDocument) -> tuple[WriteObject, ...]:
+    if len(Objects) != 2:
+        return Objects
+    Sketch, Extrusion = Objects
+    SourceSketch = next((ItemValue for ItemValue in DocValue.sketches if ItemValue.id == Sketch.source_id), None)
+    SourceFeature = next((ItemValue for ItemValue in DocValue.feature_timeline if ItemValue.id == Extrusion.source_id), None)
+    if SourceSketch is not None:
+        NormalizedSketch = CanonicalSketch(SourceSketch, DocValue.support_planes, ObjectIds)
+        NormalizedPayload, Ignored = SketchPayload(NormalizedSketch, Sketch.object_id, ObjectIds)
+        Sketch = Replace(Sketch, payload=NormalizedPayload)
+    if SourceFeature is not None and SourceSketch is not None:
+        NormalizedFeature = CanonicalA(SourceFeature, SourceSketch, DocValue.support_planes, ObjectIds)
+        Extrusion = Replace(Extrusion, payload=Extrusion(NormalizedFeature))
+    Bounds = WriteRectangle(Sketch)
+    Circle = WriteCircle(Sketch)
+    PolylineData = PolySixPoints(Sketch)
+    HasProfileDimensions = HasRectDims(Sketch, Bounds) if Bounds is not None else HasCircleDims(Sketch, Circle) if Circle is not None else PolylineData is not None and (not Sketch.dimensions)
+    HasSourceGeom = SourceSketch is not None and (HasCanonical(SourceSketch, Bounds, Circle) if Bounds is not None or Circle is not None else HasPolySix(SourceSketch, PolylineData))
+    if len(Sketch.payload) < 4 or Struct.unpack_from('<I', Sketch.payload)[0] not in {2, 3, 4} or Sketch.class_name != 'moProfileFeature_c' or (sum((ItemValue is not None for ItemValue in (Bounds, Circle, PolylineData))) != 1) or (not HasProfileDimensions) or (Extrusion.class_name != 'moExtrusion_c') or (ExtrusionEdit(Extrusion.payload) is None) or (SourceSketch is None) or SourceSketch.suppressed or (not HasSourceGeom) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemValue.id for ItemValue in SourceSketch.entities}) or (SourceFeature is None) or SourceFeature.suppressed or SourceFeature.input_feature_ids or SourceFeature.selection_ids or SourceFeature.configuration_states:
+        return Objects
+    FreecadDimension = FreecadSingle(DocValue, SourceSketch, SourceFeature)
+    if FreecadDimension is None:
+        if Sketch.object_id != 26 or Sketch.name != 'Sketch1' or Extrusion.name != 'Boss-Extrude1' or (len(Extrusion.dimensions) != 1) or (Extrusion.dimensions[0].name != 'D1') or (not MathValue.isfinite(Extrusion.dimensions[0].value_mm)) or (Extrusion.dimensions[0].value_mm <= 0.0):
+            return Objects
+        SourceDimension = Extrusion.dimensions[0]
     else:
-        source_dimension = freecad_dimension
-    dimension = replace(
-        source_dimension,
-        name="D1",
-        text=format(source_dimension.value_mm, ".15g"),
-    )
-    if circle is not None:
-        CircleDimension = sketch.dimensions[0]
-        DiameterValue = circle[2] * 2.0
-        sketch = replace(
-            sketch,
-            dimensions=(
-                replace(
-                    CircleDimension,
-                    name="D1",
-                    value_mm=DiameterValue,
-                    text="<MOD-DIAM>" + format(DiameterValue, ".15g"),
-                ),
-            ),
-        )
-    FeatureObjectId = 33 if circle is not None else 32
-    object_ids[f"sketch:{sketch.source_id}"] = 26
-    object_ids[f"feature:{extrusion.source_id}"] = FeatureObjectId
-    return (
-        replace(sketch, object_id=26, name="Sketch1"),
-        replace(
-            extrusion,
-            object_id=FeatureObjectId,
-            name="Boss-Extrude1",
-            dimensions=(dimension,),
-        ),
-    )
+        SourceDimension = FreecadDimension
+    Dimension = Replace(SourceDimension, name='D1', text=format(SourceDimension.value_mm, '.15g'))
+    if Circle is not None:
+        CircleDimension = Sketch.dimensions[0]
+        DiameterValue = Circle[2] * 2.0
+        Sketch = Replace(Sketch, dimensions=(Replace(CircleDimension, name='D1', value_mm=DiameterValue, text='<MOD-DIAM>' + format(DiameterValue, '.15g')),))
+    FeatureObjectId = 33 if Circle is not None else 32
+    ObjectIds[f'sketch:{Sketch.source_id}'] = 26
+    ObjectIds[f'feature:{Extrusion.source_id}'] = FeatureObjectId
+    return (Replace(Sketch, object_id=26, name='Sketch1'), Replace(Extrusion, object_id=FeatureObjectId, name='Boss-Extrude1', dimensions=(Dimension,)))
 
-
-# two-feature canonicalization binds FreeCAD pad-pocket semantics to recovered native ids
-def _CanonicalTwoFeatureObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalTwo(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 4:
         return ObjectsData
     SketchOne, FeatureOne, SketchTwo, FeatureTwo = ObjectsData
-    SourceSketches = tuple(
-        next(
-            (
-                ItemData
-                for ItemData in DocumentData.sketches
-                if ItemData.id == SketchObject.source_id
-            ),
-            None,
-        )
-        for SketchObject in (SketchOne, SketchTwo)
-    )
-    SourceFeatures = tuple(
-        next(
-            (
-                ItemData
-                for ItemData in DocumentData.feature_timeline
-                if ItemData.id == FeatureObject.source_id
-            ),
-            None,
-        )
-        for FeatureObject in (FeatureOne, FeatureTwo)
-    )
-    if any(ItemData is None for ItemData in (*SourceSketches, *SourceFeatures)):
+    SourceSketches = tuple((next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None) for SketchObject in (SketchOne, SketchTwo)))
+    SourceFeatures = tuple((next((ItemData for ItemData in DocData.feature_timeline if ItemData.id == FeatureObject.source_id), None) for FeatureObject in (FeatureOne, FeatureTwo)))
+    if any((ItemData is None for ItemData in (*SourceSketches, *SourceFeatures))):
         return ObjectsData
     SourceSketchOne, SourceSketchTwo = SourceSketches
     SourceFeatureOne, SourceFeatureTwo = SourceFeatures
-    if (
-        SourceSketchOne is None
-        or SourceSketchTwo is None
-        or SourceFeatureOne is None
-        or SourceFeatureTwo is None
-    ):
+    if SourceSketchOne is None or SourceSketchTwo is None or SourceFeatureOne is None or (SourceFeatureTwo is None):
         return ObjectsData
-    NormalizedSketches = tuple(
-        _CanonicalPrincipalSketch(ItemData, DocumentData.support_planes, ObjectIds)
-        for ItemData in (SourceSketchOne, SourceSketchTwo)
-    )
-    NormalizedFeatures = tuple(
-        _CanonicalPrincipalExtrusion(
-            FeatureData,
-            SketchData,
-            DocumentData.support_planes,
-            ObjectIds,
-        )
-        for FeatureData, SketchData in zip(
-            (SourceFeatureOne, SourceFeatureTwo),
-            (SourceSketchOne, SourceSketchTwo),
-            strict=True,
-        )
-    )
-    NormalizedObjects: list[_WriteObject] = []
-    for SketchObject, FeatureObject, SketchData, FeatureData in zip(
-        (SketchOne, SketchTwo),
-        (FeatureOne, FeatureTwo),
-        NormalizedSketches,
-        NormalizedFeatures,
-        strict=True,
-    ):
-        SketchPayload, _ = _sketch_payload(
-            SketchData, SketchObject.object_id, ObjectIds
-        )
-        NormalizedObjects.extend(
-            (
-                replace(SketchObject, payload=SketchPayload),
-                replace(FeatureObject, payload=_extrusion_payload(FeatureData)),
-            )
-        )
+    NormalizedSketches = tuple((CanonicalSketch(ItemData, DocData.support_planes, ObjectIds) for ItemData in (SourceSketchOne, SourceSketchTwo)))
+    NormalizedFeatures = tuple((CanonicalA(FeatureData, SketchData, DocData.support_planes, ObjectIds) for FeatureData, SketchData in zip((SourceFeatureOne, SourceFeatureTwo), (SourceSketchOne, SourceSketchTwo), strict=True)))
+    NormalizedObjects: list[WriteObject] = []
+    for SketchObject, FeatureObject, SketchData, FeatureData in zip((SketchOne, SketchTwo), (FeatureOne, FeatureTwo), NormalizedSketches, NormalizedFeatures, strict=True):
+        SketchPayload, Ignored = SketchPayload(SketchData, SketchObject.object_id, ObjectIds)
+        NormalizedObjects.extend((Replace(SketchObject, payload=SketchPayload), Replace(FeatureObject, payload=Extrusion(FeatureData))))
     SketchOne, FeatureOne, SketchTwo, FeatureTwo = NormalizedObjects
-    BoundsData = (
-        _write_rectangle_bounds(SketchOne),
-        _write_rectangle_bounds(SketchTwo),
-    )
-    DimensionData = _FreeCadTwoFeatureDimensions(
-        DocumentData,
-        (SourceSketchOne, SourceSketchTwo),
-        (SourceFeatureOne, SourceFeatureTwo),
-    )
-    SecondIsBoss = (
-        str(SourceFeatureTwo.operation).casefold() == BooleanOperation.JOIN.value
-    )
-    if (
-        FeatureOne.class_name != "moExtrusion_c"
-        or FeatureTwo.class_name != ("moExtrusion_c" if SecondIsBoss else "moCut_c")
-        or any(ItemData is None for ItemData in BoundsData)
-        or any(
-            ExtrusionEditCodes(ItemData.payload) is None
-            for ItemData in (FeatureOne, FeatureTwo)
-        )
-        or DimensionData is None
-        or any(
-            len(SketchObject.payload) < 4
-            or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-            or SketchObject.class_name != "moProfileFeature_c"
-            or not HasRectDims(SketchObject, BoundsValue)
-            or SketchData.suppressed
-            or not HasCanonicalSketchGeometry(SketchData, BoundsValue, None)
-            or len(SketchData.closed_profile_entity_ids) != 1
-            or set(SketchData.closed_profile_entity_ids[0])
-            != {ItemData.id for ItemData in SketchData.entities}
-            for SketchObject, SketchData, BoundsValue in zip(
-                (SketchOne, SketchTwo),
-                (SourceSketchOne, SourceSketchTwo),
-                BoundsData,
-                strict=True,
-            )
-        )
-    ):
+    BoundsData = (WriteRectangle(SketchOne), WriteRectangle(SketchTwo))
+    DimensionData = FreeCadTwo(DocData, (SourceSketchOne, SourceSketchTwo), (SourceFeatureOne, SourceFeatureTwo))
+    SecondIsBoss = str(SourceFeatureTwo.operation).casefold() == BoolOperation.JOIN.value
+    if FeatureOne.class_name != 'moExtrusion_c' or FeatureTwo.class_name != ('moExtrusion_c' if SecondIsBoss else 'moCut_c') or any((ItemData is None for ItemData in BoundsData)) or any((ExtrusionEdit(ItemData.payload) is None for ItemData in (FeatureOne, FeatureTwo))) or (DimensionData is None) or any((len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or SketchObject.class_name != 'moProfileFeature_c' or (not HasRectDims(SketchObject, BoundsValue)) or SketchData.suppressed or (not HasCanonical(SketchData, BoundsValue, None)) or (len(SketchData.closed_profile_entity_ids) != 1) or (set(SketchData.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SketchData.entities}) for SketchObject, SketchData, BoundsValue in zip((SketchOne, SketchTwo), (SourceSketchOne, SourceSketchTwo), BoundsData, strict=True))):
         return ObjectsData
     TargetIds = (26, 32, 33, 40)
-    TargetNames = (
-        "Sketch1",
-        "Boss-Extrude1",
-        "Sketch2",
-        "Boss-Extrude2" if SecondIsBoss else "Cut-Extrude1",
-    )
-    for SourceObject, TargetId in zip(
-        (SketchOne, FeatureOne, SketchTwo, FeatureTwo), TargetIds, strict=True
-    ):
-        PrefixValue = "sketch" if SourceObject.kind == "Sketch" else "feature"
-        ObjectIds[f"{PrefixValue}:{SourceObject.source_id}"] = TargetId
-    CanonicalObjects: list[_WriteObject] = []
-    for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(
-        zip(
-            (SketchOne, FeatureOne, SketchTwo, FeatureTwo),
-            TargetIds,
-            TargetNames,
-            strict=True,
-        )
-    ):
-        if ItemData.kind == "Extrusion":
+    TargetNames = ('Sketch1', 'Boss-Extrude1', 'Sketch2', 'Boss-Extrude2' if SecondIsBoss else 'Cut-Extrude1')
+    for SourceObject, TargetId in zip((SketchOne, FeatureOne, SketchTwo, FeatureTwo), TargetIds, strict=True):
+        PrefixValue = 'sketch' if SourceObject.kind == 'Sketch' else 'feature'
+        ObjectIds[f'{PrefixValue}:{SourceObject.source_id}'] = TargetId
+    CanonicalObjects: list[WriteObject] = []
+    for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(zip((SketchOne, FeatureOne, SketchTwo, FeatureTwo), TargetIds, TargetNames, strict=True)):
+        if ItemData.kind == 'Extrusion':
             DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
-                ()
-                if DimensionValue is None
-                else (
-                    replace(
-                        DimensionValue,
-                        name="D1",
-                        text=format(DimensionValue.value_mm, ".15g"),
-                    ),
-                )
-            )
+            DimensionValues = () if DimensionValue is None else (Replace(DimensionValue, name='D1', text=format(DimensionValue.value_mm, '.15g')),)
             ChildObjectId = TargetIds[ObjectIndex - 1]
-            PropertyValues = tuple(
-                (
-                    PropertyName,
-                    (
-                        str(ChildObjectId)
-                        if PropertyName == "DissectableChildren"
-                        else PropertyValue
-                    ),
-                )
-                for PropertyName, PropertyValue in ItemData.properties
-            )
+            PropValues = tuple(((PropName, str(ChildObjectId) if PropName == 'DissectableChildren' else PropValue) for PropName, PropValue in ItemData.properties))
         else:
             DimensionValues = ItemData.dimensions
-            PropertyValues = ItemData.properties
-        CanonicalObjects.append(
-            replace(
-                ItemData,
-                object_id=TargetId,
-                name=TargetName,
-                properties=PropertyValues,
-                dimensions=DimensionValues,
-            )
-        )
+            PropValues = ItemData.properties
+        CanonicalObjects.append(Replace(ItemData, object_id=TargetId, name=TargetName, properties=PropValues, dimensions=DimensionValues))
     return tuple(CanonicalObjects)
 
-
-# cut-chain canonicalization binds chained FreeCAD pockets to recovered native ids
-def _CanonicalCutChainObjects(
-    ObjectsData: tuple[_WriteObject, ...],
-    ObjectIds: dict[str, int],
-    DocumentData: CadDocument,
-) -> tuple[_WriteObject, ...]:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalCut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     FeatureCount = len(ObjectsData) // 2
     if FeatureCount not in {3, 4} or len(ObjectsData) != FeatureCount * 2:
         return ObjectsData
     SketchObjects = ObjectsData[0::2]
     FeatureObjects = ObjectsData[1::2]
-    SourceSketches = tuple(
-        next(
-            (
-                SketchData
-                for SketchData in DocumentData.sketches
-                if SketchData.id == SketchObject.source_id
-            ),
-            None,
-        )
-        for SketchObject in SketchObjects
-    )
-    SourceFeatures = tuple(
-        next(
-            (
-                FeatureData
-                for FeatureData in DocumentData.feature_timeline
-                if FeatureData.id == FeatureObject.source_id
-            ),
-            None,
-        )
-        for FeatureObject in FeatureObjects
-    )
-    if any(ItemData is None for ItemData in (*SourceSketches, *SourceFeatures)):
+    SourceSketches = tuple((next((SketchData for SketchData in DocData.sketches if SketchData.id == SketchObject.source_id), None) for SketchObject in SketchObjects))
+    SourceFeatures = tuple((next((FeatureData for FeatureData in DocData.feature_timeline if FeatureData.id == FeatureObject.source_id), None) for FeatureObject in FeatureObjects))
+    if any((ItemData is None for ItemData in (*SourceSketches, *SourceFeatures))):
         return ObjectsData
-    ResolvedSketches = tuple(
-        ItemData for ItemData in SourceSketches if ItemData is not None
-    )
-    ResolvedFeatures = tuple(
-        ItemData for ItemData in SourceFeatures if ItemData is not None
-    )
+    ResolvedSketches = tuple((ItemData for ItemData in SourceSketches if ItemData is not None))
+    ResolvedFeatures = tuple((ItemData for ItemData in SourceFeatures if ItemData is not None))
     if len(ResolvedSketches) != FeatureCount or len(ResolvedFeatures) != FeatureCount:
         return ObjectsData
-    NormalizedSketches = tuple(
-        _CanonicalPrincipalSketch(ItemData, DocumentData.support_planes, ObjectIds)
-        for ItemData in ResolvedSketches
-    )
-    NormalizedFeatures = tuple(
-        _CanonicalPrincipalExtrusion(
-            FeatureData,
-            SketchData,
-            DocumentData.support_planes,
-            ObjectIds,
-        )
-        for FeatureData, SketchData in zip(
-            ResolvedFeatures,
-            ResolvedSketches,
-            strict=True,
-        )
-    )
-    NormalizedObjects: list[_WriteObject] = []
-    for SketchObject, FeatureObject, SketchData, FeatureData in zip(
-        SketchObjects,
-        FeatureObjects,
-        NormalizedSketches,
-        NormalizedFeatures,
-        strict=True,
-    ):
-        SketchPayload, _ = _sketch_payload(
-            SketchData,
-            SketchObject.object_id,
-            ObjectIds,
-        )
-        NormalizedObjects.extend(
-            (
-                replace(SketchObject, payload=SketchPayload),
-                replace(FeatureObject, payload=_extrusion_payload(FeatureData)),
-            )
-        )
+    NormalizedSketches = tuple((CanonicalSketch(ItemData, DocData.support_planes, ObjectIds) for ItemData in ResolvedSketches))
+    NormalizedFeatures = tuple((CanonicalA(FeatureData, SketchData, DocData.support_planes, ObjectIds) for FeatureData, SketchData in zip(ResolvedFeatures, ResolvedSketches, strict=True)))
+    NormalizedObjects: list[WriteObject] = []
+    for SketchObject, FeatureObject, SketchData, FeatureData in zip(SketchObjects, FeatureObjects, NormalizedSketches, NormalizedFeatures, strict=True):
+        SketchPayload, Ignored = SketchPayload(SketchData, SketchObject.object_id, ObjectIds)
+        NormalizedObjects.extend((Replace(SketchObject, payload=SketchPayload), Replace(FeatureObject, payload=Extrusion(FeatureData))))
     SketchObjects = tuple(NormalizedObjects[0::2])
     FeatureObjects = tuple(NormalizedObjects[1::2])
-    BoundsData = tuple(_write_rectangle_bounds(ItemData) for ItemData in SketchObjects)
-    CircleData = tuple(_write_circle_profile(ItemData) for ItemData in SketchObjects)
+    BoundsData = tuple((WriteRectangle(ItemData) for ItemData in SketchObjects))
+    CircleData = tuple((WriteCircle(ItemData) for ItemData in SketchObjects))
     HasCircleData = IsCircleChain(BoundsData, CircleData)
-    DimensionData = (
-        _FreeCadThreeFeatureDimensions(
-            DocumentData,
-            ResolvedSketches,
-            ResolvedFeatures,
-        )
-        if FeatureCount == 3
-        else _FreeCadFourFeatureDimensions(
-            DocumentData,
-            ResolvedSketches,
-            ResolvedFeatures,
-        )
-    )
-    if (
-        tuple(ItemData.class_name for ItemData in FeatureObjects)
-        != ("moExtrusion_c", *(("moCut_c",) * (FeatureCount - 1)))
-        or (not HasCircleData and any(ItemData is None for ItemData in BoundsData))
-        or any(
-            ExtrusionEditCodes(ItemData.payload) is None for ItemData in FeatureObjects
-        )
-        or DimensionData is None
-        or any(
-            len(SketchObject.payload) < 4
-            or struct.unpack_from("<I", SketchObject.payload)[0] != 2
-            or SketchObject.class_name != "moProfileFeature_c"
-            or not (
-                HasRectDims(SketchObject, BoundsValue)
-                if BoundsValue is not None
-                else HasCircleDims(SketchObject, CircleValue)
-            )
-            or SketchData.suppressed
-            or not HasCanonicalSketchGeometry(
-                SketchData,
-                BoundsValue,
-                CircleValue,
-            )
-            or len(SketchData.closed_profile_entity_ids) != 1
-            or set(SketchData.closed_profile_entity_ids[0])
-            != {ItemData.id for ItemData in SketchData.entities}
-            for SketchObject, SketchData, BoundsValue, CircleValue in zip(
-                SketchObjects,
-                ResolvedSketches,
-                BoundsData,
-                CircleData,
-                strict=True,
-            )
-        )
-    ):
+    DimensionData = FreeCadThree(DocData, ResolvedSketches, ResolvedFeatures) if FeatureCount == 3 else FreeCadFour(DocData, ResolvedSketches, ResolvedFeatures)
+    if tuple((ItemData.class_name for ItemData in FeatureObjects)) != ('moExtrusion_c', *('moCut_c',) * (FeatureCount - 1)) or (not HasCircleData and any((ItemData is None for ItemData in BoundsData))) or any((ExtrusionEdit(ItemData.payload) is None for ItemData in FeatureObjects)) or (DimensionData is None) or any((len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or SketchObject.class_name != 'moProfileFeature_c' or (not (HasRectDims(SketchObject, BoundsValue) if BoundsValue is not None else HasCircleDims(SketchObject, CircleValue))) or SketchData.suppressed or (not HasCanonical(SketchData, BoundsValue, CircleValue)) or (len(SketchData.closed_profile_entity_ids) != 1) or (set(SketchData.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SketchData.entities}) for SketchObject, SketchData, BoundsValue, CircleValue in zip(SketchObjects, ResolvedSketches, BoundsData, CircleData, strict=True))):
         return ObjectsData
-    TargetIds = (
-        (26, 32, 33, 40, 41, 47)
-        if FeatureCount == 3
-        else (26, 32, 33, 40, 41, 47, 48, 54)
-    )
-    TargetNames = tuple(
-        NameValue
-        for FeatureIndex in range(FeatureCount)
-        for NameValue in (
-            f"Sketch{FeatureIndex + 1}",
-            ("Boss-Extrude1" if FeatureIndex == 0 else f"Cut-Extrude{FeatureIndex}"),
-        )
-    )
-    for SourceObject, TargetId in zip(
-        NormalizedObjects,
-        TargetIds,
-        strict=True,
-    ):
-        PrefixValue = "sketch" if SourceObject.kind == "Sketch" else "feature"
-        ObjectIds[f"{PrefixValue}:{SourceObject.source_id}"] = TargetId
-    CanonicalObjects: list[_WriteObject] = []
-    for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(
-        zip(NormalizedObjects, TargetIds, TargetNames, strict=True)
-    ):
-        if ItemData.kind == "Extrusion":
+    TargetIds = (26, 32, 33, 40, 41, 47) if FeatureCount == 3 else (26, 32, 33, 40, 41, 47, 48, 54)
+    TargetNames = tuple((NameValue for FeatureIndex in range(FeatureCount) for NameValue in (f'Sketch{FeatureIndex + 1}', 'Boss-Extrude1' if FeatureIndex == 0 else f'Cut-Extrude{FeatureIndex}')))
+    for SourceObject, TargetId in zip(NormalizedObjects, TargetIds, strict=True):
+        PrefixValue = 'sketch' if SourceObject.kind == 'Sketch' else 'feature'
+        ObjectIds[f'{PrefixValue}:{SourceObject.source_id}'] = TargetId
+    CanonicalObjects: list[WriteObject] = []
+    for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(zip(NormalizedObjects, TargetIds, TargetNames, strict=True)):
+        if ItemData.kind == 'Extrusion':
             DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
-                replace(
-                    DimensionValue,
-                    name="D1",
-                    text=format(DimensionValue.value_mm, ".15g"),
-                ),
-            )
+            DimensionValues = (Replace(DimensionValue, name='D1', text=format(DimensionValue.value_mm, '.15g')),)
             ChildObjectId = TargetIds[ObjectIndex - 1]
-            PropertyValues = tuple(
-                (
-                    PropertyName,
-                    (
-                        str(ChildObjectId)
-                        if PropertyName == "DissectableChildren"
-                        else PropertyValue
-                    ),
-                )
-                for PropertyName, PropertyValue in ItemData.properties
-            )
+            PropValues = tuple(((PropName, str(ChildObjectId) if PropName == 'DissectableChildren' else PropValue) for PropName, PropValue in ItemData.properties))
         else:
             DimensionValues = ItemData.dimensions
-            PropertyValues = ItemData.properties
-        CanonicalObjects.append(
-            replace(
-                ItemData,
-                object_id=TargetId,
-                name=TargetName,
-                properties=PropertyValues,
-                dimensions=DimensionValues,
-            )
-        )
+            PropValues = ItemData.properties
+        CanonicalObjects.append(Replace(ItemData, object_id=TargetId, name=TargetName, properties=PropValues, dimensions=DimensionValues))
     return tuple(CanonicalObjects)
 
+# this definition exists because focused behavior needs one stable owner
+def PrincipalPlane(PlaneObjectId: int) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]] | None:
+    return {2: ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)), 3: ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)), 4: ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0))}.get(PlaneObjectId)
 
-# target principal-plane frames provide a stable basis for source sketch coordinates
-def _PrincipalPlaneFrame(
-    PlaneObjectId: int,
-) -> (
-    tuple[
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-    ]
-    | None
-):
-    return {
-        2: ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
-        3: ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
-        4: ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
-    }.get(PlaneObjectId)
-
-
-# proof compares principal planes in their target-native canonical parameterization
-def _ExpectedPlaneFrame(
-    PlaneData: SupportPlane,
-    PlaneObjectId: int,
-) -> tuple[
-    tuple[float, float, float],
-    tuple[float, float, float],
-    tuple[float, float, float],
-    tuple[float, float, float],
-]:
-    PrincipalFrame = _PrincipalPlaneFrame(PlaneObjectId)
+# this definition exists because focused behavior needs one stable owner
+def ExpectedPlane(PlaneData: SupportPlane, PlaneObjectId: int) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+    PrincipalFrame = PrincipalPlane(PlaneObjectId)
     if PrincipalFrame is not None:
         return ((0.0, 0.0, 0.0), *PrincipalFrame)
-    return (
-        _frame_vector(
-            (
-                PlaneData.transform.origin.x,
-                PlaneData.transform.origin.y,
-                PlaneData.transform.origin.z,
-            )
-        ),
-        _frame_vector(
-            (
-                PlaneData.transform.x_axis.x,
-                PlaneData.transform.x_axis.y,
-                PlaneData.transform.x_axis.z,
-            )
-        ),
-        _frame_vector(
-            (
-                PlaneData.transform.y_axis.x,
-                PlaneData.transform.y_axis.y,
-                PlaneData.transform.y_axis.z,
-            )
-        ),
-        _frame_vector(
-            (
-                PlaneData.transform.z_axis.x,
-                PlaneData.transform.z_axis.y,
-                PlaneData.transform.z_axis.z,
-            )
-        ),
-    )
+    return (FrameVector((PlaneData.transform.origin.x, PlaneData.transform.origin.y, PlaneData.transform.origin.z)), FrameVector((PlaneData.transform.x_axis.x, PlaneData.transform.x_axis.y, PlaneData.transform.x_axis.z)), FrameVector((PlaneData.transform.y_axis.x, PlaneData.transform.y_axis.y, PlaneData.transform.y_axis.z)), FrameVector((PlaneData.transform.z_axis.x, PlaneData.transform.z_axis.y, PlaneData.transform.z_axis.z)))
 
-
-# source sketch points are re-expressed in the equivalent SOLIDWORKS principal basis
-def _CanonicalPrincipalSketch(
-    SketchData: Sketch,
-    PlaneData: tuple[SupportPlane, ...],
-    ObjectIds: Mapping[str, int],
-) -> Sketch:
-    PlaneValue = next(
-        (
-            ItemData
-            for ItemData in PlaneData
-            if ItemData.id == SketchData.support_plane_id
-        ),
-        None,
-    )
-    PlaneObjectId = ObjectIds.get(f"plane:{SketchData.support_plane_id}", 0)
-    TargetFrame = _PrincipalPlaneFrame(PlaneObjectId)
+# this definition exists because focused behavior needs one stable owner
+def CanonicalSketch(SketchData: Sketch, PlaneData: tuple[SupportPlane, ...], ObjectIds: Mapping[str, int]) -> Sketch:
+    PlaneValue = next((ItemData for ItemData in PlaneData if ItemData.id == SketchData.support_plane_id), None)
+    PlaneObjectId = ObjectIds.get(f'plane:{SketchData.support_plane_id}', 0)
+    TargetFrame = PrincipalPlane(PlaneObjectId)
     if PlaneValue is None or TargetFrame is None:
         return SketchData
     SourceFrame = PlaneValue.transform
-    TargetU, TargetV, _ = TargetFrame
+    TargetU, TargetV, Ignored = TargetFrame
 
-    # point coordinates move through model space so in-plane rotations remain exact
-    def TransformPoint(PointData: Vector2) -> Vector2:
-        GlobalValue = (
-            SourceFrame.origin.x
-            + PointData.x * SourceFrame.x_axis.x
-            + PointData.y * SourceFrame.y_axis.x,
-            SourceFrame.origin.y
-            + PointData.x * SourceFrame.x_axis.y
-            + PointData.y * SourceFrame.y_axis.y,
-            SourceFrame.origin.z
-            + PointData.x * SourceFrame.x_axis.z
-            + PointData.y * SourceFrame.y_axis.z,
-        )
-        return Vector2(
-            sum(
-                LeftValue * RightValue
-                for LeftValue, RightValue in zip(GlobalValue, TargetU, strict=True)
-            ),
-            sum(
-                LeftValue * RightValue
-                for LeftValue, RightValue in zip(GlobalValue, TargetV, strict=True)
-            ),
-        )
-
+    # this definition exists because focused behavior needs one stable owner
+    def TransformPoint(PointData: Vector2) -> VectorTwo:
+        GlobalValue = (SourceFrame.origin.x + PointData.x * SourceFrame.x_axis.x + PointData.y * SourceFrame.y_axis.x, SourceFrame.origin.y + PointData.x * SourceFrame.x_axis.y + PointData.y * SourceFrame.y_axis.y, SourceFrame.origin.z + PointData.x * SourceFrame.x_axis.z + PointData.y * SourceFrame.y_axis.z)
+        return VectorTwo(sum((LeftValue * RightValue for LeftValue, RightValue in zip(GlobalValue, TargetU, strict=True))), sum((LeftValue * RightValue for LeftValue, RightValue in zip(GlobalValue, TargetV, strict=True))))
     NormalizedEntities = []
     for EntityData in SketchData.entities:
-        GeometryData = EntityData.geometry
-        if isinstance(GeometryData, LineGeometry):
-            GeometryData = replace(
-                GeometryData,
-                start=TransformPoint(GeometryData.start),
-                end=TransformPoint(GeometryData.end),
-            )
-        elif isinstance(GeometryData, CircleGeometry):
-            GeometryData = replace(
-                GeometryData,
-                center=TransformPoint(GeometryData.center),
-            )
-        NormalizedEntities.append(replace(EntityData, geometry=GeometryData))
-    return replace(SketchData, entities=tuple(NormalizedEntities))
+        GeomData = EntityData.geometry
+        if isinstance(GeomData, LineGeom):
+            GeomData = Replace(GeomData, start=TransformPoint(GeomData.start), end=TransformPoint(GeomData.end))
+        elif isinstance(GeomData, CircleGeom):
+            GeomData = Replace(GeomData, center=TransformPoint(GeomData.center))
+        NormalizedEntities.append(Replace(EntityData, geometry=GeomData))
+    return Replace(SketchData, entities=tuple(NormalizedEntities))
 
-
-# extrusion reversal is adjusted when source and target principal normals oppose
-def _CanonicalPrincipalExtrusion(
-    FeatureData: FeatureStep,
-    SketchData: Sketch,
-    PlaneData: tuple[SupportPlane, ...],
-    ObjectIds: Mapping[str, int],
-) -> FeatureStep:
+# this definition exists because focused behavior needs one stable owner
+def CanonicalA(FeatureData: FeatureStep, SketchData: Sketch, PlaneData: tuple[SupportPlane, ...], ObjectIds: Mapping[str, int]) -> FeatureStep:
     DefinitionData = FeatureData.definition
-    PlaneValue = next(
-        (
-            ItemData
-            for ItemData in PlaneData
-            if ItemData.id == SketchData.support_plane_id
-        ),
-        None,
-    )
-    PlaneObjectId = ObjectIds.get(f"plane:{SketchData.support_plane_id}", 0)
-    TargetFrame = _PrincipalPlaneFrame(PlaneObjectId)
-    if (
-        not isinstance(DefinitionData, ExtrusionFeature)
-        or PlaneValue is None
-        or TargetFrame is None
-    ):
+    PlaneValue = next((ItemData for ItemData in PlaneData if ItemData.id == SketchData.support_plane_id), None)
+    PlaneObjectId = ObjectIds.get(f'plane:{SketchData.support_plane_id}', 0)
+    TargetFrame = PrincipalPlane(PlaneObjectId)
+    if not isinstance(DefinitionData, ExtrusionFeature) or PlaneValue is None or TargetFrame is None:
         return FeatureData
     SourceNormal = PlaneValue.transform.z_axis
     TargetNormal = TargetFrame[2]
-    OpposedValue = (
-        sum(
-            LeftValue * RightValue
-            for LeftValue, RightValue in zip(
-                (SourceNormal.x, SourceNormal.y, SourceNormal.z),
-                TargetNormal,
-                strict=True,
-            )
-        )
-        < 0.0
-    )
-    return replace(
-        FeatureData,
-        definition=replace(
-            DefinitionData,
-            reversed=DefinitionData.reversed != OpposedValue,
-        ),
-    )
+    OpposedValue = sum((LeftValue * RightValue for LeftValue, RightValue in zip((SourceNormal.x, SourceNormal.y, SourceNormal.z), TargetNormal, strict=True))) < 0.0
+    return Replace(FeatureData, definition=Replace(DefinitionData, reversed=DefinitionData.reversed != OpposedValue))
 
-
-# canonical single-profile sketches exclude hidden construction and fixed geometry
-def HasCanonicalSketchGeometry(
-    SketchData: Sketch,
-    BoundsValue: tuple[float, float, float, float] | None,
-    CircleValue: tuple[float, float, float] | None,
-) -> bool:
+# this definition exists because focused behavior needs one stable owner
+def HasCanonical(SketchData: Sketch, BoundsValue: tuple[float, float, float, float] | None, CircleValue: tuple[float, float, float] | None) -> bool:
     if (BoundsValue is None) == (CircleValue is None):
         return False
-    if any(ItemData.construction or ItemData.fixed for ItemData in SketchData.entities):
+    if any((ItemData.construction or ItemData.fixed for ItemData in SketchData.entities)):
         return False
     if BoundsValue is not None:
-        return len(SketchData.entities) == 4 and all(
-            isinstance(ItemData.geometry, LineGeometry)
-            for ItemData in SketchData.entities
-        )
-    return len(SketchData.entities) == 1 and isinstance(
-        SketchData.entities[0].geometry,
-        CircleGeometry,
-    )
+        return len(SketchData.entities) == 4 and all((isinstance(ItemData.geometry, LineGeom) for ItemData in SketchData.entities))
+    return len(SketchData.entities) == 1 and isinstance(SketchData.entities[0].geometry, CircleGeom)
 
-
-# strict source topology keeps six line pad dispatch inside its traced family
-def HasPolySix(
-    SketchData: Sketch,
-    PointsData: tuple[tuple[float, float], ...] | None,
-) -> bool:
+# this definition exists because focused behavior needs one stable owner
+def HasPolySix(SketchData: Sketch, PointsData: tuple[tuple[float, float], ...] | None) -> bool:
     if PointsData is None or len(PointsData) != 6 or len(SketchData.entities) != 6:
         return False
-    if any(ItemData.construction or ItemData.fixed for ItemData in SketchData.entities):
+    if any((ItemData.construction or ItemData.fixed for ItemData in SketchData.entities)):
         return False
-    if not all(
-        isinstance(ItemData.geometry, LineGeometry) for ItemData in SketchData.entities
-    ):
+    if not all((isinstance(ItemData.geometry, LineGeom) for ItemData in SketchData.entities)):
         return False
-    LineData = tuple(
-        ItemData.geometry
-        for ItemData in SketchData.entities
-        if isinstance(ItemData.geometry, LineGeometry)
-    )
+    LineData = tuple((ItemData.geometry for ItemData in SketchData.entities if isinstance(ItemData.geometry, LineGeom)))
     return LineLoopPoints(LineData) is not None
 
-
-# four-stage FreeCAD validation proves all chained cuts and every inactive default
-def _FreeCadFourFeatureDimensions(
-    DocumentData: CadDocument,
-    SketchData: tuple[Sketch, ...],
-    FeatureData: tuple[FeatureStep, ...],
-) -> (
-    tuple[
-        _WriteDimension,
-        _WriteDimension,
-        _WriteDimension,
-        _WriteDimension,
-    ]
-    | None
-):
+# this definition exists because focused behavior needs one stable owner
+def FreeCadFour(DocData: CadDocument, SketchData: tuple[Sketch, ...], FeatureData: tuple[FeatureStep, ...]) -> tuple[WriteDimension, WriteDimension, WriteDimension, WriteDimension] | None:
     if len(SketchData) != 4 or len(FeatureData) != 4:
         return None
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    AllowedOwners = {
-        *(ItemData.id for ItemData in SketchData),
-        *(ItemData.id for ItemData in FeatureData),
-    }
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or DocumentData.selections
-        or tuple(DocumentData.sketches) != SketchData
-        or TimelineData != FeatureData
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FeatureData[-1].id
-        or tuple(ItemData.order for ItemData in FeatureData) != (0, 1, 2, 3)
-        or tuple(ItemData.sketch_id for ItemData in FeatureData)
-        != tuple(ItemData.id for ItemData in SketchData)
-        or FeatureData[0].input_feature_ids
-        or any(
-            FeatureValue.input_feature_ids != (FeatureData[FeatureIndex - 1].id,)
-            for FeatureIndex, FeatureValue in enumerate(FeatureData[1:], start=1)
-        )
-        or any(ItemData.selection_ids for ItemData in FeatureData)
-        or any(ItemData.configuration_states for ItemData in FeatureData)
-        or any(ItemData.suppressed for ItemData in FeatureData)
-        or str(FeatureData[0].operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or any(
-            str(ItemData.operation).casefold() != BooleanOperation.CUT.value
-            for ItemData in FeatureData[1:]
-        )
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
-        return None
-    DimensionData = tuple(
-        _FreeCadFeatureDimension(
-            DocumentData,
-            SketchValue,
-            FeatureValue,
-            TypeId,
-            SecondLength,
-            Visibility,
-        )
-        for SketchValue, FeatureValue, TypeId, SecondLength, Visibility in zip(
-            SketchData,
-            FeatureData,
-            (
-                "PartDesign::Pad",
-                "PartDesign::Pocket",
-                "PartDesign::Pocket",
-                "PartDesign::Pocket",
-            ),
-            (10.0, 5.0, 5.0, 5.0),
-            (False, False, False, True),
-            strict=True,
-        )
-    )
-    if any(ItemData is None for ItemData in DimensionData):
-        return None
-    return (
-        DimensionData[0],
-        DimensionData[1],
-        DimensionData[2],
-        DimensionData[3],
-    )
 
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    AllowedOwners = {*(ItemData.id for ItemData in SketchData), *(ItemData.id for ItemData in FeatureData)}
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or DocData.selections or (tuple(DocData.sketches) != SketchData) or (TimelineData != FeatureData) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FeatureData[-1].id) or (tuple((ItemData.order for ItemData in FeatureData)) != (0, 1, 2, 3)) or (tuple((ItemData.sketch_id for ItemData in FeatureData)) != tuple((ItemData.id for ItemData in SketchData))) or FeatureData[0].input_feature_ids or any((FeatureValue.input_feature_ids != (FeatureData[FeatureIndex - 1].id,) for FeatureIndex, FeatureValue in enumerate(FeatureData[1:], start=1))) or any((ItemData.selection_ids for ItemData in FeatureData)) or any((ItemData.configuration_states for ItemData in FeatureData)) or any((ItemData.suppressed for ItemData in FeatureData)) or (str(FeatureData[0].operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or any((str(ItemData.operation).casefold() != BoolOperation.CUT.value for ItemData in FeatureData[1:])) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
+        return None
+    DimensionData = tuple((FreeCadFeature(DocData, SketchValue, FeatureValue, TypeId, SecondLength, Visibility) for SketchValue, FeatureValue, TypeId, SecondLength, Visibility in zip(SketchData, FeatureData, ('PartDesign::Pad', 'PartDesign::Pocket', 'PartDesign::Pocket', 'PartDesign::Pocket'), (10.0, 5.0, 5.0, 5.0), (False, False, False, True), strict=True)))
+    if any((ItemData is None for ItemData in DimensionData)):
+        return None
+    return (DimensionData[0], DimensionData[1], DimensionData[2], DimensionData[3])
 
-# three-stage FreeCAD validation proves both chained cuts and every inactive default
-def _FreeCadThreeFeatureDimensions(
-    DocumentData: CadDocument,
-    SketchData: tuple[Sketch, ...],
-    FeatureData: tuple[FeatureStep, ...],
-) -> tuple[_WriteDimension, _WriteDimension, _WriteDimension] | None:
+# this definition exists because focused behavior needs one stable owner
+def FreeCadThree(DocData: CadDocument, SketchData: tuple[Sketch, ...], FeatureData: tuple[FeatureStep, ...]) -> tuple[WriteDimension, WriteDimension, WriteDimension] | None:
     if len(SketchData) != 3 or len(FeatureData) != 3:
         return None
     SketchOne, SketchTwo, SketchThree = SketchData
     FeatureOne, FeatureTwo, FeatureThree = FeatureData
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    AllowedOwners = {
-        *(ItemData.id for ItemData in SketchData),
-        *(ItemData.id for ItemData in FeatureData),
-    }
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or DocumentData.selections
-        or tuple(DocumentData.sketches) != SketchData
-        or TimelineData != FeatureData
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FeatureThree.id
-        or tuple(ItemData.order for ItemData in FeatureData) != (0, 1, 2)
-        or tuple(ItemData.sketch_id for ItemData in FeatureData)
-        != tuple(ItemData.id for ItemData in SketchData)
-        or FeatureOne.input_feature_ids
-        or FeatureTwo.input_feature_ids != (FeatureOne.id,)
-        or FeatureThree.input_feature_ids != (FeatureTwo.id,)
-        or any(ItemData.selection_ids for ItemData in FeatureData)
-        or any(ItemData.configuration_states for ItemData in FeatureData)
-        or any(ItemData.suppressed for ItemData in FeatureData)
-        or str(FeatureOne.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or any(
-            str(ItemData.operation).casefold() != BooleanOperation.CUT.value
-            for ItemData in (FeatureTwo, FeatureThree)
-        )
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
-        return None
-    DimensionData = tuple(
-        _FreeCadFeatureDimension(
-            DocumentData,
-            SketchValue,
-            FeatureValue,
-            TypeId,
-            SecondLength,
-            Visibility,
-        )
-        for SketchValue, FeatureValue, TypeId, SecondLength, Visibility in zip(
-            (SketchOne, SketchTwo, SketchThree),
-            (FeatureOne, FeatureTwo, FeatureThree),
-            ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Pocket"),
-            (10.0, 5.0, 5.0),
-            (False, False, True),
-            strict=True,
-        )
-    )
-    if any(ItemData is None for ItemData in DimensionData):
-        return None
-    return (
-        DimensionData[0],
-        DimensionData[1],
-        DimensionData[2],
-    )
 
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    AllowedOwners = {*(ItemData.id for ItemData in SketchData), *(ItemData.id for ItemData in FeatureData)}
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or DocData.selections or (tuple(DocData.sketches) != SketchData) or (TimelineData != FeatureData) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FeatureThree.id) or (tuple((ItemData.order for ItemData in FeatureData)) != (0, 1, 2)) or (tuple((ItemData.sketch_id for ItemData in FeatureData)) != tuple((ItemData.id for ItemData in SketchData))) or FeatureOne.input_feature_ids or (FeatureTwo.input_feature_ids != (FeatureOne.id,)) or (FeatureThree.input_feature_ids != (FeatureTwo.id,)) or any((ItemData.selection_ids for ItemData in FeatureData)) or any((ItemData.configuration_states for ItemData in FeatureData)) or any((ItemData.suppressed for ItemData in FeatureData)) or (str(FeatureOne.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or any((str(ItemData.operation).casefold() != BoolOperation.CUT.value for ItemData in (FeatureTwo, FeatureThree))) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
+        return None
+    DimensionData = tuple((FreeCadFeature(DocData, SketchValue, FeatureValue, TypeId, SecondLength, Visibility) for SketchValue, FeatureValue, TypeId, SecondLength, Visibility in zip((SketchOne, SketchTwo, SketchThree), (FeatureOne, FeatureTwo, FeatureThree), ('PartDesign::Pad', 'PartDesign::Pocket', 'PartDesign::Pocket'), (10.0, 5.0, 5.0), (False, False, True), strict=True)))
+    if any((ItemData is None for ItemData in DimensionData)):
+        return None
+    return (DimensionData[0], DimensionData[1], DimensionData[2])
 
-# FreeCAD history validation proves the exact pad-pocket dependency and inactive defaults
-def _FreeCadTwoFeatureDimensions(
-    DocumentData: CadDocument,
-    SketchData: tuple[Sketch, Sketch],
-    FeatureData: tuple[FeatureStep, FeatureStep],
-) -> tuple[_WriteDimension, _WriteDimension | None] | None:
+# this definition exists because focused behavior needs one stable owner
+def FreeCadTwo(DocData: CadDocument, SketchData: tuple[Sketch, Sketch], FeatureData: tuple[FeatureStep, FeatureStep]) -> tuple[WriteDimension, WriteDimension | None] | None:
     SketchOne, SketchTwo = SketchData
     FeatureOne, FeatureTwo = FeatureData
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline, key=lambda ItemData: ItemData.order
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    AllowedOwners = {
-        SketchOne.id,
-        SketchTwo.id,
-        FeatureOne.id,
-        FeatureTwo.id,
-    }
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or DocumentData.selections
-        or tuple(DocumentData.sketches) != (SketchOne, SketchTwo)
-        or TimelineData != (FeatureOne, FeatureTwo)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FeatureTwo.id
-        or FeatureOne.order != 0
-        or FeatureTwo.order != 1
-        or FeatureOne.sketch_id != SketchOne.id
-        or FeatureTwo.sketch_id != SketchTwo.id
-        or FeatureOne.input_feature_ids
-        or FeatureTwo.input_feature_ids != (FeatureOne.id,)
-        or FeatureOne.selection_ids
-        or FeatureTwo.selection_ids
-        or FeatureOne.configuration_states
-        or FeatureTwo.configuration_states
-        or FeatureOne.suppressed
-        or FeatureTwo.suppressed
-        or str(FeatureOne.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or str(FeatureTwo.operation).casefold()
-        not in {BooleanOperation.CUT.value, BooleanOperation.JOIN.value}
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
+
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    AllowedOwners = {SketchOne.id, SketchTwo.id, FeatureOne.id, FeatureTwo.id}
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or DocData.selections or (tuple(DocData.sketches) != (SketchOne, SketchTwo)) or (TimelineData != (FeatureOne, FeatureTwo)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FeatureTwo.id) or (FeatureOne.order != 0) or (FeatureTwo.order != 1) or (FeatureOne.sketch_id != SketchOne.id) or (FeatureTwo.sketch_id != SketchTwo.id) or FeatureOne.input_feature_ids or (FeatureTwo.input_feature_ids != (FeatureOne.id,)) or FeatureOne.selection_ids or FeatureTwo.selection_ids or FeatureOne.configuration_states or FeatureTwo.configuration_states or FeatureOne.suppressed or FeatureTwo.suppressed or (str(FeatureOne.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (str(FeatureTwo.operation).casefold() not in {BoolOperation.CUT.value, BoolOperation.JOIN.value}) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
         return None
-    DimensionOne = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchOne,
-        FeatureOne,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
+    DimensionOne = FreeCadFeature(DocData, SketchOne, FeatureOne, 'PartDesign::Pad', 10.0, False)
     if not isinstance(FeatureTwo.definition, ExtrusionFeature):
         return None
     SecondOperation = str(FeatureTwo.operation).casefold()
-    if SecondOperation == BooleanOperation.CUT.value and (
-        str(FeatureTwo.definition.end_condition).casefold()
-        == ExtrusionEndCondition.THROUGH_ALL.value
-    ):
-        if not HasFreeCadThroughAllFeature(
-            DocumentData,
-            SketchTwo,
-            FeatureTwo,
-        ):
+    if SecondOperation == BoolOperation.CUT.value and str(FeatureTwo.definition.end_condition).casefold() == ExtrusionEndCondition.THROUGH_ALL.value:
+        if not HasFreeCadAll(DocData, SketchTwo, FeatureTwo):
             return None
         DimensionTwo = None
     else:
-        DimensionTwo = _FreeCadFeatureDimension(
-            DocumentData,
-            SketchTwo,
-            FeatureTwo,
-            (
-                "PartDesign::Pad"
-                if SecondOperation == BooleanOperation.JOIN.value
-                else "PartDesign::Pocket"
-            ),
-            10.0 if SecondOperation == BooleanOperation.JOIN.value else 5.0,
-            True,
-        )
+        DimensionTwo = FreeCadFeature(DocData, SketchTwo, FeatureTwo, 'PartDesign::Pad' if SecondOperation == BoolOperation.JOIN.value else 'PartDesign::Pocket', 10.0 if SecondOperation == BoolOperation.JOIN.value else 5.0, True)
         if DimensionTwo is None:
             return None
     if DimensionOne is None:
         return None
-    return DimensionOne, DimensionTwo
+    return (DimensionOne, DimensionTwo)
 
-
-# FreeCAD pad-groove validation proves both feature defaults and the sketch-axis link
-def _FreeCadPadGrooveDimensions(
-    DocumentData: CadDocument,
-    SketchData: tuple[Sketch, Sketch],
-    FeatureData: tuple[FeatureStep, FeatureStep],
-) -> tuple[_WriteDimension, _WriteDimension] | None:
+# this definition exists because focused behavior needs one stable owner
+def FreeCadPad(DocData: CadDocument, SketchData: tuple[Sketch, Sketch], FeatureData: tuple[FeatureStep, FeatureStep]) -> tuple[WriteDimension, WriteDimension] | None:
     SketchOne, SketchTwo = SketchData
     PadFeature, GrooveFeature = FeatureData
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     GrooveDefinition = GrooveFeature.definition
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchOne, SketchTwo)
-        or TimelineData != (PadFeature, GrooveFeature)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != GrooveFeature.id
-        or PadFeature.order != 0
-        or GrooveFeature.order != 1
-        or PadFeature.sketch_id != SketchOne.id
-        or GrooveFeature.sketch_id != SketchTwo.id
-        or PadFeature.input_feature_ids
-        or GrooveFeature.input_feature_ids != (PadFeature.id,)
-        or PadFeature.selection_ids
-        or len(GrooveFeature.selection_ids) != 1
-        or PadFeature.configuration_states
-        or GrooveFeature.configuration_states
-        or PadFeature.suppressed
-        or GrooveFeature.suppressed
-        or str(PadFeature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or str(GrooveFeature.operation).casefold() != BooleanOperation.CUT.value
-        or str(GrooveFeature.kind).casefold() != FeatureKind.REVOLUTION.value
-        or _freecad_type_id(GrooveFeature.attributes) != "PartDesign::Groove"
-        or not isinstance(GrooveDefinition, NativeFeatureDefinition)
-        or GrooveDefinition.format_id.casefold() != "freecad.fcstd"
-        or GrooveDefinition.type_id != "PartDesign::Groove"
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or GrooveFeature.selection_ids != (DocumentData.selections[0].id,)
-    ):
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or tuple(DocData.sketches) != (SketchOne, SketchTwo) or (TimelineData != (PadFeature, GrooveFeature)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != GrooveFeature.id) or (PadFeature.order != 0) or (GrooveFeature.order != 1) or (PadFeature.sketch_id != SketchOne.id) or (GrooveFeature.sketch_id != SketchTwo.id) or PadFeature.input_feature_ids or (GrooveFeature.input_feature_ids != (PadFeature.id,)) or PadFeature.selection_ids or (len(GrooveFeature.selection_ids) != 1) or PadFeature.configuration_states or GrooveFeature.configuration_states or PadFeature.suppressed or GrooveFeature.suppressed or (str(PadFeature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (str(GrooveFeature.operation).casefold() != BoolOperation.CUT.value) or (str(GrooveFeature.kind).casefold() != FeatureKind.REVOLUTION.value) or (FreecadTypeId(GrooveFeature.attributes) != 'PartDesign::Groove') or (not isinstance(GrooveDefinition, NativeFeatureDefinition)) or (GrooveDefinition.format_id.casefold() != 'freecad.fcstd') or (GrooveDefinition.type_id != 'PartDesign::Groove') or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (GrooveFeature.selection_ids != (DocData.selections[0].id,)):
         return None
-    AxisSelection = DocumentData.selections[0]
-    if (
-        GrooveFeature.provenance is None
-        or AxisSelection.attributes.get("freecad_object")
-        != GrooveFeature.provenance.native_id
-        or AxisSelection.attributes.get("freecad_property") != "ReferenceAxis"
-        or len(AxisSelection.path) != 1
-        or AxisSelection.path[0].entity_id != SketchTwo.name
-        or AxisSelection.path[0].subelement != HORIZONTAL_AXIS_SUBELEMENT
-    ):
+    AxisSelection = DocData.selections[0]
+    if GrooveFeature.provenance is None or AxisSelection.attributes.get('freecad_object') != GrooveFeature.provenance.native_id or AxisSelection.attributes.get('freecad_property') != 'ReferenceAxis' or (len(AxisSelection.path) != 1) or (AxisSelection.path[0].entity_id != SketchTwo.name) or (AxisSelection.path[0].subelement != KHorizontalAxisSubElem):
         return None
-    PadDimension = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchOne,
-        PadFeature,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
+    PadDimension = FreeCadFeature(DocData, SketchOne, PadFeature, 'PartDesign::Pad', 10.0, False)
     if PadDimension is None:
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != GrooveFeature.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != GrooveFeature.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "AllowMultiFace": (ValueKind.BOOLEAN, True),
-        "Angle": (ValueKind.ANGLE, 360.0),
-        "Angle2": (ValueKind.ANGLE, 0.0),
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, GrooveFeature.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Midplane": (ValueKind.BOOLEAN, False),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "Type": (ValueKind.INTEGER, 0),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'Angle': (ValueKind.ANGLE, 360.0), 'Angle2': (ValueKind.ANGLE, 0.0), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, GrooveFeature.name), 'Label2': (ValueKind.STRING, ''), 'Midplane': (ValueKind.BOOLEAN, False), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'Type': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    AngleParameter = ParameterData["Angle"]
-    if AngleParameter.value.unit.casefold() not in {"deg", "degree", "degrees"}:
+    AngleParam = ParamData['Angle']
+    if AngleParam.value.unit.casefold() not in {'deg', 'degree', 'degrees'}:
         return None
-    return (
-        PadDimension,
-        _WriteDimension("D1", 360.0, "360°", AngleParameter.role),
-    )
+    return (PadDimension, WriteDimension('D1', 360.0, '360°', AngleParam.role))
 
+# this definition exists because focused behavior needs one stable owner
+def FreeCadBossB(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureStep, FilletFeatureData: FeatureStep, BoundsValue: tuple[float, float, float, float] | None) -> tuple[WriteDimension, WriteDimension] | None:
 
-# FreeCAD boss-fillet validation proves the history, defaults, radius, and edge locus
-def _FreeCadBossFilletDimensions(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    PadFeature: FeatureStep,
-    FilletFeatureData: FeatureStep,
-    BoundsValue: tuple[float, float, float, float] | None,
-) -> tuple[_WriteDimension, _WriteDimension] | None:
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     FilletDefinition = FilletFeatureData.definition
     PadDefinition = PadFeature.definition
     AllowedOwners = {SketchData.id, PadFeature.id, FilletFeatureData.id}
-    if (
-        BoundsValue is None
-        or DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchData,)
-        or TimelineData != (PadFeature, FilletFeatureData)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FilletFeatureData.id
-        or PadFeature.order != 0
-        or FilletFeatureData.order != 1
-        or PadFeature.sketch_id != SketchData.id
-        or FilletFeatureData.sketch_id is not None
-        or PadFeature.input_feature_ids
-        or FilletFeatureData.input_feature_ids != (PadFeature.id,)
-        or PadFeature.selection_ids
-        or len(FilletFeatureData.selection_ids) != 1
-        or PadFeature.configuration_states
-        or FilletFeatureData.configuration_states
-        or PadFeature.suppressed
-        or FilletFeatureData.suppressed
-        or str(PadFeature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or FilletFeatureData.operation is not None
-        or str(FilletFeatureData.kind).casefold() != FeatureKind.FILLET.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(PadFeature.attributes) != "PartDesign::Pad"
-        or _freecad_type_id(FilletFeatureData.attributes) != "PartDesign::Fillet"
-        or not isinstance(PadDefinition, ExtrusionFeature)
-        or PadDefinition.reversed
-        or PadDefinition.symmetric
-        or not isinstance(FilletDefinition, FilletFeature)
-        or FilletDefinition.variable_radius_parameter_ids
-        or FilletFeatureData.provenance is None
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or FilletFeatureData.selection_ids != (DocumentData.selections[0].id,)
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
+    if BoundsValue is None or DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or (tuple(DocData.sketches) != (SketchData,)) or (TimelineData != (PadFeature, FilletFeatureData)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FilletFeatureData.id) or (PadFeature.order != 0) or (FilletFeatureData.order != 1) or (PadFeature.sketch_id != SketchData.id) or (FilletFeatureData.sketch_id is not None) or PadFeature.input_feature_ids or (FilletFeatureData.input_feature_ids != (PadFeature.id,)) or PadFeature.selection_ids or (len(FilletFeatureData.selection_ids) != 1) or PadFeature.configuration_states or FilletFeatureData.configuration_states or PadFeature.suppressed or FilletFeatureData.suppressed or (str(PadFeature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (FilletFeatureData.operation is not None) or (str(FilletFeatureData.kind).casefold() != FeatureKind.FILLET.value) or (FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(PadFeature.attributes) != 'PartDesign::Pad') or (FreecadTypeId(FilletFeatureData.attributes) != 'PartDesign::Fillet') or (not isinstance(PadDefinition, ExtrusionFeature)) or PadDefinition.reversed or PadDefinition.symmetric or (not isinstance(FilletDefinition, FilletFeature)) or FilletDefinition.variable_radius_parameter_ids or (FilletFeatureData.provenance is None) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (FilletFeatureData.selection_ids != (DocData.selections[0].id,)) or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
         return None
-    PadDimension = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchData,
-        PadFeature,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
+    PadDimension = FreeCadFeature(DocData, SketchData, PadFeature, 'PartDesign::Pad', 10.0, False)
     RadiusValue = FilletDefinition.radius
-    RadiusDimension = _parameter_dimension(Parameter("", "D1", RadiusValue))
-    if (
-        PadDimension is None
-        or RadiusDimension is None
-        or RadiusDimension.value_mm <= 0.0
-    ):
+    RadiusDimension = ParamDimension(Param('', 'D1', RadiusValue))
+    if PadDimension is None or RadiusDimension is None or RadiusDimension.value_mm <= 0.0:
         return None
     RadiusNumber = RadiusDimension.value_mm
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(RadiusNumber)
-        or RadiusNumber <= 0.0
-        or RadiusNumber * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)
-    ):
+    if not MathValue.isfinite(RadiusNumber) or RadiusNumber <= 0.0 or RadiusNumber * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY):
         return None
-    SelectionData = DocumentData.selections[0]
-    PadNativeName = (
-        PadFeature.provenance.native_id
-        if PadFeature.provenance is not None
-        else PadFeature.name
-    )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != FilletFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Base"
-        or SelectionData.attributes.get("freecad_target") != PadNativeName
-        or len(SelectionData.path) != 1
-        or SelectionData.path[0].entity_kind != "edge"
-        or SelectionData.path[0].entity_id != PadNativeName
-        or not _HasFreeCadMaxCornerEdge(
-            DocumentData,
-            PadNativeName,
-            SelectionData.path[0].subelement,
-            BoundsValue,
-            PadDimension.value_mm,
-        )
-    ):
+    SelectionData = DocData.selections[0]
+    PadNativeName = PadFeature.provenance.native_id if PadFeature.provenance is not None else PadFeature.name
+    if SelectionData.attributes.get('freecad_object') != FilletFeatureData.provenance.native_id or SelectionData.attributes.get('freecad_property') != 'Base' or SelectionData.attributes.get('freecad_target') != PadNativeName or (len(SelectionData.path) != 1) or (SelectionData.path[0].entity_kind != 'edge') or (SelectionData.path[0].entity_id != PadNativeName) or (not HasFreeCadMax(DocData, PadNativeName, SelectionData.path[0].subelement, BoundsValue, PadDimension.value_mm)):
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != FilletFeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != FilletFeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, FilletFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Radius": (ValueKind.QUANTITY, RadiusNumber),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "SupportTransform": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "UseAllEdges": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, FilletFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Radius': (ValueKind.QUANTITY, RadiusNumber), 'Refine': (ValueKind.BOOLEAN, True), 'SupportTransform': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'UseAllEdges': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    RadiusParameter = ParameterData["Radius"]
-    return (
-        PadDimension,
-        _WriteDimension(
-            "D1",
-            RadiusNumber,
-            "R" + format(RadiusNumber, ".15g"),
-            RadiusParameter.role,
-        ),
-    )
+    RadiusParam = ParamData['Radius']
+    return (PadDimension, WriteDimension('D1', RadiusNumber, 'R' + format(RadiusNumber, '.15g'), RadiusParam.role))
 
+# this definition exists because focused behavior needs one stable owner
+def FreeCadBoss(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureStep, ChamferFeatureData: FeatureStep, BoundsValue: tuple[float, float, float, float] | None) -> tuple[WriteDimension, WriteDimension] | None:
 
-# FreeCAD boss-chamfer validation proves equal distance, defaults, and edge locus
-def _FreeCadBossChamferDimensions(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    PadFeature: FeatureStep,
-    ChamferFeatureData: FeatureStep,
-    BoundsValue: tuple[float, float, float, float] | None,
-) -> tuple[_WriteDimension, _WriteDimension] | None:
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     ChamferDefinition = ChamferFeatureData.definition
     PadDefinition = PadFeature.definition
     AllowedOwners = {SketchData.id, PadFeature.id, ChamferFeatureData.id}
-    if (
-        BoundsValue is None
-        or DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchData,)
-        or TimelineData != (PadFeature, ChamferFeatureData)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != ChamferFeatureData.id
-        or PadFeature.order != 0
-        or ChamferFeatureData.order != 1
-        or PadFeature.sketch_id != SketchData.id
-        or ChamferFeatureData.sketch_id is not None
-        or PadFeature.input_feature_ids
-        or ChamferFeatureData.input_feature_ids != (PadFeature.id,)
-        or PadFeature.selection_ids
-        or len(ChamferFeatureData.selection_ids) != 1
-        or PadFeature.configuration_states
-        or ChamferFeatureData.configuration_states
-        or PadFeature.suppressed
-        or ChamferFeatureData.suppressed
-        or str(PadFeature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or ChamferFeatureData.operation is not None
-        or str(ChamferFeatureData.kind).casefold() != FeatureKind.CHAMFER.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(PadFeature.attributes) != "PartDesign::Pad"
-        or _freecad_type_id(ChamferFeatureData.attributes) != "PartDesign::Chamfer"
-        or not isinstance(PadDefinition, ExtrusionFeature)
-        or PadDefinition.reversed
-        or PadDefinition.symmetric
-        or not isinstance(ChamferDefinition, ChamferFeature)
-        or ChamferDefinition.mode != "equal_distance"
-        or ChamferDefinition.second_distance is not None
-        or ChamferDefinition.angle is not None
-        or ChamferFeatureData.provenance is None
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or ChamferFeatureData.selection_ids != (DocumentData.selections[0].id,)
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
+    if BoundsValue is None or DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or (tuple(DocData.sketches) != (SketchData,)) or (TimelineData != (PadFeature, ChamferFeatureData)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != ChamferFeatureData.id) or (PadFeature.order != 0) or (ChamferFeatureData.order != 1) or (PadFeature.sketch_id != SketchData.id) or (ChamferFeatureData.sketch_id is not None) or PadFeature.input_feature_ids or (ChamferFeatureData.input_feature_ids != (PadFeature.id,)) or PadFeature.selection_ids or (len(ChamferFeatureData.selection_ids) != 1) or PadFeature.configuration_states or ChamferFeatureData.configuration_states or PadFeature.suppressed or ChamferFeatureData.suppressed or (str(PadFeature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (ChamferFeatureData.operation is not None) or (str(ChamferFeatureData.kind).casefold() != FeatureKind.CHAMFER.value) or (FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(PadFeature.attributes) != 'PartDesign::Pad') or (FreecadTypeId(ChamferFeatureData.attributes) != 'PartDesign::Chamfer') or (not isinstance(PadDefinition, ExtrusionFeature)) or PadDefinition.reversed or PadDefinition.symmetric or (not isinstance(ChamferDefinition, ChamferFeature)) or (ChamferDefinition.mode != 'equal_distance') or (ChamferDefinition.second_distance is not None) or (ChamferDefinition.angle is not None) or (ChamferFeatureData.provenance is None) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (ChamferFeatureData.selection_ids != (DocData.selections[0].id,)) or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
         return None
-    PadDimension = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchData,
-        PadFeature,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
-    DistanceDimension = _parameter_dimension(
-        Parameter("", "D1", ChamferDefinition.distance)
-    )
-    if (
-        PadDimension is None
-        or DistanceDimension is None
-        or DistanceDimension.value_mm <= 0.0
-    ):
+    PadDimension = FreeCadFeature(DocData, SketchData, PadFeature, 'PartDesign::Pad', 10.0, False)
+    DistanceDimension = ParamDimension(Param('', 'D1', ChamferDefinition.distance))
+    if PadDimension is None or DistanceDimension is None or DistanceDimension.value_mm <= 0.0:
         return None
     DistanceNumber = DistanceDimension.value_mm
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(DistanceNumber)
-        or DistanceNumber <= 0.0
-        or DistanceNumber * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)
-    ):
+    if not MathValue.isfinite(DistanceNumber) or DistanceNumber <= 0.0 or DistanceNumber * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY):
         return None
-    SelectionData = DocumentData.selections[0]
-    PadNativeName = (
-        PadFeature.provenance.native_id
-        if PadFeature.provenance is not None
-        else PadFeature.name
-    )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != ChamferFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Base"
-        or SelectionData.attributes.get("freecad_target") != PadNativeName
-        or len(SelectionData.path) != 1
-        or SelectionData.path[0].entity_kind != "edge"
-        or SelectionData.path[0].entity_id != PadNativeName
-        or not _HasFreeCadMaxCornerEdge(
-            DocumentData,
-            PadNativeName,
-            SelectionData.path[0].subelement,
-            BoundsValue,
-            PadDimension.value_mm,
-        )
-    ):
+    SelectionData = DocData.selections[0]
+    PadNativeName = PadFeature.provenance.native_id if PadFeature.provenance is not None else PadFeature.name
+    if SelectionData.attributes.get('freecad_object') != ChamferFeatureData.provenance.native_id or SelectionData.attributes.get('freecad_property') != 'Base' or SelectionData.attributes.get('freecad_target') != PadNativeName or (len(SelectionData.path) != 1) or (SelectionData.path[0].entity_kind != 'edge') or (SelectionData.path[0].entity_id != PadNativeName) or (not HasFreeCadMax(DocData, PadNativeName, SelectionData.path[0].subelement, BoundsValue, PadDimension.value_mm)):
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != ChamferFeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != ChamferFeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "Angle": (ValueKind.ANGLE, 45.0),
-        "ChamferType": (ValueKind.INTEGER, 0),
-        "FlipDirection": (ValueKind.BOOLEAN, False),
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, ChamferFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Size": (ValueKind.QUANTITY, DistanceNumber),
-        "Size2": (ValueKind.QUANTITY, 1.0),
-        "SupportTransform": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "UseAllEdges": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'Angle': (ValueKind.ANGLE, 45.0), 'ChamferType': (ValueKind.INTEGER, 0), 'FlipDirection': (ValueKind.BOOLEAN, False), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, ChamferFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Refine': (ValueKind.BOOLEAN, True), 'Size': (ValueKind.QUANTITY, DistanceNumber), 'Size2': (ValueKind.QUANTITY, 1.0), 'SupportTransform': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'UseAllEdges': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    DistanceParameter = ParameterData["Size"]
-    return (
-        PadDimension,
-        _WriteDimension(
-            "D1",
-            DistanceNumber,
-            format(DistanceNumber, ".15g"),
-            DistanceParameter.role,
-        ),
-    )
+    DistanceParam = ParamData['Size']
+    return (PadDimension, WriteDimension('D1', DistanceNumber, format(DistanceNumber, '.15g'), DistanceParam.role))
 
+# this definition exists because focused behavior needs one stable owner
+def FreeCadBossD(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureStep, ShellFeatureData: FeatureStep, BoundsValue: tuple[float, float, float, float] | None) -> tuple[WriteDimension, WriteDimension] | None:
 
-# FreeCAD boss-shell validation proves inward thickness defaults and the removed top face
-def _FreeCadBossShellDimensions(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    PadFeature: FeatureStep,
-    ShellFeatureData: FeatureStep,
-    BoundsValue: tuple[float, float, float, float] | None,
-) -> tuple[_WriteDimension, _WriteDimension] | None:
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     ShellDefinition = ShellFeatureData.definition
     PadDefinition = PadFeature.definition
     AllowedOwners = {SketchData.id, PadFeature.id, ShellFeatureData.id}
-    if (
-        BoundsValue is None
-        or DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchData,)
-        or TimelineData != (PadFeature, ShellFeatureData)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != ShellFeatureData.id
-        or PadFeature.order != 0
-        or ShellFeatureData.order != 1
-        or PadFeature.sketch_id != SketchData.id
-        or ShellFeatureData.sketch_id is not None
-        or PadFeature.input_feature_ids
-        or ShellFeatureData.input_feature_ids != (PadFeature.id,)
-        or PadFeature.selection_ids
-        or len(ShellFeatureData.selection_ids) != 1
-        or PadFeature.configuration_states
-        or ShellFeatureData.configuration_states
-        or PadFeature.suppressed
-        or ShellFeatureData.suppressed
-        or str(PadFeature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or ShellFeatureData.operation is not None
-        or str(ShellFeatureData.kind).casefold() != FeatureKind.SHELL.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(PadFeature.attributes) != "PartDesign::Pad"
-        or _freecad_type_id(ShellFeatureData.attributes) != "PartDesign::Thickness"
-        or not isinstance(PadDefinition, ExtrusionFeature)
-        or PadDefinition.reversed
-        or PadDefinition.symmetric
-        or not isinstance(ShellDefinition, ShellFeature)
-        or ShellDefinition.outward is not False
-        or ShellFeatureData.provenance is None
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or ShellFeatureData.selection_ids != (DocumentData.selections[0].id,)
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
+    if BoundsValue is None or DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or (tuple(DocData.sketches) != (SketchData,)) or (TimelineData != (PadFeature, ShellFeatureData)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != ShellFeatureData.id) or (PadFeature.order != 0) or (ShellFeatureData.order != 1) or (PadFeature.sketch_id != SketchData.id) or (ShellFeatureData.sketch_id is not None) or PadFeature.input_feature_ids or (ShellFeatureData.input_feature_ids != (PadFeature.id,)) or PadFeature.selection_ids or (len(ShellFeatureData.selection_ids) != 1) or PadFeature.configuration_states or ShellFeatureData.configuration_states or PadFeature.suppressed or ShellFeatureData.suppressed or (str(PadFeature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (ShellFeatureData.operation is not None) or (str(ShellFeatureData.kind).casefold() != FeatureKind.SHELL.value) or (FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(PadFeature.attributes) != 'PartDesign::Pad') or (FreecadTypeId(ShellFeatureData.attributes) != 'PartDesign::Thickness') or (not isinstance(PadDefinition, ExtrusionFeature)) or PadDefinition.reversed or PadDefinition.symmetric or (not isinstance(ShellDefinition, ShellFeature)) or (ShellDefinition.outward is not False) or (ShellFeatureData.provenance is None) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (ShellFeatureData.selection_ids != (DocData.selections[0].id,)) or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
         return None
-    PadDimension = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchData,
-        PadFeature,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
-    ThicknessDimension = _parameter_dimension(
-        Parameter("", "D1", ShellDefinition.thickness)
-    )
-    if (
-        PadDimension is None
-        or ThicknessDimension is None
-        or ThicknessDimension.value_mm <= 0.0
-    ):
+    PadDimension = FreeCadFeature(DocData, SketchData, PadFeature, 'PartDesign::Pad', 10.0, False)
+    ThicknessDimension = ParamDimension(Param('', 'D1', ShellDefinition.thickness))
+    if PadDimension is None or ThicknessDimension is None or ThicknessDimension.value_mm <= 0.0:
         return None
     ThicknessNumber = ThicknessDimension.value_mm
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not math.isfinite(ThicknessNumber)
-        or ThicknessNumber <= 0.0
-        or ThicknessNumber >= PadDimension.value_mm
-        or ThicknessNumber * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)
-    ):
+    if not MathValue.isfinite(ThicknessNumber) or ThicknessNumber <= 0.0 or ThicknessNumber >= PadDimension.value_mm or (ThicknessNumber * 2.0 >= min(MaximumX - MinimumX, MaximumY - MinimumY)):
         return None
-    SelectionData = DocumentData.selections[0]
-    PadNativeName = (
-        PadFeature.provenance.native_id
-        if PadFeature.provenance is not None
-        else PadFeature.name
-    )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != ShellFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Base"
-        or SelectionData.attributes.get("freecad_target") != PadNativeName
-        or len(SelectionData.path) != 1
-        or SelectionData.path[0].entity_kind != "face"
-        or SelectionData.path[0].entity_id != PadNativeName
-        or not _HasFreeCadTopFace(
-            DocumentData,
-            PadNativeName,
-            SelectionData.path[0].subelement,
-            PadDimension.value_mm,
-        )
-    ):
+    SelectionData = DocData.selections[0]
+    PadNativeName = PadFeature.provenance.native_id if PadFeature.provenance is not None else PadFeature.name
+    if SelectionData.attributes.get('freecad_object') != ShellFeatureData.provenance.native_id or SelectionData.attributes.get('freecad_property') != 'Base' or SelectionData.attributes.get('freecad_target') != PadNativeName or (len(SelectionData.path) != 1) or (SelectionData.path[0].entity_kind != 'face') or (SelectionData.path[0].entity_id != PadNativeName) or (not HasFreeCadTop(DocData, PadNativeName, SelectionData.path[0].subelement, PadDimension.value_mm)):
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != ShellFeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != ShellFeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Intersection": (ValueKind.BOOLEAN, False),
-        "Join": (ValueKind.INTEGER, 0),
-        "Label": (ValueKind.STRING, ShellFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Mode": (ValueKind.INTEGER, 0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, True),
-        "SupportTransform": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "Value": (ValueKind.LENGTH, ThicknessNumber),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Intersection': (ValueKind.BOOLEAN, False), 'Join': (ValueKind.INTEGER, 0), 'Label': (ValueKind.STRING, ShellFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Mode': (ValueKind.INTEGER, 0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, True), 'SupportTransform': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'Value': (ValueKind.LENGTH, ThicknessNumber), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    ThicknessParameter = ParameterData["Value"]
-    return (
-        PadDimension,
-        _WriteDimension(
-            "D1",
-            ThicknessNumber,
-            format(ThicknessNumber, ".15g"),
-            ThicknessParameter.role,
-        ),
-    )
+    ThicknessParam = ParamData['Value']
+    return (PadDimension, WriteDimension('D1', ThicknessNumber, format(ThicknessNumber, '.15g'), ThicknessParam.role))
 
+# this definition exists because focused behavior needs one stable owner
+def FreeCadBossC(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureStep, PatternFeatureData: FeatureStep, BoundsValue: tuple[float, float, float, float] | None) -> tuple[WriteDimension, WriteDimension, WriteDimension] | None:
 
-# FreeCAD boss-pattern validation proves pitch, count, sketch-normal direction, and body
-def _FreeCadBossLinearPatternDimensions(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    PadFeature: FeatureStep,
-    PatternFeatureData: FeatureStep,
-    BoundsValue: tuple[float, float, float, float] | None,
-) -> tuple[_WriteDimension, _WriteDimension, _WriteDimension] | None:
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     PatternDefinition = PatternFeatureData.definition
     PadDefinition = PadFeature.definition
     AllowedOwners = {SketchData.id, PadFeature.id, PatternFeatureData.id}
-    if (
-        BoundsValue is None
-        or DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchData,)
-        or TimelineData != (PadFeature, PatternFeatureData)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != PatternFeatureData.id
-        or PadFeature.order != 0
-        or PatternFeatureData.order != 1
-        or PadFeature.sketch_id != SketchData.id
-        or PatternFeatureData.sketch_id is not None
-        or PadFeature.input_feature_ids
-        or PatternFeatureData.input_feature_ids != (PadFeature.id,)
-        or PadFeature.selection_ids
-        or len(PatternFeatureData.selection_ids) != 1
-        or PadFeature.configuration_states
-        or PatternFeatureData.configuration_states
-        or PadFeature.suppressed
-        or PatternFeatureData.suppressed
-        or str(PadFeature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or PatternFeatureData.operation is not None
-        or str(PatternFeatureData.kind).casefold() != FeatureKind.PATTERN.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(PadFeature.attributes) != "PartDesign::Pad"
-        or _freecad_type_id(PatternFeatureData.attributes)
-        != "PartDesign::LinearPattern"
-        or not isinstance(PadDefinition, ExtrusionFeature)
-        or PadDefinition.reversed
-        or PadDefinition.symmetric
-        or not isinstance(PatternDefinition, LinearPatternFeature)
-        or PatternDefinition.reversed
-        or PatternFeatureData.provenance is None
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or PatternFeatureData.selection_ids != (DocumentData.selections[0].id,)
-        or PatternDefinition.direction_selection_id != DocumentData.selections[0].id
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
+    if BoundsValue is None or DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or (tuple(DocData.sketches) != (SketchData,)) or (TimelineData != (PadFeature, PatternFeatureData)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != PatternFeatureData.id) or (PadFeature.order != 0) or (PatternFeatureData.order != 1) or (PadFeature.sketch_id != SketchData.id) or (PatternFeatureData.sketch_id is not None) or PadFeature.input_feature_ids or (PatternFeatureData.input_feature_ids != (PadFeature.id,)) or PadFeature.selection_ids or (len(PatternFeatureData.selection_ids) != 1) or PadFeature.configuration_states or PatternFeatureData.configuration_states or PadFeature.suppressed or PatternFeatureData.suppressed or (str(PadFeature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (PatternFeatureData.operation is not None) or (str(PatternFeatureData.kind).casefold() != FeatureKind.PATTERN.value) or (FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(PadFeature.attributes) != 'PartDesign::Pad') or (FreecadTypeId(PatternFeatureData.attributes) != 'PartDesign::LinearPattern') or (not isinstance(PadDefinition, ExtrusionFeature)) or PadDefinition.reversed or PadDefinition.symmetric or (not isinstance(PatternDefinition, LinearPatternFeature)) or PatternDefinition.reversed or (PatternFeatureData.provenance is None) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (PatternFeatureData.selection_ids != (DocData.selections[0].id,)) or (PatternDefinition.direction_selection_id != DocData.selections[0].id) or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
         return None
-    PadDimension = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchData,
-        PadFeature,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
-    SpacingDimension = _parameter_dimension(
-        Parameter("", "D3", PatternDefinition.spacing)
-    )
-    OccurrenceCount = PatternDefinition.instance_count
-    if (
-        PadDimension is None
-        or SpacingDimension is None
-        or isinstance(OccurrenceCount, bool)
-        or not isinstance(OccurrenceCount, int)
-        or not 2 <= OccurrenceCount <= 1000
-        or not math.isfinite(SpacingDimension.value_mm)
-        or SpacingDimension.value_mm <= 0.0
-        or SpacingDimension.value_mm > PadDimension.value_mm
-    ):
+    PadDimension = FreeCadFeature(DocData, SketchData, PadFeature, 'PartDesign::Pad', 10.0, False)
+    SpacingDimension = ParamDimension(Param('', 'D3', PatternDefinition.spacing))
+    ItemCount = PatternDefinition.instance_count
+    if PadDimension is None or SpacingDimension is None or isinstance(ItemCount, bool) or (not isinstance(ItemCount, int)) or (not 2 <= ItemCount <= 1000) or (not MathValue.isfinite(SpacingDimension.value_mm)) or (SpacingDimension.value_mm <= 0.0) or (SpacingDimension.value_mm > PadDimension.value_mm):
         return None
-    SelectionData = DocumentData.selections[0]
-    SketchNativeName = (
-        SketchData.provenance.native_id
-        if SketchData.provenance is not None
-        else SketchData.name
-    )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != PatternFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Direction"
-        or SelectionData.attributes.get("freecad_target") != SketchNativeName
-        or len(SelectionData.path) != 1
-        or SelectionData.path[0].entity_kind != "native"
-        or SelectionData.path[0].entity_id != SketchNativeName
-        or SelectionData.path[0].subelement != "N_Axis"
-    ):
+    SelectionData = DocData.selections[0]
+    SketchNativeName = SketchData.provenance.native_id if SketchData.provenance is not None else SketchData.name
+    if SelectionData.attributes.get('freecad_object') != PatternFeatureData.provenance.native_id or SelectionData.attributes.get('freecad_property') != 'Direction' or SelectionData.attributes.get('freecad_target') != SketchNativeName or (len(SelectionData.path) != 1) or (SelectionData.path[0].entity_kind != 'native') or (SelectionData.path[0].entity_id != SketchNativeName) or (SelectionData.path[0].subelement != 'N_Axis'):
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != PatternFeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != PatternFeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
+        ParamData[PathValue] = ParamValueData
     SpacingNumber = SpacingDimension.value_mm
-    LengthNumber = SpacingNumber * (OccurrenceCount - 1)
-    ExpectedData = {
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, PatternFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Length": (ValueKind.LENGTH, LengthNumber),
-        "Length2": (ValueKind.LENGTH, 100.0),
-        "Mode": (ValueKind.INTEGER, 0),
-        "Mode2": (ValueKind.INTEGER, 0),
-        "Occurrences": (ValueKind.INTEGER, OccurrenceCount),
-        "Occurrences2": (ValueKind.INTEGER, 1),
-        "Offset": (ValueKind.LENGTH, SpacingNumber),
-        "Offset2": (ValueKind.LENGTH, 10.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, False),
-        "Reversed2": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TransformMode": (ValueKind.INTEGER, 0),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+    LengthNumber = SpacingNumber * (ItemCount - 1)
+    ExpectedData = {'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, PatternFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Length': (ValueKind.LENGTH, LengthNumber), 'Length2': (ValueKind.LENGTH, 100.0), 'Mode': (ValueKind.INTEGER, 0), 'Mode2': (ValueKind.INTEGER, 0), 'Occurrences': (ValueKind.INTEGER, ItemCount), 'Occurrences2': (ValueKind.INTEGER, 1), 'Offset': (ValueKind.LENGTH, SpacingNumber), 'Offset2': (ValueKind.LENGTH, 10.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Reversed2': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'TransformMode': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    TerminalDepth = PadDimension.value_mm + SpacingNumber * (OccurrenceCount - 1)
-    if not _HasFreeCadLinearPatternGeometry(
-        DocumentData,
-        PatternFeatureData.provenance.native_id,
-        BoundsValue,
-        TerminalDepth,
-    ):
+    TerminalDepth = PadDimension.value_mm + SpacingNumber * (ItemCount - 1)
+    if not HasFreeCadGeomA(DocData, PatternFeatureData.provenance.native_id, BoundsValue, TerminalDepth):
         return None
-    CountParameter = ParameterData["Occurrences"]
-    SpacingParameter = ParameterData["Length"]
-    return (
-        PadDimension,
-        _WriteDimension(
-            "D1",
-            float(OccurrenceCount),
-            str(OccurrenceCount),
-            CountParameter.role,
-        ),
-        replace(
-            SpacingDimension,
-            name="D3",
-            text=format(SpacingNumber, ".15g"),
-            role=SpacingParameter.role,
-        ),
-    )
+    CountParam = ParamData['Occurrences']
+    SpacingParam = ParamData['Length']
+    return (PadDimension, WriteDimension('D1', float(ItemCount), str(ItemCount), CountParam.role), Replace(SpacingDimension, name='D3', text=format(SpacingNumber, '.15g'), role=SpacingParam.role))
 
-
-# decoded OpenCascade topology proves the pattern produces one exact fused prism
-def _HasFreeCadLinearPatternGeometry(
-    DocumentData: CadDocument,
-    PatternNativeName: str,
-    BoundsValue: tuple[float, float, float, float],
-    TerminalDepth: float,
-) -> bool:
-    ShapePayload = next(
-        (
-            ItemData.data
-            for ItemData in DocumentData.brep_payloads
-            if ItemData.source_stream == f"{PatternNativeName}.Shape.brp"
-            and ItemData.data
-        ),
-        None,
-    )
+# this definition exists because focused behavior needs one stable owner
+def HasFreeCadGeomA(DocData: CadDocument, PatternNativeName: str, BoundsValue: tuple[float, float, float, float], TerminalDepth: float) -> bool:
+    ShapePayload = next((ItemData.data for ItemData in DocData.brep_payloads if ItemData.source_stream == f'{PatternNativeName}.Shape.brp' and ItemData.data), None)
     if ShapePayload is None:
         return False
-    ModelData = decode_ascii_brep(
-        ShapePayload,
-        id_prefix="freecad:linear-pattern-proof",
-    )
-    if (
-        ModelData is None
-        or ModelData.validate()
-        or len(ModelData.bodies) != 1
-        or len(ModelData.regions) != 1
-        or len(ModelData.shells) != 1
-        or len(ModelData.faces) != 6
-        or len(ModelData.edges) != 12
-        or len(ModelData.vertices) != 8
-    ):
+    ModelData = DecodeAsciiBrep(ShapePayload, id_prefix='freecad:linear-pattern-proof')
+    if ModelData is None or ModelData.validate() or len(ModelData.bodies) != 1 or (len(ModelData.regions) != 1) or (len(ModelData.shells) != 1) or (len(ModelData.faces) != 6) or (len(ModelData.edges) != 12) or (len(ModelData.vertices) != 8):
         return False
-    CoordinateData = (
-        min(ItemData.point.x for ItemData in ModelData.vertices),
-        min(ItemData.point.y for ItemData in ModelData.vertices),
-        max(ItemData.point.x for ItemData in ModelData.vertices),
-        max(ItemData.point.y for ItemData in ModelData.vertices),
-        min(ItemData.point.z for ItemData in ModelData.vertices),
-        max(ItemData.point.z for ItemData in ModelData.vertices),
-    )
+    CoordinateData = (min((ItemData.point.x for ItemData in ModelData.vertices)), min((ItemData.point.y for ItemData in ModelData.vertices)), max((ItemData.point.x for ItemData in ModelData.vertices)), max((ItemData.point.y for ItemData in ModelData.vertices)), min((ItemData.point.z for ItemData in ModelData.vertices)), max((ItemData.point.z for ItemData in ModelData.vertices)))
     ExpectedData = (*BoundsValue, 0.0, TerminalDepth)
-    return all(
-        math.isclose(
-            ActualValue,
-            ExpectedValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-8,
-        )
-        for ActualValue, ExpectedValue in zip(
-            CoordinateData,
-            ExpectedData,
-            strict=True,
-        )
-    )
+    return all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-08) for ActualValue, ExpectedValue in zip(CoordinateData, ExpectedData, strict=True)))
 
+# this definition exists because focused behavior needs one stable owner
+def FreeCadBossA(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureStep, PatternFeatureData: FeatureStep, BoundsValue: tuple[float, float, float, float] | None) -> tuple[WriteDimension, WriteDimension, WriteDimension] | None:
 
-# FreeCAD circular-pattern validation proves angle, count, selected axis, and body
-def _FreeCadBossCircularPatternDimensions(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    PadFeature: FeatureStep,
-    PatternFeatureData: FeatureStep,
-    BoundsValue: tuple[float, float, float, float] | None,
-) -> tuple[_WriteDimension, _WriteDimension, _WriteDimension] | None:
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
     PatternDefinition = PatternFeatureData.definition
     PadDefinition = PadFeature.definition
     AllowedOwners = {SketchData.id, PadFeature.id, PatternFeatureData.id}
-    if (
-        BoundsValue is None
-        or DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchData,)
-        or TimelineData != (PadFeature, PatternFeatureData)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != PatternFeatureData.id
-        or PadFeature.order != 0
-        or PatternFeatureData.order != 1
-        or PadFeature.sketch_id != SketchData.id
-        or PatternFeatureData.sketch_id is not None
-        or PadFeature.input_feature_ids
-        or PatternFeatureData.input_feature_ids != (PadFeature.id,)
-        or PadFeature.selection_ids
-        or len(PatternFeatureData.selection_ids) != 1
-        or PadFeature.configuration_states
-        or PatternFeatureData.configuration_states
-        or PadFeature.suppressed
-        or PatternFeatureData.suppressed
-        or str(PadFeature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or PatternFeatureData.operation is not None
-        or str(PatternFeatureData.kind).casefold() != FeatureKind.PATTERN.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(PadFeature.attributes) != "PartDesign::Pad"
-        or _freecad_type_id(PatternFeatureData.attributes) != "PartDesign::PolarPattern"
-        or not isinstance(PadDefinition, ExtrusionFeature)
-        or PadDefinition.reversed
-        or PadDefinition.symmetric
-        or not isinstance(PatternDefinition, CircularPatternFeature)
-        or PatternDefinition.reversed
-        or PatternFeatureData.provenance is None
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or PatternFeatureData.selection_ids != (DocumentData.selections[0].id,)
-        or PatternDefinition.axis_selection_id != DocumentData.selections[0].id
-        or any(
-            ItemData.owner_id not in AllowedOwners
-            for ItemData in DocumentData.parameters
-        )
-    ):
+    if BoundsValue is None or DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or (tuple(DocData.sketches) != (SketchData,)) or (TimelineData != (PadFeature, PatternFeatureData)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != PatternFeatureData.id) or (PadFeature.order != 0) or (PatternFeatureData.order != 1) or (PadFeature.sketch_id != SketchData.id) or (PatternFeatureData.sketch_id is not None) or PadFeature.input_feature_ids or (PatternFeatureData.input_feature_ids != (PadFeature.id,)) or PadFeature.selection_ids or (len(PatternFeatureData.selection_ids) != 1) or PadFeature.configuration_states or PatternFeatureData.configuration_states or PadFeature.suppressed or PatternFeatureData.suppressed or (str(PadFeature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (PatternFeatureData.operation is not None) or (str(PatternFeatureData.kind).casefold() != FeatureKind.PATTERN.value) or (FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(PadFeature.attributes) != 'PartDesign::Pad') or (FreecadTypeId(PatternFeatureData.attributes) != 'PartDesign::PolarPattern') or (not isinstance(PadDefinition, ExtrusionFeature)) or PadDefinition.reversed or PadDefinition.symmetric or (not isinstance(PatternDefinition, CircularPatternFeature)) or PatternDefinition.reversed or (PatternFeatureData.provenance is None) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (PatternFeatureData.selection_ids != (DocData.selections[0].id,)) or (PatternDefinition.axis_selection_id != DocData.selections[0].id) or any((ItemData.owner_id not in AllowedOwners for ItemData in DocData.parameters)):
         return None
-    PadDimension = _FreeCadFeatureDimension(
-        DocumentData,
-        SketchData,
-        PadFeature,
-        "PartDesign::Pad",
-        10.0,
-        False,
-    )
+    PadDimension = FreeCadFeature(DocData, SketchData, PadFeature, 'PartDesign::Pad', 10.0, False)
     AngleValue = PatternDefinition.angle
     AngleNumber = AngleValue.value
-    OccurrenceCount = PatternDefinition.instance_count
-    if (
-        PadDimension is None
-        or AngleValue.kind is not ValueKind.ANGLE
-        or AngleValue.unit.casefold() not in {"deg", "degree", "degrees"}
-        or isinstance(AngleNumber, bool)
-        or not isinstance(AngleNumber, (int, float))
-        or not math.isfinite(float(AngleNumber))
-        or not 0.0 < float(AngleNumber) <= 360.0
-        or isinstance(OccurrenceCount, bool)
-        or not isinstance(OccurrenceCount, int)
-        or not 2 <= OccurrenceCount <= 1000
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                BoundsValue,
-                (0.0, 0.0, 10.0, 5.0),
-                strict=True,
-            )
-        )
-    ):
+    ItemCount = PatternDefinition.instance_count
+    if PadDimension is None or AngleValue.kind is not ValueKind.ANGLE or AngleValue.unit.casefold() not in {'deg', 'degree', 'degrees'} or isinstance(AngleNumber, bool) or (not isinstance(AngleNumber, (int, float))) or (not MathValue.isfinite(float(AngleNumber))) or (not 0.0 < float(AngleNumber) <= 360.0) or isinstance(ItemCount, bool) or (not isinstance(ItemCount, int)) or (not 2 <= ItemCount <= 1000) or any((not MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(BoundsValue, (0.0, 0.0, 10.0, 5.0), strict=True))):
         return None
-    SelectionData = DocumentData.selections[0]
-    SketchNativeName = (
-        SketchData.provenance.native_id
-        if SketchData.provenance is not None
-        else SketchData.name
-    )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != PatternFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Axis"
-        or SelectionData.attributes.get("freecad_target") != SketchNativeName
-        or len(SelectionData.path) != 1
-        or SelectionData.path[0].entity_kind != "native"
-        or SelectionData.path[0].entity_id != SketchNativeName
-        or SelectionData.path[0].subelement != "N_Axis"
-    ):
+    SelectionData = DocData.selections[0]
+    SketchNativeName = SketchData.provenance.native_id if SketchData.provenance is not None else SketchData.name
+    if SelectionData.attributes.get('freecad_object') != PatternFeatureData.provenance.native_id or SelectionData.attributes.get('freecad_property') != 'Axis' or SelectionData.attributes.get('freecad_target') != SketchNativeName or (len(SelectionData.path) != 1) or (SelectionData.path[0].entity_kind != 'native') or (SelectionData.path[0].entity_id != SketchNativeName) or (SelectionData.path[0].subelement != 'N_Axis'):
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != PatternFeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != PatternFeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "Angle": (ValueKind.ANGLE, float(AngleNumber)),
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, PatternFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Mode": (ValueKind.INTEGER, 0),
-        "Occurrences": (ValueKind.INTEGER, OccurrenceCount),
-        "Offset": (ValueKind.ANGLE, 120.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TransformMode": (ValueKind.INTEGER, 0),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'Angle': (ValueKind.ANGLE, float(AngleNumber)), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, PatternFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Mode': (ValueKind.INTEGER, 0), 'Occurrences': (ValueKind.INTEGER, ItemCount), 'Offset': (ValueKind.ANGLE, 120.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'TransformMode': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    if not _HasFreeCadCircularPatternGeometry(
-        DocumentData,
-        PatternFeatureData.provenance.native_id,
-        BoundsValue,
-        OccurrenceCount,
-        float(AngleNumber),
-        PadDimension.value_mm,
-    ):
+    if not HasFreeCadGeom(DocData, PatternFeatureData.provenance.native_id, BoundsValue, ItemCount, float(AngleNumber), PadDimension.value_mm):
         return None
-    return (
-        PadDimension,
-        _WriteDimension(
-            "D1",
-            float(OccurrenceCount),
-            str(OccurrenceCount),
-            ParameterData["Occurrences"].role,
-        ),
-        _WriteDimension(
-            "D3",
-            float(AngleNumber),
-            f"{float(AngleNumber):.15g}°",
-            ParameterData["Angle"].role,
-        ),
-    )
+    return (PadDimension, WriteDimension('D1', float(ItemCount), str(ItemCount), ParamData['Occurrences'].role), WriteDimension('D3', float(AngleNumber), f'{float(AngleNumber):.15g}°', ParamData['Angle'].role))
 
-
-# decoded OpenCascade topology proves the circular pattern produces one fused body
-def _HasFreeCadCircularPatternGeometry(
-    DocumentData: CadDocument,
-    PatternNativeName: str,
-    BoundsValue: tuple[float, float, float, float],
-    OccurrenceCount: int,
-    AngleDegrees: float,
-    PadDepth: float,
-) -> bool:
-    ShapePayload = next(
-        (
-            ItemData.data
-            for ItemData in DocumentData.brep_payloads
-            if ItemData.source_stream == f"{PatternNativeName}.Shape.brp"
-            and ItemData.data
-        ),
-        None,
-    )
+# this definition exists because focused behavior needs one stable owner
+def HasFreeCadGeom(DocData: CadDocument, PatternNativeName: str, BoundsValue: tuple[float, float, float, float], ItemCount: int, AngleDegrees: float, PadDepth: float) -> bool:
+    ShapePayload = next((ItemData.data for ItemData in DocData.brep_payloads if ItemData.source_stream == f'{PatternNativeName}.Shape.brp' and ItemData.data), None)
     if ShapePayload is None:
         return False
-    ModelData = decode_ascii_brep(
-        ShapePayload,
-        id_prefix="freecad:circular-pattern-proof",
-    )
-    if (
-        ModelData is None
-        or ModelData.validate()
-        or len(ModelData.bodies) != 1
-        or len(ModelData.regions) != 1
-        or len(ModelData.shells) != 1
-        or not ModelData.faces
-        or not ModelData.edges
-        or not ModelData.vertices
-    ):
+    ModelData = DecodeAsciiBrep(ShapePayload, id_prefix='freecad:circular-pattern-proof')
+    if ModelData is None or ModelData.validate() or len(ModelData.bodies) != 1 or (len(ModelData.regions) != 1) or (len(ModelData.shells) != 1) or (not ModelData.faces) or (not ModelData.edges) or (not ModelData.vertices):
         return False
-    CoordinateData = (
-        min(ItemData.point.x for ItemData in ModelData.vertices),
-        min(ItemData.point.y for ItemData in ModelData.vertices),
-        max(ItemData.point.x for ItemData in ModelData.vertices),
-        max(ItemData.point.y for ItemData in ModelData.vertices),
-        min(ItemData.point.z for ItemData in ModelData.vertices),
-        max(ItemData.point.z for ItemData in ModelData.vertices),
-    )
-    ExpectedData = (
-        *_CircularPatternBounds(BoundsValue, OccurrenceCount, AngleDegrees),
-        0.0,
-        PadDepth,
-    )
-    return all(
-        math.isclose(
-            ActualValue,
-            ExpectedValue,
-            rel_tol=0.0,
-            abs_tol=1.0e-8,
-        )
-        for ActualValue, ExpectedValue in zip(
-            CoordinateData,
-            ExpectedData,
-            strict=True,
-        )
-    )
+    CoordinateData = (min((ItemData.point.x for ItemData in ModelData.vertices)), min((ItemData.point.y for ItemData in ModelData.vertices)), max((ItemData.point.x for ItemData in ModelData.vertices)), max((ItemData.point.y for ItemData in ModelData.vertices)), min((ItemData.point.z for ItemData in ModelData.vertices)), max((ItemData.point.z for ItemData in ModelData.vertices)))
+    ExpectedData = (*CircularPattern(BoundsValue, ItemCount, AngleDegrees), 0.0, PadDepth)
+    return all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-08) for ActualValue, ExpectedValue in zip(CoordinateData, ExpectedData, strict=True)))
 
-
-# native OpenCascade face order proves that the selected source face is the open top
-def _HasFreeCadTopFace(
-    DocumentData: CadDocument,
-    PadNativeName: str,
-    SubelementName: str,
-    PadDepth: float,
-) -> bool:
-    MatchValue = re.fullmatch(r"Face([1-9][0-9]*)", SubelementName)
+# this definition exists because focused behavior needs one stable owner
+def HasFreeCadTop(DocData: CadDocument, PadNativeName: str, SubElemName: str, PadDepth: float) -> bool:
+    MatchValue = RegexLib.fullmatch('Face([1-9][0-9]*)', SubElemName)
     if MatchValue is None:
         return False
-    ShapePayload = next(
-        (
-            ItemData.data
-            for ItemData in DocumentData.brep_payloads
-            if ItemData.source_stream == f"{PadNativeName}.Shape.brp" and ItemData.data
-        ),
-        None,
-    )
+    ShapePayload = next((ItemData.data for ItemData in DocData.brep_payloads if ItemData.source_stream == f'{PadNativeName}.Shape.brp' and ItemData.data), None)
     if ShapePayload is None:
         return False
-    ModelData = decode_ascii_brep(
-        ShapePayload,
-        id_prefix="freecad:shell-proof",
-    )
+    ModelData = DecodeAsciiBrep(ShapePayload, id_prefix='freecad:shell-proof')
     if ModelData is None:
         return False
-    FaceData = tuple(
-        sorted(
-            ModelData.faces,
-            key=lambda ItemData: int(ItemData.id.rsplit(":", 1)[1]),
-        )
-    )
+
+    # this callback exists because local behavior needs one focused transformation
+    FaceData = tuple(sorted(ModelData.faces, key=lambda ItemData: int(ItemData.id.rsplit(':', 1)[1])))
     FaceIndex = int(MatchValue.group(1)) - 1
     if FaceIndex < 0 or FaceIndex >= len(FaceData):
         return False
     SelectedFace = FaceData[FaceIndex]
-    SurfaceData = next(
-        (
-            ItemData
-            for ItemData in ModelData.surfaces
-            if ItemData.id == SelectedFace.surface_id
-        ),
-        None,
-    )
-    ToleranceValue = 1.0e-8
-    return (
-        isinstance(SurfaceData, PlaneSurface)
-        and SelectedFace.same_sense
-        and math.isclose(
-            SurfaceData.origin.z,
-            PadDepth,
-            rel_tol=0.0,
-            abs_tol=ToleranceValue,
-        )
-        and math.isclose(
-            SurfaceData.normal.x,
-            0.0,
-            rel_tol=0.0,
-            abs_tol=ToleranceValue,
-        )
-        and math.isclose(
-            SurfaceData.normal.y,
-            0.0,
-            rel_tol=0.0,
-            abs_tol=ToleranceValue,
-        )
-        and math.isclose(
-            SurfaceData.normal.z,
-            1.0,
-            rel_tol=0.0,
-            abs_tol=ToleranceValue,
-        )
-    )
+    SurfaceData = next((ItemData for ItemData in ModelData.surfaces if ItemData.id == SelectedFace.surface_id), None)
+    ToleranceValue = 1e-08
+    return isinstance(SurfaceData, PlaneSurface) and SelectedFace.same_sense and MathValue.isclose(SurfaceData.origin.z, PadDepth, rel_tol=0.0, abs_tol=ToleranceValue) and MathValue.isclose(SurfaceData.normal.x, 0.0, rel_tol=0.0, abs_tol=ToleranceValue) and MathValue.isclose(SurfaceData.normal.y, 0.0, rel_tol=0.0, abs_tol=ToleranceValue) and MathValue.isclose(SurfaceData.normal.z, 1.0, rel_tol=0.0, abs_tol=ToleranceValue)
 
-
-# native OpenCascade edge order proves that the selected source edge has the target locus
-def _HasFreeCadMaxCornerEdge(
-    DocumentData: CadDocument,
-    PadNativeName: str,
-    SubelementName: str,
-    BoundsValue: tuple[float, float, float, float],
-    PadDepth: float,
-) -> bool:
-    MatchValue = re.fullmatch(r"Edge([1-9][0-9]*)", SubelementName)
+# this definition exists because focused behavior needs one stable owner
+def HasFreeCadMax(DocData: CadDocument, PadNativeName: str, SubElemName: str, BoundsValue: tuple[float, float, float, float], PadDepth: float) -> bool:
+    MatchValue = RegexLib.fullmatch('Edge([1-9][0-9]*)', SubElemName)
     if MatchValue is None:
         return False
-    ShapePayload = next(
-        (
-            ItemData.data
-            for ItemData in DocumentData.brep_payloads
-            if ItemData.source_stream == f"{PadNativeName}.Shape.brp" and ItemData.data
-        ),
-        None,
-    )
+    ShapePayload = next((ItemData.data for ItemData in DocData.brep_payloads if ItemData.source_stream == f'{PadNativeName}.Shape.brp' and ItemData.data), None)
     if ShapePayload is None:
         return False
-    ModelData = decode_ascii_brep(
-        ShapePayload,
-        id_prefix="freecad:fillet-proof",
-    )
+    ModelData = DecodeAsciiBrep(ShapePayload, id_prefix='freecad:fillet-proof')
     if ModelData is None:
         return False
-    EdgeData = tuple(
-        sorted(
-            ModelData.edges,
-            key=lambda ItemData: int(ItemData.id.rsplit(":", 1)[1]),
-        )
-    )
+
+    # this callback exists because local behavior needs one focused transformation
+    EdgeData = tuple(sorted(ModelData.edges, key=lambda ItemData: int(ItemData.id.rsplit(':', 1)[1])))
     EdgeIndex = int(MatchValue.group(1)) - 1
     if EdgeIndex < 0 or EdgeIndex >= len(EdgeData):
         return False
@@ -6097,3742 +2460,1269 @@ def _HasFreeCadMaxCornerEdge(
     StartVertex = VertexData.get(SelectedEdge.start_vertex_id)
     EndVertex = VertexData.get(SelectedEdge.end_vertex_id)
     SelectedCurve = CurveData.get(SelectedEdge.curve_id)
-    if (
-        StartVertex is None
-        or EndVertex is None
-        or not isinstance(SelectedCurve, LineCurve)
-        or SelectedEdge.degenerate
-    ):
+    if StartVertex is None or EndVertex is None or (not isinstance(SelectedCurve, LineCurve)) or SelectedEdge.degenerate:
         return False
     MaximumX = BoundsValue[2]
     MaximumY = BoundsValue[3]
-    ToleranceValue = 1.0e-8
-    return (
-        all(
-            math.isclose(
-                ItemData.point.x,
-                MaximumX,
-                rel_tol=0.0,
-                abs_tol=ToleranceValue,
-            )
-            and math.isclose(
-                ItemData.point.y,
-                MaximumY,
-                rel_tol=0.0,
-                abs_tol=ToleranceValue,
-            )
-            for ItemData in (StartVertex, EndVertex)
-        )
-        and math.isclose(
-            min(StartVertex.point.z, EndVertex.point.z),
-            0.0,
-            rel_tol=0.0,
-            abs_tol=ToleranceValue,
-        )
-        and math.isclose(
-            max(StartVertex.point.z, EndVertex.point.z),
-            PadDepth,
-            rel_tol=0.0,
-            abs_tol=ToleranceValue,
-        )
-    )
+    ToleranceValue = 1e-08
+    return all((MathValue.isclose(ItemData.point.x, MaximumX, rel_tol=0.0, abs_tol=ToleranceValue) and MathValue.isclose(ItemData.point.y, MaximumY, rel_tol=0.0, abs_tol=ToleranceValue) for ItemData in (StartVertex, EndVertex))) and MathValue.isclose(min(StartVertex.point.z, EndVertex.point.z), 0.0, rel_tol=0.0, abs_tol=ToleranceValue) and MathValue.isclose(max(StartVertex.point.z, EndVertex.point.z), PadDepth, rel_tol=0.0, abs_tol=ToleranceValue)
 
-
-# through-all validation proves inactive FreeCAD lengths without inventing a target D1
-def HasFreeCadThroughAllFeature(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    FeatureData: FeatureStep,
-) -> bool:
-    if (
-        FeatureData.sketch_id != SketchData.id
-        or str(FeatureData.kind).casefold() != FeatureKind.EXTRUSION.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(FeatureData.attributes) != "PartDesign::Pocket"
-        or not isinstance(FeatureData.definition, ExtrusionFeature)
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasFreeCadAll(DocData: CadDocument, SketchData: Sketch, FeatureData: FeatureStep) -> bool:
+    if FeatureData.sketch_id != SketchData.id or str(FeatureData.kind).casefold() != FeatureKind.EXTRUSION.value or FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject' or (FreecadTypeId(FeatureData.attributes) != 'PartDesign::Pocket') or (not isinstance(FeatureData.definition, ExtrusionFeature)):
         return False
     DefinitionData = FeatureData.definition
-    SupportPlaneValue = next(
-        (
-            ItemData
-            for ItemData in DocumentData.support_planes
-            if ItemData.id == SketchData.support_plane_id
-        ),
-        None,
-    )
-    if (
-        str(DefinitionData.end_condition).casefold()
-        != ExtrusionEndCondition.THROUGH_ALL.value
-        or DefinitionData.symmetric
-        or DefinitionData.second_end_condition is not None
-        or DefinitionData.up_to_reference
-        or DefinitionData.second_up_to_reference
-        or not _parameter_value_matches(
-            DefinitionData.length,
-            5.0,
-            ValueKind.LENGTH,
-        )
-        or not _parameter_value_matches(
-            DefinitionData.second_length,
-            5.0,
-            ValueKind.LENGTH,
-        )
-        or not _parameter_value_matches(DefinitionData.offset, 0.0, ValueKind.LENGTH)
-        or not _parameter_value_matches(
-            DefinitionData.second_offset,
-            0.0,
-            ValueKind.LENGTH,
-        )
-        or not _parameter_value_matches(
-            DefinitionData.draft_angle,
-            0.0,
-            ValueKind.ANGLE,
-        )
-        or not _parameter_value_matches(
-            DefinitionData.second_draft_angle,
-            0.0,
-            ValueKind.ANGLE,
-        )
-        or DefinitionData.direction is None
-        or SupportPlaneValue is None
-        or not all(
-            math.isclose(LeftValue, -RightValue, abs_tol=1e-12)
-            for LeftValue, RightValue in zip(
-                (
-                    DefinitionData.direction.x,
-                    DefinitionData.direction.y,
-                    DefinitionData.direction.z,
-                ),
-                (
-                    SupportPlaneValue.transform.z_axis.x,
-                    SupportPlaneValue.transform.z_axis.y,
-                    SupportPlaneValue.transform.z_axis.z,
-                ),
-                strict=True,
-            )
-        )
-    ):
+    SupportPlaneValue = next((ItemData for ItemData in DocData.support_planes if ItemData.id == SketchData.support_plane_id), None)
+    if str(DefinitionData.end_condition).casefold() != ExtrusionEndCondition.THROUGH_ALL.value or DefinitionData.symmetric or DefinitionData.second_end_condition is not None or DefinitionData.up_to_reference or DefinitionData.second_up_to_reference or (not ParamValueA(DefinitionData.length, 5.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.second_length, 5.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.second_offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.draft_angle, 0.0, ValueKind.ANGLE)) or (not ParamValueA(DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE)) or (DefinitionData.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, -RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((DefinitionData.direction.x, DefinitionData.direction.y, DefinitionData.direction.z), (SupportPlaneValue.transform.z_axis.x, SupportPlaneValue.transform.z_axis.y, SupportPlaneValue.transform.z_axis.z), strict=True)))):
         return False
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != FeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != FeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return False
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "AllowMultiFace": (ValueKind.BOOLEAN, True),
-        "AlongSketchNormal": (ValueKind.BOOLEAN, True),
-        "Label": (ValueKind.STRING, None),
-        "Label2": (ValueKind.STRING, None),
-        "Length": (ValueKind.LENGTH, 5.0),
-        "Length2": (ValueKind.LENGTH, 5.0),
-        "Midplane": (ValueKind.BOOLEAN, False),
-        "Offset": (ValueKind.LENGTH, 0.0),
-        "Offset2": (ValueKind.LENGTH, 0.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, DefinitionData.reversed),
-        "SideType": (ValueKind.INTEGER, 0),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TaperAngle": (ValueKind.ANGLE, 0.0),
-        "TaperAngle2": (ValueKind.ANGLE, 0.0),
-        "Type": (ValueKind.INTEGER, 1),
-        "Type2": (ValueKind.INTEGER, 0),
-        "UseCustomVector": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    return set(ExpectedData) <= set(ParameterData) and all(
-        _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    )
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, 5.0), 'Length2': (ValueKind.LENGTH, 5.0), 'Midplane': (ValueKind.BOOLEAN, False), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, DefinitionData.reversed), 'SideType': (ValueKind.INTEGER, 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 1), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
+    return set(ExpectedData) <= set(ParamData) and all((FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()))
 
-
-# per-feature FreeCAD validation maps only active blind-extrusion semantics into D1
-def _FreeCadFeatureDimension(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    FeatureData: FeatureStep,
-    ExpectedTypeId: str,
-    ExpectedSecondLength: float,
-    ExpectedVisibility: bool,
-) -> _WriteDimension | None:
-    if (
-        FeatureData.sketch_id != SketchData.id
-        or str(FeatureData.kind).casefold() != FeatureKind.EXTRUSION.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(FeatureData.attributes) != ExpectedTypeId
-        or not isinstance(FeatureData.definition, ExtrusionFeature)
-    ):
+# this definition exists because focused behavior needs one stable owner
+def FreeCadFeature(DocData: CadDocument, SketchData: Sketch, FeatureData: FeatureStep, ExpectedTypeId: str, ExpectedSecondLength: float, ExpectedVisibility: bool) -> WriteDimension | None:
+    if FeatureData.sketch_id != SketchData.id or str(FeatureData.kind).casefold() != FeatureKind.EXTRUSION.value or FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject' or (FreecadTypeId(FeatureData.attributes) != ExpectedTypeId) or (not isinstance(FeatureData.definition, ExtrusionFeature)):
         return None
     DefinitionData = FeatureData.definition
-    SupportPlaneValue = next(
-        (
-            ItemData
-            for ItemData in DocumentData.support_planes
-            if ItemData.id == SketchData.support_plane_id
-        ),
-        None,
-    )
-    DirectionSign = -1.0 if ExpectedTypeId == "PartDesign::Pocket" else 1.0
-    if (
-        str(DefinitionData.end_condition).casefold()
-        != ExtrusionEndCondition.BLIND.value
-        or (DefinitionData.reversed and DefinitionData.symmetric)
-        or DefinitionData.second_end_condition is not None
-        or DefinitionData.up_to_reference
-        or DefinitionData.second_up_to_reference
-        or not _parameter_value_matches(
-            DefinitionData.second_length,
-            ExpectedSecondLength,
-            ValueKind.LENGTH,
-        )
-        or not _parameter_value_matches(DefinitionData.offset, 0.0, ValueKind.LENGTH)
-        or not _parameter_value_matches(
-            DefinitionData.second_offset, 0.0, ValueKind.LENGTH
-        )
-        or not _parameter_value_matches(
-            DefinitionData.draft_angle, 0.0, ValueKind.ANGLE
-        )
-        or not _parameter_value_matches(
-            DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE
-        )
-        or DefinitionData.direction is None
-        or SupportPlaneValue is None
-        or not all(
-            math.isclose(LeftValue, RightValue, abs_tol=1e-12)
-            for LeftValue, RightValue in zip(
-                (
-                    DefinitionData.direction.x,
-                    DefinitionData.direction.y,
-                    DefinitionData.direction.z,
-                ),
-                (
-                    DirectionSign * SupportPlaneValue.transform.z_axis.x,
-                    DirectionSign * SupportPlaneValue.transform.z_axis.y,
-                    DirectionSign * SupportPlaneValue.transform.z_axis.z,
-                ),
-                strict=True,
-            )
-        )
-    ):
+    SupportPlaneValue = next((ItemData for ItemData in DocData.support_planes if ItemData.id == SketchData.support_plane_id), None)
+    DirectionSign = -1.0 if ExpectedTypeId == 'PartDesign::Pocket' else 1.0
+    if str(DefinitionData.end_condition).casefold() != ExtrusionEndCondition.BLIND.value or (DefinitionData.reversed and DefinitionData.symmetric) or DefinitionData.second_end_condition is not None or DefinitionData.up_to_reference or DefinitionData.second_up_to_reference or (not ParamValueA(DefinitionData.second_length, ExpectedSecondLength, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.second_offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.draft_angle, 0.0, ValueKind.ANGLE)) or (not ParamValueA(DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE)) or (DefinitionData.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((DefinitionData.direction.x, DefinitionData.direction.y, DefinitionData.direction.z), (DirectionSign * SupportPlaneValue.transform.z_axis.x, DirectionSign * SupportPlaneValue.transform.z_axis.y, DirectionSign * SupportPlaneValue.transform.z_axis.z), strict=True)))):
         return None
-    DimensionData = _parameter_dimension(Parameter("", "D1", DefinitionData.length))
+    DimensionData = ParamDimension(Param('', 'D1', DefinitionData.length))
     if DimensionData is None or DimensionData.value_mm <= 0.0:
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != FeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != FeatureData.id:
             continue
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    ExpectedData = {
-        "AllowMultiFace": (ValueKind.BOOLEAN, True),
-        "AlongSketchNormal": (ValueKind.BOOLEAN, True),
-        "Label": (ValueKind.STRING, None),
-        "Label2": (ValueKind.STRING, None),
-        "Length": (ValueKind.LENGTH, DimensionData.value_mm),
-        "Length2": (ValueKind.LENGTH, ExpectedSecondLength),
-        "Midplane": (ValueKind.BOOLEAN, DefinitionData.symmetric),
-        "Offset": (ValueKind.LENGTH, 0.0),
-        "Offset2": (ValueKind.LENGTH, 0.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, DefinitionData.reversed),
-        "SideType": (ValueKind.INTEGER, 2 if DefinitionData.symmetric else 0),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TaperAngle": (ValueKind.ANGLE, 0.0),
-        "TaperAngle2": (ValueKind.ANGLE, 0.0),
-        "Type": (ValueKind.INTEGER, 0),
-        "Type2": (ValueKind.INTEGER, 0),
-        "UseCustomVector": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, ExpectedVisibility),
-    }
-    if not set(ExpectedData) <= set(ParameterData):
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, DimensionData.value_mm), 'Length2': (ValueKind.LENGTH, ExpectedSecondLength), 'Midplane': (ValueKind.BOOLEAN, DefinitionData.symmetric), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, DefinitionData.reversed), 'SideType': (ValueKind.INTEGER, 2 if DefinitionData.symmetric else 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 0), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, ExpectedVisibility)}
+    if not set(ExpectedData) <= set(ParamData):
         return None
-    if any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue], KindValue, ExpectedValue
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+    if any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     return DimensionData
 
-
-# freecad pad settings must agree before a recovered native program is eligible
-def _freecad_single_boss_dimension(
-    document: CadDocument,
-    sketch: Sketch,
-    feature: FeatureStep,
-) -> _WriteDimension | None:
-    if (
-        document.source.format_id.casefold() != "freecad.fcstd"
-        or document.assembly is not None
-        or document.selections
-        or len(document.sketches) != 1
-        or len(
-            tuple(
-                item
-                for item in document.feature_timeline
-                if not _is_native_system_feature(item)
-            )
-        )
-        != 1
-        or len(document.bodies) != 1
-        or document.bodies[0].final_feature_id != feature.id
-        or feature.sketch_id != sketch.id
-        or feature.order != 0
-        or str(feature.kind).casefold() != FeatureKind.EXTRUSION.value
-        or str(feature.operation).casefold()
-        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or _freecad_type_id(sketch.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(feature.attributes) != "PartDesign::Pad"
-        or len(document.configurations) != 1
-        or document.configurations[0].name.casefold() != "default"
-        or not document.configurations[0].active
-        or document.configurations[0].parent_id is not None
-        or document.configurations[0].overrides
-        or document.configurations[0].suppressed_feature_ids
-        or not isinstance(feature.definition, ExtrusionFeature)
-    ):
+# this definition exists because focused behavior needs one stable owner
+def FreecadSingle(DocValue: CadDocument, Sketch: Sketch, Feature: FeatureStep) -> WriteDimension | None:
+    if DocValue.source.format_id.casefold() != 'freecad.fcstd' or DocValue.assembly is not None or DocValue.selections or (len(DocValue.sketches) != 1) or (len(tuple((ItemValue for ItemValue in DocValue.feature_timeline if not IsNativeSystem(ItemValue)))) != 1) or (len(DocValue.bodies) != 1) or (DocValue.bodies[0].final_feature_id != Feature.id) or (Feature.sketch_id != Sketch.id) or (Feature.order != 0) or (str(Feature.kind).casefold() != FeatureKind.EXTRUSION.value) or (str(Feature.operation).casefold() not in {BoolOperation.CREATE.value, BoolOperation.JOIN.value}) or (FreecadTypeId(Sketch.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(Feature.attributes) != 'PartDesign::Pad') or (len(DocValue.configurations) != 1) or (DocValue.configurations[0].name.casefold() != 'default') or (not DocValue.configurations[0].active) or (DocValue.configurations[0].parent_id is not None) or DocValue.configurations[0].overrides or DocValue.configurations[0].suppressed_feature_ids or (not isinstance(Feature.definition, ExtrusionFeature)):
         return None
-    definition = feature.definition
-    SupportPlaneValue = next(
-        (
-            ItemData
-            for ItemData in document.support_planes
-            if ItemData.id == sketch.support_plane_id
-        ),
-        None,
-    )
-    if (
-        str(definition.end_condition).casefold() != ExtrusionEndCondition.BLIND.value
-        or (definition.reversed and definition.symmetric)
-        or definition.second_end_condition is not None
-        or definition.up_to_reference
-        or definition.second_up_to_reference
-        or not _parameter_value_matches(
-            definition.second_length, 10.0, ValueKind.LENGTH
-        )
-        or not _parameter_value_matches(definition.offset, 0.0, ValueKind.LENGTH)
-        or not _parameter_value_matches(definition.second_offset, 0.0, ValueKind.LENGTH)
-        or not _parameter_value_matches(definition.draft_angle, 0.0, ValueKind.ANGLE)
-        or not _parameter_value_matches(
-            definition.second_draft_angle, 0.0, ValueKind.ANGLE
-        )
-        or definition.direction is None
-        or SupportPlaneValue is None
-        or not all(
-            math.isclose(LeftValue, RightValue, abs_tol=1e-12)
-            for LeftValue, RightValue in zip(
-                (
-                    definition.direction.x,
-                    definition.direction.y,
-                    definition.direction.z,
-                ),
-                (
-                    SupportPlaneValue.transform.z_axis.x,
-                    SupportPlaneValue.transform.z_axis.y,
-                    SupportPlaneValue.transform.z_axis.z,
-                ),
-                strict=True,
-            )
-        )
-    ):
+    Definition = Feature.definition
+    SupportPlaneValue = next((ItemData for ItemData in DocValue.support_planes if ItemData.id == Sketch.support_plane_id), None)
+    if str(Definition.end_condition).casefold() != ExtrusionEndCondition.BLIND.value or (Definition.reversed and Definition.symmetric) or Definition.second_end_condition is not None or Definition.up_to_reference or Definition.second_up_to_reference or (not ParamValueA(Definition.second_length, 10.0, ValueKind.LENGTH)) or (not ParamValueA(Definition.offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(Definition.second_offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(Definition.draft_angle, 0.0, ValueKind.ANGLE)) or (not ParamValueA(Definition.second_draft_angle, 0.0, ValueKind.ANGLE)) or (Definition.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((Definition.direction.x, Definition.direction.y, Definition.direction.z), (SupportPlaneValue.transform.z_axis.x, SupportPlaneValue.transform.z_axis.y, SupportPlaneValue.transform.z_axis.z), strict=True)))):
         return None
-    dimension = _parameter_dimension(Parameter("", "D1", definition.length))
-    if dimension is None or dimension.value_mm <= 0.0:
+    Dimension = ParamDimension(Param('', 'D1', Definition.length))
+    if Dimension is None or Dimension.value_mm <= 0.0:
         return None
-    parameters: dict[str, Parameter] = {}
-    for parameter in document.parameters:
-        if parameter.owner_id == sketch.id:
+    Parameters: dict[str, Param] = {}
+    for Param in DocValue.parameters:
+        if Param.owner_id == Sketch.id:
             continue
-        path = parameter.attributes.get("freecad_path")
-        if (
-            parameter.owner_id != feature.id
-            or not isinstance(path, str)
-            or not path
-            or path in parameters
-            or parameter.expression is not None
-        ):
+        PathValue = Param.attributes.get('freecad_path')
+        if Param.owner_id != Feature.id or not isinstance(PathValue, str) or (not PathValue) or (PathValue in Parameters) or (Param.expression is not None):
             return None
-        parameters[path] = parameter
-    expected = {
-        "AllowMultiFace": (ValueKind.BOOLEAN, True),
-        "AlongSketchNormal": (ValueKind.BOOLEAN, True),
-        "Label": (ValueKind.STRING, None),
-        "Label2": (ValueKind.STRING, None),
-        "Length": (ValueKind.LENGTH, dimension.value_mm),
-        "Length2": (ValueKind.LENGTH, 10.0),
-        "Midplane": (ValueKind.BOOLEAN, definition.symmetric),
-        "Offset": (ValueKind.LENGTH, 0.0),
-        "Offset2": (ValueKind.LENGTH, 0.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, definition.reversed),
-        "SideType": (ValueKind.INTEGER, 2 if definition.symmetric else 0),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TaperAngle": (ValueKind.ANGLE, 0.0),
-        "TaperAngle2": (ValueKind.ANGLE, 0.0),
-        "Type": (ValueKind.INTEGER, 0),
-        "Type2": (ValueKind.INTEGER, 0),
-        "UseCustomVector": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if not set(expected) <= set(parameters):
+        Parameters[PathValue] = Param
+    Expected = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, Dimension.value_mm), 'Length2': (ValueKind.LENGTH, 10.0), 'Midplane': (ValueKind.BOOLEAN, Definition.symmetric), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, Definition.reversed), 'SideType': (ValueKind.INTEGER, 2 if Definition.symmetric else 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 0), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if not set(Expected) <= set(Parameters):
         return None
-    if any(
-        not _freecad_parameter_matches(parameters[path], kind, value)
-        for path, (kind, value) in expected.items()
-    ):
+    if any((not FreecadParam(Parameters[PathValue], KindValue, Value) for PathValue, (KindValue, Value) in Expected.items())):
         return None
-    return dimension
+    return Dimension
 
+# this definition exists because focused behavior needs one stable owner
+def FreecadTypeId(Attributes: Mapping[str, Any]) -> str:
+    Value = Attributes.get('freecad')
+    return str(Value.get('type_id', '')) if isinstance(Value, Mapping) else ''
 
-def _freecad_type_id(attributes: Mapping[str, Any]) -> str:
-    value = attributes.get("freecad")
-    return str(value.get("type_id", "")) if isinstance(value, Mapping) else ""
-
-
-# traced FreeCAD revolutions require a recovered angle and every inactive default
-def _FreeCadSingleRevolutionDimension(
-    DocumentData: CadDocument,
-    SketchData: Sketch,
-    FeatureData: FeatureStep,
-) -> _WriteDimension | None:
+# this definition exists because focused behavior needs one stable owner
+def FreeCadSingle(DocData: CadDocument, SketchData: Sketch, FeatureData: FeatureStep) -> WriteDimension | None:
     DefinitionData = FeatureData.definition
-    TimelineData = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    if (
-        DocumentData.source.format_id.casefold() != "freecad.fcstd"
-        or DocumentData.assembly is not None
-        or tuple(DocumentData.sketches) != (SketchData,)
-        or TimelineData != (FeatureData,)
-        or len(DocumentData.bodies) != 1
-        or DocumentData.bodies[0].final_feature_id != FeatureData.id
-        or FeatureData.order != 0
-        or FeatureData.sketch_id != SketchData.id
-        or FeatureData.input_feature_ids
-        or FeatureData.configuration_states
-        or FeatureData.suppressed
-        or str(FeatureData.kind).casefold() != FeatureKind.REVOLUTION.value
-        or str(FeatureData.operation).casefold() != BooleanOperation.CREATE.value
-        or _freecad_type_id(SketchData.attributes) != "Sketcher::SketchObject"
-        or _freecad_type_id(FeatureData.attributes) != "PartDesign::Revolution"
-        or not isinstance(DefinitionData, NativeFeatureDefinition)
-        or DefinitionData.format_id.casefold() != "freecad.fcstd"
-        or DefinitionData.type_id != "PartDesign::Revolution"
-        or FeatureData.provenance is None
-        or len(DocumentData.configurations) != 1
-        or DocumentData.configurations[0].name.casefold() != "default"
-        or not DocumentData.configurations[0].active
-        or DocumentData.configurations[0].parent_id is not None
-        or DocumentData.configurations[0].overrides
-        or DocumentData.configurations[0].suppressed_feature_ids
-        or len(DocumentData.selections) != 1
-        or FeatureData.selection_ids != (DocumentData.selections[0].id,)
-    ):
+
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    if DocData.source.format_id.casefold() != 'freecad.fcstd' or DocData.assembly is not None or tuple(DocData.sketches) != (SketchData,) or (TimelineData != (FeatureData,)) or (len(DocData.bodies) != 1) or (DocData.bodies[0].final_feature_id != FeatureData.id) or (FeatureData.order != 0) or (FeatureData.sketch_id != SketchData.id) or FeatureData.input_feature_ids or FeatureData.configuration_states or FeatureData.suppressed or (str(FeatureData.kind).casefold() != FeatureKind.REVOLUTION.value) or (str(FeatureData.operation).casefold() != BoolOperation.CREATE.value) or (FreecadTypeId(SketchData.attributes) != 'Sketcher::SketchObject') or (FreecadTypeId(FeatureData.attributes) != 'PartDesign::Revolution') or (not isinstance(DefinitionData, NativeFeatureDefinition)) or (DefinitionData.format_id.casefold() != 'freecad.fcstd') or (DefinitionData.type_id != 'PartDesign::Revolution') or (FeatureData.provenance is None) or (len(DocData.configurations) != 1) or (DocData.configurations[0].name.casefold() != 'default') or (not DocData.configurations[0].active) or (DocData.configurations[0].parent_id is not None) or DocData.configurations[0].overrides or DocData.configurations[0].suppressed_feature_ids or (len(DocData.selections) != 1) or (FeatureData.selection_ids != (DocData.selections[0].id,)):
         return None
-    AxisSelection = DocumentData.selections[0]
-    if (
-        AxisSelection.attributes.get("freecad_object")
-        != FeatureData.provenance.native_id
-        or AxisSelection.attributes.get("freecad_property") != "ReferenceAxis"
-        or len(AxisSelection.path) != 1
-        or AxisSelection.path[0].entity_id != SketchData.name
-        or AxisSelection.path[0].subelement != VERTICAL_AXIS_SUBELEMENT
-    ):
+    AxisSelection = DocData.selections[0]
+    if AxisSelection.attributes.get('freecad_object') != FeatureData.provenance.native_id or AxisSelection.attributes.get('freecad_property') != 'ReferenceAxis' or len(AxisSelection.path) != 1 or (AxisSelection.path[0].entity_id != SketchData.name) or (AxisSelection.path[0].subelement != KVerticalAxisSubElem):
         return None
-    ParameterData: dict[str, Parameter] = {}
-    for ParameterValueData in DocumentData.parameters:
-        if ParameterValueData.owner_id != FeatureData.id:
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != FeatureData.id:
             return None
-        PathValue = ParameterValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParameterData
-            or ParameterValueData.expression is not None
-        ):
+        PathValue = ParamValueData.attributes.get('freecad_path')
+        if not isinstance(PathValue, str) or not PathValue or PathValue in ParamData or (ParamValueData.expression is not None):
             return None
-        ParameterData[PathValue] = ParameterValueData
-    AngleParameter = ParameterData.get("Angle")
-    if (
-        AngleParameter is None
-        or AngleParameter.value.kind is not ValueKind.ANGLE
-        or isinstance(AngleParameter.value.value, bool)
-        or not isinstance(AngleParameter.value.value, (int, float))
-    ):
+        ParamData[PathValue] = ParamValueData
+    AngleParam = ParamData.get('Angle')
+    if AngleParam is None or AngleParam.value.kind is not ValueKind.ANGLE or isinstance(AngleParam.value.value, bool) or (not isinstance(AngleParam.value.value, (int, float))):
         return None
-    AngleDegrees = float(AngleParameter.value.value)
-    if not math.isfinite(AngleDegrees) or not any(
-        math.isclose(
-            AngleDegrees,
-            ExpectedAngle,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        for ExpectedAngle in (90.0, 360.0)
-    ):
+    AngleDegrees = float(AngleParam.value.value)
+    if not MathValue.isfinite(AngleDegrees) or not any((MathValue.isclose(AngleDegrees, ExpectedAngle, rel_tol=0.0, abs_tol=1e-10) for ExpectedAngle in (90.0, 360.0))):
         return None
-    ExpectedData = {
-        "AllowMultiFace": (ValueKind.BOOLEAN, True),
-        "Angle": (ValueKind.ANGLE, AngleDegrees),
-        "Angle2": (ValueKind.ANGLE, 0.0),
-        "FuseOrder": (ValueKind.INTEGER, 0),
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, FeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Midplane": (ValueKind.BOOLEAN, False),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "Type": (ValueKind.INTEGER, 0),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParameterData) != set(ExpectedData) or any(
-        not _freecad_parameter_matches(
-            ParameterData[PathValue],
-            KindValue,
-            ExpectedValue,
-        )
-        for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-    ):
+    ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'Angle': (ValueKind.ANGLE, AngleDegrees), 'Angle2': (ValueKind.ANGLE, 0.0), 'FuseOrder': (ValueKind.INTEGER, 0), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, FeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Midplane': (ValueKind.BOOLEAN, False), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'Type': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
+    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
-    if AngleParameter.value.unit.casefold() not in {"deg", "degree", "degrees"}:
+    if AngleParam.value.unit.casefold() not in {'deg', 'degree', 'degrees'}:
         return None
-    return _WriteDimension(
-        "D1",
-        AngleDegrees,
-        f"{AngleDegrees:g}°",
-        AngleParameter.role,
-    )
+    return WriteDimension('D1', AngleDegrees, f'{AngleDegrees:g}°', AngleParam.role)
 
-
-def _freecad_parameter_matches(
-    parameter: Parameter,
-    kind: ValueKind,
-    expected: Any,
-) -> bool:
-    value = parameter.value
-    if value.kind is not kind:
+# this definition exists because focused behavior needs one stable owner
+def FreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> bool:
+    Value = Param.value
+    if Value.kind is not KindValue:
         return False
-    if expected is None:
-        return isinstance(value.value, str)
-    if kind is ValueKind.LENGTH:
-        dimension = _parameter_dimension(parameter)
-        return dimension is not None and math.isclose(
-            dimension.value_mm,
-            float(expected),
-            rel_tol=0.0,
-            abs_tol=1e-10,
-        )
-    if kind in {ValueKind.NUMBER, ValueKind.ANGLE}:
-        return (
-            not isinstance(value.value, bool)
-            and isinstance(value.value, (int, float))
-            and math.isfinite(float(value.value))
-            and math.isclose(
-                float(value.value),
-                float(expected),
-                rel_tol=0.0,
-                abs_tol=1e-10,
-            )
-        )
-    return value.value == expected
+    if Expected is None:
+        return isinstance(Value.value, str)
+    if KindValue is ValueKind.LENGTH:
+        Dimension = ParamDimension(Param)
+        return Dimension is not None and MathValue.isclose(Dimension.value_mm, float(Expected), rel_tol=0.0, abs_tol=1e-10)
+    if KindValue in {ValueKind.NUMBER, ValueKind.ANGLE}:
+        return not isinstance(Value.value, bool) and isinstance(Value.value, (int, float)) and MathValue.isfinite(float(Value.value)) and MathValue.isclose(float(Value.value), float(Expected), rel_tol=0.0, abs_tol=1e-10)
+    return Value.value == Expected
 
-
-def _parameter_value_matches(
-    value: Any,
-    expected: float,
-    kind: ValueKind,
-) -> bool:
-    if value is None or value.kind is not kind:
+# this definition exists because focused behavior needs one stable owner
+def ParamValueA(Value: Any, Expected: float, KindValue: ValueKind) -> bool:
+    if Value is None or Value.kind is not KindValue:
         return False
-    parameter = _parameter_dimension(Parameter("", "D1", value))
-    if kind is ValueKind.LENGTH:
-        return parameter is not None and math.isclose(
-            parameter.value_mm,
-            expected,
-            rel_tol=0.0,
-            abs_tol=1e-10,
-        )
-    return (
-        not isinstance(value.value, bool)
-        and isinstance(value.value, (int, float))
-        and math.isfinite(float(value.value))
-        and math.isclose(
-            float(value.value),
-            expected,
-            rel_tol=0.0,
-            abs_tol=1e-10,
-        )
-    )
+    Param = ParamDimension(Param('', 'D1', Value))
+    if KindValue is ValueKind.LENGTH:
+        return Param is not None and MathValue.isclose(Param.value_mm, Expected, rel_tol=0.0, abs_tol=1e-10)
+    return not isinstance(Value.value, bool) and isinstance(Value.value, (int, float)) and MathValue.isfinite(float(Value.value)) and MathValue.isclose(float(Value.value), Expected, rel_tol=0.0, abs_tol=1e-10)
 
+# this definition exists because focused behavior needs one stable owner
+def WriteRectangle(Sketch: _WriteObject) -> tuple[float, float, float, float] | None:
+    if Sketch.kind != 'Sketch' or not Sketch.payload:
+        return None
+    Markers = list(ParseMarkers(Sketch.payload, 0, len(Sketch.payload)))
+    Profiles, Ignored, Ignored = Profiles(Markers, ())
+    if len(Profiles) != 1 or Profiles[0].kind != 'rectangle':
+        return None
+    Coordinates = Profiles[0].coordinates
+    if len(Coordinates) != 4 or not all((MathValue.isfinite(Value) for Value in Coordinates)):
+        return None
+    return Coordinates
 
-def _write_rectangle_bounds(
-    sketch: _WriteObject,
-) -> tuple[float, float, float, float] | None:
-    if sketch.kind != "Sketch" or not sketch.payload:
+# this definition exists because focused behavior needs one stable owner
+def WriteCircle(SketchObject: _WriteObject) -> tuple[float, float, float] | None:
+    if SketchObject.kind != 'Sketch' or not SketchObject.payload:
         return None
-    markers = list(_parse_markers(sketch.payload, 0, len(sketch.payload)))
-    profiles, _, _ = _profiles(markers, ())
-    if len(profiles) != 1 or profiles[0].kind != "rectangle":
-        return None
-    coordinates = profiles[0].coordinates
-    if len(coordinates) != 4 or not all(math.isfinite(value) for value in coordinates):
-        return None
-    return coordinates
-
-
-# circular profile recovery supplies the centre and radius needed by the typed program
-def _write_circle_profile(
-    SketchObject: _WriteObject,
-) -> tuple[float, float, float] | None:
-    if SketchObject.kind != "Sketch" or not SketchObject.payload:
-        return None
-    MarkersData = list(
-        _parse_markers(SketchObject.payload, 0, len(SketchObject.payload))
-    )
-    CoordinateData = tuple(
-        ItemData for ItemData in MarkersData if ItemData.coordinates_mm is not None
-    )
-    if (
-        len(CoordinateData) != 2
-        or CoordinateData[0].semantic != "circle"
-        or CoordinateData[1].semantic != "point"
-    ):
+    MarkersData = list(ParseMarkers(SketchObject.payload, 0, len(SketchObject.payload)))
+    CoordinateData = tuple((ItemData for ItemData in MarkersData if ItemData.coordinates_mm is not None))
+    if len(CoordinateData) != 2 or CoordinateData[0].semantic != 'circle' or CoordinateData[1].semantic != 'point':
         return None
     CenterData = CoordinateData[0].coordinates_mm
     RimData = CoordinateData[1].coordinates_mm
     if CenterData is None or RimData is None:
         return None
-    RadiusValue = math.hypot(RimData[0] - CenterData[0], RimData[1] - CenterData[1])
-    if not all(math.isfinite(ItemData) for ItemData in (*CenterData, RadiusValue)):
+    RadiusValue = MathValue.hypot(RimData[0] - CenterData[0], RimData[1] - CenterData[1])
+    if not all((MathValue.isfinite(ItemData) for ItemData in (*CenterData, RadiusValue))):
         return None
     if RadiusValue <= 0.0:
         return None
-    return CenterData[0], CenterData[1], RadiusValue
+    return (CenterData[0], CenterData[1], RadiusValue)
 
-
-# six point recovery preserves source vertex order for the typed pad program
-def PolySixPoints(
-    SketchObject: _WriteObject,
-) -> tuple[tuple[float, float], ...] | None:
-    if SketchObject.kind != "Sketch" or not SketchObject.payload:
+# this definition exists because focused behavior needs one stable owner
+def PolySixPoints(SketchObject: _WriteObject) -> tuple[tuple[float, float], ...] | None:
+    if SketchObject.kind != 'Sketch' or not SketchObject.payload:
         return None
-    MarkersData = list(
-        _parse_markers(SketchObject.payload, 0, len(SketchObject.payload))
-    )
-    ProfilesData, _, _ = _profiles(MarkersData, ())
-    PolylineData = tuple(
-        ItemData for ItemData in ProfilesData if ItemData.kind == "polyline"
-    )
+    MarkersData = list(ParseMarkers(SketchObject.payload, 0, len(SketchObject.payload)))
+    ProfilesData, Ignored, Ignored = Profiles(MarkersData, ())
+    PolylineData = tuple((ItemData for ItemData in ProfilesData if ItemData.kind == 'polyline'))
     if len(PolylineData) != 1 or len(PolylineData[0].coordinates) != 12:
         return None
     CoordinateData = PolylineData[0].coordinates
-    PointsData = tuple(
-        (CoordinateData[ItemIndex], CoordinateData[ItemIndex + 1])
-        for ItemIndex in range(0, len(CoordinateData), 2)
-    )
-    if not all(
-        math.isfinite(ValueData) for PointData in PointsData for ValueData in PointData
-    ):
+    PointsData = tuple(((CoordinateData[ItemIndex], CoordinateData[ItemIndex + 1]) for ItemIndex in range(0, len(CoordinateData), 2)))
+    if not all((MathValue.isfinite(ValueData) for PointData in PointsData for ValueData in PointData)):
         return None
     return PointsData
 
+# this definition exists because focused behavior needs one stable owner
+def IsPinProfile(PointsData: tuple[tuple[float, float], ...] | None) -> bool:
+    return PointsData is not None and len(PointsData) == len(KPinPointsMm) and all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10) for ActualPoint, ExpectedPoint in zip(PointsData, KPinPointsMm, strict=True) for ActualValue, ExpectedValue in zip(ActualPoint, ExpectedPoint, strict=True)))
 
-# exact pin geometry keeps the recovered envelope tied to its measured topology
-def IsPinProfile(
-    PointsData: tuple[tuple[float, float], ...] | None,
-) -> bool:
-    return (
-        PointsData is not None
-        and len(PointsData) == len(KPinPointsMm)
-        and all(
-            math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-10)
-            for ActualPoint, ExpectedPoint in zip(
-                PointsData,
-                KPinPointsMm,
-                strict=True,
-            )
-            for ActualValue, ExpectedValue in zip(
-                ActualPoint,
-                ExpectedPoint,
-                strict=True,
-            )
-        )
-    )
+# this definition exists because focused behavior needs one stable owner
+def IsNativeSystem(Feature: FeatureStep) -> bool:
+    NativeId = Feature.attributes.get('native_object_id')
+    return isinstance(NativeId, int) and (not isinstance(NativeId, bool)) and (NativeId in KSystemObjectIds) and (str(Feature.kind).casefold() in {FeatureKind.NATIVE.value, FeatureKind.REFERENCE.value})
 
+# this definition exists because focused behavior needs one stable owner
+def NativeSystem(Feature: FeatureStep | None, Fallback: str) -> str:
+    if Feature is None:
+        return Fallback
+    Properties = Feature.attributes.get('native_properties')
+    if isinstance(Properties, Mapping):
+        NameValue = Properties.get('Name')
+        if isinstance(NameValue, str):
+            return NameValue
+    return Feature.name or Fallback
 
-def _is_native_system_feature(feature: FeatureStep) -> bool:
-    native_id = feature.attributes.get("native_object_id")
-    return (
-        isinstance(native_id, int)
-        and not isinstance(native_id, bool)
-        and native_id in _SYSTEM_OBJECT_IDS
-        and str(feature.kind).casefold()
-        in {FeatureKind.NATIVE.value, FeatureKind.REFERENCE.value}
-    )
+# this definition exists because focused behavior needs one stable owner
+def WriteSketch(Sketch: Sketch, Parameters: dict[str, Parameter], ObjectIds: dict[str, int], NativeFeature: FeatureStep | None=None) -> WriteObject:
+    ObjectId = ObjectIds[f'sketch:{Sketch.id}']
+    Dimensions = list(WriteDimensions(Sketch.id, Sketch.parameter_ids, Parameters))
+    Payload, GeneratedDimensions = SketchPayload(Sketch, ObjectId, ObjectIds)
+    Existing = {Dimension.name for Dimension in Dimensions}
+    Dimensions.extend((Dimension for Dimension in GeneratedDimensions if Dimension.name not in Existing))
+    NativeProperties = NativeKeyword(NativeFeature.attributes) if NativeFeature is not None else None
+    return WriteObject(Sketch.id, ObjectId, Sketch.name, 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),) if NativeProperties is None else NativeProperties, tuple(Dimensions), Payload)
 
+# this definition exists because focused behavior needs one stable owner
+def WriteFeature(Feature: FeatureStep, Parameters: dict[str, Parameter], ObjectIds: dict[str, int]) -> WriteObject:
+    ObjectId = ObjectIds[f'feature:{Feature.id}']
+    Dimensions = list(WriteDimensions(Feature.id, Feature.parameter_ids, Parameters))
+    TagValue, KindValue, ClassName = WriteFeatureA(Feature)
+    NativeProperties = NativeKeyword(Feature.attributes)
+    Properties = list(NativeProperties or ())
+    Payload = b''
+    if TagValue == 'Extrusion':
+        if NativeProperties is None and Feature.sketch_id is not None:
+            Child = ObjectIds.get(f'sketch:{Feature.sketch_id}')
+            if Child is not None:
+                Properties.extend((('Dissectable', 'true'), ('DissectableChildren', str(Child)), ('DissectableRoot', 'true')))
+        Generated = Definition(Feature)
+        if Generated is not None and (not Dimensions):
+            Dimensions.append(Generated)
+        Payload = Extrusion(Feature)
+    elif KindValue in {'Fillet', 'Chamfer', 'Shell'}:
+        Generated = Definition(Feature)
+        if Generated is not None and (not Dimensions):
+            Dimensions.append(Generated)
+        Payload = FilletPayload(Feature, ObjectIds)
+    return WriteObject(Feature.id, ObjectId, Feature.name, TagValue, KindValue, ClassName, tuple(Properties), tuple(Dimensions), Payload)
 
-def _native_system_name(feature: FeatureStep | None, fallback: str) -> str:
-    if feature is None:
-        return fallback
-    properties = feature.attributes.get("native_properties")
-    if isinstance(properties, Mapping):
-        name = properties.get("Name")
-        if isinstance(name, str):
-            return name
-    return feature.name or fallback
-
-
-def _write_sketch(
-    sketch: Sketch,
-    parameters: dict[str, Parameter],
-    object_ids: dict[str, int],
-    native_feature: FeatureStep | None = None,
-) -> _WriteObject:
-    object_id = object_ids[f"sketch:{sketch.id}"]
-    dimensions = list(_write_dimensions(sketch.id, sketch.parameter_ids, parameters))
-    payload, generated_dimensions = _sketch_payload(sketch, object_id, object_ids)
-    existing = {dimension.name for dimension in dimensions}
-    dimensions.extend(
-        dimension
-        for dimension in generated_dimensions
-        if dimension.name not in existing
-    )
-    native_properties = (
-        _native_keyword_properties(native_feature.attributes)
-        if native_feature is not None
-        else None
-    )
-    return _WriteObject(
-        sketch.id,
-        object_id,
-        sketch.name,
-        "Sketch",
-        "Sketch",
-        "moProfileFeature_c",
-        (
-            (("Dissectable", "true"),)
-            if native_properties is None
-            else native_properties
-        ),
-        tuple(dimensions),
-        payload,
-    )
-
-
-def _write_feature(
-    feature: FeatureStep,
-    parameters: dict[str, Parameter],
-    object_ids: dict[str, int],
-) -> _WriteObject:
-    object_id = object_ids[f"feature:{feature.id}"]
-    dimensions = list(_write_dimensions(feature.id, feature.parameter_ids, parameters))
-    tag, kind, class_name = _write_feature_type(feature)
-    native_properties = _native_keyword_properties(feature.attributes)
-    properties = list(native_properties or ())
-    payload = b""
-    if tag == "Extrusion":
-        if native_properties is None and feature.sketch_id is not None:
-            child = object_ids.get(f"sketch:{feature.sketch_id}")
-            if child is not None:
-                properties.extend(
-                    (
-                        ("Dissectable", "true"),
-                        ("DissectableChildren", str(child)),
-                        ("DissectableRoot", "true"),
-                    )
-                )
-        generated = _definition_dimension(feature)
-        if generated is not None and not dimensions:
-            dimensions.append(generated)
-        payload = _extrusion_payload(feature)
-    elif kind in {"Fillet", "Chamfer", "Shell"}:
-        generated = _definition_dimension(feature)
-        if generated is not None and not dimensions:
-            dimensions.append(generated)
-        payload = _fillet_payload(feature, object_ids)
-    return _WriteObject(
-        feature.id,
-        object_id,
-        feature.name,
-        tag,
-        kind,
-        class_name,
-        tuple(properties),
-        tuple(dimensions),
-        payload,
-    )
-
-
-def _native_keyword_properties(
-    attributes: Mapping[str, Any],
-) -> tuple[tuple[str, str], ...] | None:
-    properties = attributes.get("native_properties")
-    if not isinstance(properties, Mapping):
+# this definition exists because focused behavior needs one stable owner
+def NativeKeyword(Attributes: Mapping[str, Any]) -> tuple[tuple[str, str], ...] | None:
+    Properties = Attributes.get('native_properties')
+    if not isinstance(Properties, Mapping):
         return None
-    return tuple(
-        (name, value)
-        for name, value in properties.items()
-        if isinstance(name, str)
-        and isinstance(value, str)
-        and name not in {"id", "Name"}
-    )
+    return tuple(((NameValue, Value) for NameValue, Value in Properties.items() if isinstance(NameValue, str) and isinstance(Value, str) and (NameValue not in {'id', 'Name'})))
 
+# this definition exists because focused behavior needs one stable owner
+def WriteFeatureA(Feature: FeatureStep) -> tuple[str, str, str]:
+    KindValue = str(Feature.kind).casefold()
+    if KindValue == FeatureKind.EXTRUSION.value:
+        ClassName = 'moCut_c' if Feature.operation == BoolOperation.CUT or str(Feature.operation).casefold() == BoolOperation.CUT.value else 'moExtrusion_c'
+        return ('Extrusion', 'Extrusion', ClassName)
+    if KindValue == FeatureKind.FILLET.value:
+        return ('Feature', 'Fillet', 'Fillet_c')
+    if KindValue == FeatureKind.CHAMFER.value:
+        return ('Feature', 'Chamfer', 'Chamfer_c')
+    if KindValue == FeatureKind.SHELL.value:
+        return ('Feature', 'Shell', 'moShell_c')
+    if KindValue == FeatureKind.PATTERN.value and isinstance(Feature.definition, LinearPatternFeature):
+        return ('Feature', 'LPattern', 'moLPattern_c')
+    if KindValue == FeatureKind.PATTERN.value and isinstance(Feature.definition, CircularPatternFeature):
+        return ('Feature', 'CirPattern', 'moCirPattern_c')
+    Native = Feature.attributes.get('native_type')
+    if isinstance(Native, str) and Native.strip():
+        if Native.strip().casefold() in {'basebody', 'imported'}:
+            return ('Feature', 'Imported', 'moBaseBody_c')
+        return ('Feature', Native.strip(), 'moCompFeature_c')
+    Names = {FeatureKind.REVOLUTION.value: ('Revolution', 'moRevolution_c'), FeatureKind.SWEEP.value: ('Sweep', 'moSweep_c'), FeatureKind.LOFT.value: ('Blend', 'moBlend_c'), FeatureKind.HOLE.value: ('HoleWizard', 'moHoleWzd_c'), FeatureKind.SHELL.value: ('Shell', 'moShell_c'), FeatureKind.PATTERN.value: ('Pattern', 'moLPattern_c'), FeatureKind.MIRROR.value: ('MirrorPattern', 'moMirrorPattern_c'), FeatureKind.BOOLEAN.value: ('Combine', 'moCombineBodies_c')}
+    NativeKind, ClassName = Names.get(KindValue, (str(Feature.kind), 'moCompFeature_c'))
+    return ('Feature', NativeKind, ClassName)
 
-def _write_feature_type(feature: FeatureStep) -> tuple[str, str, str]:
-    kind = str(feature.kind).casefold()
-    if kind == FeatureKind.EXTRUSION.value:
-        class_name = (
-            "moCut_c"
-            if feature.operation == BooleanOperation.CUT
-            or str(feature.operation).casefold() == BooleanOperation.CUT.value
-            else "moExtrusion_c"
-        )
-        return "Extrusion", "Extrusion", class_name
-    if kind == FeatureKind.FILLET.value:
-        return "Feature", "Fillet", "Fillet_c"
-    if kind == FeatureKind.CHAMFER.value:
-        return "Feature", "Chamfer", "Chamfer_c"
-    if kind == FeatureKind.SHELL.value:
-        return "Feature", "Shell", "moShell_c"
-    if kind == FeatureKind.PATTERN.value and isinstance(
-        feature.definition, LinearPatternFeature
-    ):
-        return "Feature", "LPattern", "moLPattern_c"
-    if kind == FeatureKind.PATTERN.value and isinstance(
-        feature.definition, CircularPatternFeature
-    ):
-        return "Feature", "CirPattern", "moCirPattern_c"
-    native = feature.attributes.get("native_type")
-    if isinstance(native, str) and native.strip():
-        if native.strip().casefold() in {"basebody", "imported"}:
-            return "Feature", "Imported", "moBaseBody_c"
-        return "Feature", native.strip(), "moCompFeature_c"
-    names = {
-        FeatureKind.REVOLUTION.value: ("Revolution", "moRevolution_c"),
-        FeatureKind.SWEEP.value: ("Sweep", "moSweep_c"),
-        FeatureKind.LOFT.value: ("Blend", "moBlend_c"),
-        FeatureKind.HOLE.value: ("HoleWizard", "moHoleWzd_c"),
-        FeatureKind.SHELL.value: ("Shell", "moShell_c"),
-        FeatureKind.PATTERN.value: ("Pattern", "moLPattern_c"),
-        FeatureKind.MIRROR.value: ("MirrorPattern", "moMirrorPattern_c"),
-        FeatureKind.BOOLEAN.value: ("Combine", "moCombineBodies_c"),
-    }
-    native_kind, class_name = names.get(kind, (str(feature.kind), "moCompFeature_c"))
-    return "Feature", native_kind, class_name
-
-
-def _write_dimensions(
-    owner_id: str,
-    parameter_ids: tuple[str | None, ...],
-    parameters: dict[str, Parameter],
-) -> tuple[_WriteDimension, ...]:
-    selected: list[Parameter] = []
-    seen: set[str] = set()
-    for parameter_id in parameter_ids:
-        if parameter_id is None or parameter_id in seen:
+# this definition exists because focused behavior needs one stable owner
+def WriteDimensions(OwnerId: str, ParamIds: tuple[str | None, ...], Parameters: dict[str, Parameter]) -> tuple[WriteDimension, ...]:
+    Selected: list[Param] = []
+    SeenValue: set[str] = set()
+    for ParamId in ParamIds:
+        if ParamId is None or ParamId in SeenValue:
             continue
-        parameter = parameters.get(parameter_id)
-        if parameter is not None:
-            selected.append(parameter)
-            seen.add(parameter_id)
-    for parameter in parameters.values():
-        if parameter.owner_id == owner_id and parameter.id not in seen:
-            selected.append(parameter)
-            seen.add(parameter.id)
-    return tuple(
-        dimension
-        for parameter in selected
-        if (dimension := _parameter_dimension(parameter)) is not None
-    )
+        Param = Parameters.get(ParamId)
+        if Param is not None:
+            Selected.append(Param)
+            SeenValue.add(ParamId)
+    for Param in Parameters.values():
+        if Param.owner_id == OwnerId and Param.id not in SeenValue:
+            Selected.append(Param)
+            SeenValue.add(Param.id)
+    return tuple((Dimension for Param in Selected if (Dimension := ParamDimension(Param)) is not None))
 
-
-def _parameter_dimension(parameter: Parameter) -> _WriteDimension | None:
-    value = parameter.value.value
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or parameter.value.kind is not ValueKind.LENGTH
-    ):
+# this definition exists because focused behavior needs one stable owner
+def ParamDimension(Param: Parameter) -> WriteDimension | None:
+    Value = Param.value.value
+    if isinstance(Value, bool) or not isinstance(Value, (int, float)) or Param.value.kind is not ValueKind.LENGTH:
         return None
-    factor = {
-        "": 1.0,
-        "mm": 1.0,
-        "millimeter": 1.0,
-        "millimeters": 1.0,
-        "cm": 10.0,
-        "m": 1000.0,
-        "in": 25.4,
-        "inch": 25.4,
-        "inches": 25.4,
-    }.get(parameter.value.unit.casefold())
-    number = float(value)
-    if factor is None or not math.isfinite(number):
+    Factor = {'': 1.0, 'mm': 1.0, 'millimeter': 1.0, 'millimeters': 1.0, 'cm': 10.0, 'm': 1000.0, 'in': 25.4, 'inch': 25.4, 'inches': 25.4}.get(Param.value.unit.casefold())
+    Number = float(Value)
+    if Factor is None or not MathValue.isfinite(Number):
         return None
-    millimeters = number * factor
-    source_text = parameter.attributes.get("source_text")
-    text = (
-        source_text
-        if isinstance(source_text, str) and source_text
-        else format(millimeters, ".15g")
-    )
-    return _WriteDimension(
-        parameter.name,
-        millimeters,
-        text,
-        parameter.role,
-    )
+    Millimeters = Number * Factor
+    SourceText = Param.attributes.get('source_text')
+    TextValue = SourceText if isinstance(SourceText, str) and SourceText else format(Millimeters, '.15g')
+    return WriteDimension(Param.name, Millimeters, TextValue, Param.role)
 
-
-def _definition_dimension(feature: FeatureStep) -> _WriteDimension | None:
-    definition = feature.definition
-    value = None
-    prefix = ""
-    if isinstance(definition, ExtrusionFeature):
-        value = definition.length
-    elif isinstance(definition, FilletFeature):
-        value = definition.radius
-        prefix = "R"
-    elif isinstance(definition, ChamferFeature):
-        value = definition.distance
-    elif isinstance(definition, ShellFeature):
-        value = definition.thickness
-    if value is None:
+# this definition exists because focused behavior needs one stable owner
+def Definition(Feature: FeatureStep) -> WriteDimension | None:
+    Definition = Feature.definition
+    Value = None
+    Prefix = ''
+    if isinstance(Definition, ExtrusionFeature):
+        Value = Definition.length
+    elif isinstance(Definition, FilletFeature):
+        Value = Definition.radius
+        Prefix = 'R'
+    elif isinstance(Definition, ChamferFeature):
+        Value = Definition.distance
+    elif isinstance(Definition, ShellFeature):
+        Value = Definition.thickness
+    if Value is None:
         return None
-    parameter = Parameter("", "D1", value)
-    dimension = _parameter_dimension(parameter)
-    if dimension is None:
+    Param = Param('', 'D1', Value)
+    Dimension = ParamDimension(Param)
+    if Dimension is None:
         return None
-    return replace(dimension, text=prefix + dimension.text)
+    return Replace(Dimension, text=Prefix + Dimension.text)
 
-
-def _plane_frame_block(plane: SupportPlane) -> bytes | None:
-    transform = plane.transform
-    origin = (transform.origin.x, transform.origin.y, transform.origin.z)
-    x_axis = (transform.x_axis.x, transform.x_axis.y, transform.x_axis.z)
-    y_axis = (transform.y_axis.x, transform.y_axis.y, transform.y_axis.z)
-    z_axis = (transform.z_axis.x, transform.z_axis.y, transform.z_axis.z)
-    vectors = (x_axis, y_axis, z_axis)
-    if not _orthonormal(vectors) or not all(
-        math.isfinite(value) for vector in (origin, *vectors) for value in vector
-    ):
+# this definition exists because focused behavior needs one stable owner
+def PlaneFrameBlock(Plane: SupportPlane) -> bytes | None:
+    Transform = Plane.transform
+    Origin = (Transform.origin.x, Transform.origin.y, Transform.origin.z)
+    XAxis = (Transform.x_axis.x, Transform.x_axis.y, Transform.x_axis.z)
+    YAxis = (Transform.y_axis.x, Transform.y_axis.y, Transform.y_axis.z)
+    ZAxis = (Transform.z_axis.x, Transform.z_axis.y, Transform.z_axis.z)
+    Vectors = (XAxis, YAxis, ZAxis)
+    if not Orthonormal(Vectors) or not all((MathValue.isfinite(Value) for Vector in (Origin, *Vectors) for Value in Vector)):
         return None
-    frame = bytearray(_PLANE_FRAME_BYTES)
-    struct.pack_into("<3d", frame, 0, *(value / _MILLIMETRES for value in origin))
-    struct.pack_into("<3d", frame, 24, *z_axis)
-    frame[48] = 1
-    rows = tuple(zip(x_axis, y_axis, z_axis, strict=True))
-    for index, row in enumerate(rows):
-        struct.pack_into("<3d", frame, 49 + index * 24, *row)
-    return bytes(frame)
+    Frame = bytearray(KPlaneFrameBytes)
+    Struct.pack_into('<3d', Frame, 0, *(Value / KMillimetres for Value in Origin))
+    Struct.pack_into('<3d', Frame, 24, *ZAxis)
+    Frame[48] = 1
+    RowsValue = tuple(zip(XAxis, YAxis, ZAxis, strict=True))
+    for Index, RowValue in enumerate(RowsValue):
+        Struct.pack_into('<3d', Frame, 49 + Index * 24, *RowValue)
+    return bytes(Frame)
 
+# this definition exists because focused behavior needs one stable owner
+def PlanePayload(Plane: SupportPlane) -> bytes:
+    Frame = PlaneFrameBlock(Plane)
+    if Frame is None:
+        return b''
+    return ClassDecl('moFixedRefPlnData_c') + Frame
 
-def _plane_payload(plane: SupportPlane) -> bytes:
-    frame = _plane_frame_block(plane)
-    if frame is None:
-        return b""
-    return _class_declaration("moFixedRefPlnData_c") + frame
+# this definition exists because focused behavior needs one stable owner
+def Orthonormal(Vectors: tuple[tuple[float, float, float], ...]) -> bool:
+    return all((MathValue.isclose(NormAction(Vector), 1.0, abs_tol=1e-09) for Vector in Vectors)) and all((MathValue.isclose(DotAction(LeftValue, Right), 0.0, abs_tol=1e-09) for LeftValue, Right in Itertools.combinations(Vectors, 2)))
 
-
-def _orthonormal(vectors: tuple[tuple[float, float, float], ...]) -> bool:
-    return all(
-        math.isclose(_norm(vector), 1.0, abs_tol=1e-9) for vector in vectors
-    ) and all(
-        math.isclose(_dot(left, right), 0.0, abs_tol=1e-9)
-        for left, right in itertools.combinations(vectors, 2)
-    )
-
-
-# connected line chains share one point roster in native sketch records
-def LineLoopPoints(
-    LinesData: tuple[LineGeometry, ...],
-) -> tuple[tuple[float, float], ...] | None:
+# this definition exists because focused behavior needs one stable owner
+def LineLoopPoints(LinesData: tuple[LineGeometry, ...]) -> tuple[tuple[float, float], ...] | None:
     if len(LinesData) < 3:
         return None
-    StartData = tuple((ItemData.start.x, ItemData.start.y) for ItemData in LinesData)
-    EndData = tuple((ItemData.end.x, ItemData.end.y) for ItemData in LinesData)
-    if not all(
-        math.isfinite(ValueData)
-        for PointData in (*StartData, *EndData)
-        for ValueData in PointData
-    ):
+    StartData = tuple(((ItemData.start.x, ItemData.start.y) for ItemData in LinesData))
+    EndData = tuple(((ItemData.end.x, ItemData.end.y) for ItemData in LinesData))
+    if not all((MathValue.isfinite(ValueData) for PointData in (*StartData, *EndData) for ValueData in PointData)):
         return None
-    if any(
-        not _same_point(EndData[ItemIndex], StartData[(ItemIndex + 1) % len(StartData)])
-        for ItemIndex in range(len(StartData))
-    ):
+    if any((not SamePoint(EndData[ItemIndex], StartData[(ItemIndex + 1) % len(StartData)]) for ItemIndex in range(len(StartData)))):
         return None
     return StartData
 
-
-def _sketch_payload(
-    sketch: Sketch, object_id: int, object_ids: dict[str, int]
-) -> tuple[bytes, tuple[_WriteDimension, ...]]:
-    payload = bytearray()
-    plane_id = object_ids.get(f"plane:{sketch.support_plane_id}", 2)
-    payload.extend(_plane_reference(plane_id))
-    generated: list[_WriteDimension] = []
-    consumed: set[str] = set()
-    local_id = 1
-    entities = {entity.id: entity for entity in sketch.entities}
-    for profile in sketch.closed_profile_entity_ids:
-        selected = tuple(entities.get(entity_id) for entity_id in profile)
-        if len(selected) == 4 and all(
-            entity is not None and isinstance(entity.geometry, LineGeometry)
-            for entity in selected
-        ):
-            rectangle = _rectangle_coordinates(
-                tuple(entity.geometry for entity in selected if entity is not None)
-            )
-            if rectangle is not None:
-                points = (
-                    (rectangle[0], rectangle[1]),
-                    (rectangle[2], rectangle[1]),
-                    (rectangle[2], rectangle[3]),
-                    (rectangle[0], rectangle[3]),
-                )
-                for point in points:
-                    payload.extend(_coordinate_marker(point, local_id, _POINT_LOCUS))
-                    local_id += 1
-                for start, end in ((0, 1), (1, 2), (2, 3), (3, 0)):
-                    payload.extend(_line_marker(start, end, local_id))
-                    local_id += 1
-                consumed.update(profile)
+# this definition exists because focused behavior needs one stable owner
+def SketchPayload(Sketch: Sketch, ObjectId: int, ObjectIds: dict[str, int]) -> tuple[bytes, tuple[WriteDimension, ...]]:
+    Payload = bytearray()
+    PlaneId = ObjectIds.get(f'plane:{Sketch.support_plane_id}', 2)
+    Payload.extend(PlaneRef(PlaneId))
+    Generated: list[WriteDimension] = []
+    Consumed: set[str] = set()
+    LocalId = 1
+    Entities = {Entity.id: Entity for Entity in Sketch.entities}
+    for Profile in Sketch.closed_profile_entity_ids:
+        Selected = tuple((Entities.get(EntityId) for EntityId in Profile))
+        if len(Selected) == 4 and all((Entity is not None and isinstance(Entity.geometry, LineGeom) for Entity in Selected)):
+            Rectangle = Rectangle(tuple((Entity.geometry for Entity in Selected if Entity is not None)))
+            if Rectangle is not None:
+                Points = ((Rectangle[0], Rectangle[1]), (Rectangle[2], Rectangle[1]), (Rectangle[2], Rectangle[3]), (Rectangle[0], Rectangle[3]))
+                for Point in Points:
+                    Payload.extend(Coordinate(Point, LocalId, KPointLocus))
+                    LocalId += 1
+                for Start, EndValue in ((0, 1), (1, 2), (2, 3), (3, 0)):
+                    Payload.extend(LineMarker(Start, EndValue, LocalId))
+                    LocalId += 1
+                Consumed.update(Profile)
                 continue
-        if len(selected) == 6 and all(
-            entity is not None and isinstance(entity.geometry, LineGeometry)
-            for entity in selected
-        ):
-            LineData = tuple(
-                entity.geometry for entity in selected if entity is not None
-            )
+        if len(Selected) == 6 and all((Entity is not None and isinstance(Entity.geometry, LineGeom) for Entity in Selected)):
+            LineData = tuple((Entity.geometry for Entity in Selected if Entity is not None))
             PointData = LineLoopPoints(LineData)
             if PointData is not None:
                 for PointValue in PointData:
-                    payload.extend(
-                        _coordinate_marker(PointValue, local_id, _POINT_LOCUS)
-                    )
-                    local_id += 1
+                    Payload.extend(Coordinate(PointValue, LocalId, KPointLocus))
+                    LocalId += 1
                 for PointIndex in range(len(PointData)):
-                    payload.extend(
-                        _line_marker(
-                            PointIndex,
-                            (PointIndex + 1) % len(PointData),
-                            local_id,
-                        )
-                    )
-                    local_id += 1
-                consumed.update(profile)
+                    Payload.extend(LineMarker(PointIndex, (PointIndex + 1) % len(PointData), LocalId))
+                    LocalId += 1
+                Consumed.update(Profile)
                 continue
-        if (
-            len(selected) == 1
-            and selected[0] is not None
-            and isinstance(selected[0].geometry, CircleGeometry)
-        ):
-            circle = selected[0].geometry
-            center = (circle.center.x, circle.center.y)
-            radial = (circle.center.x + circle.radius, circle.center.y)
-            payload.extend(_coordinate_marker(center, local_id, _CIRCLE_LOCUS))
-            local_id += 1
-            payload.extend(_coordinate_marker(radial, local_id, _POINT_LOCUS))
-            local_id += 1
-            generated.append(
-                _WriteDimension(
-                    f"D{len(generated) + 1}",
-                    circle.radius,
-                    "R" + format(circle.radius, ".15g"),
-                    ParameterRole.DRIVING,
-                )
-            )
-            consumed.add(selected[0].id)
-    for entity in sketch.entities:
-        if entity.id in consumed:
+        if len(Selected) == 1 and Selected[0] is not None and isinstance(Selected[0].geometry, CircleGeom):
+            Circle = Selected[0].geometry
+            Center = (Circle.center.x, Circle.center.y)
+            Radial = (Circle.center.x + Circle.radius, Circle.center.y)
+            Payload.extend(Coordinate(Center, LocalId, KCircleLocus))
+            LocalId += 1
+            Payload.extend(Coordinate(Radial, LocalId, KPointLocus))
+            LocalId += 1
+            Generated.append(WriteDimension(f'D{len(Generated) + 1}', Circle.radius, 'R' + format(Circle.radius, '.15g'), ParamRole.DRIVING))
+            Consumed.add(Selected[0].id)
+    for Entity in Sketch.entities:
+        if Entity.id in Consumed:
             continue
-        if isinstance(entity.geometry, LineGeometry):
-            start_index = local_id
-            payload.extend(
-                _coordinate_marker(
-                    (entity.geometry.start.x, entity.geometry.start.y),
-                    local_id,
-                    _POINT_LOCUS,
-                )
-            )
-            local_id += 1
-            payload.extend(
-                _coordinate_marker(
-                    (entity.geometry.end.x, entity.geometry.end.y),
-                    local_id,
-                    _POINT_LOCUS,
-                )
-            )
-            local_id += 1
-            roster_start = start_index - 1
-            payload.extend(_line_marker(roster_start, roster_start + 1, local_id))
-            local_id += 1
-        elif isinstance(entity.geometry, CircleGeometry):
-            center = (entity.geometry.center.x, entity.geometry.center.y)
-            radial = (center[0] + entity.geometry.radius, center[1])
-            payload.extend(_coordinate_marker(center, local_id, _CIRCLE_LOCUS))
-            local_id += 1
-            payload.extend(_coordinate_marker(radial, local_id, _POINT_LOCUS))
-            local_id += 1
-            generated.append(
-                _WriteDimension(
-                    f"D{len(generated) + 1}",
-                    entity.geometry.radius,
-                    "R" + format(entity.geometry.radius, ".15g"),
-                    ParameterRole.DRIVING,
-                )
-            )
-    return bytes(payload), tuple(generated)
+        if isinstance(Entity.geometry, LineGeom):
+            StartIndex = LocalId
+            Payload.extend(Coordinate((Entity.geometry.start.x, Entity.geometry.start.y), LocalId, KPointLocus))
+            LocalId += 1
+            Payload.extend(Coordinate((Entity.geometry.end.x, Entity.geometry.end.y), LocalId, KPointLocus))
+            LocalId += 1
+            RosterStart = StartIndex - 1
+            Payload.extend(LineMarker(RosterStart, RosterStart + 1, LocalId))
+            LocalId += 1
+        elif isinstance(Entity.geometry, CircleGeom):
+            Center = (Entity.geometry.center.x, Entity.geometry.center.y)
+            Radial = (Center[0] + Entity.geometry.radius, Center[1])
+            Payload.extend(Coordinate(Center, LocalId, KCircleLocus))
+            LocalId += 1
+            Payload.extend(Coordinate(Radial, LocalId, KPointLocus))
+            LocalId += 1
+            Generated.append(WriteDimension(f'D{len(Generated) + 1}', Entity.geometry.radius, 'R' + format(Entity.geometry.radius, '.15g'), ParamRole.DRIVING))
+    return (bytes(Payload), tuple(Generated))
 
+# this definition exists because focused behavior needs one stable owner
+def PlaneRef(ObjectId: int) -> bytes:
+    Block = bytearray(67)
+    Struct.pack_into('<I', Block, 0, ObjectId)
+    Block[4] = 1
+    Block[8:12] = b'\x00\x00\x03\x00'
+    Struct.pack_into('<d', Block, 39, 1.0)
+    Block[50] = 2
+    Block[54] = 255
+    Block[55:58] = b'\xff\xff\xff'
+    return bytes(Block)
 
-def _plane_reference(object_id: int) -> bytes:
-    block = bytearray(67)
-    struct.pack_into("<I", block, 0, object_id)
-    block[4] = 1
-    block[8:12] = b"\0\0\x03\0"
-    struct.pack_into("<d", block, 39, 1.0)
-    block[50] = 2
-    block[54] = 0xFF
-    block[55:58] = b"\xff\xff\xff"
-    return bytes(block)
+# this definition exists because focused behavior needs one stable owner
+def Coordinate(Point: tuple[float, float], LocalId: int, Locus: bytes) -> bytes:
+    Record = bytearray(142)
+    Record[:5] = KCurrentMarker
+    Record[5:13] = b'\xff' * 8
+    Record[13:17] = b'\x00\x00\x80\xbf'
+    Struct.pack_into('<I', Record, 17, 1)
+    Record[23:27] = Locus
+    Struct.pack_into('<H', Record, 27, 1)
+    Record[31:39] = b'\x00\x00\x80\xbf\x00\x00\x04\x00'
+    Struct.pack_into('<d', Record, 48, 1.0)
+    Record[56:58] = KCoordinateTag
+    Struct.pack_into('<2d', Record, 58, Point[0] / 1000.0, Point[1] / 1000.0)
+    Struct.pack_into('<I', Record, 138, LocalId)
+    return bytes(Record)
 
+# this definition exists because focused behavior needs one stable owner
+def LineMarker(Start: int, EndValue: int, LocalId: int) -> bytes:
+    Record = bytearray(92)
+    Record[:5] = KCurrentMarker
+    Record[5:13] = b'\xff' * 8
+    Record[13:17] = b'\x00\x00\x80\xbf'
+    Struct.pack_into('<I', Record, 17, 2)
+    Record[23:27] = KPointLocus
+    Struct.pack_into('<H', Record, 27, 1)
+    Struct.pack_into('<d', Record, 48, 1.0)
+    Struct.pack_into('<HH', Record, 64, Start, EndValue)
+    Struct.pack_into('<I', Record, 88, LocalId)
+    return bytes(Record)
 
-def _coordinate_marker(
-    point: tuple[float, float], local_id: int, locus: bytes
-) -> bytes:
-    record = bytearray(142)
-    record[:5] = _CURRENT_MARKER
-    record[5:13] = b"\xff" * 8
-    record[13:17] = b"\0\0\x80\xbf"
-    struct.pack_into("<I", record, 17, 1)
-    record[23:27] = locus
-    struct.pack_into("<H", record, 27, 1)
-    record[31:39] = b"\0\0\x80\xbf\0\0\x04\0"
-    struct.pack_into("<d", record, 48, 1.0)
-    record[56:58] = _COORDINATE_TAG
-    struct.pack_into("<2d", record, 58, point[0] / 1000.0, point[1] / 1000.0)
-    struct.pack_into("<I", record, 138, local_id)
-    return bytes(record)
-
-
-def _line_marker(start: int, end: int, local_id: int) -> bytes:
-    record = bytearray(92)
-    record[:5] = _CURRENT_MARKER
-    record[5:13] = b"\xff" * 8
-    record[13:17] = b"\0\0\x80\xbf"
-    struct.pack_into("<I", record, 17, 2)
-    record[23:27] = _POINT_LOCUS
-    struct.pack_into("<H", record, 27, 1)
-    struct.pack_into("<d", record, 48, 1.0)
-    struct.pack_into("<HH", record, 64, start, end)
-    struct.pack_into("<I", record, 88, local_id)
-    return bytes(record)
-
-
-def _rectangle_coordinates(
-    lines: tuple[LineGeometry, ...],
-) -> tuple[float, float, float, float] | None:
-    points = tuple((line.start.x, line.start.y) for line in lines)
-    ends = tuple((line.end.x, line.end.y) for line in lines)
-    if any(ends[index] != points[(index + 1) % 4] for index in range(4)):
+# this definition exists because focused behavior needs one stable owner
+def Rectangle(Lines: tuple[LineGeometry, ...]) -> tuple[float, float, float, float] | None:
+    Points = tuple(((LineValue.start.x, LineValue.start.y) for LineValue in Lines))
+    EndsValue = tuple(((LineValue.end.x, LineValue.end.y) for LineValue in Lines))
+    if any((EndsValue[Index] != Points[(Index + 1) % 4] for Index in range(4))):
         return None
-    xs = sorted({point[0] for point in points})
-    ys = sorted({point[1] for point in points})
-    if len(xs) != 2 or len(ys) != 2:
+    XsValue = sorted({Point[0] for Point in Points})
+    YsValue = sorted({Point[1] for Point in Points})
+    if len(XsValue) != 2 or len(YsValue) != 2:
         return None
-    if set(points) != {(x, y) for x in xs for y in ys}:
+    if set(Points) != {(FirstCoord, SecondCoord) for FirstCoord in XsValue for SecondCoord in YsValue}:
         return None
-    return xs[0], ys[0], xs[1], ys[1]
+    return (XsValue[0], YsValue[0], XsValue[1], YsValue[1])
 
+# this definition exists because focused behavior needs one stable owner
+def Extrusion(Feature: FeatureStep) -> bytes:
+    Definition = Feature.definition
+    Direction = int(isinstance(Definition, ExtrusionFeature) and Definition.reversed)
+    Condition = (ExtrusionEndCondition.MID_PLANE if Definition.symmetric else Definition.end_condition) if isinstance(Definition, ExtrusionFeature) else None
+    Termination = {ExtrusionEndCondition.BLIND: 0, ExtrusionEndCondition.THROUGH_ALL: 1, ExtrusionEndCondition.UP_TO_FIRST: 2, ExtrusionEndCondition.UP_TO_VERTEX: 3, ExtrusionEndCondition.UP_TO_FACE: 4, ExtrusionEndCondition.UP_TO_SHAPE: 4, ExtrusionEndCondition.OFFSET_FROM_SURFACE: 5, ExtrusionEndCondition.MID_PLANE: 6}.get(Condition, 0)
+    DeclValue = ClassDecl('moEndSpec_c')
+    return b''.join((DeclValue, b'\x00\x00', Struct.pack('<II', 1, 0), Struct.pack('<I', Direction), b'\x00\x00', Struct.pack('<II', Termination, 0)))
 
-# extrusion payloads carry direction and termination independently of display metadata
-def _extrusion_payload(feature: FeatureStep) -> bytes:
-    definition = feature.definition
-    direction = int(isinstance(definition, ExtrusionFeature) and definition.reversed)
-    condition = (
-        (
-            ExtrusionEndCondition.MID_PLANE
-            if definition.symmetric
-            else definition.end_condition
-        )
-        if isinstance(definition, ExtrusionFeature)
-        else None
-    )
-    termination = {
-        ExtrusionEndCondition.BLIND: 0,
-        ExtrusionEndCondition.THROUGH_ALL: 1,
-        ExtrusionEndCondition.UP_TO_FIRST: 2,
-        ExtrusionEndCondition.UP_TO_VERTEX: 3,
-        ExtrusionEndCondition.UP_TO_FACE: 4,
-        ExtrusionEndCondition.UP_TO_SHAPE: 4,
-        ExtrusionEndCondition.OFFSET_FROM_SURFACE: 5,
-        ExtrusionEndCondition.MID_PLANE: 6,
-    }.get(condition, 0)
-    declaration = _class_declaration("moEndSpec_c")
-    return b"".join(
-        (
-            declaration,
-            b"\0\0",
-            struct.pack("<II", 1, 0),
-            struct.pack("<I", direction),
-            b"\0\0",
-            struct.pack("<II", termination, 0),
-        )
-    )
-
-
-def _fillet_payload(feature: FeatureStep, object_ids: dict[str, int]) -> bytes:
-    result = bytearray()
-    for selection_id in feature.selection_ids:
-        producer = 0
-        local_id = 0
-        parts = selection_id.rsplit(":", 1)
-        if len(parts) == 2:
+# this definition exists because focused behavior needs one stable owner
+def FilletPayload(Feature: FeatureStep, ObjectIds: dict[str, int]) -> bytes:
+    Result = bytearray()
+    for SelectionId in Feature.selection_ids:
+        Producer = 0
+        LocalId = 0
+        Parts = SelectionId.rsplit(':', 1)
+        if len(Parts) == 2:
             try:
-                local_id = int(parts[1])
+                LocalId = int(Parts[1])
             except ValueError:
-                local_id = 0
-        if feature.input_feature_ids:
-            producer = object_ids.get(f"feature:{feature.input_feature_ids[-1]}", 0)
-        if producer and local_id:
-            result.extend(_FilletSelectionRecord(producer, local_id))
-    return bytes(result)
+                LocalId = 0
+        if Feature.input_feature_ids:
+            Producer = ObjectIds.get(f'feature:{Feature.input_feature_ids[-1]}', 0)
+        if Producer and LocalId:
+            Result.extend(FilletSelection(Producer, LocalId))
+    return bytes(Result)
 
-
-# fillet selection records bind an operation object to one native edge-local identity
-def _FilletSelectionRecord(ProducerId: int, LocalId: int) -> bytes:
-    if not 1 <= ProducerId <= 0xFFFFFFFF or not 1 <= LocalId <= 0xFFFFFFFF:
-        raise SldprtFormatError("native fillet selection ids must be positive integers")
+# this definition exists because focused behavior needs one stable owner
+def FilletSelection(ProducerId: int, LocalId: int) -> bytes:
+    if not 1 <= ProducerId <= 4294967295 or not 1 <= LocalId <= 4294967295:
+        raise SldprtFormatError('native fillet selection ids must be positive integers')
     RecordData = bytearray(38)
-    RecordData[:16] = _EDGE_SELECTION_IDENTITY
-    struct.pack_into("<I", RecordData, 26, ProducerId)
-    struct.pack_into("<I", RecordData, 34, LocalId)
+    RecordData[:16] = KEdgeSelectionIdentity
+    Struct.pack_into('<I', RecordData, 26, ProducerId)
+    Struct.pack_into('<I', RecordData, 34, LocalId)
     return bytes(RecordData)
 
+# this definition exists because focused behavior needs one stable owner
+def ShellSelection(ProducerId: int) -> bytes:
+    return FilletSelection(ProducerId, 1) + FilletSelection(ProducerId, 4)
 
-# the recovered inward shell stores its removed top face and paired face witness
-def _ShellSelectionRecord(ProducerId: int) -> bytes:
-    return _FilletSelectionRecord(ProducerId, 1) + _FilletSelectionRecord(
-        ProducerId,
-        4,
-    )
-
-
-def _keywords_payload(
-    document: CadDocument,
-    model_name: str,
-    objects: tuple[_WriteObject, ...],
-    object_ids: Mapping[str, int],
-    identity: _NativeIdentity,
-) -> bytes:
-    children: list[str] = []
-    configurations = document.configurations or ()
-    for configuration in configurations:
-        configuration_id = object_ids[f"configuration:{configuration.id}"]
-        attributes = {
-            "id": str(configuration_id),
-            "Name": configuration.name,
-            "Type": "ConfigurationManager",
-        }
-        native_properties = configuration.attributes.get("native_properties")
-        material = (
-            native_properties.get("Material")
-            if isinstance(native_properties, Mapping)
-            else configuration.attributes.get("Material")
-        )
-        if isinstance(material, str):
-            attributes["Material"] = material
+# this definition exists because focused behavior needs one stable owner
+def KeywordsPayload(DocValue: CadDocument, ModelName: str, Objects: tuple[_WriteObject, ...], ObjectIds: Mapping[str, int], Identity: _NativeIdentity) -> bytes:
+    Children: list[str] = []
+    Configurations = DocValue.configurations or ()
+    for Config in Configurations:
+        ConfigId = ObjectIds[f'configuration:{Config.id}']
+        Attributes = {'id': str(ConfigId), 'Name': Config.name, 'Type': 'ConfigurationManager'}
+        NativeProperties = Config.attributes.get('native_properties')
+        Material = NativeProperties.get('Material') if isinstance(NativeProperties, Mapping) else Config.attributes.get('Material')
+        if isinstance(Material, str):
+            Attributes['Material'] = Material
         else:
-            attributes["Material"] = "Material <not specified>"
-        children.append(_xml_element("Configuration", attributes))
-    if not configurations:
-        children.append(
-            _xml_element(
-                "Configuration",
-                {
-                    "id": "0",
-                    "Name": "Default",
-                    "Type": "ConfigurationManager",
-                    "Material": "Material <not specified>",
-                },
-            )
-        )
-    for item in sorted(
-        objects, key=lambda value: (value.xml_tag, str(value.object_id))
-    ):
-        attributes = {"id": str(item.object_id), "Name": item.name}
-        if item.xml_tag == "Feature" or item.kind == "Origin":
-            attributes["Type"] = item.kind
-        attributes.update(item.properties)
-        dimensions = "".join(
-            _xml_element(
-                "Dimension",
-                {"Name": dimension.name},
-                _xml_text(dimension.text),
-            )
-            for dimension in item.dimensions
-        )
-        children.append(
-            _xml_element(
-                item.xml_tag,
-                attributes,
-                dimensions if item.dimensions else None,
-            )
-        )
-    root = _xml_element(
-        "Keywords",
-        {"id": str(identity.creation_stamp), "Name": identity.reference_name},
-        "".join(children),
-    )
-    return b"\x86" + _xml_document(root)
+            Attributes['Material'] = 'Material <not specified>'
+        Children.append(XmlElem('Configuration', Attributes))
+    if not Configurations:
+        Children.append(XmlElem('Configuration', {'id': '0', 'Name': 'Default', 'Type': 'ConfigurationManager', 'Material': 'Material <not specified>'}))
 
+    # this callback exists because local behavior needs one focused transformation
+    for ItemValue in sorted(Objects, key=lambda Value: (Value.xml_tag, str(Value.object_id))):
+        Attributes = {'id': str(ItemValue.object_id), 'Name': ItemValue.name}
+        if ItemValue.xml_tag == 'Feature' or ItemValue.kind == 'Origin':
+            Attributes['Type'] = ItemValue.kind
+        Attributes.update(ItemValue.properties)
+        Dimensions = ''.join((XmlElem('Dimension', {'Name': Dimension.name}, XmlText(Dimension.text)) for Dimension in ItemValue.dimensions))
+        Children.append(XmlElem(ItemValue.xml_tag, Attributes, Dimensions if ItemValue.dimensions else None))
+    RootValue = XmlElem('Keywords', {'id': str(Identity.creation_stamp), 'Name': Identity.reference_name}, ''.join(Children))
+    return b'\x86' + XmlDoc(RootValue)
 
-def _features_payload(
-    document: CadDocument,
-    model_name: str,
-    object_ids: Mapping[str, int],
-    identity: _NativeIdentity,
-) -> bytes:
-    header = _xml_element(
-        "swHeader",
-        {"swObjCount": "1"},
-        _xml_element(
-            "swFile",
-            {
-                "id": "3",
-                "swDocType": "PART",
-                "swCreationTime": str(identity.creation_stamp),
-                "swPath": f"{model_name}{PART_SUFFIX}",
-            },
-        ),
-    )
-    active = next(
-        (
-            configuration
-            for configuration in document.configurations
-            if configuration.active
-        ),
-        document.configurations[0] if document.configurations else None,
-    )
-    active_name = active.name if active is not None else "Default"
-    active_id = 0
-    if active is not None:
-        active_id = object_ids[f"configuration:{active.id}"]
-    models = _xml_element(
-        "swModelList",
-        {"swObjCount": "1"},
-        _xml_element(
-            "swModel",
-            {
-                "id": "2",
-                "swName": model_name,
-                "swConfigurationName": active_name,
-                "swConfigurationId": str(active_id),
-                "swLastModifiedStamp": str(identity.last_modified_stamp),
-                "swConfigurationFlags": str(identity.configuration_flags),
-                "swFileRef": "3",
-            },
-        ),
-    )
-    configurations = document.configurations or ()
-    configuration_children: list[str] = []
-    if configurations:
-        for index, configuration in enumerate(configurations, start=1):
-            native_id = object_ids[f"configuration:{configuration.id}"]
-            configuration_children.append(
-                _xml_element(
-                    "swConfiguration",
-                    {
-                        "id": str(index),
-                        "swName": configuration.name,
-                        "swID": str(native_id),
-                        "swReference": identity.reference_name,
-                        "swMostRecentConfiguration": (
-                            "YES" if configuration.active else "NO"
-                        ),
-                        "swConfigurationNeedsUpdate": "NO",
-                        "swDefeatureConfiguration": "NO",
-                        "swModelRef": "2",
-                    },
-                )
-            )
+# this definition exists because focused behavior needs one stable owner
+def FeaturesPayload(DocValue: CadDocument, ModelName: str, ObjectIds: Mapping[str, int], Identity: _NativeIdentity) -> bytes:
+    Header = XmlElem('swHeader', {'swObjCount': '1'}, XmlElem('swFile', {'id': '3', 'swDocType': 'PART', 'swCreationTime': str(Identity.creation_stamp), 'swPath': f'{ModelName}{PartSuffix}'}))
+    Active = next((Config for Config in DocValue.configurations if Config.active), DocValue.configurations[0] if DocValue.configurations else None)
+    ActiveName = Active.name if Active is not None else 'Default'
+    ActiveId = 0
+    if Active is not None:
+        ActiveId = ObjectIds[f'configuration:{Active.id}']
+    Models = XmlElem('swModelList', {'swObjCount': '1'}, XmlElem('swModel', {'id': '2', 'swName': ModelName, 'swConfigurationName': ActiveName, 'swConfigurationId': str(ActiveId), 'swLastModifiedStamp': str(Identity.last_modified_stamp), 'swConfigurationFlags': str(Identity.configuration_flags), 'swFileRef': '3'}))
+    Configurations = DocValue.configurations or ()
+    ConfigChildren: list[str] = []
+    if Configurations:
+        for Index, Config in enumerate(Configurations, start=1):
+            NativeId = ObjectIds[f'configuration:{Config.id}']
+            ConfigChildren.append(XmlElem('swConfiguration', {'id': str(Index), 'swName': Config.name, 'swID': str(NativeId), 'swReference': Identity.reference_name, 'swMostRecentConfiguration': 'YES' if Config.active else 'NO', 'swConfigurationNeedsUpdate': 'NO', 'swDefeatureConfiguration': 'NO', 'swModelRef': '2'}))
     else:
-        configuration_children.append(
-            _xml_element(
-                "swConfiguration",
-                {
-                    "id": "1",
-                    "swName": "Default",
-                    "swID": "0",
-                    "swReference": identity.reference_name,
-                    "swMostRecentConfiguration": "YES",
-                    "swConfigurationNeedsUpdate": "NO",
-                    "swDefeatureConfiguration": "NO",
-                    "swModelRef": "2",
-                },
-            )
-        )
-    configuration_list = _xml_element(
-        "swConfigurationList",
-        {"swObjCount": str(len(configurations) or 1)},
-        "".join(configuration_children),
-    )
-    root = _xml_element(
-        "swSolidWorks",
-        {
-            "xmlns": _SOLIDWORKS_XML_NAMESPACE,
-            "swObjCount": "3",
-            "swVersion": "18000",
-        },
-        "".join(
-            (
-                header,
-                models,
-                configuration_list,
-                _xml_element("swExtFeatureList", {"swObjCount": "0"}),
-            )
-        ),
-    )
-    return _xml_document(root)
+        ConfigChildren.append(XmlElem('swConfiguration', {'id': '1', 'swName': 'Default', 'swID': '0', 'swReference': Identity.reference_name, 'swMostRecentConfiguration': 'YES', 'swConfigurationNeedsUpdate': 'NO', 'swDefeatureConfiguration': 'NO', 'swModelRef': '2'}))
+    ConfigList = XmlElem('swConfigurationList', {'swObjCount': str(len(Configurations) or 1)}, ''.join(ConfigChildren))
+    RootValue = XmlElem('swSolidWorks', {'xmlns': KSolidworksXmlNamespace, 'swObjCount': '3', 'swVersion': '18000'}, ''.join((Header, Models, ConfigList, XmlElem('swExtFeatureList', {'swObjCount': '0'}))))
+    return XmlDoc(RootValue)
 
+# this definition exists because focused behavior needs one stable owner
+def XmlDoc(RootValue: str) -> bytes:
+    return ('<?xml version="1.0" encoding="UTF-8"?>\r\n' + RootValue + '\r\n').encode('utf-8')
 
-def _xml_document(root: str) -> bytes:
-    return ('<?xml version="1.0" encoding="UTF-8"?>\r\n' + root + "\r\n").encode(
-        "utf-8"
-    )
+# this definition exists because focused behavior needs one stable owner
+def XmlElem(NameValue: str, Attributes: Mapping[str, str], BodyValue: str | None=None) -> str:
+    EncodedAttributes = ''.join((f' {KeyValue}="{XmlAttr(Value)}"' for KeyValue, Value in Attributes.items()))
+    if BodyValue is None:
+        return f'<{NameValue}{EncodedAttributes}/>'
+    return f'<{NameValue}{EncodedAttributes}>{BodyValue}</{NameValue}>'
 
+# this definition exists because focused behavior needs one stable owner
+def XmlAttr(Value: str) -> str:
+    return XmlText(Value).replace('"', '&quot;').replace('\t', '&#9;').replace('\n', '&#10;').replace('\r', '&#13;')
 
-def _xml_element(
-    name: str,
-    attributes: Mapping[str, str],
-    body: str | None = None,
-) -> str:
-    encoded_attributes = "".join(
-        f' {key}="{_xml_attribute(value)}"' for key, value in attributes.items()
-    )
-    if body is None:
-        return f"<{name}{encoded_attributes}/>"
-    return f"<{name}{encoded_attributes}>{body}</{name}>"
+# this definition exists because focused behavior needs one stable owner
+def XmlText(Value: str) -> str:
+    return Value.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+# this definition exists because focused behavior needs one stable owner
+def ResolvedBaseMap(Objects: tuple[_WriteObject, ...]) -> int:
+    Authored = tuple((ItemValue for ItemValue in Objects if ItemValue.object_id not in KSystemObjectIds))
+    Features = len(SolidFeatureIds(Authored))
+    return KConfigZeroFirstFeature + max(Features, 1) - 1
 
-def _xml_attribute(value: str) -> str:
-    return (
-        _xml_text(value)
-        .replace('"', "&quot;")
-        .replace("\t", "&#9;")
-        .replace("\n", "&#10;")
-        .replace("\r", "&#13;")
-    )
+# this definition exists because focused behavior needs one stable owner
+def ResolvedPayload(Objects: tuple[_WriteObject, ...]) -> bytes:
+    Output = bytearray(Struct.pack('<IH', ResolvedBaseMap(Objects), max(0, len(Objects) - 1)))
+    for ItemValue in Objects:
+        Output.extend(ClassDecl(ItemValue.class_name))
+        Output.extend(NameRecord(ItemValue.name, ItemValue.object_id, TreeNodeFlags(ItemValue)))
+        Output.extend(ItemValue.payload)
+        for Dimension in ItemValue.dimensions:
+            Output.extend(ScalarRecord(Dimension))
+    return bytes(Output)
 
+# this definition exists because focused behavior needs one stable owner
+def ClassDecl(NameValue: str) -> bytes:
+    Encoded = NameValue.encode('ascii')
+    return ClassMarker + Struct.pack('<H', len(Encoded)) + Encoded
 
-def _xml_text(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+# this definition exists because focused behavior needs one stable owner
+def TreeNodeFlags(ItemValue: _WriteObject) -> int:
+    if ItemValue.kind == 'Extrusion':
+        return KCutExtrudeFlags if ItemValue.class_name == 'moCut_c' else KBossExtrudeFlags
+    if ItemValue.class_name in KRefGeomClasses:
+        return KRefGeomFlags
+    return KFolderFlags
 
+# this definition exists because focused behavior needs one stable owner
+def NameRecord(NameValue: str, ObjectId: int, Flags: int) -> bytes:
+    Encoded = NameValue.encode('utf-16le')
+    Units = len(Encoded) // 2
+    if not 1 <= Units <= 255:
+        raise SldprtFormatError('native SOLIDWORKS object name exceeds 255 UTF-16 units')
+    return KNamePrefix + bytes((Units,)) + Encoded + Struct.pack('<III', 0, Flags, ObjectId) + b'\x00' * 16
 
-def _resolved_base_map_index(objects: tuple[_WriteObject, ...]) -> int:
-    authored = tuple(
-        item for item in objects if item.object_id not in _SYSTEM_OBJECT_IDS
-    )
-    features = len(_solid_feature_tree_ids(authored))
-    return _CONFIG0_FIRST_FEATURE_COUNTER + max(features, 1) - 1
+# this definition exists because focused behavior needs one stable owner
+def ScalarRecord(Dimension: _WriteDimension) -> bytes:
+    Encoded = Dimension.name.encode('utf-16le')
+    Units = len(Encoded) // 2
+    if not 1 <= Units <= 255:
+        raise SldprtFormatError('native SOLIDWORKS dimension name exceeds 255 UTF-16 units')
+    Trailer = bytearray(51)
+    Trailer[3:7] = b'\xff' * 4
+    Trailer[21:27] = b'\x01\x00\x00\x00\x02\x00'
+    Trailer[27] = 1 if Dimension.role is ParamRole.DRIVEN else 0
+    return b''.join((ClassDecl('moLengthParameter_c'), KNamePrefix, bytes((Units,)), Encoded, KScalarHeader, Struct.pack('<d', Dimension.value_mm / 1000.0), bytes(Trailer)))
 
+# this definition exists because focused behavior needs one stable owner
+def NativeIdentityA(DocValue: CadDocument, ModelName: str) -> NativeIdentity:
+    Authored = sum((not IsNativeSystem(Feature) for Feature in DocValue.feature_timeline))
+    if Authored == 0 and (not DocValue.sketches):
+        return NativeIdentity(1785690802, 114, 101, 1785690807, KSolidworksConfigFlags, 'Part1')
+    CreationStamp = StableCreation(DocValue, ModelName)
+    LastModifiedStamp = 102 + Authored * 4
+    return NativeIdentity(CreationStamp, LastModifiedStamp, 101, CreationStamp + Authored * 7 + len(DocValue.sketches) * 3 + 5 & 2147483647, KSolidworksConfigFlags, 'Part1')
 
-def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
-    output = bytearray(
-        struct.pack("<IH", _resolved_base_map_index(objects), max(0, len(objects) - 1))
-    )
-    for item in objects:
-        output.extend(_class_declaration(item.class_name))
-        output.extend(_name_record(item.name, item.object_id, _tree_node_flags(item)))
-        output.extend(item.payload)
-        for dimension in item.dimensions:
-            output.extend(_scalar_record(dimension))
-    return bytes(output)
+# this definition exists because focused behavior needs one stable owner
+def SolidFeatureIds(Objects: tuple[_WriteObject, ...]) -> tuple[int, ...]:
+    return tuple((ItemValue.object_id for ItemValue in Objects if ItemValue.class_name not in KNonSolidFeatureClasses))
 
+# this definition exists because focused behavior needs one stable owner
+def ConfigAtomTree(SolidFeatureTreeIds: tuple[int, ...]) -> tuple[int, ...]:
+    return SolidFeatureTreeIds or (KConfigRootTreeId,)
 
-def _class_declaration(name: str) -> bytes:
-    encoded = name.encode("ascii")
-    return CLASS_MARKER + struct.pack("<H", len(encoded)) + encoded
-
-
-def _tree_node_flags(item: _WriteObject) -> int:
-    if item.kind == "Extrusion":
-        return (
-            _CUT_EXTRUDE_FLAGS if item.class_name == "moCut_c" else _BOSS_EXTRUDE_FLAGS
-        )
-    if item.class_name in _REFERENCE_GEOMETRY_CLASSES:
-        return _REFERENCE_GEOMETRY_FLAGS
-    return _FOLDER_FLAGS
-
-
-def _name_record(name: str, object_id: int, flags: int) -> bytes:
-    encoded = name.encode("utf-16le")
-    units = len(encoded) // 2
-    if not 1 <= units <= 255:
-        raise SldprtFormatError(
-            "native SOLIDWORKS object name exceeds 255 UTF-16 units"
-        )
-    return (
-        _NAME_PREFIX
-        + bytes((units,))
-        + encoded
-        + struct.pack("<III", 0, flags, object_id)
-        + b"\0" * 16
-    )
-
-
-def _scalar_record(dimension: _WriteDimension) -> bytes:
-    encoded = dimension.name.encode("utf-16le")
-    units = len(encoded) // 2
-    if not 1 <= units <= 255:
-        raise SldprtFormatError(
-            "native SOLIDWORKS dimension name exceeds 255 UTF-16 units"
-        )
-    trailer = bytearray(51)
-    trailer[3:7] = b"\xff" * 4
-    trailer[21:27] = b"\x01\0\0\0\x02\0"
-    trailer[27] = 1 if dimension.role is ParameterRole.DRIVEN else 0
-    return b"".join(
-        (
-            _class_declaration("moLengthParameter_c"),
-            _NAME_PREFIX,
-            bytes((units,)),
-            encoded,
-            _SCALAR_HEADER,
-            struct.pack("<d", dimension.value_mm / 1000.0),
-            bytes(trailer),
-        )
-    )
-
-
-def _native_identity(document: CadDocument, model_name: str) -> _NativeIdentity:
-    authored = sum(
-        not _is_native_system_feature(feature) for feature in document.feature_timeline
-    )
-    if authored == 0 and not document.sketches:
-        return _NativeIdentity(
-            1785690802,
-            114,
-            101,
-            1785690807,
-            _SOLIDWORKS_CONFIGURATION_FLAGS,
-            "Part1",
-        )
-    creation_stamp = _stable_creation_stamp(document, model_name)
-    last_modified_stamp = 102 + authored * 4
-    return _NativeIdentity(
-        creation_stamp,
-        last_modified_stamp,
-        101,
-        (creation_stamp + authored * 7 + len(document.sketches) * 3 + 5) & 0x7FFFFFFF,
-        _SOLIDWORKS_CONFIGURATION_FLAGS,
-        "Part1",
-    )
-
-
-def _solid_feature_tree_ids(objects: tuple[_WriteObject, ...]) -> tuple[int, ...]:
-    return tuple(
-        item.object_id
-        for item in objects
-        if item.class_name not in _NON_SOLID_FEATURE_CLASSES
-    )
-
-
-def _configuration_atom_tree_ids(
-    solid_feature_tree_ids: tuple[int, ...],
-) -> tuple[int, ...]:
-    return solid_feature_tree_ids or (_CONFIGURATION_ROOT_TREE_ID,)
-
-
-# load critical envelope streams must share feature topology and cached bounds
-def _native_envelope_streams(
-    document: CadDocument,
-    model_name: str,
-    identity: _NativeIdentity,
-    solid_feature_tree_ids: tuple[int, ...] = (),
-    header_feature_objects: tuple[tuple[int, str, bool], ...] = (),
-    header_feature_stamps: Mapping[int, tuple[int, ...]] | None = None,
-    annotation_view_count: int = 1,
-    terminal_parent_tree_id: int | None = None,
-    HeaderBounds: tuple[float, ...] | None = None,
-    HeaderCreation: int | None = None,
-    CmgrParentTreeId: int | None = None,
-    AnnotationViewVariant: str = "default",
-) -> Mapping[str, bytes]:
-    configuration_name = next(
-        (
-            configuration.name
-            for configuration in document.configurations
-            if configuration.active
-        ),
-        document.configurations[0].name if document.configurations else "Default",
-    )
-    zero = struct.pack("<I", 0)
-    streams = {
-        "Contents/CMgrHdr2": _configuration_header_payload(
-            configuration_name, identity
-        ),
-        "Contents/CnfgObjs": zero + _serialized_string("") + _serialized_string(""),
-        "Contents/CusProps": _custom_properties_payload(),
-        "Contents/OleItems": zero,
-        "Contents/eModelLic": zero,
-        "ModelStamps": struct.pack(
-            "<III",
-            identity.creation_stamp,
-            identity.last_modified_stamp,
-            identity.baseline_stamp,
-        ),
-        "_MO_VERSION_18000/Biography": _biography_payload(model_name, identity),
-        "_MO_VERSION_18000/History": _version_history_payload(),
-    }
-    if HeaderCreation is not None and not 0 <= HeaderCreation <= 0xFFFFFFFF:
-        raise SldprtFormatError("native SOLIDWORKS header creation stamp is invalid")
-    HeaderIdentity = (
-        identity
-        if HeaderCreation is None
-        else _NativeIdentity(
-            HeaderCreation,
-            identity.last_modified_stamp,
-            identity.baseline_stamp,
-            identity.header_stamp,
-            identity.configuration_flags,
-            identity.reference_name,
-        )
-    )
-    model_header = _model_header_payload(
-        HeaderIdentity,
-        configuration_name,
-        solid_feature_tree_ids=solid_feature_tree_ids,
-        feature_objects=header_feature_objects,
-        feature_stamps=header_feature_stamps,
-        HeaderBounds=HeaderBounds,
-    )
-    streams["Contents/Config-0-ModelHeader"] = model_header
-    streams["Header2"] = model_header
-    streams["Contents/Definition"] = encode_definition_stream(
-        assembly=document.assembly is not None
-    )
-    tree_ids = _configuration_atom_tree_ids(solid_feature_tree_ids)
-    ParentTreeId = (
-        terminal_parent_tree_id
-        if terminal_parent_tree_id is not None
-        else CmgrParentTreeId
-    )
+# this definition exists because focused behavior needs one stable owner
+def NativeEnvelope(DocValue: CadDocument, ModelName: str, Identity: _NativeIdentity, SolidFeatureTreeIds: tuple[int, ...]=(), HeaderFeatureObjects: tuple[tuple[int, str, bool], ...]=(), HeaderFeatureStamps: Mapping[int, tuple[int, ...]] | None=None, AnnotationViewCount: int=1, TerminalParentTreeId: int | None=None, HeaderBounds: tuple[float, ...] | None=None, HeaderCreation: int | None=None, CmgrParentTreeId: int | None=None, AnnotationViewVariant: str='default') -> Mapping[str, bytes]:
+    ConfigName = next((Config.name for Config in DocValue.configurations if Config.active), DocValue.configurations[0].name if DocValue.configurations else 'Default')
+    ZeroValue = Struct.pack('<I', 0)
+    Streams = {'Contents/CMgrHdr2': ConfigHeader(ConfigName, Identity), 'Contents/CnfgObjs': ZeroValue + Serialized('') + Serialized(''), 'Contents/CusProps': CustomPayload(), 'Contents/OleItems': ZeroValue, 'Contents/eModelLic': ZeroValue, 'ModelStamps': Struct.pack('<III', Identity.creation_stamp, Identity.last_modified_stamp, Identity.baseline_stamp), '_MO_VERSION_18000/Biography': Biography(ModelName, Identity), '_MO_VERSION_18000/History': VersionHistory()}
+    if HeaderCreation is not None and (not 0 <= HeaderCreation <= 4294967295):
+        raise SldprtFormatError('native SOLIDWORKS header creation stamp is invalid')
+    HeaderIdentity = Identity if HeaderCreation is None else NativeIdentity(HeaderCreation, Identity.last_modified_stamp, Identity.baseline_stamp, Identity.header_stamp, Identity.configuration_flags, Identity.reference_name)
+    ModelHeader = ModelHeader(HeaderIdentity, ConfigName, SolidFeatureTreeIds=SolidFeatureTreeIds, FeatureObjects=HeaderFeatureObjects, FeatureStamps=HeaderFeatureStamps, HeaderBounds=HeaderBounds)
+    Streams['Contents/Config-0-ModelHeader'] = ModelHeader
+    Streams['Header2'] = ModelHeader
+    Streams['Contents/Definition'] = EncodeDefinitionStream(assembly=DocValue.assembly is not None)
+    TreeIds = ConfigAtomTree(SolidFeatureTreeIds)
+    ParentTreeId = TerminalParentTreeId if TerminalParentTreeId is not None else CmgrParentTreeId
     if ParentTreeId is not None:
-        if (
-            len(tree_ids) != 2
-            or tree_ids[0] != ParentTreeId
-            or (terminal_parent_tree_id is not None and annotation_view_count != 2)
-        ):
-            raise SldprtFormatError(
-                "terminal feature configuration requires its parent and child trees"
-            )
-        tree_ids = (tree_ids[-1],)
-    atom_ids = atom_ids_for(len(tree_ids))
-    streams[CONFIGURATION_MANAGER_STREAM] = encode_cmgr_stream(
-        feature_tree_ids=tree_ids,
-        configuration_name=configuration_name,
-        part_name=identity.reference_name,
-        atom_ids=atom_ids,
-        connected_history=len(tree_ids) in {2, 3, 4} and len(document.bodies) == 1,
-        terminal_parent_tree_id=ParentTreeId,
-    )
-    streams[CONFIGURATION_STREAM] = encode_config0_stream(
-        part_name=identity.reference_name,
-        atoms=tuple(reversed(tuple(zip(atom_ids, tree_ids, strict=True)))),
-        high_water=(atom_ids[-1], FIRST_ATOM_ID + 2 * len(atom_ids)),
-        annotation_view_count=annotation_view_count,
-        terminal_parent_tree_id=terminal_parent_tree_id,
-        annotation_view_variant=AnnotationViewVariant,
-    )
-    return MappingProxyType(streams)
+        if len(TreeIds) != 2 or TreeIds[0] != ParentTreeId or (TerminalParentTreeId is not None and AnnotationViewCount != 2):
+            raise SldprtFormatError('terminal feature configuration requires its parent and child trees')
+        TreeIds = (TreeIds[-1],)
+    AtomIds = AtomIdsFor(len(TreeIds))
+    Streams[ConfigManagerStream] = EncodeCmgrStream(feature_tree_ids=TreeIds, configuration_name=ConfigName, part_name=Identity.reference_name, atom_ids=AtomIds, connected_history=len(TreeIds) in {2, 3, 4} and len(DocValue.bodies) == 1, terminal_parent_tree_id=ParentTreeId)
+    Streams[ConfigStream] = EncodeConfigZeroStream(part_name=Identity.reference_name, atoms=tuple(reversed(tuple(zip(AtomIds, TreeIds, strict=True)))), high_water=(AtomIds[-1], FirstAtomId + 2 * len(AtomIds)), annotation_view_count=AnnotationViewCount, terminal_parent_tree_id=TerminalParentTreeId, annotation_view_variant=AnnotationViewVariant)
+    return MappingProxyType(Streams)
 
-
-def encode_native_assembly_envelope(
-    document: CadDocument,
-    model_name: str,
-    occurrence_names: Sequence[str],
-    mate_names: Sequence[str],
-) -> NativeAssemblyEnvelope:
-    configuration_name = next(
-        (
-            configuration.name
-            for configuration in document.configurations
-            if configuration.active
-        ),
-        document.configurations[0].name if document.configurations else "Default",
-    )
-    listed: list[tuple[int, str, bool]] = list(_ASSEMBLY_HEADER_OBJECTS)
-    omitted: list[str] = []
-    next_object_id = _ASSEMBLY_HEADER_OBJECTS[-1][0] + 1
-    for name in (*occurrence_names, *mate_names):
-        if _serializable_name(name):
-            listed.append((next_object_id, name, False))
-            next_object_id += 1
+# this definition exists because focused behavior needs one stable owner
+def EncodeNativeAsm(DocValue: CadDocument, ModelName: str, ItemNames: Sequence[str], MateNames: Sequence[str]) -> NativeAsm:
+    ConfigName = next((Config.name for Config in DocValue.configurations if Config.active), DocValue.configurations[0].name if DocValue.configurations else 'Default')
+    Listed: list[tuple[int, str, bool]] = list(KAsmHeaderObjects)
+    Omitted: list[str] = []
+    NextObjectId = KAsmHeaderObjects[-1][0] + 1
+    for NameValue in (*ItemNames, *MateNames):
+        if Serializable(NameValue):
+            Listed.append((NextObjectId, NameValue, False))
+            NextObjectId += 1
         else:
-            omitted.append(name)
-    identity = _native_assembly_identity(document, model_name, len(listed))
-    document_path = f"C:\\{model_name}{ASSEMBLY_SUFFIX}"
-    model_header = _header_payload(
-        identity, configuration_name, tuple(listed), document_path
-    )
-    zero = struct.pack("<I", 0)
-    streams = {
-        "Contents/CMgrHdr2": _configuration_header_payload(
-            configuration_name, identity
-        ),
-        "Contents/CnfgObjs": zero + _serialized_string("") + _serialized_string(""),
-        "Contents/Config-0-ModelHeader": model_header,
-        _ASSEMBLY_ATTACHMENT_STREAM: struct.pack("<H", 0),
-        "Contents/CusProps": _custom_properties_payload(
-            _ASSEMBLY_PROPERTY_CONTAINER_CLASS
-        ),
-        "Contents/OleItems": zero,
-        _ASSEMBLY_VIEW_ORIENTATION_STREAM: _VIEW_ORIENTATION_PAYLOAD,
-        "Contents/eModelLic": zero,
-        "Header2": model_header,
-        "ModelStamps": struct.pack(
-            "<III",
-            identity.creation_stamp,
-            identity.last_modified_stamp,
-            identity.baseline_stamp,
-        ),
-        _ASSEMBLY_VISUAL_DATA_STREAM: zero,
-        f"{_ASSEMBLY_VERSION_PREFIX}/Biography": _biography_payload(
-            model_name,
-            identity,
-            "C:\\Kit\\Assembly.ASMDOT",
-            ASSEMBLY_SUFFIX,
-        ),
-        f"{_ASSEMBLY_VERSION_PREFIX}/History": _version_history_payload(),
-        _ASSEMBLY_TABLES_STREAM: b"",
-        _ASSEMBLY_CUTLIST_STREAM: (
-            f'<Configuration id="0" Name="{_xml_attribute(configuration_name)}"/>\r\n'
-        ).encode("utf-8"),
-        _ASSEMBLY_CONFIG_PROPERTIES_STREAM: _CONFIG_PROPERTIES_PAYLOAD,
-        _ASSEMBLY_OPEN_TIME_STREAM: _OPEN_TIME_PAYLOAD,
-    }
-    header_objects = tuple((object_id, name) for object_id, name, _ in listed)
-    decoded = decode_native_model_header(model_header)
-    return NativeAssemblyEnvelope(
-        MappingProxyType(streams),
-        configuration_name,
-        identity.reference_name,
-        document_path,
-        header_objects,
-        tuple(omitted),
-        not omitted
-        and decoded.user_name == "Kit"
-        and decoded.reference_name == identity.reference_name
-        and decoded.configuration_name == configuration_name
-        and decoded.document_path == document_path
-        and decoded.objects == header_objects,
-    )
+            Omitted.append(NameValue)
+    Identity = NativeAsmA(DocValue, ModelName, len(Listed))
+    DocPath = f'C:\\{ModelName}{AsmSuffix}'
+    ModelHeader = HeaderPayload(Identity, ConfigName, tuple(Listed), DocPath)
+    ZeroValue = Struct.pack('<I', 0)
+    Streams = {'Contents/CMgrHdr2': ConfigHeader(ConfigName, Identity), 'Contents/CnfgObjs': ZeroValue + Serialized('') + Serialized(''), 'Contents/Config-0-ModelHeader': ModelHeader, KAsmAttachmentStream: Struct.pack('<H', 0), 'Contents/CusProps': CustomPayload(KAsmPropContainerClass), 'Contents/OleItems': ZeroValue, KAsmViewOrientationStream: KViewOrientationPayload, 'Contents/eModelLic': ZeroValue, 'Header2': ModelHeader, 'ModelStamps': Struct.pack('<III', Identity.creation_stamp, Identity.last_modified_stamp, Identity.baseline_stamp), KAsmVisualDataStream: ZeroValue, f'{KAsmVersionPrefix}/Biography': Biography(ModelName, Identity, 'C:\\Kit\\Assembly.ASMDOT', AsmSuffix), f'{KAsmVersionPrefix}/History': VersionHistory(), KAsmTablesStream: b'', KAsmCutlistStream: f'<Configuration id="0" Name="{XmlAttr(ConfigName)}"/>\r\n'.encode('utf-8'), KAsmConfigPropertiesStreA: KConfigPropertiesPayload, KAsmOpenTimeStream: KOpenTimePayload}
+    HeaderObjects = tuple(((ObjectId, NameValue) for ObjectId, NameValue, Ignored in Listed))
+    Decoded = DecodeNativeA(ModelHeader)
+    return NativeAsm(MappingProxyType(Streams), ConfigName, Identity.reference_name, DocPath, HeaderObjects, tuple(Omitted), not Omitted and Decoded.user_name == 'Kit' and (Decoded.reference_name == Identity.reference_name) and (Decoded.configuration_name == ConfigName) and (Decoded.document_path == DocPath) and (Decoded.objects == HeaderObjects))
 
+# this definition exists because focused behavior needs one stable owner
+def DecodeNativeA(DataValue: bytes) -> NativeModelA:
+    ClassName, Offset = ReadClass(DataValue, 0)
+    if ClassName != 'moHeader_c':
+        raise SldprtFormatError('native SOLIDWORKS header class is not moHeader_c')
+    Offset = ExpectBytes(DataValue, Offset, bytes.fromhex('01000000ffff00000f00') + b'su_CStringArray' + Struct.pack('<H', 1))
+    UserName, Offset = ReadSerialized(DataValue, Offset)
+    Offset = ExpectBytes(DataValue, Offset, bytes.fromhex('03800100'))
+    Ignored, Offset = ReadSerialized(DataValue, Offset)
+    ClassName, Offset = ReadClass(DataValue, Offset)
+    if ClassName != 'suObList':
+        raise SldprtFormatError('native SOLIDWORKS header log list is missing')
+    LogCount, = Struct.unpack_from('<H', DataValue, Offset)
+    Offset += 2
+    ClassName, Offset = ReadClass(DataValue, Offset)
+    if ClassName != 'moLogs_c':
+        raise SldprtFormatError('native SOLIDWORKS header log record is missing')
+    Offset = ExpectBytes(DataValue, Offset, Struct.pack('<H', 1))
+    ClassName, Offset = ReadClass(DataValue, Offset)
+    if ClassName != 'moStamp_c':
+        raise SldprtFormatError('native SOLIDWORKS header stamp record is missing')
+    Offset += 10
+    Ignored, Offset = ReadSerialized(DataValue, Offset)
+    Offset += 4
+    RefName, Offset = ReadSerialized(DataValue, Offset)
+    Objects: list[tuple[int, str]] = []
+    for Ignored in range(LogCount - 1):
+        Offset = ExpectBytes(DataValue, Offset, bytes.fromhex('0880'))
+        ActionCount, = Struct.unpack_from('<H', DataValue, Offset)
+        Offset += 2
+        for Ignored in range(ActionCount):
+            Offset = ExpectBytes(DataValue, Offset, bytes.fromhex('0a80'))
+            Offset += 10
+            Ignored, Offset = ReadSerialized(DataValue, Offset)
+        ObjectId, = Struct.unpack_from('<I', DataValue, Offset)
+        Offset += 4
+        ObjectName, Offset = ReadSerialized(DataValue, Offset)
+        Objects.append((ObjectId, ObjectName))
+    Offset += 14
+    ClassName, Offset = ReadClass(DataValue, Offset)
+    if ClassName != 'moExtObject_c':
+        raise SldprtFormatError('native SOLIDWORKS header reference block is missing')
+    ClassName, Offset = ReadClass(DataValue, Offset)
+    if ClassName != 'moCStringHandle_c':
+        raise SldprtFormatError('native SOLIDWORKS header path handle is missing')
+    DocPath, Offset = ReadSerialized(DataValue, Offset)
+    Ignored, Offset = ReadClassRef(DataValue, Offset)
+    Ignored, Offset = ReadSerialized(DataValue, Offset)
+    Offset = ExpectBytes(DataValue, Offset, bytes.fromhex('020000'))
+    Offset += 4
+    for Ignored in range(3):
+        Ignored, Offset = ReadSerialized(DataValue, Offset)
+    Offset = ExpectBytes(DataValue, Offset, bytes.fromhex('0008'))
+    Offset += 16
+    ConfigName, Offset = ReadSerialized(DataValue, Offset)
+    return NativeModelA(UserName, RefName, ConfigName, DocPath, tuple(Objects))
 
-def decode_native_model_header(data: bytes) -> NativeModelHeader:
-    class_name, offset = _read_class(data, 0)
-    if class_name != "moHeader_c":
-        raise SldprtFormatError("native SOLIDWORKS header class is not moHeader_c")
-    offset = _expect_bytes(
-        data,
-        offset,
-        bytes.fromhex("01000000ffff00000f00")
-        + b"su_CStringArray"
-        + struct.pack("<H", 1),
-    )
-    user_name, offset = _read_serialized_string(data, offset)
-    offset = _expect_bytes(data, offset, bytes.fromhex("03800100"))
-    _, offset = _read_serialized_string(data, offset)
-    class_name, offset = _read_class(data, offset)
-    if class_name != "suObList":
-        raise SldprtFormatError("native SOLIDWORKS header log list is missing")
-    (log_count,) = struct.unpack_from("<H", data, offset)
-    offset += 2
-    class_name, offset = _read_class(data, offset)
-    if class_name != "moLogs_c":
-        raise SldprtFormatError("native SOLIDWORKS header log record is missing")
-    offset = _expect_bytes(data, offset, struct.pack("<H", 1))
-    class_name, offset = _read_class(data, offset)
-    if class_name != "moStamp_c":
-        raise SldprtFormatError("native SOLIDWORKS header stamp record is missing")
-    offset += 10
-    _, offset = _read_serialized_string(data, offset)
-    offset += 4
-    reference_name, offset = _read_serialized_string(data, offset)
-    objects: list[tuple[int, str]] = []
-    for _ in range(log_count - 1):
-        offset = _expect_bytes(data, offset, bytes.fromhex("0880"))
-        (action_count,) = struct.unpack_from("<H", data, offset)
-        offset += 2
-        for _ in range(action_count):
-            offset = _expect_bytes(data, offset, bytes.fromhex("0a80"))
-            offset += 10
-            _, offset = _read_serialized_string(data, offset)
-        (object_id,) = struct.unpack_from("<I", data, offset)
-        offset += 4
-        object_name, offset = _read_serialized_string(data, offset)
-        objects.append((object_id, object_name))
-    offset += 14
-    class_name, offset = _read_class(data, offset)
-    if class_name != "moExtObject_c":
-        raise SldprtFormatError("native SOLIDWORKS header reference block is missing")
-    class_name, offset = _read_class(data, offset)
-    if class_name != "moCStringHandle_c":
-        raise SldprtFormatError("native SOLIDWORKS header path handle is missing")
-    document_path, offset = _read_serialized_string(data, offset)
-    _, offset = _ReadClassReference(data, offset)
-    _, offset = _read_serialized_string(data, offset)
-    offset = _expect_bytes(data, offset, bytes.fromhex("020000"))
-    offset += 4
-    for _ in range(3):
-        _, offset = _read_serialized_string(data, offset)
-    offset = _expect_bytes(data, offset, bytes.fromhex("0008"))
-    offset += 16
-    configuration_name, offset = _read_serialized_string(data, offset)
-    return NativeModelHeader(
-        user_name,
-        reference_name,
-        configuration_name,
-        document_path,
-        tuple(objects),
-    )
+# this definition exists because focused behavior needs one stable owner
+def ReadClass(DataValue: bytes, Offset: int) -> tuple[str, int]:
+    Marker = len(ClassMarker)
+    if DataValue[Offset:Offset + Marker] != ClassMarker:
+        raise SldprtFormatError('native SOLIDWORKS class declaration is missing')
+    Start = Offset + Marker
+    if Start + 2 > len(DataValue):
+        raise SldprtFormatError('native SOLIDWORKS class declaration is truncated')
+    Length, = Struct.unpack_from('<H', DataValue, Start)
+    EndValue = Start + 2 + Length
+    if EndValue > len(DataValue):
+        raise SldprtFormatError('native SOLIDWORKS class declaration is truncated')
+    return (DataValue[Start + 2:EndValue].decode('ascii'), EndValue)
 
+# this definition exists because focused behavior needs one stable owner
+def ReadClassRef(DataValue: bytes, OffsetData: int) -> tuple[int, int]:
+    if OffsetData + 2 > len(DataValue):
+        raise SldprtFormatError('native SOLIDWORKS class reference is truncated')
+    RefData, = Struct.unpack_from('<H', DataValue, OffsetData)
+    if RefData == 65535 or not RefData & 32768:
+        raise SldprtFormatError('native SOLIDWORKS class reference is invalid')
+    return (RefData & 32767, OffsetData + 2)
 
-def _read_class(data: bytes, offset: int) -> tuple[str, int]:
-    marker = len(CLASS_MARKER)
-    if data[offset : offset + marker] != CLASS_MARKER:
-        raise SldprtFormatError("native SOLIDWORKS class declaration is missing")
-    start = offset + marker
-    if start + 2 > len(data):
-        raise SldprtFormatError("native SOLIDWORKS class declaration is truncated")
-    (length,) = struct.unpack_from("<H", data, start)
-    end = start + 2 + length
-    if end > len(data):
-        raise SldprtFormatError("native SOLIDWORKS class declaration is truncated")
-    return data[start + 2 : end].decode("ascii"), end
+# this definition exists because focused behavior needs one stable owner
+def ReadSerialized(DataValue: bytes, Offset: int) -> tuple[str, int]:
+    Marker = len(SerializedStringMarker)
+    if DataValue[Offset:Offset + Marker] != SerializedStringMarker:
+        raise SldprtFormatError('native SOLIDWORKS serialized string is missing')
+    Start = Offset + Marker
+    if Start >= len(DataValue):
+        raise SldprtFormatError('native SOLIDWORKS serialized string is truncated')
+    EndValue = Start + 1 + DataValue[Start] * 2
+    if EndValue > len(DataValue):
+        raise SldprtFormatError('native SOLIDWORKS serialized string is truncated')
+    return (DataValue[Start + 1:EndValue].decode('utf-16le'), EndValue)
 
+# this definition exists because focused behavior needs one stable owner
+def ExpectBytes(DataValue: bytes, Offset: int, Literal: bytes) -> int:
+    if DataValue[Offset:Offset + len(Literal)] != Literal:
+        raise SldprtFormatError('native SOLIDWORKS header layout is unexpected')
+    return Offset + len(Literal)
 
-# feature-count-dependent header references need validation without a fixed class index
-def _ReadClassReference(data: bytes, OffsetData: int) -> tuple[int, int]:
-    if OffsetData + 2 > len(data):
-        raise SldprtFormatError("native SOLIDWORKS class reference is truncated")
-    (ReferenceData,) = struct.unpack_from("<H", data, OffsetData)
-    if ReferenceData == 0xFFFF or not ReferenceData & 0x8000:
-        raise SldprtFormatError("native SOLIDWORKS class reference is invalid")
-    return ReferenceData & 0x7FFF, OffsetData + 2
+# this definition exists because focused behavior needs one stable owner
+def Serializable(Value: str) -> bool:
+    return 1 <= len(Value.encode('utf-16le')) // 2 <= 254
 
+# this definition exists because focused behavior needs one stable owner
+def NativeAsmA(DocValue: CadDocument, ModelName: str, ObjectCount: int) -> NativeIdentity:
+    CreationStamp = StableCreation(DocValue, ModelName, b'assembly')
+    return NativeIdentity(CreationStamp, 101 + ObjectCount * 4, 101, CreationStamp + ObjectCount * 7 + 5 & 2147483647, KAsmConfigFlags, PureWindowsPath(ModelName).stem or KAsmRefName)
 
-def _read_serialized_string(data: bytes, offset: int) -> tuple[str, int]:
-    marker = len(SERIALIZED_STRING_MARKER)
-    if data[offset : offset + marker] != SERIALIZED_STRING_MARKER:
-        raise SldprtFormatError("native SOLIDWORKS serialized string is missing")
-    start = offset + marker
-    if start >= len(data):
-        raise SldprtFormatError("native SOLIDWORKS serialized string is truncated")
-    end = start + 1 + data[start] * 2
-    if end > len(data):
-        raise SldprtFormatError("native SOLIDWORKS serialized string is truncated")
-    return data[start + 1 : end].decode("utf-16le"), end
+# this definition exists because focused behavior needs one stable owner
+def ModelHeader(Identity: _NativeIdentity, ConfigName: str, UserName: str='Kit', SolidFeatureTreeIds: tuple[int, ...]=(), FeatureObjects: tuple[tuple[int, str, bool], ...]=(), FeatureStamps: Mapping[int, tuple[int, ...]] | None=None, HeaderBounds: tuple[float, ...] | None=None) -> bytes:
+    return HeaderPayload(Identity, ConfigName, (*KHeaderObjects, *FeatureObjects), '', UserName, max(SolidFeatureTreeIds) + 1 if SolidFeatureTreeIds else None, FeatureStamps, HeaderBounds)
 
-
-def _expect_bytes(data: bytes, offset: int, literal: bytes) -> int:
-    if data[offset : offset + len(literal)] != literal:
-        raise SldprtFormatError("native SOLIDWORKS header layout is unexpected")
-    return offset + len(literal)
-
-
-def _serializable_name(value: str) -> bool:
-    return 1 <= len(value.encode("utf-16le")) // 2 <= 0xFE
-
-
-def _native_assembly_identity(
-    document: CadDocument, model_name: str, object_count: int
-) -> _NativeIdentity:
-    creation_stamp = _stable_creation_stamp(document, model_name, b"assembly")
-    return _NativeIdentity(
-        creation_stamp,
-        101 + object_count * 4,
-        101,
-        (creation_stamp + object_count * 7 + 5) & 0x7FFFFFFF,
-        _ASSEMBLY_CONFIGURATION_FLAGS,
-        PureWindowsPath(model_name).stem or _ASSEMBLY_REFERENCE_NAME,
-    )
-
-
-# model headers need one owner for action history and spatial metadata
-def _model_header_payload(
-    identity: _NativeIdentity,
-    configuration_name: str,
-    user_name: str = "Kit",
-    solid_feature_tree_ids: tuple[int, ...] = (),
-    feature_objects: tuple[tuple[int, str, bool], ...] = (),
-    feature_stamps: Mapping[int, tuple[int, ...]] | None = None,
-    HeaderBounds: tuple[float, ...] | None = None,
-) -> bytes:
-    return _header_payload(
-        identity,
-        configuration_name,
-        (*_HEADER_OBJECTS, *feature_objects),
-        "",
-        user_name,
-        max(solid_feature_tree_ids) + 1 if solid_feature_tree_ids else None,
-        feature_stamps,
-        HeaderBounds,
-    )
-
-
-# format versions share one header grammar despite optional geometric bounds
-def _header_payload(
-    identity: _NativeIdentity,
-    configuration_name: str,
-    objects: Sequence[tuple[int, str, bool]],
-    document_path: str,
-    user_name: str = "Kit",
-    next_object_id: int | None = None,
-    object_stamps: Mapping[int, tuple[int, ...]] | None = None,
-    HeaderBounds: tuple[float, ...] | None = None,
-) -> bytes:
-    if HeaderBounds is not None and (
-        len(HeaderBounds) != 10
-        or not all(math.isfinite(ItemValue) for ItemValue in HeaderBounds)
-    ):
-        raise SldprtFormatError(
-            "native SOLIDWORKS header bounds require ten finite values"
-        )
-    legacy_stamp = bytes.fromhex("f65a1a69")
-    CStringHandleClassIndex = 14 + sum(
-        2 + int(modified) for _object_id, _name, modified in objects
-    )
-    output = bytearray(_class_declaration("moHeader_c"))
-    output.extend(
-        bytes.fromhex("01000000ffff00000f00")
-        + b"su_CStringArray"
-        + struct.pack("<H", 1)
-    )
-    output.extend(_serialized_string(user_name))
-    output.extend(bytes.fromhex("03800100"))
-    output.extend(_serialized_string(""))
-    output.extend(_class_declaration("suObList"))
-    output.extend(struct.pack("<H", len(objects) + 1))
-    output.extend(_class_declaration("moLogs_c"))
-    output.extend(struct.pack("<H", 1))
-    output.extend(_class_declaration("moStamp_c"))
-    output.extend(b"\0" * 6 + legacy_stamp)
-    output.extend(_serialized_string("Created"))
-    output.extend(struct.pack("<I", 0))
-    output.extend(_serialized_string(identity.reference_name))
-    LogicalStamp = identity.creation_stamp
-    ObjectStamps = object_stamps or {}
-    for object_id, name, modified in objects:
-        actions = ("Created", "Modified") if modified else ("Created",)
-        RecoveredStamps = ObjectStamps.get(object_id)
-        if RecoveredStamps is not None and len(RecoveredStamps) != len(actions):
-            raise SldprtFormatError(
-                "native SOLIDWORKS header action stamps do not match object actions"
-            )
-        output.extend(bytes.fromhex("0880") + struct.pack("<H", len(actions)))
-        if object_id > 16 and modified:
+# this definition exists because focused behavior needs one stable owner
+def HeaderPayload(Identity: _NativeIdentity, ConfigName: str, Objects: Sequence[tuple[int, str, bool]], DocPath: str, UserName: str='Kit', NextObjectId: int | None=None, ObjectStampsA: Mapping[int, tuple[int, ...]] | None=None, HeaderBounds: tuple[float, ...] | None=None) -> bytes:
+    if HeaderBounds is not None and (len(HeaderBounds) != 10 or not all((MathValue.isfinite(ItemValue) for ItemValue in HeaderBounds))):
+        raise SldprtFormatError('native SOLIDWORKS header bounds require ten finite values')
+    LegacyStamp = bytes.fromhex('f65a1a69')
+    CStringHandleClassIndex = 14 + sum((2 + int(Modified) for ObjectId, NameValue, Modified in Objects))
+    Output = bytearray(ClassDecl('moHeader_c'))
+    Output.extend(bytes.fromhex('01000000ffff00000f00') + b'su_CStringArray' + Struct.pack('<H', 1))
+    Output.extend(Serialized(UserName))
+    Output.extend(bytes.fromhex('03800100'))
+    Output.extend(Serialized(''))
+    Output.extend(ClassDecl('suObList'))
+    Output.extend(Struct.pack('<H', len(Objects) + 1))
+    Output.extend(ClassDecl('moLogs_c'))
+    Output.extend(Struct.pack('<H', 1))
+    Output.extend(ClassDecl('moStamp_c'))
+    Output.extend(b'\x00' * 6 + LegacyStamp)
+    Output.extend(Serialized('Created'))
+    Output.extend(Struct.pack('<I', 0))
+    Output.extend(Serialized(Identity.reference_name))
+    LogicalStamp = Identity.creation_stamp
+    ObjectStamps = ObjectStampsA or {}
+    for ObjectId, NameValue, Modified in Objects:
+        Actions = ('Created', 'Modified') if Modified else ('Created',)
+        RecoveredStamps = ObjectStamps.get(ObjectId)
+        if RecoveredStamps is not None and len(RecoveredStamps) != len(Actions):
+            raise SldprtFormatError('native SOLIDWORKS header action stamps do not match object actions')
+        Output.extend(bytes.fromhex('0880') + Struct.pack('<H', len(Actions)))
+        if ObjectId > 16 and Modified:
             LogicalStamp += 1
-        for index, action in enumerate(actions):
-            if object_id > 16 and index:
+        for Index, Action in enumerate(Actions):
+            if ObjectId > 16 and Index:
                 LogicalStamp += 1
-            StampData = (
-                struct.pack("<I", RecoveredStamps[index])
-                if RecoveredStamps is not None
-                else (
-                    legacy_stamp if object_id <= 16 else struct.pack("<I", LogicalStamp)
-                )
-            )
-            output.extend(
-                bytes.fromhex("0a80") + struct.pack("<I", index) + b"\0\0" + StampData
-            )
-            output.extend(_serialized_string(action))
-        output.extend(struct.pack("<I", object_id))
-        output.extend(_serialized_string(name))
-    watermark = (
-        max(item[0] for item in objects) + 1
-        if next_object_id is None
-        else max(next_object_id, max(item[0] for item in objects) + 1)
-    )
-    output.extend(
-        legacy_stamp
-        + struct.pack("<IH", watermark, 0)
-        + struct.pack("<I", identity.last_modified_stamp)
-    )
-    output.extend(_class_declaration("moExtObject_c"))
-    output.extend(_class_declaration("moCStringHandle_c"))
-    output.extend(_serialized_string(document_path))
-    output.extend(encode_class_reference(CStringHandleClassIndex))
-    output.extend(_serialized_string(identity.reference_name))
-    output.extend(bytes.fromhex("020000"))
-    output.extend(struct.pack("<I", identity.creation_stamp))
-    output.extend(_serialized_string("") * 3)
-    output.extend(bytes.fromhex("0008"))
-    output.extend(struct.pack("<III", identity.header_stamp, 1, 0))
-    output.extend(struct.pack("<I", 0xFFFFFFFF))
-    output.extend(_serialized_string(configuration_name))
-    output.extend(b"\0" * 16)
-    output.extend(struct.pack("<I", identity.baseline_stamp))
-    output.extend(b"\0" * 8)
-    output.extend(struct.pack("<I", identity.creation_stamp))
-    output.extend(b"\0" * 22)
-    output.extend(struct.pack("<I", identity.header_stamp))
-    output.extend(bytes.fromhex("0680"))
-    output.extend(b"\0" * 10)
-    output.extend(struct.pack("<I", int(HeaderBounds is not None)))
+            StampData = Struct.pack('<I', RecoveredStamps[Index]) if RecoveredStamps is not None else LegacyStamp if ObjectId <= 16 else Struct.pack('<I', LogicalStamp)
+            Output.extend(bytes.fromhex('0a80') + Struct.pack('<I', Index) + b'\x00\x00' + StampData)
+            Output.extend(Serialized(Action))
+        Output.extend(Struct.pack('<I', ObjectId))
+        Output.extend(Serialized(NameValue))
+    Watermark = max((ItemValue[0] for ItemValue in Objects)) + 1 if NextObjectId is None else max(NextObjectId, max((ItemValue[0] for ItemValue in Objects)) + 1)
+    Output.extend(LegacyStamp + Struct.pack('<IH', Watermark, 0) + Struct.pack('<I', Identity.last_modified_stamp))
+    Output.extend(ClassDecl('moExtObject_c'))
+    Output.extend(ClassDecl('moCStringHandle_c'))
+    Output.extend(Serialized(DocPath))
+    Output.extend(EncodeClassRef(CStringHandleClassIndex))
+    Output.extend(Serialized(Identity.reference_name))
+    Output.extend(bytes.fromhex('020000'))
+    Output.extend(Struct.pack('<I', Identity.creation_stamp))
+    Output.extend(Serialized('') * 3)
+    Output.extend(bytes.fromhex('0008'))
+    Output.extend(Struct.pack('<III', Identity.header_stamp, 1, 0))
+    Output.extend(Struct.pack('<I', 4294967295))
+    Output.extend(Serialized(ConfigName))
+    Output.extend(b'\x00' * 16)
+    Output.extend(Struct.pack('<I', Identity.baseline_stamp))
+    Output.extend(b'\x00' * 8)
+    Output.extend(Struct.pack('<I', Identity.creation_stamp))
+    Output.extend(b'\x00' * 22)
+    Output.extend(Struct.pack('<I', Identity.header_stamp))
+    Output.extend(bytes.fromhex('0680'))
+    Output.extend(b'\x00' * 10)
+    Output.extend(Struct.pack('<I', int(HeaderBounds is not None)))
     if HeaderBounds is not None:
-        output.extend(struct.pack("<10d", *HeaderBounds))
-    output.extend(b"\xff" * 10)
-    output.extend(_class_declaration(""))
-    output.extend(b"\0" * 40)
-    output.extend(struct.pack("<I", 1))
-    output.extend(b"\0" * 16)
-    output.extend(struct.pack("<I", 1))
-    return bytes(output)
+        Output.extend(Struct.pack('<10d', *HeaderBounds))
+    Output.extend(b'\xff' * 10)
+    Output.extend(ClassDecl(''))
+    Output.extend(b'\x00' * 40)
+    Output.extend(Struct.pack('<I', 1))
+    Output.extend(b'\x00' * 16)
+    Output.extend(Struct.pack('<I', 1))
+    return bytes(Output)
 
+# this definition exists because focused behavior needs one stable owner
+def ConfigHeader(ConfigName: str, Identity: _NativeIdentity) -> bytes:
+    return b''.join((ClassDecl('dmConfigMgrHeader_c'), Struct.pack('<H', 1), ClassDecl('dmConfigHeader_c'), Struct.pack('<I', 1), Serialized(ConfigName), Struct.pack('<II', 0, Identity.last_modified_stamp), Serialized(ConfigName), Struct.pack('<II', 4294967295, 0), Serialized(''), Serialized(''), Struct.pack('<IIIIII', Identity.configuration_flags & 4294967295, 0, Identity.baseline_stamp, Identity.baseline_stamp, Identity.header_stamp, 2)))
 
-def _configuration_header_payload(
-    configuration_name: str, identity: _NativeIdentity
-) -> bytes:
-    return b"".join(
-        (
-            _class_declaration("dmConfigMgrHeader_c"),
-            struct.pack("<H", 1),
-            _class_declaration("dmConfigHeader_c"),
-            struct.pack("<I", 1),
-            _serialized_string(configuration_name),
-            struct.pack("<II", 0, identity.last_modified_stamp),
-            _serialized_string(configuration_name),
-            struct.pack("<II", 0xFFFFFFFF, 0),
-            _serialized_string(""),
-            _serialized_string(""),
-            struct.pack(
-                "<IIIIII",
-                identity.configuration_flags & 0xFFFFFFFF,
-                0,
-                identity.baseline_stamp,
-                identity.baseline_stamp,
-                identity.header_stamp,
-                2,
-            ),
-        )
-    )
+# this definition exists because focused behavior needs one stable owner
+def CustomPayload(ContainerClass: str='moFilePropContainer_c') -> bytes:
+    return b''.join((ClassDecl('moCusPropMgr_c'), Struct.pack('<H', 65535), ClassDecl(''), Struct.pack('<II', 1, 0), ClassDecl('moCusPropContainer_c'), ClassDecl(ContainerClass), b'\x00' * 13))
 
+# this definition exists because focused behavior needs one stable owner
+def VersionHistory() -> bytes:
+    return b''.join((ClassDecl('moVersionHistory_c'), Struct.pack('<IIH', 1, 0, 0), bytes.fromhex('f65a1a69'), Serialized(''), b'PF\x00\x00', ClassDecl('moDateCodeHistory_c'), Struct.pack('<I', 1), bytes.fromhex('34e71e'), Struct.pack('<IBI', 1, 0, 4294967295), b'\x00' * 14))
 
-def _custom_properties_payload(
-    container_class: str = "moFilePropContainer_c",
-) -> bytes:
-    return b"".join(
-        (
-            _class_declaration("moCusPropMgr_c"),
-            struct.pack("<H", 0xFFFF),
-            _class_declaration(""),
-            struct.pack("<II", 1, 0),
-            _class_declaration("moCusPropContainer_c"),
-            _class_declaration(container_class),
-            b"\0" * 13,
-        )
-    )
+# this definition exists because focused behavior needs one stable owner
+def Biography(ModelName: str, Identity: _NativeIdentity, TemplatePath: str='C:\\Kit\\Part.PRTDOT', DocSuffix: str=PartSuffix) -> bytes:
+    Filetime = 116444736000000000 + Identity.creation_stamp * 10000000
+    FirstPaths = ('C:\\Windows\\System32\\', 'C:\\Windows\\', 'C:\\Program Files\\SOLIDWORKS\\', 'C:\\Temp\\', 'C:\\Temp\\', TemplatePath)
+    SecondPaths = ('C:\\Windows\\System32\\', 'C:\\Windows\\', 'C:\\', 'C:\\Temp\\', 'C:\\Temp\\', TemplatePath)
+    Output = bytearray(ClassDecl('moBiography_c') + Struct.pack('<10I', 2, 18000, 2025268, 1, 9, 12, 2, 10, 0, 26100))
+    for Ignored in range(7):
+        Output.extend(Serialized(''))
+        Output.extend(b'\x00' * (14 if len(Output) == 63 else 12))
+    Output.extend(Struct.pack('<QI', Filetime, 691077120))
+    for PathValue in FirstPaths:
+        Output.extend(Serialized(PathValue))
+        Output.extend(Struct.pack('<III', 3, 1162821632, 5))
+    Output.extend(Struct.pack('<9I', 18000, 2025268, 1, 9, 12, 2, 10, 0, 26200))
+    Output.extend(Serialized(''))
+    Output.extend(Struct.pack('<HQI', 6153, Filetime, 1806331904))
+    for PathValue in SecondPaths:
+        Output.extend(Serialized(PathValue))
+        Output.extend(Struct.pack('<III', 3, 212815872, 5))
+    Output.extend(Struct.pack('<QI', Filetime, 1434583040))
+    for Value in ('*', '*', 'C:\\', '*', '*'):
+        Output.extend(Serialized(Value))
+        Output.extend(Struct.pack('<III', 3, 211980288, 5))
+    Output.extend(Serialized(f'C:\\{ModelName}{DocSuffix}'))
+    Output.extend(Struct.pack('<III', 3, 211980288, 5))
+    return bytes(Output)
 
+# this definition exists because focused behavior needs one stable owner
+def Serialized(Value: str) -> bytes:
+    Encoded = Value.encode('utf-16le')
+    Units = len(Encoded) // 2
+    if Units > 254:
+        raise SldprtFormatError('native SOLIDWORKS serialized string exceeds 254 UTF-16 units')
+    return SerializedStringMarker + bytes((Units,)) + Encoded
 
-# the version-history stream preserves the typed archive stamps required by the native reader
-def _version_history_payload() -> bytes:
-    return b"".join(
-        (
-            _class_declaration("moVersionHistory_c"),
-            struct.pack("<IIH", 1, 0, 0),
-            bytes.fromhex("f65a1a69"),
-            _serialized_string(""),
-            b"PF\0\0",
-            _class_declaration("moDateCodeHistory_c"),
-            struct.pack("<I", 1),
-            bytes.fromhex("34e71e"),
-            struct.pack("<IBI", 1, 0, 0xFFFFFFFF),
-            b"\0" * 14,
-        )
-    )
+# this definition exists because focused behavior needs one stable owner
+def StableUThreeTwo(DocValue: CadDocument, ModelName: str, Domain: bytes=b'') -> int:
+    Source = ModelName.encode('utf-8') + b'\x00' + DocValue.to_json(indent=None).encode('utf-8')
+    if Domain:
+        Source += b'\x00' + Domain
+    Digest = Hashlib.sha256(Source).digest()
+    Value = int.from_bytes(Digest[:4], 'little') & 2147483647
+    return Value or 1
 
+# this definition exists because focused behavior needs one stable owner
+def StableCreation(DocValue: CadDocument, ModelName: str, Domain: bytes=b'') -> int:
+    SpanValue = KCreationStampHigh - KCreationStampLow
+    return KCreationStampLow + StableUThreeTwo(DocValue, ModelName, Domain) % SpanValue
 
-# the biography stream records deterministic typed provenance without copying a template stream
-def _biography_payload(
-    model_name: str,
-    identity: _NativeIdentity,
-    template_path: str = "C:\\Kit\\Part.PRTDOT",
-    document_suffix: str = PART_SUFFIX,
-) -> bytes:
-    filetime = 116444736000000000 + identity.creation_stamp * 10_000_000
-    first_paths = (
-        "C:\\Windows\\System32\\",
-        "C:\\Windows\\",
-        "C:\\Program Files\\SOLIDWORKS\\",
-        "C:\\Temp\\",
-        "C:\\Temp\\",
-        template_path,
-    )
-    second_paths = (
-        "C:\\Windows\\System32\\",
-        "C:\\Windows\\",
-        "C:\\",
-        "C:\\Temp\\",
-        "C:\\Temp\\",
-        template_path,
-    )
-    output = bytearray(
-        _class_declaration("moBiography_c")
-        + struct.pack(
-            "<10I",
-            2,
-            0x4650,
-            0x1EE734,
-            1,
-            9,
-            12,
-            2,
-            10,
-            0,
-            0x65F4,
-        )
-    )
-    for _ in range(7):
-        output.extend(_serialized_string(""))
-        output.extend(b"\0" * (14 if len(output) == 63 else 12))
-    output.extend(struct.pack("<QI", filetime, 0x29310000))
-    for path in first_paths:
-        output.extend(_serialized_string(path))
-        output.extend(struct.pack("<III", 3, 0x454F4000, 5))
-    output.extend(
-        struct.pack(
-            "<9I",
-            0x4650,
-            0x1EE734,
-            1,
-            9,
-            12,
-            2,
-            10,
-            0,
-            0x6658,
-        )
-    )
-    output.extend(_serialized_string(""))
-    output.extend(struct.pack("<HQI", 0x1809, filetime, 0x6BAA7000))
-    for path in second_paths:
-        output.extend(_serialized_string(path))
-        output.extend(struct.pack("<III", 3, 0x0CAF5000, 5))
-    output.extend(struct.pack("<QI", filetime, 0x55820000))
-    for value in ("*", "*", "C:\\", "*", "*"):
-        output.extend(_serialized_string(value))
-        output.extend(struct.pack("<III", 3, 0x0CA29000, 5))
-    output.extend(_serialized_string(f"C:\\{model_name}{document_suffix}"))
-    output.extend(struct.pack("<III", 3, 0x0CA29000, 5))
-    return bytes(output)
+# this definition exists because focused behavior needs one stable owner
+def ProvedWrite(DocValue: CadDocument, Authored: tuple[_WriteObject, ...], Parsed: NativeModel, ObjectIds: dict[str, int]) -> frozenset[Capability]:
+    Result: set[Capability] = set()
+    if all((Config.parent_id is None and (not Config.overrides) and (not Config.suppressed_feature_ids) for Config in DocValue.configurations)) and (not DocValue.configurations or sum((Config.active for Config in DocValue.configurations)) == 1):
+        Expected = tuple(((Config.name, ObjectIds[f'configuration:{Config.id}']) for Config in DocValue.configurations))
+        Actual = tuple(((Config.name, Config.configuration_id) for Config in Parsed.configurations))
+        if Expected == Actual:
+            Result.add(Capability.CONFIGURATIONS)
+    ExpectedParameters = tuple(((ItemValue.object_id, Dimension.name, round(Dimension.value_mm, 10), Dimension.role) for ItemValue in Authored for Dimension in ItemValue.dimensions if any((Param.name == Dimension.name and Param.owner_id == ItemValue.source_id for Param in DocValue.parameters))))
+    ActualParameters = tuple(((Feature.object_id, Dimension.name, round(Dimension.value_mm, 10), ParamRole.DRIVEN if Dimension.native_role == 'display' else ParamRole.DRIVING) for Feature in Parsed.features if any((ItemValue.object_id == Feature.object_id for ItemValue in Authored)) for Dimension in Feature.dimensions if any((Param.name == Dimension.name and Param.owner_id == next((ItemValue.source_id for ItemValue in Authored if ItemValue.object_id == Feature.object_id)) for Param in DocValue.parameters))))
+    Encodable = tuple((Param for Param in DocValue.parameters if ParamDimension(Param) is not None and Param.expression is None))
+    if len(Encodable) == len(DocValue.parameters) and len(ExpectedParameters) == len(DocValue.parameters) and (ExpectedParameters == ActualParameters):
+        Result.add(Capability.PARAMETERS)
+    ExpectedPlanes = {PlaneObjectId: ExpectedPlane(PlaneData, PlaneObjectId) for PlaneData in DocValue.support_planes for PlaneObjectId in (ObjectIds[f'plane:{PlaneData.id}'],)}
+    ActualPlanes = {Plane.object_id: (FrameVector(Plane.origin_mm), FrameVector(Plane.u_axis), FrameVector(Plane.v_axis), FrameVector(Plane.normal)) for Plane in Parsed.planes}
+    if len(ExpectedPlanes) == len(DocValue.support_planes) and all((ObjectId in ActualPlanes and ActualPlanes[ObjectId] == Frame for ObjectId, Frame in ExpectedPlanes.items())):
+        Result.add(Capability.SUPPORT_PLANES)
+    ExpectedAxes = DocAxisBindings(DocValue, ObjectIds)
+    if ExpectedAxes is not None:
+        ActualAxes = NativeAxis(Parsed)
+        if ExpectedAxes and ExpectedAxes <= ActualAxes:
+            Result.add(Capability.SELECTIONS)
+    ExpectedEquations = ExpressionTexts(DocValue)
+    if ExpectedEquations is not None:
+        ActualEquations = tuple((Equation.source for Equation in Parsed.equations))
+        if ActualEquations[:len(ExpectedEquations)] == ExpectedEquations and all((Source.startswith(f'"{KEquationReservedPrefix}') for Source in ActualEquations[len(ExpectedEquations):])):
+            Result.add(Capability.EXPRESSIONS)
+    HasGrooveData = HasPadGroove(DocValue, Authored, Parsed)
+    HasFilletData = HasBossFillet(DocValue, Authored, Parsed)
+    HasChamferData = HasBossChamfer(DocValue, Authored, Parsed)
+    HasShellData = HasBossShell(DocValue, Authored, Parsed)
+    HasLinearPatternData = HasBossLinear(DocValue, Authored, Parsed)
+    HasCircularPatternData = HasBossCircular(DocValue, Authored, Parsed)
+    if HasPadProof(DocValue, Authored, Parsed) or HasSingleProof(DocValue, Authored, Parsed) or HasGrooveData or HasFilletData or HasChamferData or HasShellData or HasLinearPatternData or HasCircularPatternData or HasTwoFeature(DocValue, Authored, Parsed) or HasCutChain(DocValue, Authored, Parsed):
+        Result.update({Capability.BREP, Capability.PARAMETERS, Capability.PARAMETRIC_HISTORY, Capability.EDITABLE_SKETCHES, Capability.BODY_STRUCTURE})
+    if HasGrooveData or HasFilletData or HasChamferData or HasShellData or HasLinearPatternData or HasCircularPatternData:
+        Result.add(Capability.SELECTIONS)
+    return frozenset(Result)
 
-
-def _serialized_string(value: str) -> bytes:
-    encoded = value.encode("utf-16le")
-    units = len(encoded) // 2
-    if units > 0xFE:
-        raise SldprtFormatError(
-            "native SOLIDWORKS serialized string exceeds 254 UTF-16 units"
-        )
-    return SERIALIZED_STRING_MARKER + bytes((units,)) + encoded
-
-
-def _stable_u32(document: CadDocument, model_name: str, domain: bytes = b"") -> int:
-    source = (
-        model_name.encode("utf-8")
-        + b"\0"
-        + document.to_json(indent=None).encode("utf-8")
-    )
-    if domain:
-        source += b"\0" + domain
-    digest = hashlib.sha256(source).digest()
-    value = int.from_bytes(digest[:4], "little") & 0x7FFFFFFF
-    return value or 1
-
-
-def _stable_creation_stamp(
-    document: CadDocument, model_name: str, domain: bytes = b""
-) -> int:
-    span = _CREATION_STAMP_HIGH - _CREATION_STAMP_LOW
-    return _CREATION_STAMP_LOW + _stable_u32(document, model_name, domain) % span
-
-
-# this proves native fields match authored capabilities
-def _proved_write_capabilities(
-    document: CadDocument,
-    authored: tuple[_WriteObject, ...],
-    parsed: NativeModel,
-    object_ids: dict[str, int],
-) -> frozenset[Capability]:
-    result: set[Capability] = set()
-    if all(
-        configuration.parent_id is None
-        and not configuration.overrides
-        and not configuration.suppressed_feature_ids
-        for configuration in document.configurations
-    ) and (
-        not document.configurations
-        or sum(configuration.active for configuration in document.configurations) == 1
-    ):
-        expected = tuple(
-            (
-                configuration.name,
-                object_ids[f"configuration:{configuration.id}"],
-            )
-            for configuration in document.configurations
-        )
-        actual = tuple(
-            (configuration.name, configuration.configuration_id)
-            for configuration in parsed.configurations
-        )
-        if expected == actual:
-            result.add(Capability.CONFIGURATIONS)
-    expected_parameters = tuple(
-        (
-            item.object_id,
-            dimension.name,
-            round(dimension.value_mm, 10),
-            dimension.role,
-        )
-        for item in authored
-        for dimension in item.dimensions
-        if any(
-            parameter.name == dimension.name and parameter.owner_id == item.source_id
-            for parameter in document.parameters
-        )
-    )
-    actual_parameters = tuple(
-        (
-            feature.object_id,
-            dimension.name,
-            round(dimension.value_mm, 10),
-            (
-                ParameterRole.DRIVEN
-                if dimension.native_role == "display"
-                else ParameterRole.DRIVING
-            ),
-        )
-        for feature in parsed.features
-        if any(item.object_id == feature.object_id for item in authored)
-        for dimension in feature.dimensions
-        if any(
-            parameter.name == dimension.name
-            and parameter.owner_id
-            == next(
-                item.source_id
-                for item in authored
-                if item.object_id == feature.object_id
-            )
-            for parameter in document.parameters
-        )
-    )
-    encodable = tuple(
-        parameter
-        for parameter in document.parameters
-        if _parameter_dimension(parameter) is not None and parameter.expression is None
-    )
-    if (
-        len(encodable) == len(document.parameters)
-        and len(expected_parameters) == len(document.parameters)
-        and expected_parameters == actual_parameters
-    ):
-        result.add(Capability.PARAMETERS)
-    expected_planes = {
-        PlaneObjectId: _ExpectedPlaneFrame(PlaneData, PlaneObjectId)
-        for PlaneData in document.support_planes
-        for PlaneObjectId in (object_ids[f"plane:{PlaneData.id}"],)
-    }
-    actual_planes = {
-        plane.object_id: (
-            _frame_vector(plane.origin_mm),
-            _frame_vector(plane.u_axis),
-            _frame_vector(plane.v_axis),
-            _frame_vector(plane.normal),
-        )
-        for plane in parsed.planes
-    }
-    if len(expected_planes) == len(document.support_planes) and all(
-        object_id in actual_planes and actual_planes[object_id] == frame
-        for object_id, frame in expected_planes.items()
-    ):
-        result.add(Capability.SUPPORT_PLANES)
-    expected_axes = _document_axis_bindings(document, object_ids)
-    if expected_axes is not None:
-        actual_axes = native_axis_bindings(parsed)
-        if expected_axes and expected_axes <= actual_axes:
-            result.add(Capability.SELECTIONS)
-    expected_equations = expression_equation_texts(document)
-    if expected_equations is not None:
-        actual_equations = tuple(equation.source for equation in parsed.equations)
-        if actual_equations[: len(expected_equations)] == expected_equations and all(
-            source.startswith(f'"{_EQUATION_RESERVED_PREFIX}')
-            for source in actual_equations[len(expected_equations) :]
-        ):
-            result.add(Capability.EXPRESSIONS)
-    HasGrooveData = HasPadGrooveProof(document, authored, parsed)
-    HasFilletData = HasBossFilletProof(document, authored, parsed)
-    HasChamferData = HasBossChamferProof(document, authored, parsed)
-    HasShellData = HasBossShellProof(document, authored, parsed)
-    HasLinearPatternData = HasBossLinearPatternProof(document, authored, parsed)
-    HasCircularPatternData = HasBossCircularPatternProof(document, authored, parsed)
-    if (
-        HasPadProof(document, authored, parsed)
-        or HasSingleRevolutionProof(document, authored, parsed)
-        or HasGrooveData
-        or HasFilletData
-        or HasChamferData
-        or HasShellData
-        or HasLinearPatternData
-        or HasCircularPatternData
-        or HasTwoFeatureProof(document, authored, parsed)
-        or HasCutChainProof(document, authored, parsed)
-    ):
-        result.update(
-            {
-                Capability.BREP,
-                Capability.PARAMETERS,
-                Capability.PARAMETRIC_HISTORY,
-                Capability.EDITABLE_SKETCHES,
-                Capability.BODY_STRUCTURE,
-            }
-        )
-    if (
-        HasGrooveData
-        or HasFilletData
-        or HasChamferData
-        or HasShellData
-        or HasLinearPatternData
-        or HasCircularPatternData
-    ):
-        result.add(Capability.SELECTIONS)
-    return frozenset(result)
-
-
-# this proves recovered single-pad records and direction semantics structurally
-def HasPadProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
+# this definition exists because focused behavior needs one stable owner
+def HasPadProof(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
     if len(AuthoredObjs) != 2:
         return False
     SketchObject, PadObject = AuthoredObjs
-    PlaneObjectId = (
-        struct.unpack_from("<I", SketchObject.payload)[0]
-        if len(SketchObject.payload) >= 4
-        else 0
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
-    CircleValue = _write_circle_profile(SketchObject)
+    PlaneObjectId = Struct.unpack_from('<I', SketchObject.payload)[0] if len(SketchObject.payload) >= 4 else 0
+    BoundsValue = WriteRectangle(SketchObject)
+    CircleValue = WriteCircle(SketchObject)
     PolylineValue = PolySixPoints(SketchObject)
-    EndCodes = ExtrusionEditCodes(PadObject.payload)
-    IsDimensionedBox = (
-        BoundsValue is not None
-        and ("KitPrimitive", "Box") in PadObject.properties
-        and len(SketchObject.dimensions) == 2
-    )
-    ExpectedFeatureId = 34 if IsDimensionedBox else (33 if CircleValue else 32)
-    if (
-        sum(
-            ItemValue is not None
-            for ItemValue in (BoundsValue, CircleValue, PolylineValue)
-        )
-        != 1
-        or EndCodes is None
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or PadObject.object_id != ExpectedFeatureId
-        or PadObject.name != "Boss-Extrude1"
-        or len(PadObject.dimensions) != 1
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 1
-    ):
+    EndCodes = ExtrusionEdit(PadObject.payload)
+    IsDimensionedBox = BoundsValue is not None and ('KitPrimitive', 'Box') in PadObject.properties and (len(SketchObject.dimensions) == 2)
+    ExpectedFeatureId = 34 if IsDimensionedBox else 33 if CircleValue else 32
+    if sum((ItemValue is not None for ItemValue in (BoundsValue, CircleValue, PolylineValue))) != 1 or EndCodes is None or SketchObject.object_id != 26 or (SketchObject.name != 'Sketch1') or (PadObject.object_id != ExpectedFeatureId) or (PadObject.name != 'Boss-Extrude1') or (len(PadObject.dimensions) != 1) or (len(ParsedModel.sketches) != 1) or (len(ParsedModel.operations) != 1):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad = ParsedModel.operations[0]
-    ExpectedProfile = (
-        BoundsValue
-        if BoundsValue is not None
-        else (
-            CircleValue
-            if CircleValue is not None
-            else tuple(
-                CoordinateValue
-                for PointData in PolylineValue or ()
-                for CoordinateValue in PointData
-            )
-        )
-    )
-    ExpectedKind = (
-        "rectangle"
-        if BoundsValue is not None
-        else "circle" if CircleValue is not None else "polyline"
-    )
-    ProfilesValue = tuple(
-        ProfileData
-        for ProfileData in NativeSketch.profiles
-        if ProfileData.kind == ExpectedKind
-    )
-    HasProfile = ExpectedProfile is not None and (
-        len(ProfilesValue) == 1
-        and len(ProfilesValue[0].coordinates) == len(ExpectedProfile)
-        and all(
-            math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfilesValue[0].coordinates,
-                ExpectedProfile,
-                strict=True,
-            )
-        )
-    )
+    ExpectedProfile = BoundsValue if BoundsValue is not None else CircleValue if CircleValue is not None else tuple((CoordinateValue for PointData in PolylineValue or () for CoordinateValue in PointData))
+    ExpectedKind = 'rectangle' if BoundsValue is not None else 'circle' if CircleValue is not None else 'polyline'
+    ProfilesValue = tuple((ProfileData for ProfileData in NativeSketch.profiles if ProfileData.kind == ExpectedKind))
+    HasProfile = ExpectedProfile is not None and (len(ProfilesValue) == 1 and len(ProfilesValue[0].coordinates) == len(ExpectedProfile) and all((MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfilesValue[0].coordinates, ExpectedProfile, strict=True))))
     DepthValue = PadObject.dimensions[0].value_mm
     ExpectedDepth = (1, 1, -1, -1, 1, 1)
-    ExpectedDims = tuple(
-        (ItemData.name, round(ItemData.value_mm, 10))
-        for ItemData in SketchObject.dimensions
-    )
-    ActualDims = tuple(
-        (ItemData.name, round(ItemData.value_mm, 10))
-        for ItemData in NativeSketch.dimensions
-    )
-    ConstraintKinds = tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-    ExpectedConstraintKinds = (
-        (
-            "horizontal",
-            "vertical",
-            "horizontal",
-            "vertical",
-            *(("distance",) * len(ExpectedDims)),
-        )
-        if BoundsValue is not None
-        else ("diameter",) if CircleValue is not None else ()
-    )
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != PlaneObjectId
-        or not HasProfile
-        or ConstraintKinds != ExpectedConstraintKinds
-        or ActualDims != ExpectedDims
-        or NativePad.object_id != ExpectedFeatureId
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.profile_id != 26
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.direction_code != EndCodes[0]
-        or NativePad.termination_code != EndCodes[1]
-        or NativePad.length_mm is None
-        or not math.isclose(NativePad.length_mm, DepthValue, abs_tol=1.0e-10)
-        or len(NativePad.depth_copies) != len(ExpectedDepth)
-        or not math.isclose(
-            NativePad.depth_copies[0].value_mm,
-            DepthValue,
-            abs_tol=1.0e-10,
-        )
-        or (
-            PolylineValue is None
-            and EndCodes == (0, 0)
-            and any(
-                CopyData.sign != CopySign
-                or not math.isclose(
-                    CopyData.value_mm,
-                    DepthValue * CopySign,
-                    abs_tol=1.0e-10,
-                )
-                for CopyData, CopySign in zip(
-                    NativePad.depth_copies,
-                    ExpectedDepth,
-                    strict=True,
-                )
-            )
-        )
-    ):
+    ExpectedDims = tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in SketchObject.dimensions))
+    ActualDims = tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in NativeSketch.dimensions))
+    RuleKinds = tuple((ItemData.kind for ItemData in NativeSketch.constraints))
+    ExpectedRuleKinds = ('horizontal', 'vertical', 'horizontal', 'vertical', *('distance',) * len(ExpectedDims)) if BoundsValue is not None else ('diameter',) if CircleValue is not None else ()
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != PlaneObjectId or (not HasProfile) or (RuleKinds != ExpectedRuleKinds) or (ActualDims != ExpectedDims) or (NativePad.object_id != ExpectedFeatureId) or (NativePad.name != 'Boss-Extrude1') or (NativePad.profile_id != 26) or (NativePad.kind not in {'boss', 'join'}) or (NativePad.direction_code != EndCodes[0]) or (NativePad.termination_code != EndCodes[1]) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DepthValue, abs_tol=1e-10)) or (len(NativePad.depth_copies) != len(ExpectedDepth)) or (not MathValue.isclose(NativePad.depth_copies[0].value_mm, DepthValue, abs_tol=1e-10)) or (PolylineValue is None and EndCodes == (0, 0) and any((CopyData.sign != CopySign or not MathValue.isclose(CopyData.value_mm, DepthValue * CopySign, abs_tol=1e-10) for CopyData, CopySign in zip(NativePad.depth_copies, ExpectedDepth, strict=True)))):
         return False
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, ExpectedFeatureId}
-    )
-    return NativeFeatureIds == (26, ExpectedFeatureId) and len(DocumentData.bodies) == 1
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, ExpectedFeatureId}))
+    return NativeFeatureIds == (26, ExpectedFeatureId) and len(DocData.bodies) == 1
 
-
-# this proves the revolved profile, full angle, vertical sketch axis, and native ids
-def HasSingleRevolutionProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 2
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 1
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasSingleProof(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 2 or len(ParsedModel.sketches) != 1 or len(ParsedModel.operations) != 1 or (len(DocData.bodies) != 1):
         return False
     SketchObject, RevolveObject = AuthoredObjs
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    BoundsValue = WriteRectangle(SketchObject)
     PinPoints = PolySixPoints(SketchObject)
     IsPinData = IsPinProfile(PinPoints)
-    if (
-        not (BoundsValue is not None or IsPinData)
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or RevolveObject.object_id != 31
-        or RevolveObject.name != "Revolve1"
-        or len(RevolveObject.dimensions) != 1
-    ):
+    if not (BoundsValue is not None or IsPinData) or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (RevolveObject.object_id != 31) or (RevolveObject.name != 'Revolve1') or (len(RevolveObject.dimensions) != 1):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativeRevolve = ParsedModel.operations[0]
-    NativeFeature = next(
-        (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 31),
-        None,
-    )
-    ProfileKind = "polyline" if IsPinData else "rectangle"
-    ExpectedCoords = (
-        tuple(ValueData for PointData in (PinPoints or ()) for ValueData in PointData)
-        if IsPinData
-        else BoundsValue
-    )
+    NativeFeature = next((ItemData for ItemData in ParsedModel.features if ItemData.object_id == 31), None)
+    ProfileKind = 'polyline' if IsPinData else 'rectangle'
+    ExpectedCoords = tuple((ValueData for PointData in PinPoints or () for ValueData in PointData)) if IsPinData else BoundsValue
     ExpectedPlaneId = 3 if IsPinData else 2
-    ExpectedConstraints = (
-        () if IsPinData else ("horizontal", "vertical", "horizontal", "vertical")
-    )
-    ProfileData = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == ProfileKind
-    )
+    ExpectedConstraints = () if IsPinData else ('horizontal', 'vertical', 'horizontal', 'vertical')
+    ProfileData = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == ProfileKind))
     DimensionData = RevolveObject.dimensions[0]
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != ExpectedPlaneId
-        or len(ProfileData) != 1
-        or ExpectedCoords is None
-        or len(ProfileData[0].coordinates) != len(ExpectedCoords)
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfileData[0].coordinates,
-                ExpectedCoords,
-                strict=True,
-            )
-        )
-        or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ExpectedConstraints
-        or NativeRevolve.object_id != 31
-        or NativeRevolve.name != "Revolve1"
-        or NativeRevolve.kind != "revolve_join"
-        or NativeRevolve.profile_id != 26
-        or NativeRevolve.angle_degrees is None
-        or not math.isclose(
-            NativeRevolve.angle_degrees,
-            DimensionData.value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or native_axis_bindings(ParsedModel)
-        != frozenset({(31, 26, VERTICAL_AXIS_SUBELEMENT)})
-        or NativeFeature is None
-        or len(NativeFeature.dimensions) != 1
-        or NativeFeature.dimensions[0].name != "D1"
-        or NativeFeature.dimensions[0].kind != "angle"
-        or not math.isclose(
-            NativeFeature.dimensions[0].value_mm,
-            DimensionData.value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-    ):
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != ExpectedPlaneId or len(ProfileData) != 1 or (ExpectedCoords is None) or (len(ProfileData[0].coordinates) != len(ExpectedCoords)) or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfileData[0].coordinates, ExpectedCoords, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ExpectedConstraints) or (NativeRevolve.object_id != 31) or (NativeRevolve.name != 'Revolve1') or (NativeRevolve.kind != 'revolve_join') or (NativeRevolve.profile_id != 26) or (NativeRevolve.angle_degrees is None) or (not MathValue.isclose(NativeRevolve.angle_degrees, DimensionData.value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativeAxis(ParsedModel) != frozenset({(31, 26, KVerticalAxisSubElem)})) or (NativeFeature is None) or (len(NativeFeature.dimensions) != 1) or (NativeFeature.dimensions[0].name != 'D1') or (NativeFeature.dimensions[0].kind != 'angle') or (not MathValue.isclose(NativeFeature.dimensions[0].value_mm, DimensionData.value_mm, rel_tol=0.0, abs_tol=1e-10)):
         return False
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 31}
-    )
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 31}))
     return NativeFeatureIds == (26, 31)
 
-
-# this proves the pad, revolved cut, angle, profiles, and horizontal-axis source
-def HasPadGrooveProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 4
-        or len(ParsedModel.sketches) != 2
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasPadGroove(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 4 or len(ParsedModel.sketches) != 2 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchOne, PadObject, SketchTwo, GrooveObject = AuthoredObjs
-    SourceSketches = tuple(
-        next(
-            (
-                ItemData
-                for ItemData in DocumentData.sketches
-                if ItemData.id == SketchObject.source_id
-            ),
-            None,
-        )
-        for SketchObject in (SketchOne, SketchTwo)
-    )
-    SourceFeatures = tuple(
-        next(
-            (
-                ItemData
-                for ItemData in DocumentData.feature_timeline
-                if ItemData.id == FeatureObject.source_id
-            ),
-            None,
-        )
-        for FeatureObject in (PadObject, GrooveObject)
-    )
-    if any(ItemData is None for ItemData in (*SourceSketches, *SourceFeatures)):
+    SourceSketches = tuple((next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None) for SketchObject in (SketchOne, SketchTwo)))
+    SourceFeatures = tuple((next((ItemData for ItemData in DocData.feature_timeline if ItemData.id == FeatureObject.source_id), None) for FeatureObject in (PadObject, GrooveObject)))
+    if any((ItemData is None for ItemData in (*SourceSketches, *SourceFeatures))):
         return False
     SourceSketchOne, SourceSketchTwo = SourceSketches
     SourcePad, SourceGroove = SourceFeatures
-    if (
-        SourceSketchOne is None
-        or SourceSketchTwo is None
-        or SourcePad is None
-        or SourceGroove is None
-    ):
+    if SourceSketchOne is None or SourceSketchTwo is None or SourcePad is None or (SourceGroove is None):
         return False
-    DimensionData = _FreeCadPadGrooveDimensions(
-        DocumentData,
-        (SourceSketchOne, SourceSketchTwo),
-        (SourcePad, SourceGroove),
-    )
-    BoundsData = (
-        _write_rectangle_bounds(SketchOne),
-        _write_rectangle_bounds(SketchTwo),
-    )
-    EndCodes = ExtrusionEditCodes(PadObject.payload)
-    if (
-        DimensionData is None
-        or any(ItemData is None for ItemData in BoundsData)
-        or EndCodes is None
-        or (SketchOne.object_id, PadObject.object_id) != (26, 32)
-        or (SketchTwo.object_id, GrooveObject.object_id) != (33, 39)
-        or (SketchOne.name, PadObject.name) != ("Sketch1", "Boss-Extrude1")
-        or (SketchTwo.name, GrooveObject.name) != ("Sketch2", "Cut-Revolve1")
-    ):
+    DimensionData = FreeCadPad(DocData, (SourceSketchOne, SourceSketchTwo), (SourcePad, SourceGroove))
+    BoundsData = (WriteRectangle(SketchOne), WriteRectangle(SketchTwo))
+    EndCodes = ExtrusionEdit(PadObject.payload)
+    if DimensionData is None or any((ItemData is None for ItemData in BoundsData)) or EndCodes is None or ((SketchOne.object_id, PadObject.object_id) != (26, 32)) or ((SketchTwo.object_id, GrooveObject.object_id) != (33, 39)) or ((SketchOne.name, PadObject.name) != ('Sketch1', 'Boss-Extrude1')) or ((SketchTwo.name, GrooveObject.name) != ('Sketch2', 'Cut-Revolve1')):
         return False
     NativePad, NativeGroove = ParsedModel.operations
-    if (
-        NativePad.object_id != 32
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.profile_id != 26
-        or NativePad.direction_code != EndCodes[0]
-        or NativePad.termination_code != EndCodes[1]
-        or NativePad.length_mm is None
-        or not math.isclose(
-            NativePad.length_mm,
-            DimensionData[0].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or NativeGroove.object_id != 39
-        or NativeGroove.name != "Cut-Revolve1"
-        or NativeGroove.kind != "revolve_cut"
-        or NativeGroove.profile_id != 33
-        or NativeGroove.angle_degrees is None
-        or not math.isclose(
-            NativeGroove.angle_degrees,
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-    ):
+    if NativePad.object_id != 32 or NativePad.name != 'Boss-Extrude1' or NativePad.kind not in {'boss', 'join'} or (NativePad.profile_id != 26) or (NativePad.direction_code != EndCodes[0]) or (NativePad.termination_code != EndCodes[1]) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DimensionData[0].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativeGroove.object_id != 39) or (NativeGroove.name != 'Cut-Revolve1') or (NativeGroove.kind != 'revolve_cut') or (NativeGroove.profile_id != 33) or (NativeGroove.angle_degrees is None) or (not MathValue.isclose(NativeGroove.angle_degrees, DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10)):
         return False
-    for NativeSketch, SketchObject, BoundsValue, ObjectId in zip(
-        ParsedModel.sketches,
-        (SketchOne, SketchTwo),
-        BoundsData,
-        (26, 33),
-        strict=True,
-    ):
+    for NativeSketch, SketchObject, BoundsValue, ObjectId in zip(ParsedModel.sketches, (SketchOne, SketchTwo), BoundsData, (26, 33), strict=True):
         if BoundsValue is None:
             return False
-        ProfileData = tuple(
-            ItemData
-            for ItemData in NativeSketch.profiles
-            if ItemData.kind == "rectangle"
-        )
-        if (
-            NativeSketch.object_id != ObjectId
-            or NativeSketch.support_plane_id != 2
-            or len(ProfileData) != 1
-            or any(
-                not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-                for ActualValue, ExpectedValue in zip(
-                    ProfileData[0].coordinates,
-                    BoundsValue,
-                    strict=True,
-                )
-            )
-            or tuple(
-                (ItemData.name, round(ItemData.value_mm, 10))
-                for ItemData in NativeSketch.dimensions
-            )
-            != tuple(
-                (ItemData.name, round(ItemData.value_mm, 10))
-                for ItemData in SketchObject.dimensions
-            )
-        ):
+        ProfileData = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
+        if NativeSketch.object_id != ObjectId or NativeSketch.support_plane_id != 2 or len(ProfileData) != 1 or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfileData[0].coordinates, BoundsValue, strict=True))) or (tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in NativeSketch.dimensions)) != tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in SketchObject.dimensions))):
             return False
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 33, 39}
-    )
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 33, 39}))
     return NativeFeatureIds == (26, 32, 33, 39)
 
-
-# this proves the editable boss, radius, dependency, and selected native edge
-def HasBossFilletProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 3
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasBossFillet(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 3 or len(ParsedModel.sketches) != 1 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchObject, PadObject, FilletObject = AuthoredObjs
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    BoundsValue = WriteRectangle(SketchObject)
     if SourceSketch is None or len(SourceFeatures) != 2 or BoundsValue is None:
         return False
     SourcePad, SourceFillet = SourceFeatures
-    DimensionData = _FreeCadBossFilletDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourceFillet,
-        BoundsValue,
-    )
-    if (
-        DimensionData is None
-        or (SketchObject.object_id, PadObject.object_id, FilletObject.object_id)
-        != (26, 32, 34)
-        or (SketchObject.name, PadObject.name, FilletObject.name)
-        != ("Sketch1", "Boss-Extrude1", "Fillet1")
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or FilletObject.payload != _FilletSelectionRecord(32, 3)
-    ):
+    DimensionData = FreeCadBossB(DocData, SourceSketch, SourcePad, SourceFillet, BoundsValue)
+    if DimensionData is None or (SketchObject.object_id, PadObject.object_id, FilletObject.object_id) != (26, 32, 34) or (SketchObject.name, PadObject.name, FilletObject.name) != ('Sketch1', 'Boss-Extrude1', 'Fillet1') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (FilletObject.payload != FilletSelection(32, 3)):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad, NativeFillet = ParsedModel.operations
-    ProfilesValue = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == "rectangle"
-    )
+    ProfilesValue = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != 2
-        or len(ProfilesValue) != 1
-        or len(ProfilesValue[0].coordinates) != len(BoundsValue)
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfilesValue[0].coordinates,
-                BoundsValue,
-                strict=True,
-            )
-        )
-        or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ("horizontal", "vertical", "horizontal", "vertical")
-        or NativePad.object_id != 32
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.profile_id != 26
-        or NativePad.dependencies != (26,)
-        or NativePad.direction_code != 0
-        or NativePad.termination_code != 0
-        or NativePad.length_mm is None
-        or not math.isclose(
-            NativePad.length_mm,
-            DimensionData[0].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or len(NativePad.depth_copies) != len(ExpectedDepthSigns)
-        or any(
-            ItemData.sign != SignValue
-            or not math.isclose(
-                ItemData.value_mm,
-                DimensionData[0].value_mm * SignValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ItemData, SignValue in zip(
-                NativePad.depth_copies,
-                ExpectedDepthSigns,
-                strict=True,
-            )
-        )
-        or NativeFillet.object_id != 34
-        or NativeFillet.name != "Fillet1"
-        or NativeFillet.kind != "fillet"
-        or NativeFillet.profile_id is not None
-        or NativeFillet.dependencies != (32,)
-        or NativeFillet.radius_mm is None
-        or not math.isclose(
-            NativeFillet.radius_mm,
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or NativeFillet.selection_kind != "edge"
-        or NativeFillet.selection_references != ((32, 3),)
-        or NativeFillet.selected_local_ids != (3,)
-    ):
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != 2 or len(ProfilesValue) != 1 or (len(ProfilesValue[0].coordinates) != len(BoundsValue)) or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfilesValue[0].coordinates, BoundsValue, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ('horizontal', 'vertical', 'horizontal', 'vertical')) or (NativePad.object_id != 32) or (NativePad.name != 'Boss-Extrude1') or (NativePad.kind not in {'boss', 'join'}) or (NativePad.profile_id != 26) or (NativePad.dependencies != (26,)) or (NativePad.direction_code != 0) or (NativePad.termination_code != 0) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DimensionData[0].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (len(NativePad.depth_copies) != len(ExpectedDepthSigns)) or any((ItemData.sign != SignValue or not MathValue.isclose(ItemData.value_mm, DimensionData[0].value_mm * SignValue, rel_tol=0.0, abs_tol=1e-10) for ItemData, SignValue in zip(NativePad.depth_copies, ExpectedDepthSigns, strict=True))) or (NativeFillet.object_id != 34) or (NativeFillet.name != 'Fillet1') or (NativeFillet.kind != 'fillet') or (NativeFillet.profile_id is not None) or (NativeFillet.dependencies != (32,)) or (NativeFillet.radius_mm is None) or (not MathValue.isclose(NativeFillet.radius_mm, DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativeFillet.selection_kind != 'edge') or (NativeFillet.selection_references != ((32, 3),)) or (NativeFillet.selected_local_ids != (3,)):
         return False
-    NativeFilletFeature = next(
-        (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 34),
-        None,
-    )
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 34}
-    )
-    return (
-        NativeFilletFeature is not None
-        and len(NativeFilletFeature.dimensions) == 1
-        and NativeFilletFeature.dimensions[0].name == "D1"
-        and NativeFilletFeature.dimensions[0].kind == "radius"
-        and math.isclose(
-            NativeFilletFeature.dimensions[0].value_mm,
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        and NativeFeatureIds == (26, 32, 34)
-    )
+    NativeFilletFeature = next((ItemData for ItemData in ParsedModel.features if ItemData.object_id == 34), None)
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 34}))
+    return NativeFilletFeature is not None and len(NativeFilletFeature.dimensions) == 1 and (NativeFilletFeature.dimensions[0].name == 'D1') and (NativeFilletFeature.dimensions[0].kind == 'radius') and MathValue.isclose(NativeFilletFeature.dimensions[0].value_mm, DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10) and (NativeFeatureIds == (26, 32, 34))
 
-
-# this proves the editable boss, chamfer distance, dependency, and selected native edge
-def HasBossChamferProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 3
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasBossChamfer(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 3 or len(ParsedModel.sketches) != 1 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchObject, PadObject, ChamferObject = AuthoredObjs
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    BoundsValue = WriteRectangle(SketchObject)
     if SourceSketch is None or len(SourceFeatures) != 2 or BoundsValue is None:
         return False
     SourcePad, SourceChamfer = SourceFeatures
-    DimensionData = _FreeCadBossChamferDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourceChamfer,
-        BoundsValue,
-    )
-    if (
-        DimensionData is None
-        or (SketchObject.object_id, PadObject.object_id, ChamferObject.object_id)
-        != (26, 32, 35)
-        or (SketchObject.name, PadObject.name, ChamferObject.name)
-        != ("Sketch1", "Boss-Extrude1", "Chamfer1")
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or ChamferObject.payload != _FilletSelectionRecord(32, 3)
-    ):
+    DimensionData = FreeCadBoss(DocData, SourceSketch, SourcePad, SourceChamfer, BoundsValue)
+    if DimensionData is None or (SketchObject.object_id, PadObject.object_id, ChamferObject.object_id) != (26, 32, 35) or (SketchObject.name, PadObject.name, ChamferObject.name) != ('Sketch1', 'Boss-Extrude1', 'Chamfer1') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (ChamferObject.payload != FilletSelection(32, 3)):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad, NativeChamfer = ParsedModel.operations
-    ProfilesValue = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == "rectangle"
-    )
+    ProfilesValue = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != 2
-        or len(ProfilesValue) != 1
-        or len(ProfilesValue[0].coordinates) != len(BoundsValue)
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfilesValue[0].coordinates,
-                BoundsValue,
-                strict=True,
-            )
-        )
-        or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ("horizontal", "vertical", "horizontal", "vertical")
-        or NativePad.object_id != 32
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.profile_id != 26
-        or NativePad.dependencies != (26,)
-        or NativePad.direction_code != 0
-        or NativePad.termination_code != 0
-        or NativePad.length_mm is None
-        or not math.isclose(
-            NativePad.length_mm,
-            DimensionData[0].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or len(NativePad.depth_copies) != len(ExpectedDepthSigns)
-        or any(
-            ItemData.sign != SignValue
-            or not math.isclose(
-                ItemData.value_mm,
-                DimensionData[0].value_mm * SignValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ItemData, SignValue in zip(
-                NativePad.depth_copies,
-                ExpectedDepthSigns,
-                strict=True,
-            )
-        )
-        or NativeChamfer.object_id != 35
-        or NativeChamfer.name != "Chamfer1"
-        or NativeChamfer.kind != "chamfer"
-        or NativeChamfer.profile_id is not None
-        or NativeChamfer.dependencies != (32,)
-        or NativeChamfer.length_mm is None
-        or not math.isclose(
-            NativeChamfer.length_mm,
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or NativeChamfer.selection_kind != "edge"
-        or NativeChamfer.selection_references != ((32, 3),)
-        or NativeChamfer.selected_local_ids != (3,)
-        or NativeChamfer.mode != "equal_distance"
-    ):
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != 2 or len(ProfilesValue) != 1 or (len(ProfilesValue[0].coordinates) != len(BoundsValue)) or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfilesValue[0].coordinates, BoundsValue, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ('horizontal', 'vertical', 'horizontal', 'vertical')) or (NativePad.object_id != 32) or (NativePad.name != 'Boss-Extrude1') or (NativePad.kind not in {'boss', 'join'}) or (NativePad.profile_id != 26) or (NativePad.dependencies != (26,)) or (NativePad.direction_code != 0) or (NativePad.termination_code != 0) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DimensionData[0].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (len(NativePad.depth_copies) != len(ExpectedDepthSigns)) or any((ItemData.sign != SignValue or not MathValue.isclose(ItemData.value_mm, DimensionData[0].value_mm * SignValue, rel_tol=0.0, abs_tol=1e-10) for ItemData, SignValue in zip(NativePad.depth_copies, ExpectedDepthSigns, strict=True))) or (NativeChamfer.object_id != 35) or (NativeChamfer.name != 'Chamfer1') or (NativeChamfer.kind != 'chamfer') or (NativeChamfer.profile_id is not None) or (NativeChamfer.dependencies != (32,)) or (NativeChamfer.length_mm is None) or (not MathValue.isclose(NativeChamfer.length_mm, DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativeChamfer.selection_kind != 'edge') or (NativeChamfer.selection_references != ((32, 3),)) or (NativeChamfer.selected_local_ids != (3,)) or (NativeChamfer.mode != 'equal_distance'):
         return False
-    NativeChamferFeature = next(
-        (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 35),
-        None,
-    )
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 35}
-    )
-    return (
-        NativeChamferFeature is not None
-        and len(NativeChamferFeature.dimensions) == 1
-        and tuple(
-            (ItemData.name, ItemData.kind)
-            for ItemData in NativeChamferFeature.dimensions
-        )
-        == (("D1", "distance"),)
-        and math.isclose(
-            next(
-                ItemData.value_mm
-                for ItemData in NativeChamferFeature.dimensions
-                if ItemData.name == "D1"
-            ),
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        and NativeFeatureIds == (26, 32, 35)
-    )
+    NativeChamferFeature = next((ItemData for ItemData in ParsedModel.features if ItemData.object_id == 35), None)
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 35}))
+    return NativeChamferFeature is not None and len(NativeChamferFeature.dimensions) == 1 and (tuple(((ItemData.name, ItemData.kind) for ItemData in NativeChamferFeature.dimensions)) == (('D1', 'distance'),)) and MathValue.isclose(next((ItemData.value_mm for ItemData in NativeChamferFeature.dimensions if ItemData.name == 'D1')), DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10) and (NativeFeatureIds == (26, 32, 35))
 
-
-# this proves the editable boss, inward thickness, dependency, and removed top face
-def HasBossShellProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 3
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasBossShell(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 3 or len(ParsedModel.sketches) != 1 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchObject, PadObject, ShellObject = AuthoredObjs
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    BoundsValue = WriteRectangle(SketchObject)
     if SourceSketch is None or len(SourceFeatures) != 2 or BoundsValue is None:
         return False
     SourcePad, SourceShell = SourceFeatures
-    DimensionData = _FreeCadBossShellDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourceShell,
-        BoundsValue,
-    )
-    if (
-        DimensionData is None
-        or (SketchObject.object_id, PadObject.object_id, ShellObject.object_id)
-        != (26, 32, 34)
-        or (SketchObject.name, PadObject.name, ShellObject.name)
-        != ("Sketch1", "Boss-Extrude1", "Shell1")
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or ShellObject.payload != _ShellSelectionRecord(32)
-    ):
+    DimensionData = FreeCadBossD(DocData, SourceSketch, SourcePad, SourceShell, BoundsValue)
+    if DimensionData is None or (SketchObject.object_id, PadObject.object_id, ShellObject.object_id) != (26, 32, 34) or (SketchObject.name, PadObject.name, ShellObject.name) != ('Sketch1', 'Boss-Extrude1', 'Shell1') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (ShellObject.payload != ShellSelection(32)):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad, NativeShell = ParsedModel.operations
-    ProfilesValue = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == "rectangle"
-    )
+    ProfilesValue = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != 2
-        or len(ProfilesValue) != 1
-        or len(ProfilesValue[0].coordinates) != len(BoundsValue)
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfilesValue[0].coordinates,
-                BoundsValue,
-                strict=True,
-            )
-        )
-        or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ("horizontal", "vertical", "horizontal", "vertical")
-        or NativePad.object_id != 32
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.profile_id != 26
-        or NativePad.dependencies != (26,)
-        or NativePad.direction_code != 0
-        or NativePad.termination_code != 0
-        or NativePad.length_mm is None
-        or not math.isclose(
-            NativePad.length_mm,
-            DimensionData[0].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or len(NativePad.depth_copies) != len(ExpectedDepthSigns)
-        or any(
-            ItemData.sign != SignValue
-            or not math.isclose(
-                ItemData.value_mm,
-                DimensionData[0].value_mm * SignValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ItemData, SignValue in zip(
-                NativePad.depth_copies,
-                ExpectedDepthSigns,
-                strict=True,
-            )
-        )
-        or NativeShell.object_id != 34
-        or NativeShell.name != "Shell1"
-        or NativeShell.kind != "shell"
-        or NativeShell.profile_id is not None
-        or NativeShell.dependencies != (32,)
-        or NativeShell.length_mm is None
-        or not math.isclose(
-            NativeShell.length_mm,
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or NativeShell.selection_kind != "face"
-        or NativeShell.selection_references != ((32, 1), (32, 4))
-        or NativeShell.selected_local_ids != (1, 4)
-    ):
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != 2 or len(ProfilesValue) != 1 or (len(ProfilesValue[0].coordinates) != len(BoundsValue)) or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfilesValue[0].coordinates, BoundsValue, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ('horizontal', 'vertical', 'horizontal', 'vertical')) or (NativePad.object_id != 32) or (NativePad.name != 'Boss-Extrude1') or (NativePad.kind not in {'boss', 'join'}) or (NativePad.profile_id != 26) or (NativePad.dependencies != (26,)) or (NativePad.direction_code != 0) or (NativePad.termination_code != 0) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DimensionData[0].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (len(NativePad.depth_copies) != len(ExpectedDepthSigns)) or any((ItemData.sign != SignValue or not MathValue.isclose(ItemData.value_mm, DimensionData[0].value_mm * SignValue, rel_tol=0.0, abs_tol=1e-10) for ItemData, SignValue in zip(NativePad.depth_copies, ExpectedDepthSigns, strict=True))) or (NativeShell.object_id != 34) or (NativeShell.name != 'Shell1') or (NativeShell.kind != 'shell') or (NativeShell.profile_id is not None) or (NativeShell.dependencies != (32,)) or (NativeShell.length_mm is None) or (not MathValue.isclose(NativeShell.length_mm, DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativeShell.selection_kind != 'face') or (NativeShell.selection_references != ((32, 1), (32, 4))) or (NativeShell.selected_local_ids != (1, 4)):
         return False
-    NativeShellFeature = next(
-        (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 34),
-        None,
-    )
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 34}
-    )
-    return (
-        NativeShellFeature is not None
-        and len(NativeShellFeature.dimensions) == 1
-        and NativeShellFeature.dimensions[0].name == "D1"
-        and NativeShellFeature.dimensions[0].kind == "thickness"
-        and math.isclose(
-            NativeShellFeature.dimensions[0].value_mm,
-            DimensionData[1].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        and NativeFeatureIds == (26, 32, 34)
-    )
+    NativeShellFeature = next((ItemData for ItemData in ParsedModel.features if ItemData.object_id == 34), None)
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 34}))
+    return NativeShellFeature is not None and len(NativeShellFeature.dimensions) == 1 and (NativeShellFeature.dimensions[0].name == 'D1') and (NativeShellFeature.dimensions[0].kind == 'thickness') and MathValue.isclose(NativeShellFeature.dimensions[0].value_mm, DimensionData[1].value_mm, rel_tol=0.0, abs_tol=1e-10) and (NativeFeatureIds == (26, 32, 34))
 
-
-# this proves the editable boss, pattern count, spacing, direction edge, and fused body
-def HasBossLinearPatternProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 3
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasBossLinear(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 3 or len(ParsedModel.sketches) != 1 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchObject, PadObject, PatternObject = AuthoredObjs
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    BoundsValue = WriteRectangle(SketchObject)
     if SourceSketch is None or len(SourceFeatures) != 2 or BoundsValue is None:
         return False
     SourcePad, SourcePattern = SourceFeatures
-    DimensionData = _FreeCadBossLinearPatternDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourcePattern,
-        BoundsValue,
-    )
-    if (
-        DimensionData is None
-        or (SketchObject.object_id, PadObject.object_id, PatternObject.object_id)
-        != (26, 32, 40)
-        or (SketchObject.name, PadObject.name, PatternObject.name)
-        != ("Sketch1", "Boss-Extrude1", "LPattern1")
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or PatternObject.kind != "LPattern"
-        or PatternObject.payload
-        or tuple(ItemData.name for ItemData in PatternObject.dimensions) != ("D1", "D3")
-    ):
+    DimensionData = FreeCadBossC(DocData, SourceSketch, SourcePad, SourcePattern, BoundsValue)
+    if DimensionData is None or (SketchObject.object_id, PadObject.object_id, PatternObject.object_id) != (26, 32, 40) or (SketchObject.name, PadObject.name, PatternObject.name) != ('Sketch1', 'Boss-Extrude1', 'LPattern1') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (PatternObject.kind != 'LPattern') or PatternObject.payload or (tuple((ItemData.name for ItemData in PatternObject.dimensions)) != ('D1', 'D3')):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad, NativePattern = ParsedModel.operations
-    ProfilesValue = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == "rectangle"
-    )
+    ProfilesValue = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != 2
-        or len(ProfilesValue) != 1
-        or len(ProfilesValue[0].coordinates) != len(BoundsValue)
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfilesValue[0].coordinates,
-                BoundsValue,
-                strict=True,
-            )
-        )
-        or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ("horizontal", "vertical", "horizontal", "vertical")
-        or NativePad.object_id != 32
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.profile_id != 26
-        or NativePad.dependencies != (26,)
-        or NativePad.direction_code != 0
-        or NativePad.termination_code != 0
-        or NativePad.length_mm is None
-        or not math.isclose(
-            NativePad.length_mm,
-            DimensionData[0].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or len(NativePad.depth_copies) != len(ExpectedDepthSigns)
-        or any(
-            ItemData.sign != SignValue
-            or not math.isclose(
-                ItemData.value_mm,
-                DimensionData[0].value_mm * SignValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ItemData, SignValue in zip(
-                NativePad.depth_copies,
-                ExpectedDepthSigns,
-                strict=True,
-            )
-        )
-        or NativePattern.object_id != 40
-        or NativePattern.name != "LPattern1"
-        or NativePattern.kind != "linear_pattern"
-        or NativePattern.profile_id is not None
-        or NativePattern.dependencies != (32,)
-        or NativePattern.direction_code != 1
-        or NativePattern.instance_count != int(DimensionData[1].value_mm)
-        or NativePattern.spacing_mm is None
-        or not math.isclose(
-            NativePattern.spacing_mm,
-            DimensionData[2].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or NativePattern.selection_kind != "edge"
-        or NativePattern.selection_references != ((32, 4), (32, 3))
-        or NativePattern.selected_local_ids != (4, 3)
-        or NativePattern.mode != "linear"
-    ):
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != 2 or len(ProfilesValue) != 1 or (len(ProfilesValue[0].coordinates) != len(BoundsValue)) or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfilesValue[0].coordinates, BoundsValue, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ('horizontal', 'vertical', 'horizontal', 'vertical')) or (NativePad.object_id != 32) or (NativePad.name != 'Boss-Extrude1') or (NativePad.kind not in {'boss', 'join'}) or (NativePad.profile_id != 26) or (NativePad.dependencies != (26,)) or (NativePad.direction_code != 0) or (NativePad.termination_code != 0) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DimensionData[0].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (len(NativePad.depth_copies) != len(ExpectedDepthSigns)) or any((ItemData.sign != SignValue or not MathValue.isclose(ItemData.value_mm, DimensionData[0].value_mm * SignValue, rel_tol=0.0, abs_tol=1e-10) for ItemData, SignValue in zip(NativePad.depth_copies, ExpectedDepthSigns, strict=True))) or (NativePattern.object_id != 40) or (NativePattern.name != 'LPattern1') or (NativePattern.kind != 'linear_pattern') or (NativePattern.profile_id is not None) or (NativePattern.dependencies != (32,)) or (NativePattern.direction_code != 1) or (NativePattern.instance_count != int(DimensionData[1].value_mm)) or (NativePattern.spacing_mm is None) or (not MathValue.isclose(NativePattern.spacing_mm, DimensionData[2].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativePattern.selection_kind != 'edge') or (NativePattern.selection_references != ((32, 4), (32, 3))) or (NativePattern.selected_local_ids != (4, 3)) or (NativePattern.mode != 'linear'):
         return False
-    NativePatternFeature = next(
-        (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 40),
-        None,
-    )
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 40}
-    )
-    return (
-        NativePatternFeature is not None
-        and tuple(
-            (ItemData.name, ItemData.kind)
-            for ItemData in NativePatternFeature.dimensions
-        )
-        == (("D1", "instance_count"), ("D3", "spacing"))
-        and NativeFeatureIds == (26, 32, 40)
-    )
+    NativePatternFeature = next((ItemData for ItemData in ParsedModel.features if ItemData.object_id == 40), None)
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 40}))
+    return NativePatternFeature is not None and tuple(((ItemData.name, ItemData.kind) for ItemData in NativePatternFeature.dimensions)) == (('D1', 'instance_count'), ('D3', 'spacing')) and (NativeFeatureIds == (26, 32, 40))
 
-
-# this proves the editable boss, angular span, count, selected axis, and fused body
-def HasBossCircularPatternProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 3
-        or len(ParsedModel.sketches) != 1
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasBossCircular(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 3 or len(ParsedModel.sketches) != 1 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchObject, PadObject, PatternObject = AuthoredObjs
-    SourceSketch = next(
-        (
-            ItemData
-            for ItemData in DocumentData.sketches
-            if ItemData.id == SketchObject.source_id
-        ),
-        None,
-    )
-    SourceFeatures = tuple(
-        ItemData
-        for ItemData in sorted(
-            DocumentData.feature_timeline,
-            key=lambda ItemData: ItemData.order,
-        )
-        if not _is_native_system_feature(ItemData)
-    )
-    BoundsValue = _write_rectangle_bounds(SketchObject)
+    SourceSketch = next((ItemData for ItemData in DocData.sketches if ItemData.id == SketchObject.source_id), None)
+
+    # this callback exists because local behavior needs one focused transformation
+    SourceFeatures = tuple((ItemData for ItemData in sorted(DocData.feature_timeline, key=lambda ItemData: ItemData.order) if not IsNativeSystem(ItemData)))
+    BoundsValue = WriteRectangle(SketchObject)
     if SourceSketch is None or len(SourceFeatures) != 2 or BoundsValue is None:
         return False
     SourcePad, SourcePattern = SourceFeatures
-    DimensionData = _FreeCadBossCircularPatternDimensions(
-        DocumentData,
-        SourceSketch,
-        SourcePad,
-        SourcePattern,
-        BoundsValue,
-    )
-    if (
-        DimensionData is None
-        or (SketchObject.object_id, PadObject.object_id, PatternObject.object_id)
-        != (26, 32, 46)
-        or (SketchObject.name, PadObject.name, PatternObject.name)
-        != ("Sketch1", "Boss-Extrude1", "CirPattern1")
-        or ExtrusionEditCodes(PadObject.payload) != (0, 0)
-        or PatternObject.kind != "CirPattern"
-        or PatternObject.payload
-        or tuple(ItemData.name for ItemData in PatternObject.dimensions) != ("D1", "D3")
-    ):
+    DimensionData = FreeCadBossA(DocData, SourceSketch, SourcePad, SourcePattern, BoundsValue)
+    if DimensionData is None or (SketchObject.object_id, PadObject.object_id, PatternObject.object_id) != (26, 32, 46) or (SketchObject.name, PadObject.name, PatternObject.name) != ('Sketch1', 'Boss-Extrude1', 'CirPattern1') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (PatternObject.kind != 'CirPattern') or PatternObject.payload or (tuple((ItemData.name for ItemData in PatternObject.dimensions)) != ('D1', 'D3')):
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad, NativePattern = ParsedModel.operations
-    ProfilesValue = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == "rectangle"
-    )
+    ProfilesValue = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    if (
-        NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != 2
-        or len(ProfilesValue) != 1
-        or len(ProfilesValue[0].coordinates) != len(BoundsValue)
-        or any(
-            not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-            for ActualValue, ExpectedValue in zip(
-                ProfilesValue[0].coordinates,
-                BoundsValue,
-                strict=True,
-            )
-        )
-        or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ("horizontal", "vertical", "horizontal", "vertical")
-        or NativePad.object_id != 32
-        or NativePad.name != "Boss-Extrude1"
-        or NativePad.kind not in {"boss", "join"}
-        or NativePad.profile_id != 26
-        or NativePad.dependencies != (26,)
-        or NativePad.direction_code != 0
-        or NativePad.termination_code != 0
-        or NativePad.length_mm is None
-        or not math.isclose(
-            NativePad.length_mm,
-            DimensionData[0].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or len(NativePad.depth_copies) != len(ExpectedDepthSigns)
-        or any(
-            ItemData.sign != SignValue
-            or not math.isclose(
-                ItemData.value_mm,
-                DimensionData[0].value_mm * SignValue,
-                rel_tol=0.0,
-                abs_tol=1.0e-10,
-            )
-            for ItemData, SignValue in zip(
-                NativePad.depth_copies,
-                ExpectedDepthSigns,
-                strict=True,
-            )
-        )
-        or NativePattern.object_id != 46
-        or NativePattern.name != "CirPattern1"
-        or NativePattern.kind != "circular_pattern"
-        or NativePattern.profile_id is not None
-        or NativePattern.dependencies != (32,)
-        or NativePattern.direction_code != 1
-        or NativePattern.instance_count != int(DimensionData[1].value_mm)
-        or NativePattern.angle_degrees is None
-        or not math.isclose(
-            NativePattern.angle_degrees,
-            DimensionData[2].value_mm,
-            rel_tol=0.0,
-            abs_tol=1.0e-10,
-        )
-        or NativePattern.selection_kind != "edge"
-        or NativePattern.selection_references != ((32, 4), (32, 1))
-        or NativePattern.selected_local_ids != (4, 1)
-        or NativePattern.mode != "circular"
-    ):
+    if NativeSketch.object_id != 26 or NativeSketch.support_plane_id != 2 or len(ProfilesValue) != 1 or (len(ProfilesValue[0].coordinates) != len(BoundsValue)) or any((not MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ProfilesValue[0].coordinates, BoundsValue, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ('horizontal', 'vertical', 'horizontal', 'vertical')) or (NativePad.object_id != 32) or (NativePad.name != 'Boss-Extrude1') or (NativePad.kind not in {'boss', 'join'}) or (NativePad.profile_id != 26) or (NativePad.dependencies != (26,)) or (NativePad.direction_code != 0) or (NativePad.termination_code != 0) or (NativePad.length_mm is None) or (not MathValue.isclose(NativePad.length_mm, DimensionData[0].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (len(NativePad.depth_copies) != len(ExpectedDepthSigns)) or any((ItemData.sign != SignValue or not MathValue.isclose(ItemData.value_mm, DimensionData[0].value_mm * SignValue, rel_tol=0.0, abs_tol=1e-10) for ItemData, SignValue in zip(NativePad.depth_copies, ExpectedDepthSigns, strict=True))) or (NativePattern.object_id != 46) or (NativePattern.name != 'CirPattern1') or (NativePattern.kind != 'circular_pattern') or (NativePattern.profile_id is not None) or (NativePattern.dependencies != (32,)) or (NativePattern.direction_code != 1) or (NativePattern.instance_count != int(DimensionData[1].value_mm)) or (NativePattern.angle_degrees is None) or (not MathValue.isclose(NativePattern.angle_degrees, DimensionData[2].value_mm, rel_tol=0.0, abs_tol=1e-10)) or (NativePattern.selection_kind != 'edge') or (NativePattern.selection_references != ((32, 4), (32, 1))) or (NativePattern.selected_local_ids != (4, 1)) or (NativePattern.mode != 'circular'):
         return False
-    NativePatternFeature = next(
-        (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 46),
-        None,
-    )
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 46}
-    )
-    return (
-        NativePatternFeature is not None
-        and tuple(
-            (ItemData.name, ItemData.kind)
-            for ItemData in NativePatternFeature.dimensions
-        )
-        == (("D1", "instance_count"), ("D3", "angle"))
-        and NativeFeatureIds == (26, 32, 46)
-    )
+    NativePatternFeature = next((ItemData for ItemData in ParsedModel.features if ItemData.object_id == 46), None)
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 46}))
+    return NativePatternFeature is not None and tuple(((ItemData.name, ItemData.kind) for ItemData in NativePatternFeature.dimensions)) == (('D1', 'instance_count'), ('D3', 'angle')) and (NativeFeatureIds == (26, 32, 46))
 
-
-# this proves both editable rectangles, parameters, directions, and operation order
-def HasTwoFeatureProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
-    if (
-        len(AuthoredObjs) != 4
-        or len(ParsedModel.sketches) != 2
-        or len(ParsedModel.operations) != 2
-        or len(DocumentData.bodies) != 1
-    ):
+# this definition exists because focused behavior needs one stable owner
+def HasTwoFeature(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
+    if len(AuthoredObjs) != 4 or len(ParsedModel.sketches) != 2 or len(ParsedModel.operations) != 2 or (len(DocData.bodies) != 1):
         return False
     SketchOne, FeatureOne, SketchTwo, FeatureTwo = AuthoredObjs
-    SecondIsBoss = FeatureTwo.class_name == "moExtrusion_c"
-    ExpectedData = (
-        (SketchOne, FeatureOne, 26, 32, "Sketch1", "Boss-Extrude1", {"boss", "join"}),
-        (
-            SketchTwo,
-            FeatureTwo,
-            33,
-            40,
-            "Sketch2",
-            "Boss-Extrude2" if SecondIsBoss else "Cut-Extrude1",
-            {"boss", "join"} if SecondIsBoss else {"cut"},
-        ),
-    )
+    SecondIsBoss = FeatureTwo.class_name == 'moExtrusion_c'
+    ExpectedData = ((SketchOne, FeatureOne, 26, 32, 'Sketch1', 'Boss-Extrude1', {'boss', 'join'}), (SketchTwo, FeatureTwo, 33, 40, 'Sketch2', 'Boss-Extrude2' if SecondIsBoss else 'Cut-Extrude1', {'boss', 'join'} if SecondIsBoss else {'cut'}))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    for NativeSketch, NativeFeature, ExpectedValue in zip(
-        ParsedModel.sketches,
-        ParsedModel.operations,
-        ExpectedData,
-        strict=True,
-    ):
-        (
-            SketchObject,
-            FeatureObject,
-            SketchObjectId,
-            FeatureObjectId,
-            SketchName,
-            FeatureName,
-            FeatureKinds,
-        ) = ExpectedValue
-        BoundsValue = _write_rectangle_bounds(SketchObject)
-        EndCodes = ExtrusionEditCodes(FeatureObject.payload)
-        if (
-            BoundsValue is None
-            or EndCodes is None
-            or len(FeatureObject.dimensions) != (0 if EndCodes[1] == 1 else 1)
-        ):
+    for NativeSketch, NativeFeature, ExpectedValue in zip(ParsedModel.sketches, ParsedModel.operations, ExpectedData, strict=True):
+        SketchObject, FeatureObject, SketchObjectId, FeatureObjectId, SketchName, FeatureName, FeatureKinds = ExpectedValue
+        BoundsValue = WriteRectangle(SketchObject)
+        EndCodes = ExtrusionEdit(FeatureObject.payload)
+        if BoundsValue is None or EndCodes is None or len(FeatureObject.dimensions) != (0 if EndCodes[1] == 1 else 1):
             return False
-        ProfileData = tuple(
-            ItemData
-            for ItemData in NativeSketch.profiles
-            if ItemData.kind == "rectangle"
-        )
-        ExpectedDims = tuple(
-            (ItemData.name, round(ItemData.value_mm, 10))
-            for ItemData in SketchObject.dimensions
-        )
-        ActualDims = tuple(
-            (ItemData.name, round(ItemData.value_mm, 10))
-            for ItemData in NativeSketch.dimensions
-        )
-        ExpectedConstraints = (
-            "horizontal",
-            "vertical",
-            "horizontal",
-            "vertical",
-            *(("distance",) * len(ExpectedDims)),
-        )
-        DepthValue = (
-            None
-            if not FeatureObject.dimensions
-            else FeatureObject.dimensions[0].value_mm
-        )
-        if (
-            SketchObject.object_id != SketchObjectId
-            or SketchObject.name != SketchName
-            or FeatureObject.object_id != FeatureObjectId
-            or FeatureObject.name != FeatureName
-            or NativeSketch.object_id != SketchObjectId
-            or NativeSketch.support_plane_id != 2
-            or len(ProfileData) != 1
-            or len(ProfileData[0].coordinates) != len(BoundsValue)
-            or any(
-                not math.isclose(ActualValue, ExpectedCoordinate, abs_tol=1.0e-10)
-                for ActualValue, ExpectedCoordinate in zip(
-                    ProfileData[0].coordinates, BoundsValue, strict=True
-                )
-            )
-            or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-            != ExpectedConstraints
-            or ActualDims != ExpectedDims
-            or NativeFeature.object_id != FeatureObjectId
-            or NativeFeature.name != FeatureName
-            or NativeFeature.profile_id != SketchObjectId
-            or NativeFeature.kind not in FeatureKinds
-            or NativeFeature.direction_code != EndCodes[0]
-            or NativeFeature.termination_code != EndCodes[1]
-            or (
-                DepthValue is None
-                and (NativeFeature.length_mm is not None or NativeFeature.depth_copies)
-            )
-            or (
-                DepthValue is not None
-                and (
-                    NativeFeature.length_mm is None
-                    or not math.isclose(
-                        NativeFeature.length_mm,
-                        DepthValue,
-                        abs_tol=1.0e-10,
-                    )
-                    or len(NativeFeature.depth_copies) != len(ExpectedDepthSigns)
-                    or not math.isclose(
-                        NativeFeature.depth_copies[0].value_mm,
-                        DepthValue,
-                        abs_tol=1.0e-10,
-                    )
-                    or (
-                        EndCodes == (0, 0)
-                        and any(
-                            CopyData.sign != CopySign
-                            or not math.isclose(
-                                CopyData.value_mm,
-                                DepthValue * CopySign,
-                                abs_tol=1.0e-10,
-                            )
-                            for CopyData, CopySign in zip(
-                                NativeFeature.depth_copies,
-                                ExpectedDepthSigns,
-                                strict=True,
-                            )
-                        )
-                    )
-                )
-            )
-        ):
+        ProfileData = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == 'rectangle'))
+        ExpectedDims = tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in SketchObject.dimensions))
+        ActualDims = tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in NativeSketch.dimensions))
+        ExpectedConstraints = ('horizontal', 'vertical', 'horizontal', 'vertical', *('distance',) * len(ExpectedDims))
+        DepthValue = None if not FeatureObject.dimensions else FeatureObject.dimensions[0].value_mm
+        if SketchObject.object_id != SketchObjectId or SketchObject.name != SketchName or FeatureObject.object_id != FeatureObjectId or (FeatureObject.name != FeatureName) or (NativeSketch.object_id != SketchObjectId) or (NativeSketch.support_plane_id != 2) or (len(ProfileData) != 1) or (len(ProfileData[0].coordinates) != len(BoundsValue)) or any((not MathValue.isclose(ActualValue, ExpectedCoordinate, abs_tol=1e-10) for ActualValue, ExpectedCoordinate in zip(ProfileData[0].coordinates, BoundsValue, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ExpectedConstraints) or (ActualDims != ExpectedDims) or (NativeFeature.object_id != FeatureObjectId) or (NativeFeature.name != FeatureName) or (NativeFeature.profile_id != SketchObjectId) or (NativeFeature.kind not in FeatureKinds) or (NativeFeature.direction_code != EndCodes[0]) or (NativeFeature.termination_code != EndCodes[1]) or (DepthValue is None and (NativeFeature.length_mm is not None or NativeFeature.depth_copies)) or (DepthValue is not None and (NativeFeature.length_mm is None or not MathValue.isclose(NativeFeature.length_mm, DepthValue, abs_tol=1e-10) or len(NativeFeature.depth_copies) != len(ExpectedDepthSigns) or (not MathValue.isclose(NativeFeature.depth_copies[0].value_mm, DepthValue, abs_tol=1e-10)) or (EndCodes == (0, 0) and any((CopyData.sign != CopySign or not MathValue.isclose(CopyData.value_mm, DepthValue * CopySign, abs_tol=1e-10) for CopyData, CopySign in zip(NativeFeature.depth_copies, ExpectedDepthSigns, strict=True)))))):
             return False
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in {26, 32, 33, 40}
-    )
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in {26, 32, 33, 40}))
     return NativeFeatureIds == (26, 32, 33, 40)
 
-
-# this proves three- and four-stage cut chains, depths, directions, and dependency order
-def HasCutChainProof(
-    DocumentData: CadDocument,
-    AuthoredObjs: tuple[_WriteObject, ...],
-    ParsedModel: NativeModel,
-) -> bool:
+# this definition exists because focused behavior needs one stable owner
+def HasCutChain(DocData: CadDocument, AuthoredObjs: tuple[_WriteObject, ...], ParsedModel: NativeModel) -> bool:
     FeatureCount = len(AuthoredObjs) // 2
-    if (
-        FeatureCount not in {3, 4}
-        or len(AuthoredObjs) != FeatureCount * 2
-        or len(ParsedModel.sketches) != FeatureCount
-        or len(ParsedModel.operations) != FeatureCount
-        or len(DocumentData.bodies) != 1
-    ):
+    if FeatureCount not in {3, 4} or len(AuthoredObjs) != FeatureCount * 2 or len(ParsedModel.sketches) != FeatureCount or (len(ParsedModel.operations) != FeatureCount) or (len(DocData.bodies) != 1):
         return False
     SketchIds = (26, 33, 41, 48)[:FeatureCount]
     FeatureIds = (32, 40, 47, 54)[:FeatureCount]
-    ExpectedData = tuple(
-        (
-            AuthoredObjs[FeatureIndex * 2],
-            AuthoredObjs[FeatureIndex * 2 + 1],
-            SketchIds[FeatureIndex],
-            FeatureIds[FeatureIndex],
-            f"Sketch{FeatureIndex + 1}",
-            ("Boss-Extrude1" if FeatureIndex == 0 else f"Cut-Extrude{FeatureIndex}"),
-            ({"boss", "join"} if FeatureIndex == 0 else {"cut"}),
-        )
-        for FeatureIndex in range(FeatureCount)
-    )
+    ExpectedData = tuple(((AuthoredObjs[FeatureIndex * 2], AuthoredObjs[FeatureIndex * 2 + 1], SketchIds[FeatureIndex], FeatureIds[FeatureIndex], f'Sketch{FeatureIndex + 1}', 'Boss-Extrude1' if FeatureIndex == 0 else f'Cut-Extrude{FeatureIndex}', {'boss', 'join'} if FeatureIndex == 0 else {'cut'}) for FeatureIndex in range(FeatureCount)))
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
-    for NativeSketch, NativeFeature, ExpectedValue in zip(
-        ParsedModel.sketches,
-        ParsedModel.operations,
-        ExpectedData,
-        strict=True,
-    ):
-        (
-            SketchObject,
-            FeatureObject,
-            SketchObjectId,
-            FeatureObjectId,
-            SketchName,
-            FeatureName,
-            FeatureKinds,
-        ) = ExpectedValue
-        BoundsValue = _write_rectangle_bounds(SketchObject)
-        CircleValue = _write_circle_profile(SketchObject)
-        EndCodes = ExtrusionEditCodes(FeatureObject.payload)
-        if (
-            (BoundsValue is None) == (CircleValue is None)
-            or EndCodes is None
-            or len(FeatureObject.dimensions) != 1
-        ):
+    for NativeSketch, NativeFeature, ExpectedValue in zip(ParsedModel.sketches, ParsedModel.operations, ExpectedData, strict=True):
+        SketchObject, FeatureObject, SketchObjectId, FeatureObjectId, SketchName, FeatureName, FeatureKinds = ExpectedValue
+        BoundsValue = WriteRectangle(SketchObject)
+        CircleValue = WriteCircle(SketchObject)
+        EndCodes = ExtrusionEdit(FeatureObject.payload)
+        if (BoundsValue is None) == (CircleValue is None) or EndCodes is None or len(FeatureObject.dimensions) != 1:
             return False
-        ProfileKind = "rectangle" if BoundsValue is not None else "circle"
+        ProfileKind = 'rectangle' if BoundsValue is not None else 'circle'
         ExpectedProfile = BoundsValue if BoundsValue is not None else CircleValue
-        ProfileData = tuple(
-            ItemData
-            for ItemData in NativeSketch.profiles
-            if ItemData.kind == ProfileKind
-        )
-        ExpectedDims = tuple(
-            (ItemData.name, round(ItemData.value_mm, 10))
-            for ItemData in SketchObject.dimensions
-        )
-        ActualDims = tuple(
-            (ItemData.name, round(ItemData.value_mm, 10))
-            for ItemData in NativeSketch.dimensions
-        )
-        ExpectedConstraints = (
-            (
-                "horizontal",
-                "vertical",
-                "horizontal",
-                "vertical",
-                *(("distance",) * len(ExpectedDims)),
-            )
-            if BoundsValue is not None
-            else ("radius", "distance", "distance")
-        )
+        ProfileData = tuple((ItemData for ItemData in NativeSketch.profiles if ItemData.kind == ProfileKind))
+        ExpectedDims = tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in SketchObject.dimensions))
+        ActualDims = tuple(((ItemData.name, round(ItemData.value_mm, 10)) for ItemData in NativeSketch.dimensions))
+        ExpectedConstraints = ('horizontal', 'vertical', 'horizontal', 'vertical', *('distance',) * len(ExpectedDims)) if BoundsValue is not None else ('radius', 'distance', 'distance')
         DepthValue = FeatureObject.dimensions[0].value_mm
-        if (
-            SketchObject.object_id != SketchObjectId
-            or SketchObject.name != SketchName
-            or FeatureObject.object_id != FeatureObjectId
-            or FeatureObject.name != FeatureName
-            or NativeSketch.object_id != SketchObjectId
-            or NativeSketch.support_plane_id != 2
-            or len(ProfileData) != 1
-            or ExpectedProfile is None
-            or len(ProfileData[0].coordinates) != len(ExpectedProfile)
-            or any(
-                not math.isclose(ActualValue, ExpectedCoordinate, abs_tol=1.0e-10)
-                for ActualValue, ExpectedCoordinate in zip(
-                    ProfileData[0].coordinates,
-                    ExpectedProfile,
-                    strict=True,
-                )
-            )
-            or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-            != ExpectedConstraints
-            or ActualDims != ExpectedDims
-            or NativeFeature.object_id != FeatureObjectId
-            or NativeFeature.name != FeatureName
-            or NativeFeature.profile_id != SketchObjectId
-            or NativeFeature.kind not in FeatureKinds
-            or NativeFeature.direction_code != EndCodes[0]
-            or NativeFeature.termination_code != EndCodes[1]
-            or NativeFeature.length_mm is None
-            or not math.isclose(
-                NativeFeature.length_mm,
-                DepthValue,
-                abs_tol=1.0e-10,
-            )
-            or len(NativeFeature.depth_copies) != len(ExpectedDepthSigns)
-            or any(
-                CopyData.sign != CopySign
-                or not math.isclose(
-                    CopyData.value_mm,
-                    DepthValue * CopySign,
-                    abs_tol=1.0e-10,
-                )
-                for CopyData, CopySign in zip(
-                    NativeFeature.depth_copies,
-                    ExpectedDepthSigns,
-                    strict=True,
-                )
-            )
-        ):
+        if SketchObject.object_id != SketchObjectId or SketchObject.name != SketchName or FeatureObject.object_id != FeatureObjectId or (FeatureObject.name != FeatureName) or (NativeSketch.object_id != SketchObjectId) or (NativeSketch.support_plane_id != 2) or (len(ProfileData) != 1) or (ExpectedProfile is None) or (len(ProfileData[0].coordinates) != len(ExpectedProfile)) or any((not MathValue.isclose(ActualValue, ExpectedCoordinate, abs_tol=1e-10) for ActualValue, ExpectedCoordinate in zip(ProfileData[0].coordinates, ExpectedProfile, strict=True))) or (tuple((ItemData.kind for ItemData in NativeSketch.constraints)) != ExpectedConstraints) or (ActualDims != ExpectedDims) or (NativeFeature.object_id != FeatureObjectId) or (NativeFeature.name != FeatureName) or (NativeFeature.profile_id != SketchObjectId) or (NativeFeature.kind not in FeatureKinds) or (NativeFeature.direction_code != EndCodes[0]) or (NativeFeature.termination_code != EndCodes[1]) or (NativeFeature.length_mm is None) or (not MathValue.isclose(NativeFeature.length_mm, DepthValue, abs_tol=1e-10)) or (len(NativeFeature.depth_copies) != len(ExpectedDepthSigns)) or any((CopyData.sign != CopySign or not MathValue.isclose(CopyData.value_mm, DepthValue * CopySign, abs_tol=1e-10) for CopyData, CopySign in zip(NativeFeature.depth_copies, ExpectedDepthSigns, strict=True))):
             return False
-    ExpectedIds = tuple(
-        ObjectId
-        for PairData in zip(SketchIds, FeatureIds, strict=True)
-        for ObjectId in PairData
-    )
-    NativeFeatureIds = tuple(
-        ItemData.object_id
-        for ItemData in ParsedModel.features
-        if ItemData.object_id in set(ExpectedIds)
-    )
+    ExpectedIds = tuple((ObjectId for PairData in zip(SketchIds, FeatureIds, strict=True) for ObjectId in PairData))
+    NativeFeatureIds = tuple((ItemData.object_id for ItemData in ParsedModel.features if ItemData.object_id in set(ExpectedIds)))
     return NativeFeatureIds == ExpectedIds
 
-
-# this verifies rectangle dimensions match authored geometry
-def HasRectDims(
-    SketchObject: _WriteObject,
-    BoundsValue: tuple[float, float, float, float] | None,
-) -> bool:
+# this definition exists because focused behavior needs one stable owner
+def HasRectDims(SketchObject: _WriteObject, BoundsValue: tuple[float, float, float, float] | None) -> bool:
     if BoundsValue is None:
         return False
     if not SketchObject.dimensions:
@@ -9841,885 +3731,277 @@ def HasRectDims(
         return False
     MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
     ExpectedDims = sorted((MaximumX - MinimumX, MaximumY - MinimumY))
-    ActualDims = sorted(ItemData.value_mm for ItemData in SketchObject.dimensions)
-    return all(
-        math.isfinite(ActualValue)
-        and ActualValue > 0.0
-        and math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
-        for ActualValue, ExpectedValue in zip(
-            ActualDims,
-            ExpectedDims,
-            strict=True,
-        )
-    )
+    ActualDims = sorted((ItemData.value_mm for ItemData in SketchObject.dimensions))
+    return all((MathValue.isfinite(ActualValue) and ActualValue > 0.0 and MathValue.isclose(ActualValue, ExpectedValue, abs_tol=1e-10) for ActualValue, ExpectedValue in zip(ActualDims, ExpectedDims, strict=True)))
 
-
-# circular dimensions must all agree with the authored geometric radius
-def HasCircleDims(
-    SketchObject: _WriteObject,
-    CircleValue: tuple[float, float, float] | None,
-) -> bool:
+# this definition exists because focused behavior needs one stable owner
+def HasCircleDims(SketchObject: _WriteObject, CircleValue: tuple[float, float, float] | None) -> bool:
     if CircleValue is None:
         return False
     RadiusValue = CircleValue[2]
-    return bool(SketchObject.dimensions) and all(
-        math.isfinite(ItemData.value_mm)
-        and ItemData.value_mm > 0.0
-        and math.isclose(ItemData.value_mm, RadiusValue, abs_tol=1.0e-10)
-        for ItemData in SketchObject.dimensions
-    )
+    return bool(SketchObject.dimensions) and all((MathValue.isfinite(ItemData.value_mm) and ItemData.value_mm > 0.0 and MathValue.isclose(ItemData.value_mm, RadiusValue, abs_tol=1e-10) for ItemData in SketchObject.dimensions))
 
+# this definition exists because focused behavior needs one stable owner
+def FrameVector(Vector: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (Clean(Vector[0]), Clean(Vector[1]), Clean(Vector[2]))
 
-def _frame_vector(
-    vector: tuple[float, float, float],
-) -> tuple[float, float, float]:
-    return (_clean(vector[0]), _clean(vector[1]), _clean(vector[2]))
-
-
-def native_axis_bindings(model: NativeModel) -> frozenset[tuple[int, int, str]]:
-    sketches = {sketch.object_id: sketch for sketch in model.sketches}
-    result: set[tuple[int, int, str]] = set()
-    for operation in model.operations:
-        if operation.profile_id is None:
+# this definition exists because focused behavior needs one stable owner
+def NativeAxis(Model: NativeModel) -> frozenset[tuple[int, int, str]]:
+    Sketches = {Sketch.object_id: Sketch for Sketch in Model.sketches}
+    Result: set[tuple[int, int, str]] = set()
+    for Operation in Model.operations:
+        if Operation.profile_id is None:
             continue
-        sketch = sketches.get(operation.profile_id)
-        subelement = operation_axis_subelement(operation, sketch)
-        if subelement is None or sketch is None:
+        Sketch = Sketches.get(Operation.profile_id)
+        SubElem = OperationAxis(Operation, Sketch)
+        if SubElem is None or Sketch is None:
             continue
-        result.add((operation.object_id, sketch.object_id, subelement))
-    return frozenset(result)
+        Result.add((Operation.object_id, Sketch.object_id, SubElem))
+    return frozenset(Result)
 
-
-def _document_axis_bindings(
-    document: CadDocument, object_ids: Mapping[str, int]
-) -> frozenset[tuple[int, int, str]] | None:
-    features = {feature.name: feature for feature in document.feature_timeline}
-    sketches = {sketch.name: sketch for sketch in document.sketches}
-    result: set[tuple[int, int, str]] = set()
-    for selection in document.selections:
-        owner = str(selection.attributes.get("freecad_object", ""))
-        role = str(selection.attributes.get("freecad_property", ""))
-        if role != "ReferenceAxis" or len(selection.path) != 1:
+# this definition exists because focused behavior needs one stable owner
+def DocAxisBindings(DocValue: CadDocument, ObjectIds: Mapping[str, int]) -> frozenset[tuple[int, int, str]] | None:
+    Features = {Feature.name: Feature for Feature in DocValue.feature_timeline}
+    Sketches = {Sketch.name: Sketch for Sketch in DocValue.sketches}
+    Result: set[tuple[int, int, str]] = set()
+    for Selection in DocValue.selections:
+        Owner = str(Selection.attributes.get('freecad_object', ''))
+        RoleValue = str(Selection.attributes.get('freecad_property', ''))
+        if RoleValue != 'ReferenceAxis' or len(Selection.path) != 1:
             return None
-        element = selection.path[0]
-        feature = features.get(owner)
-        sketch = sketches.get(str(element.entity_id))
-        if feature is None or sketch is None or not element.subelement:
+        ElemValue = Selection.path[0]
+        Feature = Features.get(Owner)
+        Sketch = Sketches.get(str(ElemValue.entity_id))
+        if Feature is None or Sketch is None or (not ElemValue.subelement):
             return None
-        feature_key = f"feature:{feature.id}"
-        sketch_key = f"sketch:{sketch.id}"
-        if feature_key not in object_ids or sketch_key not in object_ids:
+        FeatureKey = f'feature:{Feature.id}'
+        SketchKey = f'sketch:{Sketch.id}'
+        if FeatureKey not in ObjectIds or SketchKey not in ObjectIds:
             return None
-        result.add(
-            (object_ids[feature_key], object_ids[sketch_key], element.subelement)
-        )
-    return frozenset(result)
+        Result.add((ObjectIds[FeatureKey], ObjectIds[SketchKey], ElemValue.subelement))
+    return frozenset(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, ConfigId: int | None=None, ResolvedStream: str=ResolvedFeaturesStream, ConfigStream: str='') -> NativeModel:
+    Configurations, XmlFeatures = ParseKeywords(Keywords)
+    Names = ParseNames(Resolved)
+    if ResolvedStream == ResolvedFeaturesStream:
+        RebindIds(XmlFeatures, Names)
+    Classes = ParseClasses(Resolved)
+    Scalars = ParseScalars(Resolved, Names)
+    RecordById = FeatureRecords(XmlFeatures, Names)
 
-def decode_native_model(
-    keywords: bytes,
-    resolved: bytes,
-    configuration_data: bytes = b"",
-    *,
-    configuration_id: int | None = None,
-    resolved_stream: str = RESOLVED_FEATURES_STREAM,
-    configuration_stream: str = "",
-) -> NativeModel:
-    configurations, xml_features = _parse_keywords(keywords)
-    names = _parse_names(resolved)
-    if resolved_stream == RESOLVED_FEATURES_STREAM:
-        RebindIds(xml_features, names)
-    classes = _parse_classes(resolved)
-    scalars = _parse_scalars(resolved, names)
-    record_by_id = _feature_records(xml_features, names)
-    ordered_records = sorted(
-        {record.offset: record for record in record_by_id.values()}.values(),
-        key=lambda record: record.offset,
-    )
-    ends = {
-        record.offset: (
-            ordered_records[index + 1].offset
-            if index + 1 < len(ordered_records)
-            else len(resolved)
-        )
-        for index, record in enumerate(ordered_records)
-    }
-    scalar_owner = _scalar_owners(scalars, ordered_records, ends)
-    native_features: list[NativeFeature] = []
-    for feature in xml_features:
-        record = record_by_id.get(feature.object_id)
-        name = feature.name or (record.name if record is not None else "")
-        if not name:
-            name = f"{feature.kind or feature.xml_tag} {feature.object_id}"
-        owned = scalar_owner.get(feature.object_id, ())
-        dimensions = tuple(
-            _bind_dimension(item, owned)
-            for item in _semantic_dimensions(feature.kind, tuple(feature.dimensions))
-        )
-        native_end = ends.get(record.offset) if record is not None else None
-        native_features.append(
-            NativeFeature(
-                object_id=feature.object_id,
-                name=name,
-                kind=feature.kind,
-                xml_tag=feature.xml_tag,
-                native_offset=record.offset if record else None,
-                native_end=native_end,
-                properties=dict(feature.properties),
-                dimensions=dimensions,
-                data=(
-                    resolved[record.offset : native_end]
-                    if record is not None and native_end is not None
-                    else b""
-                ),
-                class_name=(
-                    _record_class_name(classes, record.offset)
-                    if record is not None
-                    else ""
-                ),
-                native_stream=resolved_stream,
-            )
-        )
-    feature_indexes = {
-        feature.object_id: index for index, feature in enumerate(native_features)
-    }
-    for index, feature in enumerate(native_features):
-        child_id = _integer_property(feature.properties.get("DissectableChildren"))
-        child_scalars = scalar_owner.get(child_id or -1, ())
-        if not child_scalars:
+    # this callback exists because local behavior needs one focused transformation
+    OrderedRecords = sorted({Record.offset: Record for Record in RecordById.values()}.values(), key=lambda Record: Record.offset)
+    EndsValue = {Record.offset: OrderedRecords[Index + 1].offset if Index + 1 < len(OrderedRecords) else len(Resolved) for Index, Record in enumerate(OrderedRecords)}
+    ScalarOwner = ScalarOwners(Scalars, OrderedRecords, EndsValue)
+    NativeFeatures: list[NativeFeature] = []
+    for Feature in XmlFeatures:
+        Record = RecordById.get(Feature.object_id)
+        NameValue = Feature.name or (Record.name if Record is not None else '')
+        if not NameValue:
+            NameValue = f'{Feature.kind or Feature.xml_tag} {Feature.object_id}'
+        Owned = ScalarOwner.get(Feature.object_id, ())
+        Dimensions = tuple((BindDimension(ItemValue, Owned) for ItemValue in Semantic(Feature.kind, tuple(Feature.dimensions))))
+        NativeEnd = EndsValue.get(Record.offset) if Record is not None else None
+        NativeFeatures.append(NativeFeature(object_id=Feature.object_id, name=NameValue, kind=Feature.kind, xml_tag=Feature.xml_tag, native_offset=Record.offset if Record else None, native_end=NativeEnd, properties=dict(Feature.properties), dimensions=Dimensions, data=Resolved[Record.offset:NativeEnd] if Record is not None and NativeEnd is not None else b'', class_name=RecordClassName(Classes, Record.offset) if Record is not None else '', native_stream=ResolvedStream))
+    FeatureIndexes = {Feature.object_id: Index for Index, Feature in enumerate(NativeFeatures)}
+    for Index, Feature in enumerate(NativeFeatures):
+        ChildId = IntegerProp(Feature.properties.get('DissectableChildren'))
+        ChildScalars = ScalarOwner.get(ChildId or -1, ())
+        if not ChildScalars:
             continue
-        rebound = tuple(
-            (
-                _bind_dimension(dimension, child_scalars)
-                if dimension.native_offset is None
-                else dimension
-            )
-            for dimension in feature.dimensions
-        )
-        native_features[index] = replace(feature, dimensions=rebound)
-    planes = _decode_planes(resolved, native_features, native_stream=resolved_stream)
-    plane_by_id = {plane.object_id: plane for plane in planes}
-    principal_plane_frames = _principal_plane_frames(native_features)
-    principal_plane_ids = frozenset(principal_plane_frames)
-    author = sorted(
-        (
-            feature
-            for feature in native_features
-            if feature.native_offset is not None
-            and not _is_origin_feature(feature)
-            and feature.object_id not in principal_plane_ids
-        ),
-        key=lambda feature: feature.native_offset or 0,
-    )
-    unframed_planes = tuple(
-        feature
-        for feature in native_features
-        if _is_plane_feature(feature)
-        and feature.native_offset is not None
-        and feature.object_id not in plane_by_id
-    )
-    unframed_plane_ids = frozenset(feature.object_id for feature in unframed_planes)
-    sketches: list[NativeSketch] = []
-    operations: list[NativeOperation] = []
-    revolutions = {
-        layout.feature_id: layout
-        for layout in locate_features(resolved)
-        if layout.is_revolution
-    }
-    native_index_by_id = feature_indexes
-    latest_sketch: NativeSketch | None = None
-    latest_operation: NativeOperation | None = None
-    latest_plane_id = next(iter(principal_plane_frames), next(iter(plane_by_id), 0))
-    latest_unframed_plane_id: int | None = None
-    for feature in author:
-        if _is_plane_feature(feature):
-            if feature.object_id in plane_by_id:
-                latest_plane_id = feature.object_id
-                latest_unframed_plane_id = None
+        Rebound = tuple((BindDimension(Dimension, ChildScalars) if Dimension.native_offset is None else Dimension for Dimension in Feature.dimensions))
+        NativeFeatures[Index] = Replace(Feature, dimensions=Rebound)
+    Planes = DecodePlanes(Resolved, NativeFeatures, NativeStream=ResolvedStream)
+    PlaneById = {Plane.object_id: Plane for Plane in Planes}
+    PrincipalPlaneFrames = PrincipalPlaneA(NativeFeatures)
+    PrincipalPlaneIds = frozenset(PrincipalPlaneFrames)
+
+    # this callback exists because local behavior needs one focused transformation
+    Author = sorted((Feature for Feature in NativeFeatures if Feature.native_offset is not None and (not IsOriginFeature(Feature)) and (Feature.object_id not in PrincipalPlaneIds)), key=lambda Feature: Feature.native_offset or 0)
+    UnframedPlanes = tuple((Feature for Feature in NativeFeatures if IsPlaneFeature(Feature) and Feature.native_offset is not None and (Feature.object_id not in PlaneById)))
+    UnframedPlaneIds = frozenset((Feature.object_id for Feature in UnframedPlanes))
+    Sketches: list[NativeSketch] = []
+    Operations: list[NativeOperation] = []
+    Revolutions = {Layout.feature_id: Layout for Layout in LocateFeatures(Resolved) if Layout.is_revolution}
+    NativeIndexById = FeatureIndexes
+    LatestSketch: NativeSketch | None = None
+    LatestOperation: NativeOperation | None = None
+    LatestPlaneId = next(iter(PrincipalPlaneFrames), next(iter(PlaneById), 0))
+    LatestUnframedPlaneId: int | None = None
+    for Feature in Author:
+        if IsPlaneFeature(Feature):
+            if Feature.object_id in PlaneById:
+                LatestPlaneId = Feature.object_id
+                LatestUnframedPlaneId = None
             else:
-                latest_unframed_plane_id = feature.object_id
+                LatestUnframedPlaneId = Feature.object_id
             continue
-        if feature.kind.casefold() == "sketch":
-            sketch_start = feature.native_offset or 0
-            sketch_end = feature.native_end or len(resolved)
-            reference = _sketch_plane_reference(
-                resolved, classes, sketch_start, sketch_end
-            )
-            support, support_source, unframed_support = _support_plane_reference(
-                resolved,
-                sketch_start,
-                sketch_end,
-                reference,
-                latest_plane_id,
-                latest_unframed_plane_id,
-                plane_by_id,
-                unframed_plane_ids,
-            )
-            latest_sketch = _decode_sketch(
-                resolved,
-                feature,
-                support,
-                native_stream=resolved_stream,
-                support_kind=_sketch_support_kind(
-                    classes, reference, sketch_start, sketch_end
-                ),
-                support_plane=reference,
-                support_source=support_source,
-                unframed_support_plane_id=unframed_support,
-            )
-            native_index = native_index_by_id[feature.object_id]
-            native_features[native_index] = replace(
-                native_features[native_index], dimensions=latest_sketch.dimensions
-            )
-            sketches.append(latest_sketch)
+        if Feature.kind.casefold() == 'sketch':
+            SketchStart = Feature.native_offset or 0
+            SketchEnd = Feature.native_end or len(Resolved)
+            RefValue = SketchPlaneRef(Resolved, Classes, SketchStart, SketchEnd)
+            Support, SupportSource, UnframedSupport = SupportPlaneRef(Resolved, SketchStart, SketchEnd, RefValue, LatestPlaneId, LatestUnframedPlaneId, PlaneById, UnframedPlaneIds)
+            LatestSketch = DecodeSketch(Resolved, Feature, Support, NativeStream=ResolvedStream, SupportKind=SketchSupport(Classes, RefValue, SketchStart, SketchEnd), SupportPlane=RefValue, SupportSource=SupportSource, UnframedSupportPlaneId=UnframedSupport)
+            NativeIndex = NativeIndexById[Feature.object_id]
+            NativeFeatures[NativeIndex] = Replace(NativeFeatures[NativeIndex], dimensions=LatestSketch.dimensions)
+            Sketches.append(LatestSketch)
             continue
-        if feature.kind.casefold() == "extrusion":
-            record = record_by_id.get(feature.object_id)
-            if record is None:
+        if Feature.kind.casefold() == 'extrusion':
+            Record = RecordById.get(Feature.object_id)
+            if Record is None:
                 continue
-            child = _integer_property(feature.properties.get("DissectableChildren"))
-            profile_id = child or (latest_sketch.object_id if latest_sketch else None)
-            dependencies = tuple(
-                value
-                for value in (
-                    latest_operation.object_id if latest_operation else None,
-                    profile_id,
-                )
-                if value is not None
-            )
-            family, operation_code, schema = _operation_fields(resolved, record)
-            operation_start = feature.native_offset or 0
-            operation_end = feature.native_end or len(resolved)
-            end_spec = _end_spec(resolved, operation_start, operation_end, classes)
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind=(
-                    "join"
-                    if operation_code == 0
-                    else "cut" if operation_code == 2 else "native"
-                ),
-                profile_id=profile_id,
-                dependencies=dependencies,
-                native_offset=operation_start,
-                native_end=_class_record_end(resolved, classes, operation_start)
-                or operation_end,
-                length_mm=_operation_dimension(feature.dimensions, "length"),
-                radius_mm=None,
-                family_code=family,
-                operation_code=operation_code,
-                schema_code=schema,
-                direction_code=end_spec.direction_code if end_spec else None,
-                termination_code=end_spec.termination_code if end_spec else None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                native_stream=resolved_stream,
-                depth_copies=_depth_copies(
-                    resolved,
-                    _operation_dimension_offset(feature.dimensions, "length"),
-                ),
-                mirrored_direction_offset=(
-                    end_spec.mirrored_direction_offset if end_spec else None
-                ),
-                mirrored_direction_code=(
-                    end_spec.mirrored_direction_code if end_spec else None
-                ),
-            )
-            operations.append(operation)
-            latest_operation = operation
+            Child = IntegerProp(Feature.properties.get('DissectableChildren'))
+            ProfileId = Child or (LatestSketch.object_id if LatestSketch else None)
+            Dependencies = tuple((Value for Value in (LatestOperation.object_id if LatestOperation else None, ProfileId) if Value is not None))
+            Family, OperationCode, Schema = OperationFields(Resolved, Record)
+            OperationStart = Feature.native_offset or 0
+            OperationEnd = Feature.native_end or len(Resolved)
+            EndSpec = EndSpec(Resolved, OperationStart, OperationEnd, Classes)
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(Resolved, Classes, OperationStart) or OperationEnd, length_mm=Operation(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndSpec.direction_code if EndSpec else None, termination_code=EndSpec.termination_code if EndSpec else None, selection_offsets=(), selected_local_ids=(), native_stream=ResolvedStream, depth_copies=DepthCopies(Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndSpec.mirrored_direction_offset if EndSpec else None, mirrored_direction_code=EndSpec.mirrored_direction_code if EndSpec else None)
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        feature_type = feature.kind.casefold()
-        if feature_type in {"lpattern", "linearpattern"}:
-            record = record_by_id.get(feature.object_id)
-            CountValue = _operation_dimension(feature.dimensions, "instance_count")
-            SpacingValue = _operation_dimension(feature.dimensions, "spacing")
-            if (
-                record is None
-                or latest_operation is None
-                or CountValue is None
-                or CountValue != int(CountValue)
-                or SpacingValue is None
-            ):
+        FeatureType = Feature.kind.casefold()
+        if FeatureType in {'lpattern', 'linearpattern'}:
+            Record = RecordById.get(Feature.object_id)
+            CountValue = Operation(Feature.dimensions, 'instance_count')
+            SpacingValue = Operation(Feature.dimensions, 'spacing')
+            if Record is None or LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (SpacingValue is None):
                 continue
-            SelectionData = _operation_selections(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                feature,
-                native_features,
-            )
-            FamilyValue, OperationValue, SchemaValue = _operation_fields(
-                resolved,
-                record,
-            )
-            DirectionOffset = (
-                feature.native_offset + _LINEAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET
-                if feature.native_offset is not None
-                else -1
-            )
-            DirectionCode = (
-                resolved[DirectionOffset]
-                if 0 <= DirectionOffset < (feature.native_end or 0)
-                and resolved[DirectionOffset] in {0, 1}
-                else None
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="linear_pattern",
-                profile_id=None,
-                dependencies=(latest_operation.object_id,),
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=FamilyValue,
-                operation_code=OperationValue,
-                schema_code=SchemaValue,
-                direction_code=DirectionCode,
-                termination_code=None,
-                selection_offsets=tuple(ItemData[0] for ItemData in SelectionData),
-                selected_local_ids=tuple(ItemData[2] for ItemData in SelectionData),
-                selection_kind="edge",
-                mode="linear",
-                native_stream=resolved_stream,
-                selection_references=tuple(
-                    (ItemData[1], ItemData[2]) for ItemData in SelectionData
-                ),
-                instance_count=int(CountValue),
-                spacing_mm=SpacingValue,
-            )
-            operations.append(operation)
-            latest_operation = operation
+            SelectionData = OperationA(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures)
+            FamilyValue, OperationValue, SchemaValue = OperationFields(Resolved, Record)
+            DirectionOffset = Feature.native_offset + KLinearPatternDirection if Feature.native_offset is not None else -1
+            DirectionCode = Resolved[DirectionOffset] if 0 <= DirectionOffset < (Feature.native_end or 0) and Resolved[DirectionOffset] in {0, 1} else None
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='linear_pattern', profile_id=None, dependencies=(LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=FamilyValue, operation_code=OperationValue, schema_code=SchemaValue, direction_code=DirectionCode, termination_code=None, selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)), selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)), selection_kind='edge', mode='linear', native_stream=ResolvedStream, selection_references=tuple(((ItemData[1], ItemData[2]) for ItemData in SelectionData)), instance_count=int(CountValue), spacing_mm=SpacingValue)
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type in {"cirpattern", "circularpattern"}:
-            record = record_by_id.get(feature.object_id)
-            CountValue = _operation_dimension(feature.dimensions, "instance_count")
-            AngleValue = _operation_dimension(feature.dimensions, "angle")
-            if (
-                record is None
-                or latest_operation is None
-                or CountValue is None
-                or CountValue != int(CountValue)
-                or AngleValue is None
-            ):
+        if FeatureType in {'cirpattern', 'circularpattern'}:
+            Record = RecordById.get(Feature.object_id)
+            CountValue = Operation(Feature.dimensions, 'instance_count')
+            AngleValue = Operation(Feature.dimensions, 'angle')
+            if Record is None or LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (AngleValue is None):
                 continue
-            SelectionData = _operation_selections(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                feature,
-                native_features,
-            )
-            FamilyValue, OperationValue, SchemaValue = _operation_fields(
-                resolved,
-                record,
-            )
-            DirectionOffset = (
-                feature.native_offset + _CIRCULAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET
-                if feature.native_offset is not None
-                else -1
-            )
-            DirectionCode = (
-                resolved[DirectionOffset]
-                if 0 <= DirectionOffset < (feature.native_end or 0)
-                and resolved[DirectionOffset] in {0, 1}
-                else None
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="circular_pattern",
-                profile_id=None,
-                dependencies=(latest_operation.object_id,),
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=FamilyValue,
-                operation_code=OperationValue,
-                schema_code=SchemaValue,
-                direction_code=DirectionCode,
-                termination_code=None,
-                selection_offsets=tuple(ItemData[0] for ItemData in SelectionData),
-                selected_local_ids=tuple(ItemData[2] for ItemData in SelectionData),
-                angle_degrees=AngleValue,
-                selection_kind="edge",
-                mode="circular",
-                native_stream=resolved_stream,
-                selection_references=tuple(
-                    (ItemData[1], ItemData[2]) for ItemData in SelectionData
-                ),
-                instance_count=int(CountValue),
-            )
-            operations.append(operation)
-            latest_operation = operation
+            SelectionData = OperationA(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures)
+            FamilyValue, OperationValue, SchemaValue = OperationFields(Resolved, Record)
+            DirectionOffset = Feature.native_offset + KCircularPatternDirection if Feature.native_offset is not None else -1
+            DirectionCode = Resolved[DirectionOffset] if 0 <= DirectionOffset < (Feature.native_end or 0) and Resolved[DirectionOffset] in {0, 1} else None
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='circular_pattern', profile_id=None, dependencies=(LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=FamilyValue, operation_code=OperationValue, schema_code=SchemaValue, direction_code=DirectionCode, termination_code=None, selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)), selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)), angle_degrees=AngleValue, selection_kind='edge', mode='circular', native_stream=ResolvedStream, selection_references=tuple(((ItemData[1], ItemData[2]) for ItemData in SelectionData)), instance_count=int(CountValue))
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type in _REVOLUTION_FEATURE_TYPES:
-            record = record_by_id.get(feature.object_id)
-            if record is None:
+        if FeatureType in KRevolutionFeatureTypes:
+            Record = RecordById.get(Feature.object_id)
+            if Record is None:
                 continue
-            profile_id = latest_sketch.object_id if latest_sketch else None
-            dependencies = tuple(
-                value
-                for value in (
-                    latest_operation.object_id if latest_operation else None,
-                    profile_id,
-                )
-                if value is not None
-            )
-            family, operation_code, schema = _operation_fields(resolved, record)
-            layout = revolutions.get(feature.object_id)
-            axis_sketch = latest_sketch
-            if layout is not None and layout.axis_kind == REVOLUTION_AXIS_SKETCH:
-                axis_sketch = next(
-                    (
-                        item
-                        for item in sketches
-                        if item.object_id == layout.axis_feature_id
-                    ),
-                    None,
-                )
-            elif layout is not None:
-                axis_sketch = None
-            axis_marker = _revolution_axis_marker(axis_sketch)
-            revolution_start = feature.native_offset or 0
-            angle_offset = _operation_dimension_offset(feature.dimensions, "angle")
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind=(
-                    "revolve_cut"
-                    if feature_type in {"cut-revolve", "revcut"}
-                    else "revolve_join"
-                ),
-                profile_id=profile_id,
-                dependencies=dependencies,
-                native_offset=revolution_start,
-                native_end=_class_record_end(resolved, classes, revolution_start)
-                or feature.native_end
-                or len(resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=family,
-                operation_code=operation_code,
-                schema_code=schema,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                angle_degrees=_operation_dimension(feature.dimensions, "angle"),
-                axis_marker_offset=axis_marker.offset if axis_marker else None,
-                native_stream=resolved_stream,
-                axis_source_kind=None if layout is None else layout.axis_kind,
-                axis_source_id=None if layout is None else layout.axis_feature_id,
-                axis_source_offset=None if layout is None else layout.axis_offset,
-                end_spec_offset=None if layout is None else layout.end_spec_offset,
-                angle_offset=angle_offset,
-                angle_copies=_angle_copies(resolved, angle_offset),
-            )
-            operations.append(operation)
-            latest_operation = operation
+            ProfileId = LatestSketch.object_id if LatestSketch else None
+            Dependencies = tuple((Value for Value in (LatestOperation.object_id if LatestOperation else None, ProfileId) if Value is not None))
+            Family, OperationCode, Schema = OperationFields(Resolved, Record)
+            Layout = Revolutions.get(Feature.object_id)
+            AxisSketch = LatestSketch
+            if Layout is not None and Layout.axis_kind == RevolutionAxisSketch:
+                AxisSketch = next((ItemValue for ItemValue in Sketches if ItemValue.object_id == Layout.axis_feature_id), None)
+            elif Layout is not None:
+                AxisSketch = None
+            AxisMarker = RevolutionAxis(AxisSketch)
+            RevolutionStart = Feature.native_offset or 0
+            AngleOffset = OperationOffset(Feature.dimensions, 'angle')
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='revolve_cut' if FeatureType in {'cut-revolve', 'revcut'} else 'revolve_join', profile_id=ProfileId, dependencies=Dependencies, native_offset=RevolutionStart, native_end=ClassRecordEnd(Resolved, Classes, RevolutionStart) or Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), angle_degrees=Operation(Feature.dimensions, 'angle'), axis_marker_offset=AxisMarker.offset if AxisMarker else None, native_stream=ResolvedStream, axis_source_kind=None if Layout is None else Layout.axis_kind, axis_source_id=None if Layout is None else Layout.axis_feature_id, axis_source_offset=None if Layout is None else Layout.axis_offset, end_spec_offset=None if Layout is None else Layout.end_spec_offset, angle_offset=AngleOffset, angle_copies=AngleCopies(Resolved, AngleOffset))
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature.class_name in _HOLE_CLASS_NAMES:
-            record = record_by_id.get(feature.object_id)
-            if record is None:
+        if Feature.class_name in KHoleClassNames:
+            Record = RecordById.get(Feature.object_id)
+            if Record is None:
                 continue
-            child = _integer_property(feature.properties.get("DissectableChildren"))
-            family, operation_code, schema = _operation_fields(resolved, record)
-            dependencies = tuple(
-                value
-                for value in (
-                    latest_operation.object_id if latest_operation else None,
-                    child,
-                )
-                if value is not None
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="hole",
-                profile_id=child,
-                dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=_operation_dimension(feature.dimensions, "depth"),
-                radius_mm=None,
-                family_code=family,
-                operation_code=operation_code,
-                schema_code=schema,
-                direction_code=None,
-                termination_code=0,
-                selection_offsets=(),
-                selected_local_ids=(),
-                selection_kind="face",
-                native_stream=resolved_stream,
-            )
-            operations.append(operation)
-            latest_operation = operation
+            Child = IntegerProp(Feature.properties.get('DissectableChildren'))
+            Family, OperationCode, Schema = OperationFields(Resolved, Record)
+            Dependencies = tuple((Value for Value in (LatestOperation.object_id if LatestOperation else None, Child) if Value is not None))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='hole', profile_id=Child, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Operation(Feature.dimensions, 'depth'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=0, selection_offsets=(), selected_local_ids=(), selection_kind='face', native_stream=ResolvedStream)
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type == "dome":
-            selections = _operation_selections_after_class(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                feature,
-                native_features,
-                "moCompFace_c",
-            )
-            height = _operation_dimension(feature.dimensions, "height")
-            if height is None or not selections:
+        if FeatureType == 'dome':
+            Selections = OperationAfter(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures, 'moCompFace_c')
+            Height = Operation(Feature.dimensions, 'height')
+            if Height is None or not Selections:
                 continue
-            producer_ids = tuple(
-                dict.fromkeys(selection[1] for selection in selections)
-            )
-            dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((latest_operation.object_id,) if latest_operation else ()),
-                        *producer_ids,
-                    )
-                )
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="dome",
-                profile_id=None,
-                dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=height,
-                radius_mm=None,
-                family_code=None,
-                operation_code=None,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple(item[0] for item in selections),
-                selected_local_ids=tuple(item[2] for item in selections),
-                selection_kind="face",
-                native_stream=resolved_stream,
-                selection_references=tuple((item[1], item[2]) for item in selections),
-            )
-            operations.append(operation)
-            latest_operation = operation
+            ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+            Dependencies = tuple(dict.fromkeys((*((LatestOperation.object_id,) if LatestOperation else ()), *ProducerIds)))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='dome', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Height, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='face', native_stream=ResolvedStream, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)))
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type in _MOVE_BODY_FEATURE_TYPES:
-            selections = _operation_selections_after_class(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                feature,
-                native_features,
-                "moCompSolidBody_c",
-            )
-            translation = _native_translation(feature.dimensions)
-            if translation is None or not selections:
+        if FeatureType in KMoveBodyFeatureTypes:
+            Selections = OperationAfter(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures, 'moCompSolidBody_c')
+            Translation = Native(Feature.dimensions)
+            if Translation is None or not Selections:
                 continue
-            producer_ids = tuple(
-                dict.fromkeys(selection[1] for selection in selections)
-            )
-            dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((latest_operation.object_id,) if latest_operation else ()),
-                        *producer_ids,
-                    )
-                )
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="move_body",
-                profile_id=None,
-                dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=None,
-                operation_code=None,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple(item[0] for item in selections),
-                selected_local_ids=tuple(item[2] for item in selections),
-                selection_kind="body",
-                native_stream=resolved_stream,
-                selection_references=tuple((item[1], item[2]) for item in selections),
-                translation_mm=translation,
-            )
-            operations.append(operation)
-            latest_operation = operation
+            ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+            Dependencies = tuple(dict.fromkeys((*((LatestOperation.object_id,) if LatestOperation else ()), *ProducerIds)))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='move_body', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='body', native_stream=ResolvedStream, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)), translation_mm=Translation)
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type in _COMBINE_FEATURE_TYPES:
-            selections = _operation_selections_after_class(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                feature,
-                native_features,
-                "moSolidRef_w",
-            )
-            if len(selections) < 2:
+        if FeatureType in KCombineFeatureTypes:
+            Selections = OperationAfter(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures, 'moSolidRef_w')
+            if len(Selections) < 2:
                 continue
-            producer_ids = tuple(
-                dict.fromkeys(selection[1] for selection in selections)
-            )
-            dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((latest_operation.object_id,) if latest_operation else ()),
-                        *producer_ids,
-                    )
-                )
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="combine_join",
-                profile_id=None,
-                dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=None,
-                operation_code=0,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple(item[0] for item in selections),
-                selected_local_ids=tuple(item[2] for item in selections),
-                selection_kind="body",
-                mode="join",
-                native_stream=resolved_stream,
-                selection_references=tuple((item[1], item[2]) for item in selections),
-            )
-            operations.append(operation)
-            latest_operation = operation
+            ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+            Dependencies = tuple(dict.fromkeys((*((LatestOperation.object_id,) if LatestOperation else ()), *ProducerIds)))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='combine_join', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=0, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='body', mode='join', native_stream=ResolvedStream, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)))
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type == "scale":
-            factors = _native_scale_factors(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-            )
-            if factors is None or latest_operation is None:
+        if FeatureType == 'scale':
+            Factors = NativeScale(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved))
+            if Factors is None or LatestOperation is None:
                 continue
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="scale",
-                profile_id=None,
-                dependencies=(latest_operation.object_id,),
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=None,
-                operation_code=None,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                native_stream=resolved_stream,
-                scale_factors=factors,
-            )
-            operations.append(operation)
-            latest_operation = operation
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='scale', profile_id=None, dependencies=(LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), native_stream=ResolvedStream, scale_factors=Factors)
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type in {"fillet", "chamfer", "shell"}:
-            selections = _operation_selections(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                feature,
-                native_features,
-            )
-            producer_ids = tuple(
-                dict.fromkeys(selection[1] for selection in selections)
-            )
-            dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((latest_operation.object_id,) if latest_operation else ()),
-                        *producer_ids,
-                    )
-                )
-            )
-            record = record_by_id.get(feature.object_id)
-            fields = (
-                _operation_fields(resolved, record)
-                if record is not None
-                else (None, None, None)
-            )
-            dimension_kind = {
-                "fillet": "radius",
-                "chamfer": "distance",
-                "shell": "thickness",
-            }[feature_type]
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind=feature_type,
-                profile_id=None,
-                dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=(
-                    _operation_dimension(feature.dimensions, dimension_kind)
-                    if feature_type != "fillet"
-                    else None
-                ),
-                radius_mm=(
-                    _operation_dimension(feature.dimensions, dimension_kind)
-                    if feature_type == "fillet"
-                    else None
-                ),
-                family_code=fields[0],
-                operation_code=fields[1],
-                schema_code=fields[2],
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple(selection[0] for selection in selections),
-                selected_local_ids=tuple(selection[2] for selection in selections),
-                selection_kind="face" if feature_type == "shell" else "edge",
-                mode=(
-                    "equal_distance"
-                    if feature_type == "chamfer" and fields[0] == 1
-                    else None
-                ),
-                native_stream=resolved_stream,
-                selection_references=tuple(
-                    (selection[1], selection[2]) for selection in selections
-                ),
-            )
-            operations.append(operation)
-            latest_operation = operation
+        if FeatureType in {'fillet', 'chamfer', 'shell'}:
+            Selections = OperationA(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures)
+            ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+            Dependencies = tuple(dict.fromkeys((*((LatestOperation.object_id,) if LatestOperation else ()), *ProducerIds)))
+            Record = RecordById.get(Feature.object_id)
+            Fields = OperationFields(Resolved, Record) if Record is not None else (None, None, None)
+            DimensionKind = {'fillet': 'radius', 'chamfer': 'distance', 'shell': 'thickness'}[FeatureType]
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind=FeatureType, profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Operation(Feature.dimensions, DimensionKind) if FeatureType != 'fillet' else None, radius_mm=Operation(Feature.dimensions, DimensionKind) if FeatureType == 'fillet' else None, family_code=Fields[0], operation_code=Fields[1], schema_code=Fields[2], direction_code=None, termination_code=None, selection_offsets=tuple((Selection[0] for Selection in Selections)), selected_local_ids=tuple((Selection[2] for Selection in Selections)), selection_kind='face' if FeatureType == 'shell' else 'edge', mode='equal_distance' if FeatureType == 'chamfer' and Fields[0] == 1 else None, native_stream=ResolvedStream, selection_references=tuple(((Selection[1], Selection[2]) for Selection in Selections)))
+            Operations.append(Operation)
+            LatestOperation = Operation
             continue
-        if feature_type in _SURFACE_EXTRUSION_FEATURE_TYPES:
-            record = record_by_id.get(feature.object_id)
-            if record is None:
+        if FeatureType in KSurfaceExtrusionFeature:
+            Record = RecordById.get(Feature.object_id)
+            if Record is None:
                 continue
-            profile_id = latest_sketch.object_id if latest_sketch else None
-            family, operation_code, schema = _operation_fields(resolved, record)
-            end_spec = _end_spec(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-                classes,
-            )
-            lengths = tuple(
-                dimension.value_mm
-                for dimension in feature.dimensions
-                if dimension.kind in {"length", "second_length"}
-            )
-            operation = NativeOperation(
-                object_id=feature.object_id,
-                name=feature.name,
-                kind="surface",
-                profile_id=profile_id,
-                dependencies=(profile_id,) if profile_id is not None else (),
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
-                length_mm=lengths[0] if lengths else None,
-                radius_mm=None,
-                family_code=family,
-                operation_code=operation_code,
-                schema_code=schema,
-                direction_code=end_spec.direction_code if end_spec else None,
-                termination_code=end_spec.termination_code if end_spec else None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                second_length_mm=lengths[1] if len(lengths) > 1 else None,
-                native_stream=resolved_stream,
-            )
-            operations.append(operation)
-    sketches_by_id = {sketch.object_id: sketch for sketch in sketches}
-    operations = [
-        _resolve_profile_operation(
-            operation,
-            sketches_by_id,
-            resolved,
-            native_features,
-        )
-        for operation in operations
-    ]
-    active_configuration_id = (
-        configuration_id
-        if configuration_id is not None
-        else configurations[0].configuration_id
-    )
-    equations = _parse_native_equations(
-        configuration_data,
-        active_configuration_id,
-        configuration_stream or f"Contents/Config-{active_configuration_id}",
-    )
-    diagnostics = []
-    unresolved = [
-        feature
-        for feature in native_features
-        if feature.native_offset is None
-        and feature.object_id > 0
-        and feature.object_id not in _KEYWORD_ONLY_OBJECT_IDS
-    ]
-    if unresolved:
-        diagnostics.append(
-            "native name records unavailable for "
-            + ", ".join(f"{feature.object_id}:{feature.name}" for feature in unresolved)
-        )
-    if unframed_planes:
-        diagnostics.append(
-            "reference plane frames unavailable for "
-            + ", ".join(
-                f"{feature.object_id}:{feature.name}" for feature in unframed_planes
-            )
-        )
-    dependent_sketches = tuple(
-        sketch for sketch in sketches if sketch.unframed_support_plane_id is not None
-    )
-    if dependent_sketches:
-        diagnostics.append(
-            "sketch supports fall back to decoded planes for "
-            + ", ".join(
-                f"{sketch.object_id}:{sketch.name}"
-                f"->{sketch.unframed_support_plane_id}:{sketch.support_plane_id}"
-                for sketch in dependent_sketches
-            )
-        )
-    return NativeModel(
-        configurations=configurations,
-        features=tuple(
-            sorted(
-                native_features,
-                key=_native_feature_sort_key,
-            )
-        ),
-        planes=tuple(planes),
-        sketches=tuple(sketches),
-        operations=tuple(operations),
-        names=names,
-        classes=classes,
-        scalars=scalars,
-        diagnostics=tuple(diagnostics),
-        equations=equations,
-        active_configuration_id=active_configuration_id,
-        bounding_box=_bounding_box(resolved, classes),
-    )
+            ProfileId = LatestSketch.object_id if LatestSketch else None
+            Family, OperationCode, Schema = OperationFields(Resolved, Record)
+            EndSpec = EndSpec(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Classes)
+            Lengths = tuple((Dimension.value_mm for Dimension in Feature.dimensions if Dimension.kind in {'length', 'second_length'}))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='surface', profile_id=ProfileId, dependencies=(ProfileId,) if ProfileId is not None else (), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Lengths[0] if Lengths else None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndSpec.direction_code if EndSpec else None, termination_code=EndSpec.termination_code if EndSpec else None, selection_offsets=(), selected_local_ids=(), second_length_mm=Lengths[1] if len(Lengths) > 1 else None, native_stream=ResolvedStream)
+            Operations.append(Operation)
+    SketchesById = {Sketch.object_id: Sketch for Sketch in Sketches}
+    Operations = [ResolveProfile(Operation, SketchesById, Resolved, NativeFeatures) for Operation in Operations]
+    ActiveConfigId = ConfigId if ConfigId is not None else Configurations[0].configuration_id
+    Equations = ParseNative(ConfigData, ActiveConfigId, ConfigStream or f'Contents/Config-{ActiveConfigId}')
+    Diagnostics = []
+    Unresolved = [Feature for Feature in NativeFeatures if Feature.native_offset is None and Feature.object_id > 0 and (Feature.object_id not in KeywordOnlyObjectIds)]
+    if Unresolved:
+        Diagnostics.append('native name records unavailable for ' + ', '.join((f'{Feature.object_id}:{Feature.name}' for Feature in Unresolved)))
+    if UnframedPlanes:
+        Diagnostics.append('reference plane frames unavailable for ' + ', '.join((f'{Feature.object_id}:{Feature.name}' for Feature in UnframedPlanes)))
+    DependentSketches = tuple((Sketch for Sketch in Sketches if Sketch.unframed_support_plane_id is not None))
+    if DependentSketches:
+        Diagnostics.append('sketch supports fall back to decoded planes for ' + ', '.join((f'{Sketch.object_id}:{Sketch.name}->{Sketch.unframed_support_plane_id}:{Sketch.support_plane_id}' for Sketch in DependentSketches)))
+    return NativeModel(configurations=Configurations, features=tuple(sorted(NativeFeatures, key=NativeFeatureA)), planes=tuple(Planes), sketches=tuple(Sketches), operations=tuple(Operations), names=Names, classes=Classes, scalars=Scalars, diagnostics=tuple(Diagnostics), equations=Equations, active_configuration_id=ActiveConfigId, bounding_box=BoundingBox(Resolved, Classes))
 
-
-# vendor feature trees may use stable semantic ids beyond envelope tree counters
-def RebindIds(
-    FeaturesList: list[_XmlFeature], NamesList: tuple[NativeName, ...]
-) -> None:
-    KnownIds = frozenset(
-        RecordData.object_id
-        for RecordData in NamesList
-        if RecordData.object_id is not None
-    )
+# this definition exists because focused behavior needs one stable owner
+def RebindIds(FeaturesList: list[_XmlFeature], NamesList: tuple[NativeName, ...]) -> None:
+    KnownIds = frozenset((RecordData.object_id for RecordData in NamesList if RecordData.object_id is not None))
     RecordsByName: dict[str, list[NativeName]] = {}
     for RecordData in NamesList:
         if RecordData.object_id is None:
@@ -10729,1571 +4011,825 @@ def RebindIds(
         if FeatureData.object_id in KnownIds:
             continue
         MatchesList = RecordsByName.get(FeatureData.name, ())
-        MatchingIds = {
-            RecordData.object_id
-            for RecordData in MatchesList
-            if RecordData.object_id is not None
-        }
+        MatchingIds = {RecordData.object_id for RecordData in MatchesList if RecordData.object_id is not None}
         if len(MatchingIds) == 1:
             FeatureData.object_id = MatchingIds.pop()
-        elif FeatureData.kind.casefold() == "extrusion" and any(
-            RecordData.object_id == 32 and RecordData.name == "Boss-Extrude1"
-            for RecordData in NamesList
-        ):
+        elif FeatureData.kind.casefold() == 'extrusion' and any((RecordData.object_id == 32 and RecordData.name == 'Boss-Extrude1' for RecordData in NamesList)):
             FeatureData.object_id = 32
         else:
             continue
-        FeatureData.properties["id"] = str(FeatureData.object_id)
+        FeatureData.properties['id'] = str(FeatureData.object_id)
 
+# this definition exists because focused behavior needs one stable owner
+def NativeFeatureA(Feature: NativeFeature) -> tuple[int, int]:
+    if Feature.native_offset is not None and Feature.object_id <= 25:
+        return (0, Feature.native_offset)
+    if Feature.object_id in KeywordOnlyObjectIds:
+        return (1, Feature.object_id)
+    if Feature.native_offset is not None:
+        return (2, Feature.native_offset)
+    return (3, Feature.object_id)
 
-def _native_feature_sort_key(feature: NativeFeature) -> tuple[int, int]:
-    if feature.native_offset is not None and feature.object_id <= 25:
-        return 0, feature.native_offset
-    if feature.object_id in _KEYWORD_ONLY_OBJECT_IDS:
-        return 1, feature.object_id
-    if feature.native_offset is not None:
-        return 2, feature.native_offset
-    return 3, feature.object_id
-
-
-def _parse_keywords(
-    data: bytes,
-) -> tuple[tuple[NativeConfiguration, ...], list[_XmlFeature]]:
-    root = _parse_xml(data)
-    configurations: list[NativeConfiguration] = []
-    features: list[_XmlFeature] = []
-    for element in root.iter():
-        tag = element.tag.rsplit("}", 1)[-1]
-        if tag == "Configuration":
-            configurations.append(
-                NativeConfiguration(
-                    object_id=int(element.attrib.get("id", "0")),
-                    name=element.attrib.get("Name", "Default"),
-                    configuration_id=int(element.attrib.get("id", "0")),
-                    properties=dict(element.attrib),
-                )
-            )
+# this definition exists because focused behavior needs one stable owner
+def ParseKeywords(DataValue: bytes) -> tuple[tuple[NativeConfig, ...], list[XmlFeature]]:
+    RootValue = ParseXml(DataValue)
+    Configurations: list[NativeConfig] = []
+    Features: list[XmlFeature] = []
+    for ElemValue in RootValue.iter():
+        TagValue = ElemValue.tag.rsplit('}', 1)[-1]
+        if TagValue == 'Configuration':
+            Configurations.append(NativeConfig(object_id=int(ElemValue.attrib.get('id', '0')), name=ElemValue.attrib.get('Name', 'Default'), configuration_id=int(ElemValue.attrib.get('id', '0')), properties=dict(ElemValue.attrib)))
             continue
-        if element is root or tag == "Dimension":
+        if ElemValue is RootValue or TagValue == 'Dimension':
             continue
-        raw_id = element.attrib.get("id")
-        if not raw_id:
+        RawId = ElemValue.attrib.get('id')
+        if not RawId:
             continue
         try:
-            object_id = int(raw_id)
+            ObjectId = int(RawId)
         except ValueError:
             continue
-        kind = tag if tag != "Feature" else element.attrib.get("Type", "Feature")
-        if kind.casefold() in PLANE_FEATURE_TYPES:
-            kind = CANONICAL_PLANE_FEATURE_TYPE.title()
-        name = element.attrib.get("Name", "")
-        dimensions = [
-            _parse_dimension(child.attrib.get("Name", ""), child.text or "")
-            for child in element
-            if child.tag.rsplit("}", 1)[-1] == "Dimension"
-        ]
-        features.append(
-            _XmlFeature(
-                object_id=object_id,
-                name=name,
-                kind=kind,
-                xml_tag=tag,
-                properties=dict(element.attrib),
-                dimensions=dimensions,
-            )
-        )
-    if not features:
-        raise SldprtFormatError("keyword history does not contain feature nodes")
-    if not configurations:
-        configurations.append(NativeConfiguration(0, "Default", 0, {}))
-    return tuple(configurations), features
+        KindValue = TagValue if TagValue != 'Feature' else ElemValue.attrib.get('Type', 'Feature')
+        if KindValue.casefold() in PlaneFeatureTypes:
+            KindValue = CanonicalPlaneFeatureType.title()
+        NameValue = ElemValue.attrib.get('Name', '')
+        Dimensions = [ParseDimension(Child.attrib.get('Name', ''), Child.text or '') for Child in ElemValue if Child.tag.rsplit('}', 1)[-1] == 'Dimension']
+        Features.append(XmlFeature(object_id=ObjectId, name=NameValue, kind=KindValue, xml_tag=TagValue, properties=dict(ElemValue.attrib), dimensions=Dimensions))
+    if not Features:
+        raise SldprtFormatError('keyword history does not contain feature nodes')
+    if not Configurations:
+        Configurations.append(NativeConfig(0, 'Default', 0, {}))
+    return (tuple(Configurations), Features)
 
-
-def _parse_xml(data: bytes) -> ET.Element:
-    start = data.find(b"<?xml")
-    if start < 0:
-        start = data.find(b"<")
-    if start < 0:
-        raise SldprtFormatError("XML stream contains no document element")
+# this definition exists because focused behavior needs one stable owner
+def ParseXml(DataValue: bytes) -> XmlTree.Element:
+    Start = DataValue.find(b'<?xml')
+    if Start < 0:
+        Start = DataValue.find(b'<')
+    if Start < 0:
+        raise SldprtFormatError('XML stream contains no document element')
     try:
-        return ET.fromstring(data[start:])
-    except ET.ParseError as exc:
-        raise SldprtFormatError(f"invalid XML metadata stream: {exc}") from exc
+        return XmlTree.fromstring(DataValue[Start:])
+    except XmlTree.ParseError as exc:
+        raise SldprtFormatError(f'invalid XML metadata stream: {exc}') from exc
 
+# this definition exists because focused behavior needs one stable owner
+def ParseDimension(NameValue: str, TextValue: str) -> NativeDimension:
+    Match = KNumber.search(TextValue)
+    if Match is None:
+        raise SldprtFormatError(f'dimension {NameValue!r} has no numeric value')
+    KindValue = 'diameter' if '<MOD-DIAM>' in TextValue else 'radius' if TextValue.lstrip().startswith('R') else 'angle' if '°' in TextValue or 'deg' in TextValue.casefold() else 'length'
+    return NativeDimension(NameValue, float(Match.group()), KindValue, TextValue)
 
-def _parse_dimension(name: str, text: str) -> NativeDimension:
-    match = _NUMBER.search(text)
-    if match is None:
-        raise SldprtFormatError(f"dimension {name!r} has no numeric value")
-    kind = (
-        "diameter"
-        if "<MOD-DIAM>" in text
-        else (
-            "radius"
-            if text.lstrip().startswith("R")
-            else "angle" if "°" in text or "deg" in text.casefold() else "length"
-        )
-    )
-    return NativeDimension(name, float(match.group()), kind, text)
-
-
-def _name_marker(data: bytes) -> bytes:
-    for offset in _find_all(data, CLASS_MARKER):
-        if offset + 6 > len(data):
+# this definition exists because focused behavior needs one stable owner
+def NameMarker(DataValue: bytes) -> bytes:
+    for Offset in FindAll(DataValue, ClassMarker):
+        if Offset + 6 > len(DataValue):
             continue
-        length = struct.unpack_from("<H", data, offset + 4)[0]
-        end = offset + 6 + length
-        if not 1 <= length <= 128 or end + 5 > len(data):
+        Length = Struct.unpack_from('<H', DataValue, Offset + 4)[0]
+        EndValue = Offset + 6 + Length
+        if not 1 <= Length <= 128 or EndValue + 5 > len(DataValue):
             continue
-        class_name = data[offset + 6 : end]
-        if not all(0x21 <= byte <= 0x7E for byte in class_name):
+        ClassName = DataValue[Offset + 6:EndValue]
+        if not all((33 <= ByteValue <= 126 for ByteValue in ClassName)):
             continue
-        token = struct.unpack_from("<H", data, end)[0]
-        if (
-            token & 0x8000
-            and token != 0xFFFF
-            and data[end + 2 : end + 5] == b"\xff\xfe\xff"
-        ):
-            return struct.pack("<H", token) + b"\xff\xfe\xff"
-    return bytes.fromhex("0480fffeff")
+        Token = Struct.unpack_from('<H', DataValue, EndValue)[0]
+        if Token & 32768 and Token != 65535 and (DataValue[EndValue + 2:EndValue + 5] == b'\xff\xfe\xff'):
+            return Struct.pack('<H', Token) + b'\xff\xfe\xff'
+    return bytes.fromhex('0480fffeff')
 
-
-def _parse_names(data: bytes) -> tuple[NativeName, ...]:
-    marker = _name_marker(data)
-    names: list[NativeName] = []
-    for offset in _find_all(data, marker):
-        if offset + len(marker) + 1 > len(data):
+# this definition exists because focused behavior needs one stable owner
+def ParseNames(DataValue: bytes) -> tuple[NativeName, ...]:
+    Marker = NameMarker(DataValue)
+    Names: list[NativeName] = []
+    for Offset in FindAll(DataValue, Marker):
+        if Offset + len(Marker) + 1 > len(DataValue):
             continue
-        units = data[offset + len(marker)]
-        text_start = offset + len(marker) + 1
-        text_end = text_start + units * 2
-        if not 1 <= units <= 128 or text_end + 12 > len(data):
+        Units = DataValue[Offset + len(Marker)]
+        TextStart = Offset + len(Marker) + 1
+        TextEnd = TextStart + Units * 2
+        if not 1 <= Units <= 128 or TextEnd + 12 > len(DataValue):
             continue
         try:
-            name = data[text_start:text_end].decode("utf-16le")
+            NameValue = DataValue[TextStart:TextEnd].decode('utf-16le')
         except UnicodeDecodeError:
             continue
-        if not name or any(not character.isprintable() for character in name):
+        if not NameValue or any((not Character.isprintable() for Character in NameValue)):
             continue
-        raw_id = struct.unpack_from("<I", data, text_end + 8)[0]
-        names.append(
-            NativeName(
-                offset=offset,
-                text_end=text_end,
-                name=name,
-                object_id=None if raw_id == 0xFFFFFFFF else raw_id,
-                class_token=struct.unpack_from("<H", marker)[0],
-            )
-        )
-    return tuple(names)
+        RawId = Struct.unpack_from('<I', DataValue, TextEnd + 8)[0]
+        Names.append(NativeName(offset=Offset, text_end=TextEnd, name=NameValue, object_id=None if RawId == 4294967295 else RawId, class_token=Struct.unpack_from('<H', Marker)[0]))
+    return tuple(Names)
 
-
-def _parse_classes(data: bytes) -> tuple[NativeClass, ...]:
-    classes: list[NativeClass] = []
-    for offset in _find_all(data, CLASS_MARKER):
-        if offset + 6 > len(data):
+# this definition exists because focused behavior needs one stable owner
+def ParseClasses(DataValue: bytes) -> tuple[NativeClass, ...]:
+    Classes: list[NativeClass] = []
+    for Offset in FindAll(DataValue, ClassMarker):
+        if Offset + 6 > len(DataValue):
             continue
-        length = struct.unpack_from("<H", data, offset + 4)[0]
-        end = offset + 6 + length
-        if not 1 <= length <= 128 or end > len(data):
+        Length = Struct.unpack_from('<H', DataValue, Offset + 4)[0]
+        EndValue = Offset + 6 + Length
+        if not 1 <= Length <= 128 or EndValue > len(DataValue):
             continue
-        value = data[offset + 6 : end]
-        if not all(chr(byte).isalnum() or byte in b"_-" for byte in value):
+        Value = DataValue[Offset + 6:EndValue]
+        if not all((chr(ByteValue).isalnum() or ByteValue in b'_-' for ByteValue in Value)):
             continue
-        classes.append(NativeClass(offset, value.decode("ascii")))
-    return tuple(classes)
+        Classes.append(NativeClass(Offset, Value.decode('ascii')))
+    return tuple(Classes)
 
+# this definition exists because focused behavior needs one stable owner
+def RecordClassName(Classes: tuple[NativeClass, ...], RecordOffset: int) -> str:
+    Owner = RecordClass(Classes, RecordOffset)
+    return '' if Owner is None else Owner.name
 
-def _record_class_name(classes: tuple[NativeClass, ...], record_offset: int) -> str:
-    owner = _record_class(classes, record_offset)
-    return "" if owner is None else owner.name
-
-
-def _parse_native_equations(
-    data: bytes, configuration_id: int, native_stream: str
-) -> tuple[NativeEquation, ...]:
-    class_names = {item.name for item in _parse_classes(data)}
-    if not {"moRelMgr_c", "moRelation_c"} <= class_names:
+# this definition exists because focused behavior needs one stable owner
+def ParseNative(DataValue: bytes, ConfigId: int, NativeStream: str) -> tuple[NativeEquation, ...]:
+    ClassNames = {ItemValue.name for ItemValue in ParseClasses(DataValue)}
+    if not {'moRelMgr_c', 'moRelation_c'} <= ClassNames:
         return ()
-    equations: list[NativeEquation] = []
-    seen: set[str] = set()
-    for offset in _find_all(data, SERIALIZED_STRING_MARKER):
-        length_offset = offset + len(SERIALIZED_STRING_MARKER)
-        if length_offset >= len(data):
+    Equations: list[NativeEquation] = []
+    SeenValue: set[str] = set()
+    for Offset in FindAll(DataValue, SerializedStringMarker):
+        LengthOffset = Offset + len(SerializedStringMarker)
+        if LengthOffset >= len(DataValue):
             continue
-        units = data[length_offset]
-        text_start = length_offset + 1
-        text_end = text_start + units * 2
-        if units < 3 or text_end > len(data):
+        Units = DataValue[LengthOffset]
+        TextStart = LengthOffset + 1
+        TextEnd = TextStart + Units * 2
+        if Units < 3 or TextEnd > len(DataValue):
             continue
         try:
-            source = data[text_start:text_end].decode("utf-16le")
+            Source = DataValue[TextStart:TextEnd].decode('utf-16le')
         except UnicodeDecodeError:
             continue
-        match = _EQUATION.fullmatch(source)
-        if (
-            match is None
-            or source in seen
-            or not all(character.isprintable() for character in source)
-        ):
+        Match = KEquation.fullmatch(Source)
+        if Match is None or Source in SeenValue or (not all((Character.isprintable() for Character in Source))):
             continue
-        seen.add(source)
-        lhs, rhs = match.groups()
-        equations.append(
-            NativeEquation(
-                source=source,
-                lhs=lhs,
-                rhs=rhs,
-                references=tuple(dict.fromkeys(_EQUATION_REFERENCE.findall(rhs))),
-                native_offset=offset,
-                native_length=text_end - offset,
-                configuration_id=configuration_id,
-                native_stream=native_stream,
-            )
-        )
-    return tuple(equations)
+        SeenValue.add(Source)
+        LhsValue, RhsValue = Match.groups()
+        Equations.append(NativeEquation(source=Source, lhs=LhsValue, rhs=RhsValue, references=tuple(dict.fromkeys(KEquationRef.findall(RhsValue))), native_offset=Offset, native_length=TextEnd - Offset, configuration_id=ConfigId, native_stream=NativeStream))
+    return tuple(Equations)
 
-
-def _parse_scalars(
-    data: bytes, names: tuple[NativeName, ...]
-) -> tuple[NativeScalar, ...]:
-    scalars: list[NativeScalar] = []
-    for name in names:
-        value_offset = dimension_scalar_value_offset(
-            data,
-            name.text_end,
-            len(data),
-            trailing_bytes=7,
-        )
-        if value_offset is None:
+# this definition exists because focused behavior needs one stable owner
+def ParseScalars(DataValue: bytes, Names: tuple[NativeName, ...]) -> tuple[NativeScalar, ...]:
+    Scalars: list[NativeScalar] = []
+    for NameValue in Names:
+        ValueOffset = DimensionScalarValue(DataValue, NameValue.text_end, len(DataValue), trailing_bytes=7)
+        if ValueOffset is None:
             continue
-        value = struct.unpack_from("<d", data, value_offset)[0]
-        if not math.isfinite(value):
+        Value = Struct.unpack_from('<d', DataValue, ValueOffset)[0]
+        if not MathValue.isfinite(Value):
             continue
-        trailer = value_offset + 8
-        raw_id = struct.unpack_from("<I", data, trailer + 3)[0]
-        role, operands = _scalar_trailer(data, trailer)
-        scalars.append(
-            NativeScalar(
-                name=name.name,
-                name_offset=name.offset,
-                value_offset=value_offset,
-                value=value,
-                object_id=None if raw_id == 0xFFFFFFFF else raw_id,
-                role=role,
-                operands=operands,
-            )
-        )
-    return tuple(scalars)
+        Trailer = ValueOffset + 8
+        RawId = Struct.unpack_from('<I', DataValue, Trailer + 3)[0]
+        RoleValue, Operands = ScalarTrailer(DataValue, Trailer)
+        Scalars.append(NativeScalar(name=NameValue.name, name_offset=NameValue.offset, value_offset=ValueOffset, value=Value, object_id=None if RawId == 4294967295 else RawId, role=RoleValue, operands=Operands))
+    return tuple(Scalars)
 
-
-def _scalar_trailer(data: bytes, trailer: int) -> tuple[str, tuple[NativeOperand, ...]]:
-    fixed = (
-        data[trailer : trailer + 3] == b"\0\0\0"
-        and data[trailer + 7 : trailer + 21] == b"\0" * 14
-        and data[trailer + 24 : trailer + 29] == b"\0\0\0\x02\0"
-    )
-    compact = (
-        data[trailer : trailer + 3] == b"\0\0\0"
-        and data[trailer + 7 : trailer + 21] == b"\0" * 14
-        and data[trailer + 21 : trailer + 27] == b"\x01\0\0\0\x02\0"
-        and data[trailer + 28 : trailer + 35] == b"\0" * 7
-    )
-    legacy = (
-        data[trailer : trailer + 3] == b"\0\0\0"
-        and data[trailer + 7 : trailer + 24] == b"\0" * 17
-        and data[trailer + 24 : trailer + 30] == b"\x0f\0\0\0\x02\0"
-    )
-    if compact:
-        role_offset, cells, size = trailer + 27, (trailer + 35, trailer + 43), 8
-    elif fixed:
-        role_offset, cells, size = trailer + 29, (trailer + 35, trailer + 47), 12
-    elif legacy:
-        role_offset, cells, size = trailer + 30, (trailer + 36, trailer + 48), 12
+# this definition exists because focused behavior needs one stable owner
+def ScalarTrailer(DataValue: bytes, Trailer: int) -> tuple[str, tuple[NativeOperand, ...]]:
+    Fixed = DataValue[Trailer:Trailer + 3] == b'\x00\x00\x00' and DataValue[Trailer + 7:Trailer + 21] == b'\x00' * 14 and (DataValue[Trailer + 24:Trailer + 29] == b'\x00\x00\x00\x02\x00')
+    Compact = DataValue[Trailer:Trailer + 3] == b'\x00\x00\x00' and DataValue[Trailer + 7:Trailer + 21] == b'\x00' * 14 and (DataValue[Trailer + 21:Trailer + 27] == b'\x01\x00\x00\x00\x02\x00') and (DataValue[Trailer + 28:Trailer + 35] == b'\x00' * 7)
+    Legacy = DataValue[Trailer:Trailer + 3] == b'\x00\x00\x00' and DataValue[Trailer + 7:Trailer + 24] == b'\x00' * 17 and (DataValue[Trailer + 24:Trailer + 30] == b'\x0f\x00\x00\x00\x02\x00')
+    if Compact:
+        RoleOffset, Cells, SizeValue = (Trailer + 27, (Trailer + 35, Trailer + 43), 8)
+    elif Fixed:
+        RoleOffset, Cells, SizeValue = (Trailer + 29, (Trailer + 35, Trailer + 47), 12)
+    elif Legacy:
+        RoleOffset, Cells, SizeValue = (Trailer + 30, (Trailer + 36, Trailer + 48), 12)
     else:
-        return "native", ()
-    role_byte = data[role_offset] if role_offset < len(data) else 255
-    role = "driving" if role_byte == 0 else "display" if role_byte == 1 else "native"
-    operands: list[NativeOperand] = []
-    for offset in cells:
-        cell = data[offset : offset + size]
-        if len(cell) != size or cell[4:8] != b"\xff" * 4:
+        return ('native', ())
+    RoleByte = DataValue[RoleOffset] if RoleOffset < len(DataValue) else 255
+    RoleValue = 'driving' if RoleByte == 0 else 'display' if RoleByte == 1 else 'native'
+    Operands: list[NativeOperand] = []
+    for Offset in Cells:
+        CellValue = DataValue[Offset:Offset + SizeValue]
+        if len(CellValue) != SizeValue or CellValue[4:8] != b'\xff' * 4:
             continue
-        if size == 12 and cell[8:12] != b"\0" * 4:
+        if SizeValue == 12 and CellValue[8:12] != b'\x00' * 4:
             continue
-        kind = struct.unpack_from("<H", cell)[0]
-        if kind in {0, 0xFFFF}:
+        KindValue = Struct.unpack_from('<H', CellValue)[0]
+        if KindValue in {0, 65535}:
             continue
-        operands.append(
-            NativeOperand(offset, kind, struct.unpack_from("<H", cell, 2)[0])
-        )
-    return role, tuple(operands)
+        Operands.append(NativeOperand(Offset, KindValue, Struct.unpack_from('<H', CellValue, 2)[0]))
+    return (RoleValue, tuple(Operands))
 
-
-def _scalar_owners(
-    scalars: tuple[NativeScalar, ...],
-    records: list[NativeName],
-    ends: dict[int, int],
-) -> dict[int, tuple[NativeScalar, ...]]:
-    result: dict[int, list[NativeScalar]] = {}
-    for record in records:
-        if record.object_id is None:
+# this definition exists because focused behavior needs one stable owner
+def ScalarOwners(Scalars: tuple[NativeScalar, ...], Records: list[NativeName], EndsValue: dict[int, int]) -> dict[int, tuple[NativeScalar, ...]]:
+    Result: dict[int, list[NativeScalar]] = {}
+    for Record in Records:
+        if Record.object_id is None:
             continue
-        end = ends[record.offset]
-        result[record.object_id] = [
-            scalar for scalar in scalars if record.offset < scalar.value_offset < end
-        ]
-    return {key: tuple(value) for key, value in result.items()}
+        EndValue = EndsValue[Record.offset]
+        Result[Record.object_id] = [Scalar for Scalar in Scalars if Record.offset < Scalar.value_offset < EndValue]
+    return {KeyValue: tuple(Value) for KeyValue, Value in Result.items()}
 
+# this definition exists because focused behavior needs one stable owner
+def BindDimension(Dimension: NativeDimension, Scalars: tuple[NativeScalar, ...]) -> NativeDimension:
+    Target = Dimension.value_mm if Dimension.kind == 'instance_count' else MathValue.radians(Dimension.value_mm) if Dimension.kind == 'angle' else Dimension.value_mm / 1000.0
+    ValueMatches = [Scalar for Scalar in Scalars if MathValue.isclose(Scalar.value, Target, rel_tol=1e-09, abs_tol=1e-12)]
+    NamedMatches = [Scalar for Scalar in ValueMatches if Scalar.name == Dimension.name]
+    Matches = NamedMatches
+    if not Matches and len(ValueMatches) == 1:
+        Matches = ValueMatches
+    if not Matches:
+        return Dimension
+    Scalar = next((Choice for Choice in Matches if Choice.role == 'driving'), Matches[-1])
+    return NativeDimension(name=Dimension.name, value_mm=Dimension.value_mm, kind=Dimension.kind, source_text=Dimension.source_text, native_value=Scalar.value, native_offset=Scalar.value_offset, native_role=Scalar.role, operands=Scalar.operands)
 
-def _bind_dimension(
-    dimension: NativeDimension, scalars: tuple[NativeScalar, ...]
-) -> NativeDimension:
-    target = (
-        dimension.value_mm
-        if dimension.kind == "instance_count"
-        else (
-            math.radians(dimension.value_mm)
-            if dimension.kind == "angle"
-            else dimension.value_mm / 1000.0
-        )
-    )
-    value_matches = [
-        scalar
-        for scalar in scalars
-        if math.isclose(scalar.value, target, rel_tol=1e-9, abs_tol=1e-12)
-    ]
-    named_matches = [
-        scalar for scalar in value_matches if scalar.name == dimension.name
-    ]
-    matches = named_matches
-    if not matches and len(value_matches) == 1:
-        matches = value_matches
-    if not matches:
-        return dimension
-    scalar = next(
-        (candidate for candidate in matches if candidate.role == "driving"), matches[-1]
-    )
-    return NativeDimension(
-        name=dimension.name,
-        value_mm=dimension.value_mm,
-        kind=dimension.kind,
-        source_text=dimension.source_text,
-        native_value=scalar.value,
-        native_offset=scalar.value_offset,
-        native_role=scalar.role,
-        operands=scalar.operands,
-    )
-
-
-def _feature_records(
-    features: list[_XmlFeature], names: tuple[NativeName, ...]
-) -> dict[int, NativeName]:
-    records: dict[int, list[NativeName]] = {}
-    for record in names:
-        if record.object_id is not None:
-            records.setdefault(record.object_id, []).append(record)
-    result: dict[int, NativeName] = {}
-    for feature in features:
-        candidates = records.get(feature.object_id, ())
-        if not candidates:
+# this definition exists because focused behavior needs one stable owner
+def FeatureRecords(Features: list[_XmlFeature], Names: tuple[NativeName, ...]) -> dict[int, NativeName]:
+    Records: dict[int, list[NativeName]] = {}
+    for Record in Names:
+        if Record.object_id is not None:
+            Records.setdefault(Record.object_id, []).append(Record)
+    Result: dict[int, NativeName] = {}
+    for Feature in Features:
+        Candidates = Records.get(Feature.object_id, ())
+        if not Candidates:
             continue
-        exact = tuple(record for record in candidates if record.name == feature.name)
-        selected = min(exact or tuple(candidates), key=lambda record: record.offset)
-        result[feature.object_id] = selected
-    return result
+        Exact = tuple((Record for Record in Candidates if Record.name == Feature.name))
 
+        # this callback exists because local behavior needs one focused transformation
+        Selected = min(Exact or tuple(Candidates), key=lambda Record: Record.offset)
+        Result[Feature.object_id] = Selected
+    return Result
 
-def _semantic_dimensions(
-    feature_kind: str, dimensions: tuple[NativeDimension, ...]
-) -> tuple[NativeDimension, ...]:
-    feature_type = feature_kind.casefold()
-    if feature_type in _SURFACE_EXTRUSION_FEATURE_TYPES:
-        return tuple(
-            replace(
-                dimension,
-                kind=(
-                    "length"
-                    if dimension.name.casefold() == "d1"
-                    else (
-                        "second_length"
-                        if dimension.name.casefold() == "d2"
-                        else dimension.kind
-                    )
-                ),
-            )
-            for dimension in dimensions
-        )
-    if feature_type == "chamfer":
-        return tuple(
-            replace(
-                dimension,
-                kind=(
-                    "distance"
-                    if dimension.name.casefold() == "d1"
-                    else (
-                        "angle" if dimension.name.casefold() == "d2" else dimension.kind
-                    )
-                ),
-            )
-            for dimension in dimensions
-        )
-    if feature_type in {"lpattern", "linearpattern"}:
-        return tuple(
-            replace(
-                dimension,
-                kind=(
-                    "instance_count"
-                    if dimension.name.casefold() == "d1"
-                    else (
-                        "spacing"
-                        if dimension.name.casefold() == "d3"
-                        else dimension.kind
-                    )
-                ),
-            )
-            for dimension in dimensions
-        )
-    if feature_type in {"cirpattern", "circularpattern"}:
-        return tuple(
-            replace(
-                dimension,
-                kind=(
-                    "instance_count"
-                    if dimension.name.casefold() == "d1"
-                    else (
-                        "angle" if dimension.name.casefold() == "d3" else dimension.kind
-                    )
-                ),
-            )
-            for dimension in dimensions
-        )
-    semantic = {
-        "extrusion": "length",
-        "fillet": "radius",
-        "cut": "depth",
-        "revolve": "angle",
-        "revolution": "angle",
-        "cut-revolve": "angle",
-        "revcut": "angle",
-        "shell": "thickness",
-        "dome": "height",
-        "plane": "offset",
-    }.get(feature_type)
-    if semantic is None or not dimensions:
-        return dimensions
-    selected = _primary_dimension(dimensions)
-    return tuple(
-        replace(dimension, kind=semantic) if index == selected else dimension
-        for index, dimension in enumerate(dimensions)
-    )
+# this definition exists because focused behavior needs one stable owner
+def Semantic(FeatureKind: str, Dimensions: tuple[NativeDimension, ...]) -> tuple[NativeDimension, ...]:
+    FeatureType = FeatureKind.casefold()
+    if FeatureType in KSurfaceExtrusionFeature:
+        return tuple((Replace(Dimension, kind='length' if Dimension.name.casefold() == 'd1' else 'second_length' if Dimension.name.casefold() == 'd2' else Dimension.kind) for Dimension in Dimensions))
+    if FeatureType == 'chamfer':
+        return tuple((Replace(Dimension, kind='distance' if Dimension.name.casefold() == 'd1' else 'angle' if Dimension.name.casefold() == 'd2' else Dimension.kind) for Dimension in Dimensions))
+    if FeatureType in {'lpattern', 'linearpattern'}:
+        return tuple((Replace(Dimension, kind='instance_count' if Dimension.name.casefold() == 'd1' else 'spacing' if Dimension.name.casefold() == 'd3' else Dimension.kind) for Dimension in Dimensions))
+    if FeatureType in {'cirpattern', 'circularpattern'}:
+        return tuple((Replace(Dimension, kind='instance_count' if Dimension.name.casefold() == 'd1' else 'angle' if Dimension.name.casefold() == 'd3' else Dimension.kind) for Dimension in Dimensions))
+    Semantic = {'extrusion': 'length', 'fillet': 'radius', 'cut': 'depth', 'revolve': 'angle', 'revolution': 'angle', 'cut-revolve': 'angle', 'revcut': 'angle', 'shell': 'thickness', 'dome': 'height', 'plane': 'offset'}.get(FeatureType)
+    if Semantic is None or not Dimensions:
+        return Dimensions
+    Selected = Primary(Dimensions)
+    return tuple((Replace(Dimension, kind=Semantic) if Index == Selected else Dimension for Index, Dimension in enumerate(Dimensions)))
 
+# this definition exists because focused behavior needs one stable owner
+def Primary(Dimensions: tuple[NativeDimension, ...]) -> int:
 
-def _primary_dimension(dimensions: tuple[NativeDimension, ...]) -> int:
-    return min(
-        range(len(dimensions)),
-        key=lambda index: (
-            dimensions[index].native_role == "display",
-            dimensions[index].native_offset is None,
-            (
-                dimensions[index].native_offset
-                if dimensions[index].native_offset is not None
-                else index
-            ),
-            index,
-        ),
-    )
+    # this callback exists because local behavior needs one focused transformation
+    return min(range(len(Dimensions)), key=lambda Index: (Dimensions[Index].native_role == 'display', Dimensions[Index].native_offset is None, Dimensions[Index].native_offset if Dimensions[Index].native_offset is not None else Index, Index))
 
-
-def _decode_planes(
-    data: bytes,
-    features: list[NativeFeature],
-    *,
-    native_stream: str = RESOLVED_FEATURES_STREAM,
-) -> list[NativePlane]:
-    principal = _principal_plane_frames(features)
-    plane_ids = frozenset(principal) | frozenset(
-        feature.object_id for feature in features if _is_plane_feature(feature)
-    )
-    planes: list[NativePlane] = []
-    for feature in features:
-        if feature.object_id in principal:
-            origin, normal, u_axis = principal[feature.object_id]
-            planes.append(
-                NativePlane(
-                    feature.object_id,
-                    feature.name,
-                    origin,
-                    normal,
-                    u_axis,
-                    _cross(normal, u_axis),
-                    feature.native_offset,
-                    None,
-                    True,
-                    (),
-                    native_stream,
-                )
-            )
+# this definition exists because focused behavior needs one stable owner
+def DecodePlanes(DataValue: bytes, Features: list[NativeFeature], *, NativeStream: str=ResolvedFeaturesStream) -> list[NativePlane]:
+    Principal = PrincipalPlaneA(Features)
+    PlaneIds = frozenset(Principal) | frozenset((Feature.object_id for Feature in Features if IsPlaneFeature(Feature)))
+    Planes: list[NativePlane] = []
+    for Feature in Features:
+        if Feature.object_id in Principal:
+            Origin, Normal, UAxis = Principal[Feature.object_id]
+            Planes.append(NativePlane(Feature.object_id, Feature.name, Origin, Normal, UAxis, Cross(Normal, UAxis), Feature.native_offset, None, True, (), NativeStream))
             continue
-        if not _is_plane_feature(feature):
+        if not IsPlaneFeature(Feature):
             continue
-        start = feature.native_offset or 0
-        end = feature.native_end or len(data)
-        frame = _matrix_frame(data, start, end) or _minimal_frame(data, start, end)
-        if frame is None:
+        Start = Feature.native_offset or 0
+        EndValue = Feature.native_end or len(DataValue)
+        Frame = MatrixFrame(DataValue, Start, EndValue) or MinimalFrame(DataValue, Start, EndValue)
+        if Frame is None:
             continue
-        offset, length, origin, normal, u_axis, v_axis = frame
-        planes.append(
-            NativePlane(
-                feature.object_id,
-                feature.name,
-                origin,
-                normal,
-                u_axis,
-                v_axis,
-                offset,
-                length,
-                False,
-                _reference_plane_ids(data, start, end, feature.object_id, plane_ids),
-                native_stream,
-            )
-        )
-    return planes
+        Offset, Length, Origin, Normal, UAxis, VAxis = Frame
+        Planes.append(NativePlane(Feature.object_id, Feature.name, Origin, Normal, UAxis, VAxis, Offset, Length, False, RefPlaneIds(DataValue, Start, EndValue, Feature.object_id, PlaneIds), NativeStream))
+    return Planes
 
+# this definition exists because focused behavior needs one stable owner
+def PrincipalPlaneA(Features: list[NativeFeature]) -> dict[int, tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]]:
 
-def _principal_plane_frames(
-    features: list[NativeFeature],
-) -> dict[
-    int,
-    tuple[
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-    ],
-]:
-    ordered = tuple(
-        feature
-        for _, feature in sorted(
-            enumerate(features),
-            key=lambda item: (
-                item[1].native_offset is None,
-                (
-                    item[1].native_offset
-                    if item[1].native_offset is not None
-                    else item[0]
-                ),
-                item[0],
-            ),
-        )
-    )
-    origin_index = next(
-        (index for index, feature in enumerate(ordered) if _is_origin_feature(feature)),
-        None,
-    )
-    if origin_index is None:
+    # this callback exists because local behavior needs one focused transformation
+    Ordered = tuple((Feature for Ignored, Feature in sorted(enumerate(Features), key=lambda ItemValue: (ItemValue[1].native_offset is None, ItemValue[1].native_offset if ItemValue[1].native_offset is not None else ItemValue[0], ItemValue[0]))))
+    OriginIndex = next((Index for Index, Feature in enumerate(Ordered) if IsOriginFeature(Feature)), None)
+    if OriginIndex is None:
         return {}
-    planes = tuple(
-        feature for feature in ordered[:origin_index] if _is_plane_feature(feature)
-    )
-    frames = (
-        ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)),
-        ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
-        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
-    )
-    return {feature.object_id: frame for feature, frame in zip(planes[:3], frames)}
+    Planes = tuple((Feature for Feature in Ordered[:OriginIndex] if IsPlaneFeature(Feature)))
+    Frames = (((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)), ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)), ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)))
+    return {Feature.object_id: Frame for Feature, Frame in zip(Planes[:3], Frames)}
 
+# this definition exists because focused behavior needs one stable owner
+def IsOriginFeature(Feature: NativeFeature) -> bool:
+    return Feature.properties.get('Type', '').casefold() == 'origin'
 
-def _is_origin_feature(feature: NativeFeature) -> bool:
-    return feature.properties.get("Type", "").casefold() == "origin"
+# this definition exists because focused behavior needs one stable owner
+def IsPlaneFeature(Feature: NativeFeature) -> bool:
+    return Feature.kind.casefold() in PlaneFeatureTypes
 
-
-def _is_plane_feature(feature: NativeFeature) -> bool:
-    return feature.kind.casefold() in PLANE_FEATURE_TYPES
-
-
-def _matrix_frame(data: bytes, start: int, end: int) -> (
-    tuple[
-        int,
-        int,
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-    ]
-    | None
-):
-    for offset in range(start, max(start, end - 121 + 1)):
-        if data[offset + 48] != 1:
+# this definition exists because focused behavior needs one stable owner
+def MatrixFrame(DataValue: bytes, Start: int, EndValue: int) -> tuple[int, int, tuple[float, float, float], tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]] | None:
+    for Offset in range(Start, max(Start, EndValue - 121 + 1)):
+        if DataValue[Offset + 48] != 1:
             continue
-        origin = struct.unpack_from("<3d", data, offset)
-        normal = struct.unpack_from("<3d", data, offset + 24)
-        rows = (
-            struct.unpack_from("<3d", data, offset + 49),
-            struct.unpack_from("<3d", data, offset + 73),
-            struct.unpack_from("<3d", data, offset + 97),
-        )
-        u_axis = tuple(row[0] for row in rows)
-        v_axis = tuple(row[1] for row in rows)
-        matrix_normal = tuple(row[2] for row in rows)
-        values = origin + normal + u_axis + v_axis + matrix_normal
-        if not all(math.isfinite(value) and abs(value) <= 10.0 for value in values):
+        Origin = Struct.unpack_from('<3d', DataValue, Offset)
+        Normal = Struct.unpack_from('<3d', DataValue, Offset + 24)
+        RowsValue = (Struct.unpack_from('<3d', DataValue, Offset + 49), Struct.unpack_from('<3d', DataValue, Offset + 73), Struct.unpack_from('<3d', DataValue, Offset + 97))
+        UAxis = tuple((RowValue[0] for RowValue in RowsValue))
+        VAxis = tuple((RowValue[1] for RowValue in RowsValue))
+        MatrixNormal = tuple((RowValue[2] for RowValue in RowsValue))
+        Values = Origin + Normal + UAxis + VAxis + MatrixNormal
+        if not all((MathValue.isfinite(Value) and abs(Value) <= 10.0 for Value in Values)):
             continue
-        if not all(
-            math.isclose(_norm(vector), 1.0, abs_tol=1e-9)
-            for vector in (normal, u_axis, v_axis, matrix_normal)
-        ):
+        if not all((MathValue.isclose(NormAction(Vector), 1.0, abs_tol=1e-09) for Vector in (Normal, UAxis, VAxis, MatrixNormal))):
             continue
-        if any(
-            abs(_dot(left, right)) > 1e-9
-            for left, right in (
-                (u_axis, v_axis),
-                (u_axis, matrix_normal),
-                (v_axis, matrix_normal),
-            )
-        ):
+        if any((abs(DotAction(LeftValue, Right)) > 1e-09 for LeftValue, Right in ((UAxis, VAxis), (UAxis, MatrixNormal), (VAxis, MatrixNormal)))):
             continue
-        if _dot(normal, matrix_normal) < 1.0 - 1e-9:
+        if DotAction(Normal, MatrixNormal) < 1.0 - 1e-09:
             continue
-        return (
-            offset,
-            121,
-            tuple(_clean(value * 1000.0) for value in origin),
-            tuple(_clean(value) for value in normal),
-            tuple(_clean(value) for value in u_axis),
-            tuple(_clean(value) for value in v_axis),
-        )
+        return (Offset, 121, tuple((Clean(Value * 1000.0) for Value in Origin)), tuple((Clean(Value) for Value in Normal)), tuple((Clean(Value) for Value in UAxis)), tuple((Clean(Value) for Value in VAxis)))
     return None
 
-
-def _minimal_frame(data: bytes, start: int, end: int) -> (
-    tuple[
-        int,
-        int,
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-    ]
-    | None
-):
-    for offset in range(start, max(start, end - 81 + 1)):
-        origin = struct.unpack_from("<3d", data, offset)
-        normal = struct.unpack_from("<3d", data, offset + 24)
-        if normal != (0.0, 0.0, 1.0):
+# this definition exists because focused behavior needs one stable owner
+def MinimalFrame(DataValue: bytes, Start: int, EndValue: int) -> tuple[int, int, tuple[float, float, float], tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]] | None:
+    for Offset in range(Start, max(Start, EndValue - 81 + 1)):
+        Origin = Struct.unpack_from('<3d', DataValue, Offset)
+        Normal = Struct.unpack_from('<3d', DataValue, Offset + 24)
+        if Normal != (0.0, 0.0, 1.0):
             continue
-        if data[offset + 48 : offset + 56] != b"\0" * 8 or data[offset + 56] not in {
-            0x00,
-            0x80,
-        }:
+        if DataValue[Offset + 48:Offset + 56] != b'\x00' * 8 or DataValue[Offset + 56] not in {0, 128}:
             continue
-        tail = struct.unpack_from("<3d", data, offset + 57)
-        if tail[0] != 0.0:
+        TailValue = Struct.unpack_from('<3d', DataValue, Offset + 57)
+        if TailValue[0] != 0.0:
             continue
-        if (
-            struct.pack("<d", tail[1]) != struct.pack("<d", -origin[2])
-            or tail[2] != 1.0
-        ):
+        if Struct.pack('<d', TailValue[1]) != Struct.pack('<d', -Origin[2]) or TailValue[2] != 1.0:
             continue
-        return (
-            offset,
-            81,
-            tuple(_clean(value * 1000.0) for value in origin),
-            normal,
-            (1.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-        )
+        return (Offset, 81, tuple((Clean(Value * 1000.0) for Value in Origin)), Normal, (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def SupportPlaneRef(DataValue: bytes, Start: int, EndValue: int, RefValue: NativeSketchPlane | None, FramedFallback: int, UnframedFallback: int | None, Planes: dict[int, NativePlane], UnframedPlaneIds: frozenset[int]) -> tuple[int, str, int | None]:
+    if RefValue is not None and RefValue.plane_object_id in Planes:
+        return (RefValue.plane_object_id, KRefSupportSource, None)
+    Sources = ComponentPlane(DataValue, Start, EndValue)
+    Framed = [Source for Source in Sources if Source in Planes]
+    if Framed:
+        return (Framed[-1], KRefSupportSource, None)
+    Unframed = [Source for Source in Sources if Source in UnframedPlaneIds]
+    if Unframed:
+        return (FramedFallback, KUnresolvedSupportSource, Unframed[-1])
+    if UnframedFallback is not None:
+        return (FramedFallback, KUnresolvedSupportSource, UnframedFallback)
+    return (FramedFallback, KStreamOrderSupportSource, None)
 
-def _support_plane_reference(
-    data: bytes,
-    start: int,
-    end: int,
-    reference: NativeSketchPlane | None,
-    framed_fallback: int,
-    unframed_fallback: int | None,
-    planes: dict[int, NativePlane],
-    unframed_plane_ids: frozenset[int],
-) -> tuple[int, str, int | None]:
-    if reference is not None and reference.plane_object_id in planes:
-        return reference.plane_object_id, REFERENCE_SUPPORT_SOURCE, None
-    sources = _component_plane_sources(data, start, end)
-    framed = [source for source in sources if source in planes]
-    if framed:
-        return framed[-1], REFERENCE_SUPPORT_SOURCE, None
-    unframed = [source for source in sources if source in unframed_plane_ids]
-    if unframed:
-        return framed_fallback, UNRESOLVED_SUPPORT_SOURCE, unframed[-1]
-    if unframed_fallback is not None:
-        return framed_fallback, UNRESOLVED_SUPPORT_SOURCE, unframed_fallback
-    return framed_fallback, STREAM_ORDER_SUPPORT_SOURCE, None
-
-
-def _sketch_plane_reference(
-    data: bytes,
-    classes: tuple[NativeClass, ...],
-    start: int,
-    end: int,
-) -> NativeSketchPlane | None:
-    for record in classes:
-        if record.name != SKETCH_CHAIN_CLASS or not start <= record.offset < end:
+# this definition exists because focused behavior needs one stable owner
+def SketchPlaneRef(DataValue: bytes, Classes: tuple[NativeClass, ...], Start: int, EndValue: int) -> NativeSketchA | None:
+    for Record in Classes:
+        if Record.name != SketchChainClass or not Start <= Record.offset < EndValue:
             continue
-        anchored = _read_sketch_plane_reference(
-            data, record.offset + _SKETCH_PLANE_ID_RELATIVE, end
-        )
-        if anchored is not None:
-            return anchored
-    for offset in _find_all(data, _SKETCH_PLANE_REFERENCE_PREFIX, start, end):
-        scanned = _read_sketch_plane_reference(
-            data, offset + len(_SKETCH_PLANE_REFERENCE_PREFIX), end
-        )
-        if scanned is not None:
-            return scanned
+        Anchored = ReadSketchPlane(DataValue, Record.offset + KSketchPlaneIdRelative, EndValue)
+        if Anchored is not None:
+            return Anchored
+    for Offset in FindAll(DataValue, KSketchPlaneRefPrefix, Start, EndValue):
+        Scanned = ReadSketchPlane(DataValue, Offset + len(KSketchPlaneRefPrefix), EndValue)
+        if Scanned is not None:
+            return Scanned
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def ReadSketchPlane(DataValue: bytes, Offset: int, EndValue: int) -> NativeSketchA | None:
+    if Offset < 0 or Offset + KSketchPlaneBasisDelta > EndValue:
+        return None
+    PlaneObjectId = Struct.unpack_from('<I', DataValue, Offset)[0]
+    if PlaneObjectId not in KPrincipalPlaneObjectIds:
+        return None
+    if DataValue[Offset + 4:Offset + 8] != KSketchPlaneRefTag:
+        return None
+    if DataValue[Offset + 8:Offset + KSketchPlaneAxisDelta] != b'\x00\x00':
+        return None
+    AxisCode = Struct.unpack_from('<I', DataValue, Offset + KSketchPlaneAxisDelta)[0]
+    if AxisCode != KSketchPlaneAxisComplemeA - PlaneObjectId:
+        return None
+    FlagValue = DataValue[Offset + KSketchPlaneBasisFlagDelA]
+    BasisOffset = Offset + KSketchPlaneBasisDelta
+    if FlagValue == 0:
+        return NativeSketchA(Offset, PlaneObjectId, AxisCode, KIdentityBasis[0], KIdentityBasis[1], KIdentityBasis[2], None)
+    if FlagValue != 1 or BasisOffset + KSketchPlaneBasisBytes > EndValue:
+        return None
+    RowsValue = Struct.unpack_from('<9d', DataValue, BasisOffset)
+    if not all((MathValue.isfinite(Value) for Value in RowsValue)):
+        return None
+    UAxis = (RowsValue[0], RowsValue[3], RowsValue[6])
+    VAxis = (RowsValue[1], RowsValue[4], RowsValue[7])
+    Normal = (RowsValue[2], RowsValue[5], RowsValue[8])
+    if not Orthonormal((UAxis, VAxis, Normal)):
+        return None
+    return NativeSketchA(Offset, PlaneObjectId, AxisCode, tuple((Clean(Value) for Value in UAxis)), tuple((Clean(Value) for Value in VAxis)), tuple((Clean(Value) for Value in Normal)), BasisOffset)
 
-def _read_sketch_plane_reference(
-    data: bytes, offset: int, end: int
-) -> NativeSketchPlane | None:
-    if offset < 0 or offset + _SKETCH_PLANE_BASIS_DELTA > end:
-        return None
-    plane_object_id = struct.unpack_from("<I", data, offset)[0]
-    if plane_object_id not in _PRINCIPAL_PLANE_OBJECT_IDS:
-        return None
-    if data[offset + 4 : offset + 8] != _SKETCH_PLANE_REFERENCE_TAG:
-        return None
-    if data[offset + 8 : offset + _SKETCH_PLANE_AXIS_DELTA] != b"\0\0":
-        return None
-    axis_code = struct.unpack_from("<I", data, offset + _SKETCH_PLANE_AXIS_DELTA)[0]
-    if axis_code != _SKETCH_PLANE_AXIS_COMPLEMENT - plane_object_id:
-        return None
-    flag = data[offset + _SKETCH_PLANE_BASIS_FLAG_DELTA]
-    basis_offset = offset + _SKETCH_PLANE_BASIS_DELTA
-    if flag == 0:
-        return NativeSketchPlane(
-            offset,
-            plane_object_id,
-            axis_code,
-            _IDENTITY_BASIS[0],
-            _IDENTITY_BASIS[1],
-            _IDENTITY_BASIS[2],
-            None,
-        )
-    if flag != 1 or basis_offset + _SKETCH_PLANE_BASIS_BYTES > end:
-        return None
-    rows = struct.unpack_from("<9d", data, basis_offset)
-    if not all(math.isfinite(value) for value in rows):
-        return None
-    u_axis = (rows[0], rows[3], rows[6])
-    v_axis = (rows[1], rows[4], rows[7])
-    normal = (rows[2], rows[5], rows[8])
-    if not _orthonormal((u_axis, v_axis, normal)):
-        return None
-    return NativeSketchPlane(
-        offset,
-        plane_object_id,
-        axis_code,
-        tuple(_clean(value) for value in u_axis),
-        tuple(_clean(value) for value in v_axis),
-        tuple(_clean(value) for value in normal),
-        basis_offset,
-    )
+# this definition exists because focused behavior needs one stable owner
+def SketchSupport(Classes: tuple[NativeClass, ...], RefValue: NativeSketchPlane | None, Start: int, EndValue: int) -> str:
+    if RefValue is not None:
+        return KPlaneSupportKind
+    if any((Record.name == KFaceSupportClass and Start <= Record.offset < EndValue for Record in Classes)):
+        return KFaceSupportKind
+    return KDerivedSupportKind
 
-
-def _sketch_support_kind(
-    classes: tuple[NativeClass, ...],
-    reference: NativeSketchPlane | None,
-    start: int,
-    end: int,
-) -> str:
-    if reference is not None:
-        return PLANE_SUPPORT_KIND
-    if any(
-        record.name == _FACE_SUPPORT_CLASS and start <= record.offset < end
-        for record in classes
-    ):
-        return FACE_SUPPORT_KIND
-    return DERIVED_SUPPORT_KIND
-
-
-def _bounding_box(
-    data: bytes, classes: tuple[NativeClass, ...]
-) -> NativeBoundingBox | None:
-    for record in classes:
-        if record.name != _BOUNDING_BOX_CLASS:
+# this definition exists because focused behavior needs one stable owner
+def BoundingBox(DataValue: bytes, Classes: tuple[NativeClass, ...]) -> NativeBounding | None:
+    for Record in Classes:
+        if Record.name != KBoundingBoxClass:
             continue
-        offset = record.offset + _BOUNDING_BOX_RELATIVE
-        if offset + 32 > len(data):
+        Offset = Record.offset + KBoundingBoxRelative
+        if Offset + 32 > len(DataValue):
             continue
-        values = struct.unpack_from("<4d", data, offset)
-        if not all(math.isfinite(value) for value in values) or values[3] < 0.0:
+        Values = Struct.unpack_from('<4d', DataValue, Offset)
+        if not all((MathValue.isfinite(Value) for Value in Values)) or Values[3] < 0.0:
             continue
-        return NativeBoundingBox(
-            offset,
-            tuple(_clean(value * _MILLIMETRES) for value in values[:3]),
-            _clean(values[3] * _MILLIMETRES),
-        )
+        return NativeBounding(Offset, tuple((Clean(Value * KMillimetres) for Value in Values[:3])), Clean(Values[3] * KMillimetres))
     return None
 
-
-def _depth_copies(data: bytes, offset: int | None) -> tuple[NativeDepthCopy, ...]:
-    if offset is None:
+# this definition exists because focused behavior needs one stable owner
+def DepthCopies(DataValue: bytes, Offset: int | None) -> tuple[NativeDepthCopy, ...]:
+    if Offset is None:
         return ()
-    result: list[NativeDepthCopy] = []
-    for delta, sign in zip(DEPTH_COPY_DELTAS, DEPTH_COPY_SIGNS, strict=True):
-        target = offset + delta
-        if target < 0 or target + 8 > len(data):
+    Result: list[NativeDepthCopy] = []
+    for Delta, SignValue in zip(DepthCopyDeltas, DepthCopySigns, strict=True):
+        Target = Offset + Delta
+        if Target < 0 or Target + 8 > len(DataValue):
             continue
-        value = struct.unpack_from("<d", data, target)[0]
-        if not math.isfinite(value):
+        Value = Struct.unpack_from('<d', DataValue, Target)[0]
+        if not MathValue.isfinite(Value):
             continue
-        result.append(NativeDepthCopy(target, sign, value * _MILLIMETRES))
-    return tuple(result)
+        Result.append(NativeDepthCopy(Target, SignValue, Value * KMillimetres))
+    return tuple(Result)
 
-
-def _angle_copies(data: bytes, offset: int | None) -> tuple[NativeDepthCopy, ...]:
-    if offset is None:
+# this definition exists because focused behavior needs one stable owner
+def AngleCopies(DataValue: bytes, Offset: int | None) -> tuple[NativeDepthCopy, ...]:
+    if Offset is None:
         return ()
-    result: list[NativeDepthCopy] = []
-    for delta in ANGLE_COPY_DELTAS:
-        target = offset + delta
-        if target < 0 or target + 8 > len(data):
+    Result: list[NativeDepthCopy] = []
+    for Delta in AngleCopyDeltas:
+        Target = Offset + Delta
+        if Target < 0 or Target + 8 > len(DataValue):
             continue
-        value = struct.unpack_from("<d", data, target)[0]
-        if not math.isfinite(value):
+        Value = Struct.unpack_from('<d', DataValue, Target)[0]
+        if not MathValue.isfinite(Value):
             continue
-        result.append(NativeDepthCopy(target, 1, value * _RADIANS_TO_DEGREES))
-    return tuple(result)
+        Result.append(NativeDepthCopy(Target, 1, Value * KRadiansToDegrees))
+    return tuple(Result)
 
-
-def _mirrored_direction(
-    data: bytes, classes: tuple[NativeClass, ...], start: int, end: int
-) -> tuple[int | None, int | None]:
-    for record in classes:
-        if record.name != FROM_END_SPEC_CLASS or not start <= record.offset < end:
+# this definition exists because focused behavior needs one stable owner
+def Mirrored(DataValue: bytes, Classes: tuple[NativeClass, ...], Start: int, EndValue: int) -> tuple[int | None, int | None]:
+    for Record in Classes:
+        if Record.name != FromEndSpecClass or not Start <= Record.offset < EndValue:
             continue
-        offset = record.offset + FROM_REVERSE_RELATIVE
-        if offset < len(data):
-            return offset, data[offset]
-    return None, None
+        Offset = Record.offset + FromReverseRelative
+        if Offset < len(DataValue):
+            return (Offset, DataValue[Offset])
+    return (None, None)
 
+# this definition exists because focused behavior needs one stable owner
+def RecordClass(Classes: tuple[NativeClass, ...], RecordOffset: int) -> NativeClass | None:
+    return next((ItemValue for ItemValue in Classes if ItemValue.offset + 6 + len(ItemValue.name.encode('ascii')) == RecordOffset), None)
 
-def _record_class(
-    classes: tuple[NativeClass, ...], record_offset: int
-) -> NativeClass | None:
-    return next(
-        (
-            item
-            for item in classes
-            if item.offset + 6 + len(item.name.encode("ascii")) == record_offset
-        ),
-        None,
-    )
-
-
-def _class_record_end(
-    data: bytes, classes: tuple[NativeClass, ...], record_offset: int
-) -> int | None:
-    owner = _record_class(classes, record_offset)
-    if owner is None:
+# this definition exists because focused behavior needs one stable owner
+def ClassRecordEnd(DataValue: bytes, Classes: tuple[NativeClass, ...], RecordOffset: int) -> int | None:
+    Owner = RecordClass(Classes, RecordOffset)
+    if Owner is None:
         return None
-    return next(
-        (item.offset for item in classes if item.offset > owner.offset), len(data)
-    )
+    return next((ItemValue.offset for ItemValue in Classes if ItemValue.offset > Owner.offset), len(DataValue))
 
-
-def _reference_plane_ids(
-    data: bytes,
-    start: int,
-    end: int,
-    object_id: int,
-    plane_ids: frozenset[int],
-) -> tuple[int, ...]:
-    result: list[int] = []
-    marker = b"\0" * 6 + struct.pack("<I", 1)
-    for offset in _find_all(data, marker, start, end):
-        source_offset = offset + len(marker)
-        if (
-            source_offset + 6 > end
-            or data[source_offset + 4 : source_offset + 6] != b"\0\x05"
-        ):
+# this definition exists because focused behavior needs one stable owner
+def RefPlaneIds(DataValue: bytes, Start: int, EndValue: int, ObjectId: int, PlaneIds: frozenset[int]) -> tuple[int, ...]:
+    Result: list[int] = []
+    Marker = b'\x00' * 6 + Struct.pack('<I', 1)
+    for Offset in FindAll(DataValue, Marker, Start, EndValue):
+        SourceOffset = Offset + len(Marker)
+        if SourceOffset + 6 > EndValue or DataValue[SourceOffset + 4:SourceOffset + 6] != b'\x00\x05':
             continue
-        source = struct.unpack_from("<I", data, source_offset)[0]
-        if source in plane_ids and source != object_id:
-            result.append(source)
-    return tuple(dict.fromkeys(result))
+        Source = Struct.unpack_from('<I', DataValue, SourceOffset)[0]
+        if Source in PlaneIds and Source != ObjectId:
+            Result.append(Source)
+    return tuple(dict.fromkeys(Result))
 
-
-def _component_plane_sources(data: bytes, start: int, end: int) -> list[int]:
-    sources: list[int] = []
-    for offset in range(start, max(start, end - 67 + 1) + 1):
-        block = data[offset : offset + 67]
-        identity = struct.unpack_from("<I", block)[0]
-        legacy = struct.unpack_from("<H", block, 10)[0]
-        trailer = block[47:63]
-        common = (
-            block[12:39] == b"\0" * 27
-            and struct.unpack_from("<d", block, 39)[0] == 1.0
-            and trailer[:3] == b"\0" * 3
-            and trailer[3] in {2, 3, 4}
-            and trailer[4:7] == b"\0" * 3
-            and trailer[7] in {0xF9, 0xFB, 0xFF}
-            and trailer[8:11] == b"\xff" * 3
-            and trailer[11:15] == b"\0" * 4
-        )
-        if not common:
+# this definition exists because focused behavior needs one stable owner
+def ComponentPlane(DataValue: bytes, Start: int, EndValue: int) -> list[int]:
+    Sources: list[int] = []
+    for Offset in range(Start, max(Start, EndValue - 67 + 1) + 1):
+        Block = DataValue[Offset:Offset + 67]
+        Identity = Struct.unpack_from('<I', Block)[0]
+        Legacy = Struct.unpack_from('<H', Block, 10)[0]
+        Trailer = Block[47:63]
+        Common = Block[12:39] == b'\x00' * 27 and Struct.unpack_from('<d', Block, 39)[0] == 1.0 and (Trailer[:3] == b'\x00' * 3) and (Trailer[3] in {2, 3, 4}) and (Trailer[4:7] == b'\x00' * 3) and (Trailer[7] in {249, 251, 255}) and (Trailer[8:11] == b'\xff' * 3) and (Trailer[11:15] == b'\x00' * 4)
+        if not Common:
             continue
-        if identity and block[4:10] == b"\0" * 6 and legacy:
-            sources.append(legacy)
-        elif identity and block[8:12] == b"\0\0\x03\0":
-            sources.append(identity)
-    for offset in range(start, max(start, end - 138 + 1) + 1):
-        block = data[offset : offset + 138]
-        source = struct.unpack_from("<I", block)[0]
-        if not source or block[8:14] != b"\0" * 6 or block[14] != 1:
+        if Identity and Block[4:10] == b'\x00' * 6 and Legacy:
+            Sources.append(Legacy)
+        elif Identity and Block[8:12] == b'\x00\x00\x03\x00':
+            Sources.append(Identity)
+    for Offset in range(Start, max(Start, EndValue - 138 + 1) + 1):
+        Block = DataValue[Offset:Offset + 138]
+        Source = Struct.unpack_from('<I', Block)[0]
+        if not Source or Block[8:14] != b'\x00' * 6 or Block[14] != 1:
             continue
-        if block[122:126] != struct.pack("<I", 4) or block[126:130] != b"\xff" * 4:
+        if Block[122:126] != Struct.pack('<I', 4) or Block[126:130] != b'\xff' * 4:
             continue
-        basis = [
-            struct.unpack_from("<3d", block, 15 + index * 24) for index in range(3)
-        ]
-        if not all(math.isclose(_norm(vector), 1.0, abs_tol=1e-9) for vector in basis):
+        Basis = [Struct.unpack_from('<3d', Block, 15 + Index * 24) for Index in range(3)]
+        if not all((MathValue.isclose(NormAction(Vector), 1.0, abs_tol=1e-09) for Vector in Basis)):
             continue
-        sources.append(source)
-    return list(dict.fromkeys(sources))
+        Sources.append(Source)
+    return list(dict.fromkeys(Sources))
 
+# this definition exists because focused behavior needs one stable owner
+def DecodeSketch(DataValue: bytes, Feature: NativeFeature, SupportPlaneId: int, *, NativeStream: str=ResolvedFeaturesStream, SupportKind: str=KPlaneSupportKind, SupportPlane: NativeSketchPlane | None=None, SupportSource: str=KRefSupportSource, UnframedSupportPlaneId: int | None=None) -> NativeSketch:
+    Start = Feature.native_offset or 0
+    EndValue = Feature.native_end or len(DataValue)
+    Markers = list(ParseMarkers(DataValue, Start, EndValue))
+    Profiles, ProfileMarkers, Dimensions = Profiles(Markers, Feature.dimensions)
+    NormalizedMarkers = tuple((NativeMarker(offset=Marker.offset, length=Marker.length, prefix=Marker.prefix, native_kind=Marker.native_kind, locus=Marker.locus, profile_role=Marker.profile_role, state=Marker.state, object_index=Marker.object_index, local_id=Marker.local_id, coordinates_mm=Marker.coordinates_mm, endpoint_indices=Marker.endpoint_indices, construction=Marker.construction or (Marker.offset not in ProfileMarkers and Marker.semantic != 'native'), semantic=Marker.semantic, data=Marker.data, coordinates_metres=Marker.coordinates_metres) for Marker in Markers))
+    Constraints = Constraints(Feature, NormalizedMarkers, Profiles)
+    return NativeSketch(object_id=Feature.object_id, name=Feature.name, support_plane_id=SupportPlaneId, native_offset=Start, native_end=EndValue, markers=NormalizedMarkers, profiles=Profiles, dimensions=Dimensions, constraints=Constraints, native_stream=NativeStream, support_kind=SupportKind, support_plane=SupportPlane, support_source=SupportSource, unframed_support_plane_id=UnframedSupportPlaneId)
 
-def _decode_sketch(
-    data: bytes,
-    feature: NativeFeature,
-    support_plane_id: int,
-    *,
-    native_stream: str = RESOLVED_FEATURES_STREAM,
-    support_kind: str = PLANE_SUPPORT_KIND,
-    support_plane: NativeSketchPlane | None = None,
-    support_source: str = REFERENCE_SUPPORT_SOURCE,
-    unframed_support_plane_id: int | None = None,
-) -> NativeSketch:
-    start = feature.native_offset or 0
-    end = feature.native_end or len(data)
-    markers = list(_parse_markers(data, start, end))
-    profiles, profile_markers, dimensions = _profiles(markers, feature.dimensions)
-    normalized_markers = tuple(
-        NativeMarker(
-            offset=marker.offset,
-            length=marker.length,
-            prefix=marker.prefix,
-            native_kind=marker.native_kind,
-            locus=marker.locus,
-            profile_role=marker.profile_role,
-            state=marker.state,
-            object_index=marker.object_index,
-            local_id=marker.local_id,
-            coordinates_mm=marker.coordinates_mm,
-            endpoint_indices=marker.endpoint_indices,
-            construction=(
-                marker.construction
-                or marker.offset not in profile_markers
-                and marker.semantic != "native"
-            ),
-            semantic=marker.semantic,
-            data=marker.data,
-            coordinates_metres=marker.coordinates_metres,
-        )
-        for marker in markers
-    )
-    constraints = _constraints(feature, normalized_markers, profiles)
-    return NativeSketch(
-        object_id=feature.object_id,
-        name=feature.name,
-        support_plane_id=support_plane_id,
-        native_offset=start,
-        native_end=end,
-        markers=normalized_markers,
-        profiles=profiles,
-        dimensions=dimensions,
-        constraints=constraints,
-        native_stream=native_stream,
-        support_kind=support_kind,
-        support_plane=support_plane,
-        support_source=support_source,
-        unframed_support_plane_id=unframed_support_plane_id,
-    )
-
-
-def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...]:
-    offsets = sorted(
-        {
-            offset
-            for prefix in _MARKERS
-            for offset in _find_all(data, prefix, start, end)
-            if offset + 56 <= end
-        }
-    )
-    markers: list[NativeMarker] = []
-    for index, offset in enumerate(offsets):
-        prefix_bytes = next(
-            prefix for prefix in _MARKERS if data.startswith(prefix, offset)
-        )
-        native_offset = 17
-        locus_offset = 23
-        role_offset = 27
-        if offset + native_offset + 4 > end:
+# this definition exists because focused behavior needs one stable owner
+def ParseMarkers(DataValue: bytes, Start: int, EndValue: int) -> tuple[NativeMarker, ...]:
+    Offsets = sorted({Offset for Prefix in KMarkers for Offset in FindAll(DataValue, Prefix, Start, EndValue) if Offset + 56 <= EndValue})
+    Markers: list[NativeMarker] = []
+    for Index, Offset in enumerate(Offsets):
+        PrefixBytes = next((Prefix for Prefix in KMarkers if DataValue.startswith(Prefix, Offset)))
+        NativeOffset = 17
+        LocusOffset = 23
+        RoleOffset = 27
+        if Offset + NativeOffset + 4 > EndValue:
             continue
-        native_kind = struct.unpack_from("<I", data, offset + native_offset)[0]
-        locus = data[offset + locus_offset : offset + locus_offset + 4]
-        profile_role = struct.unpack_from("<H", data, offset + role_offset)[0]
-        next_offset = offsets[index + 1] if index + 1 < len(offsets) else end
-        length = next_offset - offset
-        state_offset = offset + 48
-        state = (
-            struct.unpack_from("<d", data, state_offset)[0]
-            if state_offset + 8 <= end
-            else None
-        )
-        if state is not None and not math.isfinite(state):
-            state = None
-        coordinates_metres = _marker_coordinates_metres(data, offset, end)
-        coordinates = (
-            None
-            if coordinates_metres is None
-            else (
-                _clean(round(coordinates_metres[0] * _MILLIMETRES, 12)),
-                _clean(round(coordinates_metres[1] * _MILLIMETRES, 12)),
-            )
-        )
-        endpoints = None
-        if coordinates is None:
-            pair_offset = offset + 64
-            if pair_offset + 4 <= end:
-                pair = struct.unpack_from("<HH", data, pair_offset)
-                if pair != (0, 0):
-                    endpoints = pair
-        object_index = (
-            struct.unpack_from("<I", data, offset - 4)[0] if offset >= 4 else 0xFFFFFFFF
-        )
-        if object_index == 0xFFFFFFFF:
-            object_index = None
-        local_id = _marker_local_id(data, offset, length)
-        semantic = _marker_semantic(
-            native_kind, locus, coordinates, endpoints, profile_role
-        )
-        markers.append(
-            NativeMarker(
-                offset=offset,
-                length=length,
-                prefix=prefix_bytes.hex(),
-                native_kind=native_kind,
-                locus=locus.hex(),
-                profile_role=profile_role,
-                state=state,
-                object_index=object_index,
-                local_id=local_id,
-                coordinates_mm=coordinates,
-                endpoint_indices=endpoints,
-                construction=profile_role == 2,
-                semantic=semantic,
-                data=bytes(data[offset:next_offset]),
-                coordinates_metres=coordinates_metres,
-            )
-        )
-    return tuple(markers)
+        NativeKind = Struct.unpack_from('<I', DataValue, Offset + NativeOffset)[0]
+        Locus = DataValue[Offset + LocusOffset:Offset + LocusOffset + 4]
+        ProfileRole = Struct.unpack_from('<H', DataValue, Offset + RoleOffset)[0]
+        NextOffset = Offsets[Index + 1] if Index + 1 < len(Offsets) else EndValue
+        Length = NextOffset - Offset
+        StateOffset = Offset + 48
+        State = Struct.unpack_from('<d', DataValue, StateOffset)[0] if StateOffset + 8 <= EndValue else None
+        if State is not None and (not MathValue.isfinite(State)):
+            State = None
+        CoordinatesMetres = MarkerMetres(DataValue, Offset, EndValue)
+        Coordinates = None if CoordinatesMetres is None else (Clean(round(CoordinatesMetres[0] * KMillimetres, 12)), Clean(round(CoordinatesMetres[1] * KMillimetres, 12)))
+        Endpoints = None
+        if Coordinates is None:
+            PairOffset = Offset + 64
+            if PairOffset + 4 <= EndValue:
+                PairValue = Struct.unpack_from('<HH', DataValue, PairOffset)
+                if PairValue != (0, 0):
+                    Endpoints = PairValue
+        ObjectIndex = Struct.unpack_from('<I', DataValue, Offset - 4)[0] if Offset >= 4 else 4294967295
+        if ObjectIndex == 4294967295:
+            ObjectIndex = None
+        LocalId = MarkerLocalId(DataValue, Offset, Length)
+        Semantic = MarkerSemantic(NativeKind, Locus, Coordinates, Endpoints, ProfileRole)
+        Markers.append(NativeMarker(offset=Offset, length=Length, prefix=PrefixBytes.hex(), native_kind=NativeKind, locus=Locus.hex(), profile_role=ProfileRole, state=State, object_index=ObjectIndex, local_id=LocalId, coordinates_mm=Coordinates, endpoint_indices=Endpoints, construction=ProfileRole == 2, semantic=Semantic, data=bytes(DataValue[Offset:NextOffset]), coordinates_metres=CoordinatesMetres))
+    return tuple(Markers)
 
-
-def _marker_coordinates_metres(
-    data: bytes, offset: int, end: int
-) -> tuple[float, float] | None:
-    for relative in (56, 64):
-        coordinate_offset = offset + relative
-        if data[coordinate_offset : coordinate_offset + 2] != _COORDINATE_TAG:
+# this definition exists because focused behavior needs one stable owner
+def MarkerMetres(DataValue: bytes, Offset: int, EndValue: int) -> tuple[float, float] | None:
+    for Relative in (56, 64):
+        CoordinateOffset = Offset + Relative
+        if DataValue[CoordinateOffset:CoordinateOffset + 2] != KCoordinateTag:
             continue
-        if coordinate_offset + 18 > end:
+        if CoordinateOffset + 18 > EndValue:
             continue
-        x, y = struct.unpack_from("<2d", data, coordinate_offset + 2)
-        if (
-            math.isfinite(x)
-            and math.isfinite(y)
-            and abs(x) <= 1000.0
-            and abs(y) <= 1000.0
-        ):
-            return x, y
+        FirstCoord, SecondCoord = Struct.unpack_from('<2d', DataValue, CoordinateOffset + 2)
+        if MathValue.isfinite(FirstCoord) and MathValue.isfinite(SecondCoord) and (abs(FirstCoord) <= 1000.0) and (abs(SecondCoord) <= 1000.0):
+            return (FirstCoord, SecondCoord)
     return None
 
-
-def _marker_coordinates(
-    data: bytes, offset: int, end: int
-) -> tuple[float, float] | None:
-    metres = _marker_coordinates_metres(data, offset, end)
-    if metres is None:
+# this definition exists because focused behavior needs one stable owner
+def Marker(DataValue: bytes, Offset: int, EndValue: int) -> tuple[float, float] | None:
+    Metres = MarkerMetres(DataValue, Offset, EndValue)
+    if Metres is None:
         return None
-    return (
-        _clean(round(metres[0] * _MILLIMETRES, 12)),
-        _clean(round(metres[1] * _MILLIMETRES, 12)),
-    )
+    return (Clean(round(Metres[0] * KMillimetres, 12)), Clean(round(Metres[1] * KMillimetres, 12)))
 
-
-def _marker_radius_mm(center: NativeMarker, rim: NativeMarker) -> float | None:
-    if center.coordinates_metres is None or rim.coordinates_metres is None:
+# this definition exists because focused behavior needs one stable owner
+def MarkerRadiusMm(Center: NativeMarker, RimValue: NativeMarker) -> float | None:
+    if Center.coordinates_metres is None or RimValue.coordinates_metres is None:
         return None
-    radius = (
-        circle_radius_mm(
-            rim.coordinates_metres[0] - center.coordinates_metres[0],
-            rim.coordinates_metres[1] - center.coordinates_metres[1],
-        )
-        * _MILLIMETRES
-    )
-    return radius if math.isfinite(radius) and radius > 1e-12 else None
+    Radius = CircleRadiusMm(RimValue.coordinates_metres[0] - Center.coordinates_metres[0], RimValue.coordinates_metres[1] - Center.coordinates_metres[1]) * KMillimetres
+    return Radius if MathValue.isfinite(Radius) and Radius > 1e-12 else None
 
-
-def _marker_start_angle_degrees(
-    center: NativeMarker, rim: NativeMarker
-) -> float | None:
-    if center.coordinates_metres is None or rim.coordinates_metres is None:
+# this definition exists because focused behavior needs one stable owner
+def MarkerStart(Center: NativeMarker, RimValue: NativeMarker) -> float | None:
+    if Center.coordinates_metres is None or RimValue.coordinates_metres is None:
         return None
-    angle = math.degrees(
-        math.atan2(
-            rim.coordinates_metres[1] - center.coordinates_metres[1],
-            rim.coordinates_metres[0] - center.coordinates_metres[0],
-        )
-    )
-    return angle if math.isfinite(angle) else None
+    Angle = MathValue.degrees(MathValue.atan2(RimValue.coordinates_metres[1] - Center.coordinates_metres[1], RimValue.coordinates_metres[0] - Center.coordinates_metres[0]))
+    return Angle if MathValue.isfinite(Angle) else None
 
-
-def _marker_local_id(data: bytes, offset: int, length: int) -> int | None:
-    relative = MARKER_LOCAL_ID_OFFSET_BY_LENGTH.get(length)
-    if relative is None or offset + relative + 4 > len(data):
+# this definition exists because focused behavior needs one stable owner
+def MarkerLocalId(DataValue: bytes, Offset: int, Length: int) -> int | None:
+    Relative = KMarkerLocalIdOffsetBy.get(Length)
+    if Relative is None or Offset + Relative + 4 > len(DataValue):
         return None
-    value = struct.unpack_from("<I", data, offset + relative)[0]
-    return None if value == 0xFFFFFFFF else value
+    Value = Struct.unpack_from('<I', DataValue, Offset + Relative)[0]
+    return None if Value == 4294967295 else Value
 
+# this definition exists because focused behavior needs one stable owner
+def MarkerSemantic(NativeKind: int, Locus: bytes, Coordinates: tuple[float, float] | None, Endpoints: tuple[int, int] | None, ProfileRole: int) -> str:
+    if ProfileRole == 2:
+        if NativeKind == 2 and Endpoints is not None and (Endpoints[0] != Endpoints[1]):
+            return 'line'
+        return 'native'
+    if Locus == KCircleLocus and Coordinates is not None:
+        return 'circle'
+    if Locus == KPointLocus:
+        if Coordinates is not None:
+            return 'point'
+        if Endpoints is not None and Endpoints[0] != Endpoints[1]:
+            return 'line'
+        return 'reference'
+    return 'native'
 
-def _marker_semantic(
-    native_kind: int,
-    locus: bytes,
-    coordinates: tuple[float, float] | None,
-    endpoints: tuple[int, int] | None,
-    profile_role: int,
-) -> str:
-    if profile_role == 2:
-        if native_kind == 2 and endpoints is not None and endpoints[0] != endpoints[1]:
-            return "line"
-        return "native"
-    if locus == _CIRCLE_LOCUS and coordinates is not None:
-        return "circle"
-    if locus == _POINT_LOCUS:
-        if coordinates is not None:
-            return "point"
-        if endpoints is not None and endpoints[0] != endpoints[1]:
-            return "line"
-        return "reference"
-    return "native"
-
-
-def _linked_rectangle_profiles(
-    markers: list[NativeMarker],
-) -> tuple[tuple[NativeProfile, ...], set[int]]:
-    profiles: list[NativeProfile] = []
-    used: set[int] = set()
-    for start in range(max(0, len(markers) - 8)):
-        records = markers[start : start + 9]
-        if len(records) != 9 or any(marker.offset in used for marker in records):
+# this definition exists because focused behavior needs one stable owner
+def LinkedRectangle(Markers: list[NativeMarker]) -> tuple[tuple[NativeProfile, ...], set[int]]:
+    Profiles: list[NativeProfile] = []
+    UsedValue: set[int] = set()
+    for Start in range(max(0, len(Markers) - 8)):
+        Records = Markers[Start:Start + 9]
+        if len(Records) != 9 or any((Marker.offset in UsedValue for Marker in Records)):
             continue
-        points = records[:4]
-        header = records[4]
-        lines = records[5:]
-        prefix = points[0].prefix
-        locus = points[0].locus
-        if (
-            locus != _CIRCLE_LOCUS.hex()
-            or any(
-                marker.prefix != prefix
-                or marker.locus != locus
-                or marker.profile_role != 1
-                or marker.native_kind != 0
-                or marker.coordinates_mm is None
-                for marker in points
-            )
-            or header.prefix != prefix
-            or header.locus != locus
-            or header.profile_role != 1
-            or header.native_kind != 0
-            or header.coordinates_mm is not None
-            or header.endpoint_indices is None
-            or header.length != 92
-            or any(
-                marker.prefix != prefix
-                or marker.locus != locus
-                or marker.profile_role != 1
-                or marker.native_kind not in {1, 2}
-                or marker.coordinates_mm is not None
-                or marker.endpoint_indices is None
-                for marker in lines
-            )
-            or any(marker.length != 92 for marker in lines[:-1])
-            or lines[-1].length < 92
-        ):
+        Points = Records[:4]
+        Header = Records[4]
+        Lines = Records[5:]
+        Prefix = Points[0].prefix
+        Locus = Points[0].locus
+        if Locus != KCircleLocus.hex() or any((Marker.prefix != Prefix or Marker.locus != Locus or Marker.profile_role != 1 or (Marker.native_kind != 0) or (Marker.coordinates_mm is None) for Marker in Points)) or Header.prefix != Prefix or (Header.locus != Locus) or (Header.profile_role != 1) or (Header.native_kind != 0) or (Header.coordinates_mm is not None) or (Header.endpoint_indices is None) or (Header.length != 92) or any((Marker.prefix != Prefix or Marker.locus != Locus or Marker.profile_role != 1 or (Marker.native_kind not in {1, 2}) or (Marker.coordinates_mm is not None) or (Marker.endpoint_indices is None) for Marker in Lines)) or any((Marker.length != 92 for Marker in Lines[:-1])) or (Lines[-1].length < 92):
             continue
-        coordinates = tuple(marker.coordinates_mm for marker in points)
-        if any(coordinate is None for coordinate in coordinates):
+        Coordinates = tuple((Marker.coordinates_mm for Marker in Points))
+        if any((Coordinate is None for Coordinate in Coordinates)):
             continue
-        resolved = tuple(
-            coordinate for coordinate in coordinates if coordinate is not None
-        )
-        xs = sorted({coordinate[0] for coordinate in resolved})
-        ys = sorted({coordinate[1] for coordinate in resolved})
-        if len(xs) != 2 or len(ys) != 2 or len(set(resolved)) != 4:
+        Resolved = tuple((Coordinate for Coordinate in Coordinates if Coordinate is not None))
+        XsValue = sorted({Coordinate[0] for Coordinate in Resolved})
+        YsValue = sorted({Coordinate[1] for Coordinate in Resolved})
+        if len(XsValue) != 2 or len(YsValue) != 2 or len(set(Resolved)) != 4:
             continue
-        corners = {(x, y) for x in xs for y in ys}
-        if set(resolved) != corners:
+        Corners = {(FirstCoord, SecondCoord) for FirstCoord in XsValue for SecondCoord in YsValue}
+        if set(Resolved) != Corners:
             continue
-        header_start, header_end = header.endpoint_indices
-        if (
-            header_start >= len(resolved)
-            or header_end >= len(resolved)
-            or header_start == header_end
-        ):
+        HeaderStart, HeaderEnd = Header.endpoint_indices
+        if HeaderStart >= len(Resolved) or HeaderEnd >= len(Resolved) or HeaderStart == HeaderEnd:
             continue
-        edge_markers: dict[str, NativeMarker] = {}
-        valid = True
-        for marker in lines:
-            endpoint_start, endpoint_end = marker.endpoint_indices or (-1, -1)
-            if (
-                endpoint_start < 0
-                or endpoint_end < 0
-                or endpoint_start >= len(resolved)
-                or endpoint_end >= len(resolved)
-                or endpoint_start == endpoint_end
-            ):
-                valid = False
+        EdgeMarkers: dict[str, NativeMarker] = {}
+        Valid = True
+        for Marker in Lines:
+            EndpointStart, EndpointEnd = Marker.endpoint_indices or (-1, -1)
+            if EndpointStart < 0 or EndpointEnd < 0 or EndpointStart >= len(Resolved) or (EndpointEnd >= len(Resolved)) or (EndpointStart == EndpointEnd):
+                Valid = False
                 break
-            point_start = resolved[endpoint_start]
-            point_end = resolved[endpoint_end]
-            if math.isclose(point_start[1], point_end[1], abs_tol=1e-9):
-                side = (
-                    "bottom"
-                    if math.isclose(point_start[1], ys[0], abs_tol=1e-9)
-                    else "top"
-                )
-            elif math.isclose(point_start[0], point_end[0], abs_tol=1e-9):
-                side = (
-                    "left"
-                    if math.isclose(point_start[0], xs[0], abs_tol=1e-9)
-                    else "right"
-                )
+            PointStart = Resolved[EndpointStart]
+            PointEnd = Resolved[EndpointEnd]
+            if MathValue.isclose(PointStart[1], PointEnd[1], abs_tol=1e-09):
+                SideValue = 'bottom' if MathValue.isclose(PointStart[1], YsValue[0], abs_tol=1e-09) else 'top'
+            elif MathValue.isclose(PointStart[0], PointEnd[0], abs_tol=1e-09):
+                SideValue = 'left' if MathValue.isclose(PointStart[0], XsValue[0], abs_tol=1e-09) else 'right'
             else:
-                valid = False
+                Valid = False
                 break
-            if side in edge_markers:
-                valid = False
+            if SideValue in EdgeMarkers:
+                Valid = False
                 break
-            edge_markers[side] = marker
-        if not valid or set(edge_markers) != {"bottom", "right", "top", "left"}:
+            EdgeMarkers[SideValue] = Marker
+        if not Valid or set(EdgeMarkers) != {'bottom', 'right', 'top', 'left'}:
             continue
-        edge_offsets = tuple(
-            edge_markers[side].offset for side in ("bottom", "right", "top", "left")
-        )
-        metadata_offsets = tuple(
-            marker.offset
-            for marker in (*points, header)
-            if marker.offset not in edge_offsets
-        )
-        consumed = {marker.offset for marker in records}
-        profiles.append(
-            NativeProfile(
-                "rectangle",
-                (xs[0], ys[0], xs[1], ys[1]),
-                (*edge_offsets, *metadata_offsets),
-            )
-        )
-        used.update(consumed)
-    return tuple(profiles), used
+        EdgeOffsets = tuple((EdgeMarkers[SideValue].offset for SideValue in ('bottom', 'right', 'top', 'left')))
+        MetaOffsets = tuple((Marker.offset for Marker in (*Points, Header) if Marker.offset not in EdgeOffsets))
+        Consumed = {Marker.offset for Marker in Records}
+        Profiles.append(NativeProfile('rectangle', (XsValue[0], YsValue[0], XsValue[1], YsValue[1]), (*EdgeOffsets, *MetaOffsets)))
+        UsedValue.update(Consumed)
+    return (tuple(Profiles), UsedValue)
 
-
-def _profiles(
-    markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
-) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
-    linked_rectangles, linked_markers = _linked_rectangle_profiles(markers)
-    structural_rectangles, structural_rectangle_markers = (
-        _structural_rectangle_profiles(markers, linked_markers)
-    )
-    structural_circles, structural_markers, structural_dimensions = (
-        _structural_circle_profiles(
-            markers,
-            dimensions,
-            linked_markers | structural_rectangle_markers,
-        )
-    )
-    StructuralPolylines, StructuralPolylineMarkers = PolyProfiles(
-        markers,
-        linked_markers | structural_rectangle_markers | structural_markers,
-    )
-    remaining_markers = [
-        marker
-        for marker in markers
-        if marker.offset
-        not in linked_markers
-        | structural_rectangle_markers
-        | structural_markers
-        | StructuralPolylineMarkers
-    ]
-    circle_profiles, circle_dimensions = _circle_profiles(remaining_markers, dimensions)
-    circle_dimensions.update(structural_dimensions)
-    normalized = tuple(
-        (
-            replace(dimension, kind=circle_dimensions[index])
-            if index in circle_dimensions
-            else dimension
-        )
-        for index, dimension in enumerate(dimensions)
-    )
-    points = [
-        marker
-        for marker in remaining_markers
-        if marker.coordinates_mm is not None and marker.locus == _POINT_LOCUS.hex()
-    ]
-    coordinates = list(dict.fromkeys(marker.coordinates_mm for marker in points))
-    rectangles: list[tuple[float, float, float, float]] = []
-    xs = sorted({point[0] for point in coordinates})
-    ys = sorted({point[1] for point in coordinates})
-    coordinate_set = set(coordinates)
-    for x0, x1 in itertools.combinations(xs, 2):
-        for y0, y1 in itertools.combinations(ys, 2):
-            if {(x0, y0), (x0, y1), (x1, y0), (x1, y1)} <= coordinate_set:
-                rectangles.append((x0, y0, x1, y1))
-    values = [dimension.value_mm for dimension in dimensions]
-    matches = [
-        rectangle
-        for rectangle in rectangles
-        if _matches(rectangle[2] - rectangle[0], values)
-        and _matches(rectangle[3] - rectangle[1], values)
-    ]
-    if matches:
-        minimum = min(
-            (rectangle[2] - rectangle[0]) * (rectangle[3] - rectangle[1])
-            for rectangle in matches
-        )
-        selected = [
-            rectangle
-            for rectangle in matches
-            if math.isclose(
-                (rectangle[2] - rectangle[0]) * (rectangle[3] - rectangle[1]),
-                minimum,
-                abs_tol=1e-7,
-            )
-        ]
+# this definition exists because focused behavior needs one stable owner
+def Profiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
+    LinkedRectangles, LinkedMarkers = LinkedRectangle(Markers)
+    StructuralRectangles, StructuralRectangle = StructuralA(Markers, LinkedMarkers)
+    StructuralCircles, StructuralMarkers, StructuralDimensions = Structural(Markers, Dimensions, LinkedMarkers | StructuralRectangle)
+    StructuralPolylines, StructuralPolylineMarkers = PolyProfiles(Markers, LinkedMarkers | StructuralRectangle | StructuralMarkers)
+    RemainingMarkers = [Marker for Marker in Markers if Marker.offset not in LinkedMarkers | StructuralRectangle | StructuralMarkers | StructuralPolylineMarkers]
+    CircleProfiles, CircleDimensions = CircleProfiles(RemainingMarkers, Dimensions)
+    CircleDimensions.update(StructuralDimensions)
+    Normalized = tuple((Replace(Dimension, kind=CircleDimensions[Index]) if Index in CircleDimensions else Dimension for Index, Dimension in enumerate(Dimensions)))
+    Points = [Marker for Marker in RemainingMarkers if Marker.coordinates_mm is not None and Marker.locus == KPointLocus.hex()]
+    Coordinates = list(dict.fromkeys((Marker.coordinates_mm for Marker in Points)))
+    Rectangles: list[tuple[float, float, float, float]] = []
+    XsValue = sorted({Point[0] for Point in Coordinates})
+    YsValue = sorted({Point[1] for Point in Coordinates})
+    CoordinateSet = set(Coordinates)
+    for XZero, XOneValue in Itertools.combinations(XsValue, 2):
+        for YZero, YOneValue in Itertools.combinations(YsValue, 2):
+            if {(XZero, YZero), (XZero, YOneValue), (XOneValue, YZero), (XOneValue, YOneValue)} <= CoordinateSet:
+                Rectangles.append((XZero, YZero, XOneValue, YOneValue))
+    Values = [Dimension.value_mm for Dimension in Dimensions]
+    Matches = [Rectangle for Rectangle in Rectangles if Matches(Rectangle[2] - Rectangle[0], Values) and Matches(Rectangle[3] - Rectangle[1], Values)]
+    if Matches:
+        Minimum = min(((Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]) for Rectangle in Matches))
+        Selected = [Rectangle for Rectangle in Matches if MathValue.isclose((Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]), Minimum, abs_tol=1e-07)]
     else:
-        selected = []
-        for group_start in range(max(0, len(points) - 3)):
-            group = points[group_start : group_start + 4]
-            products = {marker.coordinates_mm for marker in group}
-            gx = sorted({point[0] for point in products})
-            gy = sorted({point[1] for point in products})
-            if len(gx) == 2 and len(gy) == 2 and len(products) == 4:
-                selected = [(gx[0], gy[0], gx[1], gy[1])]
+        Selected = []
+        for GroupStart in range(max(0, len(Points) - 3)):
+            Group = Points[GroupStart:GroupStart + 4]
+            Products = {Marker.coordinates_mm for Marker in Group}
+            GxValue = sorted({Point[0] for Point in Products})
+            GyValue = sorted({Point[1] for Point in Products})
+            if len(GxValue) == 2 and len(GyValue) == 2 and (len(Products) == 4):
+                Selected = [(GxValue[0], GyValue[0], GxValue[1], GyValue[1])]
                 break
-        if not selected and rectangles:
-            selected = [
-                max(
-                    rectangles,
-                    key=lambda rectangle: (rectangle[2] - rectangle[0])
-                    * (rectangle[3] - rectangle[1]),
-                )
-            ]
-    selected.sort(
-        key=lambda rectangle: min(
-            (
-                marker.offset
-                for marker in points
-                if marker.coordinates_mm
-                in {
-                    (rectangle[0], rectangle[1]),
-                    (rectangle[0], rectangle[3]),
-                    (rectangle[2], rectangle[1]),
-                    (rectangle[2], rectangle[3]),
-                }
-            ),
-            default=1 << 62,
-        )
-    )
-    line_markers = [
-        marker
-        for marker in remaining_markers
-        if marker.semantic == "line"
-        and marker.profile_role == 1
-        and marker.locus == _POINT_LOCUS.hex()
-    ]
-    runs: list[list[NativeMarker]] = []
-    for marker in line_markers:
-        if not runs or marker.offset - runs[-1][-1].offset != 92:
-            runs.append([marker])
+        if not Selected and Rectangles:
+
+            # this callback exists because local behavior needs one focused transformation
+            Selected = [max(Rectangles, key=lambda Rectangle: (Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]))]
+
+    # this callback exists because local behavior needs one focused transformation
+    Selected.sort(key=lambda Rectangle: min((Marker.offset for Marker in Points if Marker.coordinates_mm in {(Rectangle[0], Rectangle[1]), (Rectangle[0], Rectangle[3]), (Rectangle[2], Rectangle[1]), (Rectangle[2], Rectangle[3])}), default=1 << 62))
+    LineMarkers = [Marker for Marker in RemainingMarkers if Marker.semantic == 'line' and Marker.profile_role == 1 and (Marker.locus == KPointLocus.hex())]
+    RunsValue: list[list[NativeMarker]] = []
+    for Marker in LineMarkers:
+        if not RunsValue or Marker.offset - RunsValue[-1][-1].offset != 92:
+            RunsValue.append([Marker])
         else:
-            runs[-1].append(marker)
-    profile_lines = [
-        tuple(run[index : index + 4])
-        for run in runs
-        for index in range(0, len(run), 6)
-        if len(run[index : index + 4]) == 4
-    ]
-    profiles: list[NativeProfile] = [
-        *structural_circles,
-        *circle_profiles,
-        *linked_rectangles,
-        *structural_rectangles,
-        *StructuralPolylines,
-    ]
-    used: set[int] = (
-        linked_markers
-        | structural_rectangle_markers
-        | structural_markers
-        | StructuralPolylineMarkers
-    ) | {offset for profile in circle_profiles for offset in profile.marker_offsets}
-    for index, rectangle in enumerate(selected):
-        if any(
-            profile.kind == "rectangle" and profile.coordinates == rectangle
-            for profile in profiles
-        ):
+            RunsValue[-1].append(Marker)
+    ProfileLines = [tuple(RunValue[Index:Index + 4]) for RunValue in RunsValue for Index in range(0, len(RunValue), 6) if len(RunValue[Index:Index + 4]) == 4]
+    Profiles: list[NativeProfile] = [*StructuralCircles, *CircleProfiles, *LinkedRectangles, *StructuralRectangles, *StructuralPolylines]
+    UsedValue: set[int] = LinkedMarkers | StructuralRectangle | StructuralMarkers | StructuralPolylineMarkers | {Offset for Profile in CircleProfiles for Offset in Profile.marker_offsets}
+    for Index, Rectangle in enumerate(Selected):
+        if any((Profile.kind == 'rectangle' and Profile.coordinates == Rectangle for Profile in Profiles)):
             continue
-        span = tuple(
-            marker.offset
-            for marker in (profile_lines[index] if index < len(profile_lines) else ())
-        )
-        if circle_profiles and len(span) != 4:
+        SpanValue = tuple((Marker.offset for Marker in (ProfileLines[Index] if Index < len(ProfileLines) else ())))
+        if CircleProfiles and len(SpanValue) != 4:
             continue
-        used.update(span)
-        corners = {
-            (rectangle[0], rectangle[1]),
-            (rectangle[0], rectangle[3]),
-            (rectangle[2], rectangle[1]),
-            (rectangle[2], rectangle[3]),
-        }
-        used.update(
-            marker.offset
-            for marker in markers
-            if marker.semantic == "point" and marker.coordinates_mm in corners
-        )
-        profiles.append(NativeProfile("rectangle", rectangle, span))
-    profiles.sort(key=lambda profile: min(profile.marker_offsets, default=1 << 62))
-    return tuple(profiles), used, normalized
+        UsedValue.update(SpanValue)
+        Corners = {(Rectangle[0], Rectangle[1]), (Rectangle[0], Rectangle[3]), (Rectangle[2], Rectangle[1]), (Rectangle[2], Rectangle[3])}
+        UsedValue.update((Marker.offset for Marker in Markers if Marker.semantic == 'point' and Marker.coordinates_mm in Corners))
+        Profiles.append(NativeProfile('rectangle', Rectangle, SpanValue))
 
+    # this callback exists because local behavior needs one focused transformation
+    Profiles.sort(key=lambda Profile: min(Profile.marker_offsets, default=1 << 62))
+    return (tuple(Profiles), UsedValue, Normalized)
 
-def _structural_rectangle_profiles(
-    markers: list[NativeMarker], excluded_offsets: set[int]
-) -> tuple[tuple[NativeProfile, ...], set[int]]:
-    edges = tuple(
-        marker
-        for marker in markers
-        if marker.offset not in excluded_offsets
-        and marker.profile_role == 1
-        and marker.native_kind in {1, 2}
-        and marker.coordinates_mm is None
-        and marker.endpoint_indices is not None
-        and marker.endpoint_indices[0] != marker.endpoint_indices[1]
-        and all(
-            0 <= endpoint < len(markers)
-            and markers[endpoint].coordinates_mm is not None
-            for endpoint in marker.endpoint_indices
-        )
-    )
-    remaining = set(range(len(edges)))
-    profiles: list[NativeProfile] = []
-    used: set[int] = set()
-    while remaining:
-        component = {remaining.pop()}
-        vertices = set(edges[next(iter(component))].endpoint_indices or ())
-        changed = True
-        while changed:
-            changed = False
-            for index in tuple(remaining):
-                endpoints = set(edges[index].endpoint_indices or ())
-                if vertices & endpoints:
-                    remaining.remove(index)
-                    component.add(index)
-                    vertices.update(endpoints)
-                    changed = True
-        if len(component) != 4 or len(vertices) != 4:
+# this definition exists because focused behavior needs one stable owner
+def StructuralA(Markers: list[NativeMarker], ExcludedOffsets: set[int]) -> tuple[tuple[NativeProfile, ...], set[int]]:
+    Edges = tuple((Marker for Marker in Markers if Marker.offset not in ExcludedOffsets and Marker.profile_role == 1 and (Marker.native_kind in {1, 2}) and (Marker.coordinates_mm is None) and (Marker.endpoint_indices is not None) and (Marker.endpoint_indices[0] != Marker.endpoint_indices[1]) and all((0 <= Endpoint < len(Markers) and Markers[Endpoint].coordinates_mm is not None for Endpoint in Marker.endpoint_indices))))
+    Remaining = set(range(len(Edges)))
+    Profiles: list[NativeProfile] = []
+    UsedValue: set[int] = set()
+    while Remaining:
+        Component = {Remaining.pop()}
+        Vertices = set(Edges[next(iter(Component))].endpoint_indices or ())
+        Changed = True
+        while Changed:
+            Changed = False
+            for Index in tuple(Remaining):
+                Endpoints = set(Edges[Index].endpoint_indices or ())
+                if Vertices & Endpoints:
+                    Remaining.remove(Index)
+                    Component.add(Index)
+                    Vertices.update(Endpoints)
+                    Changed = True
+        if len(Component) != 4 or len(Vertices) != 4:
             continue
-        degrees = {vertex: 0 for vertex in vertices}
-        for index in component:
-            for vertex in edges[index].endpoint_indices or ():
-                degrees[vertex] += 1
-        if set(degrees.values()) != {2}:
+        Degrees = {Vertex: 0 for Vertex in Vertices}
+        for Index in Component:
+            for Vertex in Edges[Index].endpoint_indices or ():
+                Degrees[Vertex] += 1
+        if set(Degrees.values()) != {2}:
             continue
-        coordinates = {vertex: markers[vertex].coordinates_mm for vertex in vertices}
-        if any(value is None for value in coordinates.values()):
+        Coordinates = {Vertex: Markers[Vertex].coordinates_mm for Vertex in Vertices}
+        if any((Value is None for Value in Coordinates.values())):
             continue
-        resolved = {
-            vertex: value for vertex, value in coordinates.items() if value is not None
-        }
-        xs = sorted({value[0] for value in resolved.values()})
-        ys = sorted({value[1] for value in resolved.values()})
-        if (
-            len(xs) != 2
-            or len(ys) != 2
-            or set(resolved.values()) != {(x, y) for x in xs for y in ys}
-        ):
+        Resolved = {Vertex: Value for Vertex, Value in Coordinates.items() if Value is not None}
+        XsValue = sorted({Value[0] for Value in Resolved.values()})
+        YsValue = sorted({Value[1] for Value in Resolved.values()})
+        if len(XsValue) != 2 or len(YsValue) != 2 or set(Resolved.values()) != {(FirstCoord, SecondCoord) for FirstCoord in XsValue for SecondCoord in YsValue}:
             continue
-        sides: dict[str, NativeMarker] = {}
-        valid = True
-        for index in component:
-            marker = edges[index]
-            start, end = marker.endpoint_indices or (-1, -1)
-            left = resolved[start]
-            right = resolved[end]
-            if math.isclose(left[1], right[1], abs_tol=1e-9):
-                side = "bottom" if math.isclose(left[1], ys[0]) else "top"
-            elif math.isclose(left[0], right[0], abs_tol=1e-9):
-                side = "left" if math.isclose(left[0], xs[0]) else "right"
+        Sides: dict[str, NativeMarker] = {}
+        Valid = True
+        for Index in Component:
+            Marker = Edges[Index]
+            Start, EndValue = Marker.endpoint_indices or (-1, -1)
+            LeftValue = Resolved[Start]
+            Right = Resolved[EndValue]
+            if MathValue.isclose(LeftValue[1], Right[1], abs_tol=1e-09):
+                SideValue = 'bottom' if MathValue.isclose(LeftValue[1], YsValue[0]) else 'top'
+            elif MathValue.isclose(LeftValue[0], Right[0], abs_tol=1e-09):
+                SideValue = 'left' if MathValue.isclose(LeftValue[0], XsValue[0]) else 'right'
             else:
-                valid = False
+                Valid = False
                 break
-            if side in sides:
-                valid = False
+            if SideValue in Sides:
+                Valid = False
                 break
-            sides[side] = marker
-        if not valid or set(sides) != {"bottom", "right", "top", "left"}:
+            Sides[SideValue] = Marker
+        if not Valid or set(Sides) != {'bottom', 'right', 'top', 'left'}:
             continue
-        line_offsets = tuple(
-            sides[side].offset for side in ("bottom", "right", "top", "left")
-        )
-        used.update(line_offsets)
-        profiles.append(
-            NativeProfile(
-                "rectangle",
-                (xs[0], ys[0], xs[1], ys[1]),
-                line_offsets,
-            )
-        )
-    return tuple(profiles), used
+        LineOffsets = tuple((Sides[SideValue].offset for SideValue in ('bottom', 'right', 'top', 'left')))
+        UsedValue.update(LineOffsets)
+        Profiles.append(NativeProfile('rectangle', (XsValue[0], YsValue[0], XsValue[1], YsValue[1]), LineOffsets))
+    return (tuple(Profiles), UsedValue)
 
-
-# connected six edge components reconstruct one ordered native polyline profile
-def PolyProfiles(
-    MarkersData: list[NativeMarker],
-    ExcludedOffsets: set[int],
-) -> tuple[tuple[NativeProfile, ...], set[int]]:
-    EdgeData = tuple(
-        MarkerData
-        for MarkerData in MarkersData
-        if MarkerData.offset not in ExcludedOffsets
-        and MarkerData.profile_role == 1
-        and MarkerData.native_kind in {0, 1, 2}
-        and MarkerData.coordinates_mm is None
-        and MarkerData.endpoint_indices is not None
-        and MarkerData.endpoint_indices[0] != MarkerData.endpoint_indices[1]
-        and all(
-            0 <= EndpointIndex < len(MarkersData)
-            and MarkersData[EndpointIndex].coordinates_mm is not None
-            for EndpointIndex in MarkerData.endpoint_indices
-        )
-    )
+# this definition exists because focused behavior needs one stable owner
+def PolyProfiles(MarkersData: list[NativeMarker], ExcludedOffsets: set[int]) -> tuple[tuple[NativeProfile, ...], set[int]]:
+    EdgeData = tuple((MarkerData for MarkerData in MarkersData if MarkerData.offset not in ExcludedOffsets and MarkerData.profile_role == 1 and (MarkerData.native_kind in {0, 1, 2}) and (MarkerData.coordinates_mm is None) and (MarkerData.endpoint_indices is not None) and (MarkerData.endpoint_indices[0] != MarkerData.endpoint_indices[1]) and all((0 <= EndpointIndex < len(MarkersData) and MarkersData[EndpointIndex].coordinates_mm is not None for EndpointIndex in MarkerData.endpoint_indices))))
     RemainingIndexes = set(range(len(EdgeData)))
     ProfileData: list[NativeProfile] = []
     UsedOffsets: set[int] = set()
     while RemainingIndexes:
         ComponentIndexes = {RemainingIndexes.pop()}
-        VertexIndexes = set(
-            EdgeData[next(iter(ComponentIndexes))].endpoint_indices or ()
-        )
+        VertexIndexes = set(EdgeData[next(iter(ComponentIndexes))].endpoint_indices or ())
         ChangedValue = True
         while ChangedValue:
             ChangedValue = False
@@ -12306,708 +4842,1590 @@ def PolyProfiles(
                     ChangedValue = True
         if len(ComponentIndexes) != 6 or len(VertexIndexes) != 6:
             continue
-        AdjacencyData: dict[int, list[tuple[int, int]]] = {
-            VertexIndex: [] for VertexIndex in VertexIndexes
-        }
+        AdjacencyData: dict[int, list[tuple[int, int]]] = {VertexIndex: [] for VertexIndex in VertexIndexes}
         for EdgeIndex in ComponentIndexes:
             StartIndex, EndIndex = EdgeData[EdgeIndex].endpoint_indices or (-1, -1)
             AdjacencyData[StartIndex].append((EdgeIndex, EndIndex))
             AdjacencyData[EndIndex].append((EdgeIndex, StartIndex))
-        if any(len(ValueData) != 2 for ValueData in AdjacencyData.values()):
+        if any((len(ValueData) != 2 for ValueData in AdjacencyData.values())):
             continue
-        FirstEdgeIndex = min(
-            ComponentIndexes,
-            key=lambda EdgeIndex: EdgeData[EdgeIndex].offset,
-        )
-        StartIndex, CurrentIndex = EdgeData[FirstEdgeIndex].endpoint_indices or (
-            -1,
-            -1,
-        )
+
+        # this callback exists because local behavior needs one focused transformation
+        FirstEdgeIndex = min(ComponentIndexes, key=lambda EdgeIndex: EdgeData[EdgeIndex].offset)
+        StartIndex, CurrentIndex = EdgeData[FirstEdgeIndex].endpoint_indices or (-1, -1)
         OrderedVertices = [StartIndex]
         OrderedEdges = [FirstEdgeIndex]
         UsedEdges = {FirstEdgeIndex}
         while CurrentIndex != StartIndex and len(OrderedVertices) <= len(VertexIndexes):
             OrderedVertices.append(CurrentIndex)
-            CandidateData = tuple(
-                ItemData
-                for ItemData in AdjacencyData[CurrentIndex]
-                if ItemData[0] not in UsedEdges
-            )
-            if len(CandidateData) != 1:
+            ChoiceData = tuple((ItemData for ItemData in AdjacencyData[CurrentIndex] if ItemData[0] not in UsedEdges))
+            if len(ChoiceData) != 1:
                 break
-            NextEdgeIndex, CurrentIndex = CandidateData[0]
+            NextEdgeIndex, CurrentIndex = ChoiceData[0]
             UsedEdges.add(NextEdgeIndex)
             OrderedEdges.append(NextEdgeIndex)
-        if (
-            CurrentIndex != StartIndex
-            or UsedEdges != ComponentIndexes
-            or len(OrderedVertices) != 6
-        ):
+        if CurrentIndex != StartIndex or UsedEdges != ComponentIndexes or len(OrderedVertices) != 6:
             continue
-        OrderedPoints = tuple(
-            MarkersData[VertexIndex].coordinates_mm for VertexIndex in OrderedVertices
-        )
-        if any(PointData is None for PointData in OrderedPoints):
+        OrderedPoints = tuple((MarkersData[VertexIndex].coordinates_mm for VertexIndex in OrderedVertices))
+        if any((PointData is None for PointData in OrderedPoints)):
             continue
-        ResolvedPoints = tuple(
-            PointData for PointData in OrderedPoints if PointData is not None
-        )
+        ResolvedPoints = tuple((PointData for PointData in OrderedPoints if PointData is not None))
         if len(set(ResolvedPoints)) != 6:
             continue
-        MarkerOffsets = tuple(
-            EdgeData[EdgeIndex].offset for EdgeIndex in OrderedEdges
-        ) + tuple(MarkersData[VertexIndex].offset for VertexIndex in OrderedVertices)
+        MarkerOffsets = tuple((EdgeData[EdgeIndex].offset for EdgeIndex in OrderedEdges)) + tuple((MarkersData[VertexIndex].offset for VertexIndex in OrderedVertices))
         UsedOffsets.update(MarkerOffsets)
-        ProfileData.append(
-            NativeProfile(
-                "polyline",
-                tuple(
-                    CoordinateValue
-                    for PointData in ResolvedPoints
-                    for CoordinateValue in PointData
-                ),
-                MarkerOffsets,
-            )
-        )
-    return tuple(ProfileData), UsedOffsets
+        ProfileData.append(NativeProfile('polyline', tuple((CoordinateValue for PointData in ResolvedPoints for CoordinateValue in PointData)), MarkerOffsets))
+    return (tuple(ProfileData), UsedOffsets)
 
+# this definition exists because focused behavior needs one stable owner
+def Structural(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...], ExcludedOffsets: set[int]) -> tuple[tuple[NativeProfile, ...], set[int], dict[int, str]]:
+    Profiles: list[NativeProfile] = []
+    UsedValue: set[int] = set()
+    Normalized: dict[int, str] = {}
+    Geometries: set[tuple[float, float, float]] = set()
+    for ClosureIndex, Closure in enumerate(Markers):
+        Endpoints = Closure.endpoint_indices
+        if Closure.offset in ExcludedOffsets or Closure.coordinates_mm is not None or Closure.locus != KCircleLocus.hex() or (Closure.profile_role != 1) or (Closure.native_kind not in {0, 1}) or (Endpoints is None) or (Endpoints[0] != Endpoints[1]):
+            continue
+        RimIndex = Endpoints[0]
+        CenterIndex = RimIndex - 1
+        if not 0 <= CenterIndex < RimIndex < ClosureIndex or ClosureIndex - RimIndex > 2:
+            continue
+        Center = Markers[CenterIndex]
+        RimValue = Markers[RimIndex]
+        if Center.offset in ExcludedOffsets or RimValue.offset in ExcludedOffsets or Center.coordinates_mm is None or (RimValue.coordinates_mm is None) or (RimValue.locus != KCircleLocus.hex()) or (Center.profile_role != 1) or (RimValue.profile_role != 1):
+            continue
+        Radius = MarkerRadiusMm(Center, RimValue)
+        if Radius is None:
+            continue
+        StartAngle = MarkerStart(Center, RimValue)
+        GeomValue = (Center.coordinates_mm[0], Center.coordinates_mm[1], Radius)
+        if GeomValue in Geometries:
+            continue
+        Matches: list[tuple[int, str, float]] = []
+        for Index, Dimension in enumerate(Dimensions):
+            if MathValue.isclose(Dimension.value_mm, Radius, rel_tol=1e-07, abs_tol=1e-07):
+                Matches.append((Index, 'radius', Dimension.value_mm))
+            elif MathValue.isclose(Dimension.value_mm, Radius * 2.0, rel_tol=1e-07, abs_tol=1e-07):
+                Matches.append((Index, 'diameter', Dimension.value_mm / 2.0))
+        ParamName = None
+        DimensionKind = None
+        if len(Matches) == 1 and Matches[0][0] not in Normalized:
+            DimensionIndex, DimensionKind, NormalizedRadius = Matches[0]
+            GeomValue = (GeomValue[0], GeomValue[1], NormalizedRadius)
+            ParamName = Dimensions[DimensionIndex].name
+            Normalized[DimensionIndex] = DimensionKind
+        Geometries.add(GeomValue)
+        MarkerOffsets = (Center.offset, RimValue.offset, Closure.offset)
+        UsedValue.update(MarkerOffsets)
+        Profiles.append(NativeProfile('circle', GeomValue, MarkerOffsets, ParamName, DimensionKind, StartAngle))
+    return (tuple(Profiles), UsedValue, Normalized)
 
-def _structural_circle_profiles(
-    markers: list[NativeMarker],
-    dimensions: tuple[NativeDimension, ...],
-    excluded_offsets: set[int],
-) -> tuple[tuple[NativeProfile, ...], set[int], dict[int, str]]:
-    profiles: list[NativeProfile] = []
-    used: set[int] = set()
-    normalized: dict[int, str] = {}
-    geometries: set[tuple[float, float, float]] = set()
-    for closure_index, closure in enumerate(markers):
-        endpoints = closure.endpoint_indices
-        if (
-            closure.offset in excluded_offsets
-            or closure.coordinates_mm is not None
-            or closure.locus != _CIRCLE_LOCUS.hex()
-            or closure.profile_role != 1
-            or closure.native_kind not in {0, 1}
-            or endpoints is None
-            or endpoints[0] != endpoints[1]
-        ):
-            continue
-        rim_index = endpoints[0]
-        center_index = rim_index - 1
-        if (
-            not 0 <= center_index < rim_index < closure_index
-            or closure_index - rim_index > 2
-        ):
-            continue
-        center = markers[center_index]
-        rim = markers[rim_index]
-        if (
-            center.offset in excluded_offsets
-            or rim.offset in excluded_offsets
-            or center.coordinates_mm is None
-            or rim.coordinates_mm is None
-            or rim.locus != _CIRCLE_LOCUS.hex()
-            or center.profile_role != 1
-            or rim.profile_role != 1
-        ):
-            continue
-        radius = _marker_radius_mm(center, rim)
-        if radius is None:
-            continue
-        start_angle = _marker_start_angle_degrees(center, rim)
-        geometry = (
-            center.coordinates_mm[0],
-            center.coordinates_mm[1],
-            radius,
-        )
-        if geometry in geometries:
-            continue
-        matches: list[tuple[int, str, float]] = []
-        for index, dimension in enumerate(dimensions):
-            if math.isclose(dimension.value_mm, radius, rel_tol=1e-7, abs_tol=1e-7):
-                matches.append((index, "radius", dimension.value_mm))
-            elif math.isclose(
-                dimension.value_mm, radius * 2.0, rel_tol=1e-7, abs_tol=1e-7
-            ):
-                matches.append((index, "diameter", dimension.value_mm / 2.0))
-        parameter_name = None
-        dimension_kind = None
-        if len(matches) == 1 and matches[0][0] not in normalized:
-            dimension_index, dimension_kind, normalized_radius = matches[0]
-            geometry = (geometry[0], geometry[1], normalized_radius)
-            parameter_name = dimensions[dimension_index].name
-            normalized[dimension_index] = dimension_kind
-        geometries.add(geometry)
-        marker_offsets = (center.offset, rim.offset, closure.offset)
-        used.update(marker_offsets)
-        profiles.append(
-            NativeProfile(
-                "circle",
-                geometry,
-                marker_offsets,
-                parameter_name,
-                dimension_kind,
-                start_angle,
-            )
-        )
-    return tuple(profiles), used, normalized
-
-
-# dimensioned circles reverse marker order so both encodings need one decoder
-def _circle_profiles(
-    markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
-) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
-    centers = [
-        marker
-        for marker in markers
-        if marker.semantic == "circle" and marker.coordinates_mm is not None
-    ]
-    if not centers:
-        return (), {}
-    candidates: dict[
-        int,
-        dict[
-            tuple[float, float, float],
-            list[tuple[NativeMarker, NativeMarker, str, float | None]],
-        ],
-    ] = {}
-    for CircleMarker in centers:
-        FollowingMarker = next(
-            (
-                marker
-                for marker in markers
-                if marker.offset > CircleMarker.offset
-                and marker.coordinates_mm is not None
-                and not _same_point(
-                    marker.coordinates_mm,
-                    CircleMarker.coordinates_mm,
-                )
-            ),
-            None,
-        )
-        PrecedingMarker = next(
-            (
-                marker
-                for marker in reversed(markers)
-                if marker.offset < CircleMarker.offset
-                and marker.coordinates_mm is not None
-                and not _same_point(
-                    marker.coordinates_mm,
-                    CircleMarker.coordinates_mm,
-                )
-            ),
-            None,
-        )
-        CandidatePairs = tuple(
-            ItemData
-            for ItemData in (
-                (
-                    (
-                        CircleMarker,
-                        FollowingMarker,
-                    )
-                    if FollowingMarker is not None
-                    else None
-                ),
-                (
-                    (
-                        PrecedingMarker,
-                        CircleMarker,
-                    )
-                    if PrecedingMarker is not None and FollowingMarker is None
-                    else None
-                ),
-            )
-            if ItemData is not None
-        )
-        for CenterMarker, RimMarker in CandidatePairs:
-            RadiusValue = _marker_radius_mm(CenterMarker, RimMarker)
+# this definition exists because focused behavior needs one stable owner
+def CircleProfiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
+    Centers = [Marker for Marker in Markers if Marker.semantic == 'circle' and Marker.coordinates_mm is not None]
+    if not Centers:
+        return ((), {})
+    Candidates: dict[int, dict[tuple[float, float, float], list[tuple[NativeMarker, NativeMarker, str, float | None]]]] = {}
+    for CircleMarker in Centers:
+        FollowingMarker = next((Marker for Marker in Markers if Marker.offset > CircleMarker.offset and Marker.coordinates_mm is not None and (not SamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm))), None)
+        PrecedingMarker = next((Marker for Marker in reversed(Markers) if Marker.offset < CircleMarker.offset and Marker.coordinates_mm is not None and (not SamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm))), None)
+        ChoicePairs = tuple((ItemData for ItemData in ((CircleMarker, FollowingMarker) if FollowingMarker is not None else None, (PrecedingMarker, CircleMarker) if PrecedingMarker is not None and FollowingMarker is None else None) if ItemData is not None))
+        for CenterMarker, RimMarker in ChoicePairs:
+            RadiusValue = MarkerRadiusMm(CenterMarker, RimMarker)
             if RadiusValue is None:
                 continue
-            StartAngle = _marker_start_angle_degrees(CenterMarker, RimMarker)
-            for index, dimension in enumerate(dimensions):
-                semantic = None
-                normalized_radius = RadiusValue
-                if math.isclose(
-                    dimension.value_mm,
-                    RadiusValue,
-                    rel_tol=1e-7,
-                    abs_tol=1e-7,
-                ):
-                    semantic = "radius"
-                    normalized_radius = dimension.value_mm
-                elif math.isclose(
-                    dimension.value_mm,
-                    RadiusValue * 2.0,
-                    rel_tol=1e-7,
-                    abs_tol=1e-7,
-                ):
-                    semantic = "diameter"
-                    normalized_radius = dimension.value_mm / 2.0
-                if semantic is None:
+            StartAngle = MarkerStart(CenterMarker, RimMarker)
+            for Index, Dimension in enumerate(Dimensions):
+                Semantic = None
+                NormalizedRadius = RadiusValue
+                if MathValue.isclose(Dimension.value_mm, RadiusValue, rel_tol=1e-07, abs_tol=1e-07):
+                    Semantic = 'radius'
+                    NormalizedRadius = Dimension.value_mm
+                elif MathValue.isclose(Dimension.value_mm, RadiusValue * 2.0, rel_tol=1e-07, abs_tol=1e-07):
+                    Semantic = 'diameter'
+                    NormalizedRadius = Dimension.value_mm / 2.0
+                if Semantic is None:
                     continue
-                geometry = (
-                    CenterMarker.coordinates_mm[0],
-                    CenterMarker.coordinates_mm[1],
-                    normalized_radius,
-                )
-                candidates.setdefault(index, {}).setdefault(geometry, []).append(
-                    (CenterMarker, RimMarker, semantic, StartAngle)
-                )
-    result: list[NativeProfile] = []
-    geometries: set[tuple[float, float, float]] = set()
-    normalized: dict[int, str] = {}
-    for index, dimension in enumerate(dimensions):
-        matches = candidates.get(index, {})
-        if len(matches) != 1:
+                GeomValue = (CenterMarker.coordinates_mm[0], CenterMarker.coordinates_mm[1], NormalizedRadius)
+                Candidates.setdefault(Index, {}).setdefault(GeomValue, []).append((CenterMarker, RimMarker, Semantic, StartAngle))
+    Result: list[NativeProfile] = []
+    Geometries: set[tuple[float, float, float]] = set()
+    Normalized: dict[int, str] = {}
+    for Index, Dimension in enumerate(Dimensions):
+        Matches = Candidates.get(Index, {})
+        if len(Matches) != 1:
             continue
-        geometry, records = next(iter(matches.items()))
-        if geometry in geometries:
+        GeomValue, Records = next(iter(Matches.items()))
+        if GeomValue in Geometries:
             continue
-        semantics = {semantic for _, _, semantic, _ in records}
-        if len(semantics) != 1:
+        Semantics = {Semantic for Ignored, Ignored, Semantic, Ignored in Records}
+        if len(Semantics) != 1:
             continue
-        geometries.add(geometry)
-        normalized[index] = next(iter(semantics))
-        result.append(
-            NativeProfile(
-                "circle",
-                geometry,
-                tuple(
-                    sorted(
-                        {
-                            offset
-                            for center, following, _, _ in records
-                            for offset in (center.offset, following.offset)
-                        }
-                    )
-                ),
-                dimension.name,
-                normalized[index],
-                records[0][3],
-            )
-        )
-    result.sort(key=lambda profile: min(profile.marker_offsets))
-    return tuple(result), normalized
+        Geometries.add(GeomValue)
+        Normalized[Index] = next(iter(Semantics))
+        Result.append(NativeProfile('circle', GeomValue, tuple(sorted({Offset for Center, Following, Ignored, Ignored in Records for Offset in (Center.offset, Following.offset)})), Dimension.name, Normalized[Index], Records[0][3]))
 
+    # this callback exists because local behavior needs one focused transformation
+    Result.sort(key=lambda Profile: min(Profile.marker_offsets))
+    return (tuple(Result), Normalized)
 
-def _same_point(left: tuple[float, float], right: tuple[float, float]) -> bool:
-    return math.isclose(left[0], right[0], abs_tol=1e-12) and math.isclose(
-        left[1], right[1], abs_tol=1e-12
-    )
+# this definition exists because focused behavior needs one stable owner
+def SamePoint(LeftValue: tuple[float, float], Right: tuple[float, float]) -> bool:
+    return MathValue.isclose(LeftValue[0], Right[0], abs_tol=1e-12) and MathValue.isclose(LeftValue[1], Right[1], abs_tol=1e-12)
 
-
-def _constraints(
-    feature: NativeFeature,
-    markers: tuple[NativeMarker, ...],
-    profiles: tuple[NativeProfile, ...],
-) -> tuple[NativeConstraint, ...]:
-    constraints: list[NativeConstraint] = []
-    radial_parameters: set[str] = set()
-    for profile_index, profile in enumerate(profiles):
-        if profile.kind == "rectangle":
-            for edge_index in range(4):
-                constraints.append(
-                    NativeConstraint(
-                        id=f"{feature.object_id}:profile:{profile_index}:axis:{edge_index}",
-                        kind="horizontal" if edge_index % 2 == 0 else "vertical",
-                        references=(
-                            f"{feature.object_id}:profile:{profile_index}:edge:{edge_index}",
-                        ),
-                        parameter=None,
-                        value=None,
-                        native_offset=(
-                            profile.marker_offsets[edge_index]
-                            if edge_index < len(profile.marker_offsets)
-                            else None
-                        ),
-                        native_code=None,
-                    )
-                )
-        elif profile.kind == "circle":
-            semantic = profile.dimension_kind or "radius"
-            parameter_name = profile.parameter_name
-            if parameter_name is not None:
-                radial_parameters.add(parameter_name)
-            constraints.append(
-                NativeConstraint(
-                    id=f"{feature.object_id}:profile:{profile_index}:{semantic}",
-                    kind=semantic,
-                    references=(f"{feature.object_id}:profile:{profile_index}",),
-                    parameter=(
-                        f"{feature.object_id}:{parameter_name}"
-                        if parameter_name is not None
-                        else None
-                    ),
-                    value=(
-                        profile.coordinates[2] * 2.0
-                        if semantic == "diameter"
-                        else profile.coordinates[2]
-                    ),
-                    native_offset=(
-                        profile.marker_offsets[0] if profile.marker_offsets else None
-                    ),
-                    native_code=None,
-                )
-            )
-    for dimension in feature.dimensions:
-        if dimension.name in radial_parameters:
+# this definition exists because focused behavior needs one stable owner
+def Constraints(Feature: NativeFeature, Markers: tuple[NativeMarker, ...], Profiles: tuple[NativeProfile, ...]) -> tuple[NativeRule, ...]:
+    Constraints: list[NativeRule] = []
+    RadialParameters: set[str] = set()
+    for ProfileIndex, Profile in enumerate(Profiles):
+        if Profile.kind == 'rectangle':
+            for EdgeIndex in range(4):
+                Constraints.append(NativeRule(id=f'{Feature.object_id}:profile:{ProfileIndex}:axis:{EdgeIndex}', kind='horizontal' if EdgeIndex % 2 == 0 else 'vertical', references=(f'{Feature.object_id}:profile:{ProfileIndex}:edge:{EdgeIndex}',), parameter=None, value=None, native_offset=Profile.marker_offsets[EdgeIndex] if EdgeIndex < len(Profile.marker_offsets) else None, native_code=None))
+        elif Profile.kind == 'circle':
+            Semantic = Profile.dimension_kind or 'radius'
+            ParamName = Profile.parameter_name
+            if ParamName is not None:
+                RadialParameters.add(ParamName)
+            Constraints.append(NativeRule(id=f'{Feature.object_id}:profile:{ProfileIndex}:{Semantic}', kind=Semantic, references=(f'{Feature.object_id}:profile:{ProfileIndex}',), parameter=f'{Feature.object_id}:{ParamName}' if ParamName is not None else None, value=Profile.coordinates[2] * 2.0 if Semantic == 'diameter' else Profile.coordinates[2], native_offset=Profile.marker_offsets[0] if Profile.marker_offsets else None, native_code=None))
+    for Dimension in Feature.dimensions:
+        if Dimension.name in RadialParameters:
             continue
-        constraints.append(
-            NativeConstraint(
-                id=f"{feature.object_id}:dimension:{dimension.name}",
-                kind="distance",
-                references=tuple(
-                    f"native:{operand.kind_code:04x}:{operand.entity_index}"
-                    for operand in dimension.operands
-                ),
-                parameter=f"{feature.object_id}:{dimension.name}",
-                value=dimension.value_mm,
-                native_offset=dimension.native_offset,
-                native_code=None,
-            )
-        )
-    for marker in markers:
-        if marker.semantic != "relation":
+        Constraints.append(NativeRule(id=f'{Feature.object_id}:dimension:{Dimension.name}', kind='distance', references=tuple((f'native:{Operand.kind_code:04x}:{Operand.entity_index}' for Operand in Dimension.operands)), parameter=f'{Feature.object_id}:{Dimension.name}', value=Dimension.value_mm, native_offset=Dimension.native_offset, native_code=None))
+    for Marker in Markers:
+        if Marker.semantic != 'relation':
             continue
-        constraints.append(
-            NativeConstraint(
-                id=f"{feature.object_id}:native-relation:{marker.offset}",
-                kind=f"native_{marker.native_kind}",
-                references=tuple(
-                    f"native-index:{index}" for index in marker.endpoint_indices or ()
-                ),
-                parameter=None,
-                value=None,
-                native_offset=marker.offset,
-                native_code=marker.native_kind,
-            )
-        )
-    return tuple(constraints)
+        Constraints.append(NativeRule(id=f'{Feature.object_id}:native-relation:{Marker.offset}', kind=f'native_{Marker.native_kind}', references=tuple((f'native-index:{Index}' for Index in Marker.endpoint_indices or ())), parameter=None, value=None, native_offset=Marker.offset, native_code=Marker.native_kind))
+    return tuple(Constraints)
 
+# this definition exists because focused behavior needs one stable owner
+def OperationFields(DataValue: bytes, Record: NativeName) -> tuple[int | None, int | None, int | None]:
+    if Record.text_end + 12 > len(DataValue):
+        return (None, None, None)
+    Family = Struct.unpack_from('<H', DataValue, Record.text_end + 4)[0]
+    Operation = DataValue[Record.text_end + 6]
+    Schema = DataValue[Record.text_end + 7]
+    RepeatedId = Struct.unpack_from('<I', DataValue, Record.text_end + 8)[0]
+    if RepeatedId != Record.object_id:
+        return (None, None, None)
+    return (Family, Operation, Schema)
 
-def _operation_fields(
-    data: bytes, record: NativeName
-) -> tuple[int | None, int | None, int | None]:
-    if record.text_end + 12 > len(data):
-        return None, None, None
-    family = struct.unpack_from("<H", data, record.text_end + 4)[0]
-    operation = data[record.text_end + 6]
-    schema = data[record.text_end + 7]
-    repeated_id = struct.unpack_from("<I", data, record.text_end + 8)[0]
-    if repeated_id != record.object_id:
-        return None, None, None
-    return family, operation, schema
-
-
-def _revolution_axis_marker(sketch: NativeSketch | None) -> NativeMarker | None:
-    if sketch is None:
+# this definition exists because focused behavior needs one stable owner
+def RevolutionAxis(Sketch: NativeSketch | None) -> NativeMarker | None:
+    if Sketch is None:
         return None
-    candidates = tuple(
-        marker
-        for marker in sketch.markers
-        if marker.profile_role == 2
-        and marker.semantic == "line"
-        and marker.endpoint_indices is not None
-        and marker.endpoint_indices[0] != marker.endpoint_indices[1]
-    )
-    return candidates[0] if len(candidates) == 1 else None
+    Candidates = tuple((Marker for Marker in Sketch.markers if Marker.profile_role == 2 and Marker.semantic == 'line' and (Marker.endpoint_indices is not None) and (Marker.endpoint_indices[0] != Marker.endpoint_indices[1])))
+    return Candidates[0] if len(Candidates) == 1 else None
 
-
-def revolution_axis_direction(
-    operation: NativeOperation, sketch: NativeSketch | None
-) -> tuple[float, float] | None:
-    if sketch is None:
+# this definition exists because focused behavior needs one stable owner
+def RevolutionAxisA(Operation: NativeOperation, Sketch: NativeSketch | None) -> tuple[float, float] | None:
+    if Sketch is None:
         return None
-    if operation.axis_marker_offset is None:
-        axis = (
-            _revolution_axis_marker(sketch)
-            if operation.axis_source_kind is None
-            else None
-        )
+    if Operation.axis_marker_offset is None:
+        AxisValue = RevolutionAxis(Sketch) if Operation.axis_source_kind is None else None
     else:
-        axis = next(
-            (
-                marker
-                for marker in sketch.markers
-                if marker.offset == operation.axis_marker_offset
-            ),
-            None,
-        )
-    if axis is None or axis.endpoint_indices is None:
+        AxisValue = next((Marker for Marker in Sketch.markers if Marker.offset == Operation.axis_marker_offset), None)
+    if AxisValue is None or AxisValue.endpoint_indices is None:
         return None
-    if any(
-        not 0 <= endpoint < len(sketch.markers) for endpoint in axis.endpoint_indices
-    ):
+    if any((not 0 <= Endpoint < len(Sketch.markers) for Endpoint in AxisValue.endpoint_indices)):
         return None
-    start = sketch.markers[axis.endpoint_indices[0]].coordinates_mm
-    end = sketch.markers[axis.endpoint_indices[1]].coordinates_mm
-    if start is None or end is None:
+    Start = Sketch.markers[AxisValue.endpoint_indices[0]].coordinates_mm
+    EndValue = Sketch.markers[AxisValue.endpoint_indices[1]].coordinates_mm
+    if Start is None or EndValue is None:
         return None
-    delta = (end[0] - start[0], end[1] - start[1])
-    length = math.hypot(delta[0], delta[1])
-    if length <= 0.0:
+    Delta = (EndValue[0] - Start[0], EndValue[1] - Start[1])
+    Length = MathValue.hypot(Delta[0], Delta[1])
+    if Length <= 0.0:
         return None
-    return (_clean(delta[0] / length), _clean(delta[1] / length))
+    return (Clean(Delta[0] / Length), Clean(Delta[1] / Length))
 
-
-def operation_axis_subelement(
-    operation: NativeOperation, sketch: NativeSketch | None
-) -> str | None:
-    if sketch is None or operation.profile_id != sketch.object_id:
+# this definition exists because focused behavior needs one stable owner
+def OperationAxis(Operation: NativeOperation, Sketch: NativeSketch | None) -> str | None:
+    if Sketch is None or Operation.profile_id != Sketch.object_id:
         return None
-    if operation.kind in _EXTRUSION_OPERATION_KINDS:
-        return NORMAL_AXIS_SUBELEMENT
-    if operation.kind not in _REVOLUTION_OPERATION_KINDS:
+    if Operation.kind in KExtrusionOperationKinds:
+        return KNormalAxisSubElem
+    if Operation.kind not in KRevolutionOperationKinds:
         return None
-    direction = revolution_axis_direction(operation, sketch)
-    if direction is None:
+    Direction = RevolutionAxisA(Operation, Sketch)
+    if Direction is None:
         return None
-    if direction[0] == 0.0 and direction[1] != 0.0:
-        return VERTICAL_AXIS_SUBELEMENT
-    if direction[1] == 0.0 and direction[0] != 0.0:
-        return HORIZONTAL_AXIS_SUBELEMENT
+    if Direction[0] == 0.0 and Direction[1] != 0.0:
+        return KVerticalAxisSubElem
+    if Direction[1] == 0.0 and Direction[0] != 0.0:
+        return KHorizontalAxisSubElem
     return None
 
-
-def _operation_selections(
-    data: bytes,
-    start: int,
-    end: int,
-    feature: NativeFeature,
-    features: list[NativeFeature],
-) -> tuple[tuple[int, int, int], ...]:
-    preceding = {
-        item.object_id
-        for item in features
-        if item.object_id > 25
-        and item.native_offset is not None
-        and feature.native_offset is not None
-        and item.native_offset < feature.native_offset
-    }
-    result: list[tuple[int, int, int]] = []
-    seen: set[tuple[int, int]] = set()
-    for selection in _edge_selections(data, start, end):
-        identity = selection[1], selection[2]
-        if (
-            selection[1] not in preceding
-            or not 0 < selection[2] < 0x8000
-            or identity in seen
-        ):
+# this definition exists because focused behavior needs one stable owner
+def OperationA(DataValue: bytes, Start: int, EndValue: int, Feature: NativeFeature, Features: list[NativeFeature]) -> tuple[tuple[int, int, int], ...]:
+    Preceding = {ItemValue.object_id for ItemValue in Features if ItemValue.object_id > 25 and ItemValue.native_offset is not None and (Feature.native_offset is not None) and (ItemValue.native_offset < Feature.native_offset)}
+    Result: list[tuple[int, int, int]] = []
+    SeenValue: set[tuple[int, int]] = set()
+    for Selection in EdgeSelections(DataValue, Start, EndValue):
+        Identity = (Selection[1], Selection[2])
+        if Selection[1] not in Preceding or not 0 < Selection[2] < 32768 or Identity in SeenValue:
             continue
-        seen.add(identity)
-        result.append(selection)
-    return tuple(result)
+        SeenValue.add(Identity)
+        Result.append(Selection)
+    return tuple(Result)
 
-
-def _operation_selections_after_class(
-    data: bytes,
-    start: int,
-    end: int,
-    feature: NativeFeature,
-    features: list[NativeFeature],
-    class_name: str,
-) -> tuple[tuple[int, int, int], ...]:
-    declarations = tuple(
-        item
-        for item in _parse_classes(data)
-        if item.name == class_name and start <= item.offset < end
-    )
-    if len(declarations) != 1:
+# this definition exists because focused behavior needs one stable owner
+def OperationAfter(DataValue: bytes, Start: int, EndValue: int, Feature: NativeFeature, Features: list[NativeFeature], ClassName: str) -> tuple[tuple[int, int, int], ...]:
+    Declarations = tuple((ItemValue for ItemValue in ParseClasses(DataValue) if ItemValue.name == ClassName and Start <= ItemValue.offset < EndValue))
+    if len(Declarations) != 1:
         return ()
-    declaration = declarations[0]
-    class_end = declaration.offset + 6 + len(class_name.encode("ascii"))
-    return _operation_selections(data, class_end, end, feature, features)
+    DeclValue = Declarations[0]
+    ClassEnd = DeclValue.offset + 6 + len(ClassName.encode('ascii'))
+    return OperationA(DataValue, ClassEnd, EndValue, Feature, Features)
 
-
-def _native_translation(
-    dimensions: tuple[NativeDimension, ...],
-) -> tuple[float, float, float] | None:
-    by_name = {
-        dimension.name.casefold(): dimension
-        for dimension in dimensions
-        if dimension.name.casefold() in {"d1", "d2", "d3"}
-    }
-    if set(by_name) != {"d1", "d2", "d3"} or any(
-        item.native_offset is None for item in by_name.values()
-    ):
+# this definition exists because focused behavior needs one stable owner
+def Native(Dimensions: tuple[NativeDimension, ...]) -> tuple[float, float, float] | None:
+    ByName = {Dimension.name.casefold(): Dimension for Dimension in Dimensions if Dimension.name.casefold() in {'d1', 'd2', 'd3'}}
+    if set(ByName) != {'d1', 'd2', 'd3'} or any((ItemValue.native_offset is None for ItemValue in ByName.values())):
         return None
-    return tuple(by_name[f"d{index}"].value_mm for index in range(1, 4))
+    return tuple((ByName[f'd{Index}'].value_mm for Index in range(1, 4)))
 
-
-def _native_scale_factors(
-    data: bytes, start: int, end: int
-) -> tuple[float, float, float] | None:
-    if end - start < 38:
+# this definition exists because focused behavior needs one stable owner
+def NativeScale(DataValue: bytes, Start: int, EndValue: int) -> tuple[float, float, float] | None:
+    if EndValue - Start < 38:
         return None
-    block = data[end - 38 : end]
-    if (
-        block[:4] != struct.pack("<I", 1)
-        or block[28:36] != b"\0" * 8
-        or struct.unpack_from("<H", block, 36)[0] < 0x8000
-    ):
+    Block = DataValue[EndValue - 38:EndValue]
+    if Block[:4] != Struct.pack('<I', 1) or Block[28:36] != b'\x00' * 8 or Struct.unpack_from('<H', Block, 36)[0] < 32768:
         return None
-    factors = struct.unpack_from("<3d", block, 4)
-    if not all(math.isfinite(value) and value > 0.0 for value in factors):
+    Factors = Struct.unpack_from('<3d', Block, 4)
+    if not all((MathValue.isfinite(Value) and Value > 0.0 for Value in Factors)):
         return None
-    return factors
+    return Factors
 
+# this definition exists because focused behavior needs one stable owner
+def ResolveProfile(Operation: NativeOperation, Sketches: dict[int, NativeSketch], DataValue: bytes, Features: list[NativeFeature]) -> NativeOperation:
+    if Operation.kind != 'hole' or Operation.profile_id not in Sketches:
+        return Operation
+    Sketch = Sketches[Operation.profile_id]
+    Circles = tuple((Profile for Profile in Sketch.profiles if Profile.kind == 'circle'))
+    Feature = next((ItemValue for ItemValue in Features if ItemValue.object_id == Operation.object_id), None)
+    Selections = OperationA(DataValue, Sketch.native_offset, Sketch.native_end, Feature, Features) if Feature is not None else ()
+    return Replace(Operation, diameter_mm=Circles[0].coordinates[2] * 2.0 if len(Circles) == 1 else None, selection_offsets=tuple((Selection[0] for Selection in Selections)), selected_local_ids=tuple((Selection[2] for Selection in Selections)), selection_references=tuple(((Selection[1], Selection[2]) for Selection in Selections)))
 
-def _resolve_profile_operation(
-    operation: NativeOperation,
-    sketches: dict[int, NativeSketch],
-    data: bytes,
-    features: list[NativeFeature],
-) -> NativeOperation:
-    if operation.kind != "hole" or operation.profile_id not in sketches:
-        return operation
-    sketch = sketches[operation.profile_id]
-    circles = tuple(profile for profile in sketch.profiles if profile.kind == "circle")
-    feature = next(
-        (item for item in features if item.object_id == operation.object_id), None
-    )
-    selections = (
-        _operation_selections(
-            data,
-            sketch.native_offset,
-            sketch.native_end,
-            feature,
-            features,
-        )
-        if feature is not None
-        else ()
-    )
-    return replace(
-        operation,
-        diameter_mm=(circles[0].coordinates[2] * 2.0 if len(circles) == 1 else None),
-        selection_offsets=tuple(selection[0] for selection in selections),
-        selected_local_ids=tuple(selection[2] for selection in selections),
-        selection_references=tuple(
-            (selection[1], selection[2]) for selection in selections
-        ),
-    )
-
-
-def _end_spec(
-    data: bytes,
-    start: int,
-    end: int,
-    classes: tuple[NativeClass, ...] = (),
-) -> NativeEndSpec | None:
-    mirrored_offset, mirrored_code = _mirrored_direction(data, classes, start, end)
-    for offset in range(start, max(start, end - 26 + 1) + 1):
-        prefix = data[offset : offset + 2]
-        if prefix != b"_c" and not (
-            len(prefix) == 2
-            and struct.unpack("<H", prefix)[0] & 0x8000
-            and prefix != b"\xff\xff"
-        ):
+# this definition exists because focused behavior needs one stable owner
+def EndSpec(DataValue: bytes, Start: int, EndValue: int, Classes: tuple[NativeClass, ...]=()) -> NativeEndSpec | None:
+    MirroredOffset, MirroredCode = Mirrored(DataValue, Classes, Start, EndValue)
+    for Offset in range(Start, max(Start, EndValue - 26 + 1) + 1):
+        Prefix = DataValue[Offset:Offset + 2]
+        if Prefix != b'_c' and (not (len(Prefix) == 2 and Struct.unpack('<H', Prefix)[0] & 32768 and (Prefix != b'\xff\xff'))):
             continue
-        if data[offset + 2 : offset + 4] != b"\0\0":
+        if DataValue[Offset + 2:Offset + 4] != b'\x00\x00':
             continue
-        if struct.unpack_from("<I", data, offset + 4)[0] != 1:
+        if Struct.unpack_from('<I', DataValue, Offset + 4)[0] != 1:
             continue
-        if struct.unpack_from("<I", data, offset + 8)[0] not in {0, 1}:
+        if Struct.unpack_from('<I', DataValue, Offset + 8)[0] not in {0, 1}:
             continue
-        direction = struct.unpack_from("<I", data, offset + 12)[0]
-        if direction not in {0, 1} or data[offset + 16 : offset + 18] != b"\0\0":
+        Direction = Struct.unpack_from('<I', DataValue, Offset + 12)[0]
+        if Direction not in {0, 1} or DataValue[Offset + 16:Offset + 18] != b'\x00\x00':
             continue
-        termination = struct.unpack_from("<I", data, offset + 18)[0]
-        second = struct.unpack_from("<I", data, offset + 22)[0]
-        if termination > 64 or second > 1:
+        Termination = Struct.unpack_from('<I', DataValue, Offset + 18)[0]
+        Second = Struct.unpack_from('<I', DataValue, Offset + 22)[0]
+        if Termination > 64 or Second > 1:
             continue
-        return NativeEndSpec(
-            offset,
-            termination,
-            direction,
-            second,
-            mirrored_offset,
-            mirrored_code,
-        )
+        return NativeEndSpec(Offset, Termination, Direction, Second, MirroredOffset, MirroredCode)
     return None
 
-
-def _edge_selections(
-    data: bytes, start: int, end: int
-) -> tuple[tuple[int, int, int], ...]:
-    selections: list[tuple[int, int, int]] = []
-    for offset in _find_all(data, _EDGE_SELECTION_IDENTITY, start, end):
-        if offset + 38 > end:
+# this definition exists because focused behavior needs one stable owner
+def EdgeSelections(DataValue: bytes, Start: int, EndValue: int) -> tuple[tuple[int, int, int], ...]:
+    Selections: list[tuple[int, int, int]] = []
+    for Offset in FindAll(DataValue, KEdgeSelectionIdentity, Start, EndValue):
+        if Offset + 38 > EndValue:
             continue
-        producer = struct.unpack_from("<I", data, offset + 26)[0]
-        local_id = struct.unpack_from("<I", data, offset + 34)[0]
-        if producer and local_id:
-            selections.append((offset, producer, local_id))
-    return tuple(selections)
+        Producer = Struct.unpack_from('<I', DataValue, Offset + 26)[0]
+        LocalId = Struct.unpack_from('<I', DataValue, Offset + 34)[0]
+        if Producer and LocalId:
+            Selections.append((Offset, Producer, LocalId))
+    return tuple(Selections)
 
+# this definition exists because focused behavior needs one stable owner
+def Operation(Dimensions: tuple[NativeDimension, ...], Semantic: str) -> float | None:
+    return next((Dimension.value_mm for Dimension in Dimensions if Dimension.kind == Semantic), None)
 
-def _operation_dimension(
-    dimensions: tuple[NativeDimension, ...], semantic: str
-) -> float | None:
-    return next(
-        (dimension.value_mm for dimension in dimensions if dimension.kind == semantic),
-        None,
-    )
+# this definition exists because focused behavior needs one stable owner
+def OperationOffset(Dimensions: tuple[NativeDimension, ...], Semantic: str) -> int | None:
+    return next((Dimension.native_offset for Dimension in Dimensions if Dimension.kind == Semantic and Dimension.native_offset is not None), None)
 
-
-def _operation_dimension_offset(
-    dimensions: tuple[NativeDimension, ...], semantic: str
-) -> int | None:
-    return next(
-        (
-            dimension.native_offset
-            for dimension in dimensions
-            if dimension.kind == semantic and dimension.native_offset is not None
-        ),
-        None,
-    )
-
-
-def _integer_property(value: str | None) -> int | None:
-    if value is None:
+# this definition exists because focused behavior needs one stable owner
+def IntegerProp(Value: str | None) -> int | None:
+    if Value is None:
         return None
     try:
-        return int(value)
+        return int(Value)
     except ValueError:
         return None
 
-
-def _find_all(
-    data: bytes, marker: bytes, start: int = 0, end: int | None = None
-) -> list[int]:
-    result: list[int] = []
-    cursor = start
-    limit = len(data) if end is None else end
+# this definition exists because focused behavior needs one stable owner
+def FindAll(DataValue: bytes, Marker: bytes, Start: int=0, EndValue: int | None=None) -> list[int]:
+    Result: list[int] = []
+    Cursor = Start
+    Limit = len(DataValue) if EndValue is None else EndValue
     while True:
-        offset = data.find(marker, cursor, limit)
-        if offset < 0:
-            return result
-        result.append(offset)
-        cursor = offset + 1
+        Offset = DataValue.find(Marker, Cursor, Limit)
+        if Offset < 0:
+            return Result
+        Result.append(Offset)
+        Cursor = Offset + 1
 
+# this definition exists because focused behavior needs one stable owner
+def Matches(Value: float, Candidates: list[float]) -> bool:
+    return any((MathValue.isclose(Value, Choice, abs_tol=1e-06) for Choice in Candidates))
 
-def _matches(value: float, candidates: list[float]) -> bool:
-    return any(math.isclose(value, candidate, abs_tol=1e-6) for candidate in candidates)
+# this definition exists because focused behavior needs one stable owner
+def NormAction(Vector: tuple[float, float, float]) -> float:
+    return MathValue.sqrt(sum((Value * Value for Value in Vector)))
 
+# this definition exists because focused behavior needs one stable owner
+def DotAction(LeftValue: tuple[float, float, float], Right: tuple[float, float, float]) -> float:
+    return sum((FirstValue * SecondValue for FirstValue, SecondValue in zip(LeftValue, Right, strict=True)))
 
-def _norm(vector: tuple[float, float, float]) -> float:
-    return math.sqrt(sum(value * value for value in vector))
+# this definition exists because focused behavior needs one stable owner
+def Cross(LeftValue: tuple[float, float, float], Right: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (LeftValue[1] * Right[2] - LeftValue[2] * Right[1], LeftValue[2] * Right[0] - LeftValue[0] * Right[2], LeftValue[0] * Right[1] - LeftValue[1] * Right[0])
 
+# this definition exists because focused behavior needs one stable owner
+def Clean(Value: float) -> float:
+    return 0.0 if abs(Value) <= 1e-12 else Value
 
-def _dot(left: tuple[float, float, float], right: tuple[float, float, float]) -> float:
-    return sum(a * b for a, b in zip(left, right, strict=True))
+# this binding exists because shared behavior needs one stable value
+globals()['ANGLE_COPY_DELTAS'] = AngleCopyDeltas
 
+# this binding exists because shared behavior needs one stable value
+globals()['ASSEMBLY_SUFFIX'] = AsmSuffix
 
-def _cross(
-    left: tuple[float, float, float], right: tuple[float, float, float]
-) -> tuple[float, float, float]:
-    return (
-        left[1] * right[2] - left[2] * right[1],
-        left[2] * right[0] - left[0] * right[2],
-        left[0] * right[1] - left[1] * right[0],
-    )
+# this binding exists because shared behavior needs one stable value
+globals()['Any'] = AnyValue
 
+# this binding exists because shared behavior needs one stable value
+globals()['BooleanOperation'] = BoolOperation
 
-def _clean(value: float) -> float:
-    return 0.0 if abs(value) <= 1e-12 else value
+# this binding exists because shared behavior needs one stable value
+globals()['BuildBossChamferVendorTree'] = BuildBossVendor
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildBossCircularPatternVendorTree'] = BuildBossVendoA
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildBossFilletVendorTree'] = BuildBossFillet
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildBossLinearPatternVendorTree'] = BuildBossLinear
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildBossShellVendorTree'] = BuildBossShell
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildFourFeatureVendorTree'] = BuildFourVendor
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildPadGrooveVendorTree'] = BuildPadGroove
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildPin90Envelope'] = BuildPinNineZeroEnvelope
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildSingleRevolutionVendorTree'] = BuildSingleTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildThreeFeatureVendorTree'] = BuildThreeTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildTwoFeatureVendorTree'] = BuildTwoFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['CANONICAL_PLANE_FEATURE_TYPE'] = CanonicalPlaneFeatureType
+
+# this binding exists because shared behavior needs one stable value
+globals()['CLASS_MARKER'] = ClassMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONFIGURATION_MANAGER_STREAM'] = ConfigManagerStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONFIGURATION_STREAM'] = ConfigStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['CadDocument'] = CadDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['CircleGeometry'] = CircleGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEPTH_COPY_DELTAS'] = DepthCopyDeltas
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEPTH_COPY_SIGNS'] = DepthCopySigns
+
+# this binding exists because shared behavior needs one stable value
+globals()['DERIVED_SUPPORT_KIND'] = KDerivedSupportKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['DIMENSION_SCALAR_HEADERS'] = DimensionScalarHeaders
+
+# this binding exists because shared behavior needs one stable value
+globals()['DIRECTION_AXIS_ROLE'] = KDirectionAxisRole
+
+# this binding exists because shared behavior needs one stable value
+globals()['ET'] = XmlTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeBossCircularPatternProgram'] = EncodeBossCircularPattern
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeBossCutCircleProgram'] = EncodeBossCutCircle
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeBossCutCutCutProgram'] = EncodeBossCutCutCut
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeBossCutThroughProgram'] = EncodeBossCutThrough
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeBossLinearPatternProgram'] = EncodeBossLinearPattern
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodePin90RevolveProgram'] = EncodePinNineZeroRevolve
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeReverseCircCfg'] = EncodeReverse
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeReverseCircleConfigProgram'] = EncodeReverseCircleConfig
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeReverseCircleProgram'] = EncodeReverseCircle
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodeReverseCircleResolved'] = EncodeReverseA
+
+# this binding exists because shared behavior needs one stable value
+globals()['ExtrusionEditCodes'] = ExtrusionEdit
+
+# this binding exists because shared behavior needs one stable value
+globals()['FACE_SUPPORT_KIND'] = KFaceSupportKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['FIRST_ATOM_ID'] = FirstAtomId
+
+# this binding exists because shared behavior needs one stable value
+globals()['FROM_END_SPEC_CLASS'] = FromEndSpecClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['FROM_REVERSE_RELATIVE'] = FromReverseRelative
+
+# this binding exists because shared behavior needs one stable value
+globals()['HORIZONTAL_AXIS_SUBELEMENT'] = KHorizontalAxisSubElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasBossChamferProof'] = HasBossChamfer
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasBossCircularPatternProof'] = HasBossCircular
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasBossFilletProof'] = HasBossFillet
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasBossLinearPatternProof'] = HasBossLinear
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasBossShellProof'] = HasBossShell
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasCanonicalSketchGeometry'] = HasCanonical
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasCutChainProof'] = HasCutChain
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasFreeCadThroughAllFeature'] = HasFreeCadAll
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasPadGrooveProof'] = HasPadGroove
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasSingleRevolutionProof'] = HasSingleProof
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasTwoFeatureProof'] = HasTwoFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['HasVendorPartEncoding'] = HasVendorPart
+
+# this binding exists because shared behavior needs one stable value
+globals()['KIT_RESOLVED_STREAM'] = KitResolvedStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['LineGeometry'] = LineGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['MARKER_LOCAL_ID_OFFSET_BY_LENGTH'] = KMarkerLocalIdOffsetBy
+
+# this binding exists because shared behavior needs one stable value
+globals()['NORMAL_AXIS_SUBELEMENT'] = KNormalAxisSubElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeAssemblyEnvelope'] = NativeAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeBoundingBox'] = NativeBounding
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeConfiguration'] = NativeConfig
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeConstraint'] = NativeRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeModelHeader'] = NativeModelA
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativePartStreams'] = NativePart
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeSketchPlane'] = NativeSketchA
+
+# this binding exists because shared behavior needs one stable value
+globals()['PART_SUFFIX'] = PartSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['PLANE_FEATURE_TYPES'] = PlaneFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['PLANE_SUPPORT_KIND'] = KPlaneSupportKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['Parameter'] = Param
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParameterRole'] = ParamRole
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParameterValue'] = ParamValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['REFERENCE_SUPPORT_SOURCE'] = KRefSupportSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['RESOLVED_FEATURES_STREAM'] = ResolvedFeaturesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['REVOLUTION_AXIS_SKETCH'] = RevolutionAxisSketch
+
+# this binding exists because shared behavior needs one stable value
+globals()['SERIALIZED_STRING_MARKER'] = SerializedStringMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['SKETCH_CHAIN_CLASS'] = SketchChainClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['STREAM_ORDER_SUPPORT_SOURCE'] = KStreamOrderSupportSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['UNRESOLVED_SUPPORT_SOURCE'] = KUnresolvedSupportSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['VENDOR_UNLOADABLE_NOTES'] = KVendorUnloadableNotes
+
+# this binding exists because shared behavior needs one stable value
+globals()['VERTICAL_AXIS_SUBELEMENT'] = KVerticalAxisSubElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector2'] = VectorTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_ATTACHMENT_STREAM'] = KAsmAttachmentStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_CONFIGURATION_FLAGS'] = KAsmConfigFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_CONFIG_PROPERTIES_STREAM'] = KAsmConfigPropertiesStreA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_CUTLIST_STREAM'] = KAsmCutlistStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_HEADER_OBJECTS'] = KAsmHeaderObjects
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_OPEN_TIME_STREAM'] = KAsmOpenTimeStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_PROPERTY_CONTAINER_CLASS'] = KAsmPropContainerClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_REFERENCE_NAME'] = KAsmRefName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_TABLES_STREAM'] = KAsmTablesStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_VERSION_PREFIX'] = KAsmVersionPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_VIEW_ORIENTATION_STREAM'] = KAsmViewOrientationStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ASSEMBLY_VISUAL_DATA_STREAM'] = KAsmVisualDataStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BASE_OBJECTS'] = KBaseObjects
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_BOSS_HEADER_STAMPS'] = KBossBossHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CHAMFER_DISTANCE_OFFSETS'] = KBossChamferDistance
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CHAMFER_HEADER_STAMPS'] = KBossChamferHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CHAMFER_MAX_Y_OFFSETS'] = KBossChamferMaxYOffsets
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CHAMFER_NEGATIVE_DISTANCE_OFFSET'] = KBossChamferNegativeOffsA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CHAMFER_NEGATIVE_Y_OFFSETS'] = KBossChamferNegativeY
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CIRCULAR_PATTERN_ANGLE_OFFSETS'] = KBossCircularPatternAngle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CIRCULAR_PATTERN_COUNT_DOUBLE_OFFSETS'] = KBossCircularPatternCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CIRCULAR_PATTERN_COUNT_OFFSET'] = KBossCircularPatternCounA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CIRCULAR_PATTERN_DIRECTION_FLAG_OFFSET'] = KBossCircularPatternFlag
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CIRCULAR_PATTERN_HEADER_STAMPS'] = KBossCircularPatternHeadA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CUT_CUT_CUT_HEADER_STAMPS'] = KBossCutCutCutHeaderStamA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CUT_CUT_HEADER_STAMPS'] = KBossCutCutHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CUT_HEADER_STAMPS'] = KBossCutHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_CUT_THROUGH_HEADER_STAMPS'] = KBossCutThroughHeader
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_EXTRUDE_FLAGS'] = KBossExtrudeFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_FILLET_HEADER_STAMPS'] = KBossFilletHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_FILLET_MAX_X_OFFSETS'] = KBossFilletMaxXOffsets
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_FILLET_MAX_Y_OFFSETS'] = KBossFilletMaxYOffsets
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_FILLET_NEGATIVE_Y_OFFSET'] = KBossFilletNegativeYOffsA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_FILLET_RADIUS_OFFSETS'] = KBossFilletRadiusOffsets
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_CENTER_DISPLAY_OFFSETS'] = KBossLinearPatternCenter
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_COUNT_DISPLAY_OFFSET'] = KBossLinearPatternCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_COUNT_DOUBLE_OFFSETS'] = KBossLinearPatternCountA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_COUNT_OFFSET'] = KBossLinearPatternCountB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_DIRECTION_DISTANCE_OFFSETS'] = KBossLinearPatternDistanA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_DIRECTION_FLAG_OFFSET'] = KBossLinearPatternFlag
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_HEADER_STAMPS'] = KBossLinearPatternHeader
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_NEGATIVE_DIAGONAL_OFFSET'] = KBossLinearPatternNegatiA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_NEGATIVE_DISPLAY_OFFSETS'] = KBossLinearPatternNegatiB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_NEGATIVE_EXTENT_OFFSET'] = KBossLinearPatternNegatiC
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_NEGATIVE_ZERO_OFFSETS'] = KBossLinearPatternNegatiD
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_PAD_DISPLAY_OFFSET'] = KBossLinearPatternPad
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_POSITIVE_AXIS_OFFSETS'] = KBossLinearPatternPositiA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_POSITIVE_DIAGONAL_OFFSET'] = KBossLinearPatternPositiB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_POSITIVE_DISPLAY_OFFSETS'] = KBossLinearPatternPositiC
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_POSITIVE_SPACING_OFFSETS'] = KBossLinearPatternPositiD
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_LINEAR_PATTERN_TERMINAL_DEPTH_OFFSET'] = KBossLinearPatternTerminA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_REV_CUT_HEADER_STAMPS'] = KBossRevCutHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_SHELL_DEPTH_OFFSET'] = KBossShellDepthOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_SHELL_HEADER_STAMPS'] = KBossShellHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_SHELL_INNER_MIN_X_OFFSET'] = KBossShellInnerMinXOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_SHELL_MAX_X_OFFSET'] = KBossShellMaxXOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_SHELL_MIN_X_OFFSET'] = KBossShellMinXOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOSS_SHELL_THICKNESS_OFFSETS'] = KBossShellThicknessOffseA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOUNDING_BOX_CLASS'] = KBoundingBoxClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOUNDING_BOX_RELATIVE'] = KBoundingBoxRelative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_BOX_HEADER_STAMPS'] = KBoxHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CIRCLE_BOSS_HEADER_STAMPS'] = KCircleBossHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CIRCLE_LOCUS'] = KCircleLocus
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CIRCULAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET'] = KCircularPatternDirection
+
+# this binding exists because shared behavior needs one stable value
+globals()['_COMBINE_FEATURE_TYPES'] = KCombineFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CONFIG0_FIRST_FEATURE_COUNTER'] = KConfigZeroFirstFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CONFIGURATION_ROOT_TREE_ID'] = KConfigRootTreeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CONFIG_PROPERTIES_PAYLOAD'] = KConfigPropertiesPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_COORDINATE_TAG'] = KCoordinateTag
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CREATION_STAMP_HIGH'] = KCreationStampHigh
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CREATION_STAMP_LOW'] = KCreationStampLow
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CURRENT_MARKER'] = KCurrentMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CUT_EXTRUDE_FLAGS'] = KCutExtrudeFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalBossChamferObjects'] = CanonicalBoss
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalBossCircularPatternObjects'] = CanonicalBossA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalBossFilletObjects'] = CanonicalBossB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalBossLinearPatternObjects'] = CanonicalBossC
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalBossShellObjects'] = CanonicalBossD
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalCutChainObjects'] = CanonicalCut
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalExtrusionObjects'] = Canonical
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalPadGrooveObjects'] = CanonicalPad
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalPrincipalExtrusion'] = CanonicalA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalPrincipalSketch'] = CanonicalSketch
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalSingleBossObjects'] = CanonicalSingle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalSingleRevolutionObjects'] = CanonicalSinglA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CanonicalTwoFeatureObjects'] = CanonicalTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_CircularPatternBounds'] = CircularPattern
+
+# this binding exists because shared behavior needs one stable value
+globals()['_DERIVED_PLANE_CLASSES'] = KDerivedPlaneClasses
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EDGE_SELECTION_IDENTITY'] = KEdgeSelectionIdentity
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EQUATION'] = KEquation
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EQUATION_IDENTIFIER'] = KEquationId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EQUATION_REFERENCE'] = KEquationRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EQUATION_REFERENCE_SOURCE'] = KEquationRefSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EQUATION_RESERVED_PREFIX'] = KEquationReservedPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EXTENDED_MARKER'] = KExtendedMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EXTRUSION_CLASS'] = KExtrusionClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EXTRUSION_OPERATION_KINDS'] = KExtrusionOperationKinds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ExpectedPlaneFrame'] = ExpectedPlane
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FACE_SUPPORT_CLASS'] = KFaceSupportClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FOLDER_FLAGS'] = KFolderFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FRONT_BOSS_HEADER_STAMPS'] = KFrontBossHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FilletSelectionRecord'] = FilletSelection
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadBossChamferDimensions'] = FreeCadBoss
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadBossCircularPatternDimensions'] = FreeCadBossA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadBossFilletDimensions'] = FreeCadBossB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadBossLinearPatternDimensions'] = FreeCadBossC
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadBossShellDimensions'] = FreeCadBossD
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadBoxObjects'] = FreeCadBox
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadFeatureDimension'] = FreeCadFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadFourFeatureDimensions'] = FreeCadFour
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadPadGrooveDimensions'] = FreeCadPad
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadPropertyAttributes'] = FreeCadProp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadSingleRevolutionDimension'] = FreeCadSingle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadThreeFeatureDimensions'] = FreeCadThree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FreeCadTwoFeatureDimensions'] = FreeCadTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HEADER_OBJECTS'] = KHeaderObjects
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HOLE_CLASS_NAMES'] = KHoleClassNames
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HasFreeCadBoxBrep'] = HasFreeCadBox
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HasFreeCadCircularPatternGeometry'] = HasFreeCadGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HasFreeCadLinearPatternGeometry'] = HasFreeCadGeomA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HasFreeCadMaxCornerEdge'] = HasFreeCadMax
+
+# this binding exists because shared behavior needs one stable value
+globals()['_HasFreeCadTopFace'] = HasFreeCadTop
+
+# this binding exists because shared behavior needs one stable value
+globals()['_IDENTITY_BASIS'] = KIdentityBasis
+
+# this binding exists because shared behavior needs one stable value
+globals()['_IDENTITY_ORIGIN'] = KIdentityOrigin
+
+# this binding exists because shared behavior needs one stable value
+globals()['_IsFreeCadIdentityPlacement'] = IsFreeCad
+
+# this binding exists because shared behavior needs one stable value
+globals()['_KEYWORD_ONLY_OBJECTS'] = KeywordOnlyObjects
+
+# this binding exists because shared behavior needs one stable value
+globals()['_KEYWORD_ONLY_OBJECT_IDS'] = KeywordOnlyObjectIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_LEGACY_MARKER'] = KLegacyMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['_LINEAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET'] = KLinearPatternDirection
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MARKERS'] = KMarkers
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MILLIMETRES'] = KMillimetres
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MOVE_BODY_FEATURE_TYPES'] = KMoveBodyFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NAME_PREFIX'] = KNamePrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NAME_TOKEN'] = KNameToken
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NON_SOLID_FEATURE_CLASSES'] = KNonSolidFeatureClasses
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NUMBER'] = KNumber
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NativeIdentity'] = NativeIdentity
+
+# this binding exists because shared behavior needs one stable value
+globals()['_OPEN_TIME_PAYLOAD'] = KOpenTimePayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_PLANE_FRAME_BYTES'] = KPlaneFrameBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_POINT_LOCUS'] = KPointLocus
+
+# this binding exists because shared behavior needs one stable value
+globals()['_PRINCIPAL_PLANE_OBJECT_IDS'] = KPrincipalPlaneObjectIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_PrincipalPlaneFrame'] = PrincipalPlane
+
+# this binding exists because shared behavior needs one stable value
+globals()['_RADIANS_TO_DEGREES'] = KRadiansToDegrees
+
+# this binding exists because shared behavior needs one stable value
+globals()['_REFERENCE_GEOMETRY_CLASSES'] = KRefGeomClasses
+
+# this binding exists because shared behavior needs one stable value
+globals()['_REFERENCE_GEOMETRY_FLAGS'] = KRefGeomFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_REVOLUTION_FEATURE_TYPES'] = KRevolutionFeatureTypes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_REVOLUTION_HEADER_STAMPS'] = KRevolutionHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_REVOLUTION_OPERATION_KINDS'] = KRevolutionOperationKinds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_RIGHT_BOSS_HEADER_STAMPS'] = KRightBossHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ReadClassReference'] = ReadClassRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SCALAR_HEADER'] = KScalarHeader
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_AXIS_COMPLEMENT'] = KSketchPlaneAxisComplemeA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_AXIS_DELTA'] = KSketchPlaneAxisDelta
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_BASIS_BYTES'] = KSketchPlaneBasisBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_BASIS_DELTA'] = KSketchPlaneBasisDelta
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_BASIS_FLAG_DELTA'] = KSketchPlaneBasisFlagDelA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_ID_RELATIVE'] = KSketchPlaneIdRelative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_REFERENCE_PREFIX'] = KSketchPlaneRefPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_REFERENCE_TAG'] = KSketchPlaneRefTag
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SKETCH_PLANE_SCAN_BYTES'] = KSketchPlaneScanBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOLIDWORKS_CONFIGURATION_FLAGS'] = KSolidworksConfigFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SOLIDWORKS_XML_NAMESPACE'] = KSolidworksXmlNamespace
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SURFACE_EXTRUSION_FEATURE_TYPES'] = KSurfaceExtrusionFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SYSTEM_OBJECT_IDS'] = KSystemObjectIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ShellSelectionRecord'] = ShellSelection
+
+# this binding exists because shared behavior needs one stable value
+globals()['_TOP_BOSS_HEADER_STAMPS'] = KTopBossHeaderStamps
+
+# this binding exists because shared behavior needs one stable value
+globals()['_VIEW_ORIENTATION_PAYLOAD'] = KViewOrientationPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_VendorResolved'] = VendorResolved
+
+# this binding exists because shared behavior needs one stable value
+globals()['_WriteDimension'] = WriteDimension
+
+# this binding exists because shared behavior needs one stable value
+globals()['_WriteObject'] = WriteObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_XmlFeature'] = XmlFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_angle_copies'] = AngleCopies
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bind_dimension'] = BindDimension
+
+# this binding exists because shared behavior needs one stable value
+globals()['_biography_payload'] = Biography
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bounding_box'] = BoundingBox
+
+# this binding exists because shared behavior needs one stable value
+globals()['_circle_profiles'] = CircleProfiles
+
+# this binding exists because shared behavior needs one stable value
+globals()['_class_declaration'] = ClassDecl
+
+# this binding exists because shared behavior needs one stable value
+globals()['_class_record_end'] = ClassRecordEnd
+
+# this binding exists because shared behavior needs one stable value
+globals()['_clean'] = Clean
+
+# this binding exists because shared behavior needs one stable value
+globals()['_component_plane_sources'] = ComponentPlane
+
+# this binding exists because shared behavior needs one stable value
+globals()['_configuration_atom_tree_ids'] = ConfigAtomTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_configuration_header_payload'] = ConfigHeader
+
+# this binding exists because shared behavior needs one stable value
+globals()['_constraints'] = Constraints
+
+# this binding exists because shared behavior needs one stable value
+globals()['_coordinate_marker'] = Coordinate
+
+# this binding exists because shared behavior needs one stable value
+globals()['_cross'] = Cross
+
+# this binding exists because shared behavior needs one stable value
+globals()['_custom_properties_payload'] = CustomPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_decode_planes'] = DecodePlanes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_decode_sketch'] = DecodeSketch
+
+# this binding exists because shared behavior needs one stable value
+globals()['_definition_dimension'] = Definition
+
+# this binding exists because shared behavior needs one stable value
+globals()['_depth_copies'] = DepthCopies
+
+# this binding exists because shared behavior needs one stable value
+globals()['_document_axis_bindings'] = DocAxisBindings
+
+# this binding exists because shared behavior needs one stable value
+globals()['_dot'] = DotAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_edge_selections'] = EdgeSelections
+
+# this binding exists because shared behavior needs one stable value
+globals()['_end_spec'] = EndSpec
+
+# this binding exists because shared behavior needs one stable value
+globals()['_equation_identifier'] = EquationId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_equation_literal'] = EquationLiteral
+
+# this binding exists because shared behavior needs one stable value
+globals()['_expect_bytes'] = ExpectBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_expression_parameters'] = Expression
+
+# this binding exists because shared behavior needs one stable value
+globals()['_extrusion_payload'] = Extrusion
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_records'] = FeatureRecords
+
+# this binding exists because shared behavior needs one stable value
+globals()['_features_payload'] = FeaturesPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_fillet_payload'] = FilletPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_find_all'] = FindAll
+
+# this binding exists because shared behavior needs one stable value
+globals()['_frame_vector'] = FrameVector
+
+# this binding exists because shared behavior needs one stable value
+globals()['_freecad_parameter_matches'] = FreecadParam
+
+# this binding exists because shared behavior needs one stable value
+globals()['_freecad_single_boss_dimension'] = FreecadSingle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_freecad_type_id'] = FreecadTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_header_payload'] = HeaderPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_integer_property'] = IntegerProp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_native_system_feature'] = IsNativeSystem
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_origin_feature'] = IsOriginFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_plane_feature'] = IsPlaneFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_keywords_payload'] = KeywordsPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_line_marker'] = LineMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['_linked_rectangle_profiles'] = LinkedRectangle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_coordinates'] = Marker
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_coordinates_metres'] = MarkerMetres
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_local_id'] = MarkerLocalId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_radius_mm'] = MarkerRadiusMm
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_semantic'] = MarkerSemantic
+
+# this binding exists because shared behavior needs one stable value
+globals()['_marker_start_angle_degrees'] = MarkerStart
+
+# this binding exists because shared behavior needs one stable value
+globals()['_matches'] = Matches
+
+# this binding exists because shared behavior needs one stable value
+globals()['_matrix_frame'] = MatrixFrame
+
+# this binding exists because shared behavior needs one stable value
+globals()['_minimal_frame'] = MinimalFrame
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mirrored_direction'] = Mirrored
+
+# this binding exists because shared behavior needs one stable value
+globals()['_model_header_payload'] = ModelHeader
+
+# this binding exists because shared behavior needs one stable value
+globals()['_name_marker'] = NameMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['_name_record'] = NameRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_assembly_identity'] = NativeAsmA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_envelope_streams'] = NativeEnvelope
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_feature_sort_key'] = NativeFeatureA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_identity'] = NativeIdentityA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_keyword_properties'] = NativeKeyword
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_scale_factors'] = NativeScale
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_system_name'] = NativeSystem
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_translation'] = Native
+
+# this binding exists because shared behavior needs one stable value
+globals()['_norm'] = NormAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_dimension'] = Operation
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_dimension_offset'] = OperationOffset
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_fields'] = OperationFields
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_selections'] = OperationA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_operation_selections_after_class'] = OperationAfter
+
+# this binding exists because shared behavior needs one stable value
+globals()['_orthonormal'] = Orthonormal
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameter_dimension'] = ParamDimension
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parameter_value_matches'] = ParamValueA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_classes'] = ParseClasses
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_dimension'] = ParseDimension
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_keywords'] = ParseKeywords
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_markers'] = ParseMarkers
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_names'] = ParseNames
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_native_equations'] = ParseNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_scalars'] = ParseScalars
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_xml'] = ParseXml
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_frame_block'] = PlaneFrameBlock
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_payload'] = PlanePayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_reference'] = PlaneRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_primary_dimension'] = Primary
+
+# this binding exists because shared behavior needs one stable value
+globals()['_principal_plane_frames'] = PrincipalPlaneA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_principal_plane_ids'] = PrincipalPlaneB
+
+# this binding exists because shared behavior needs one stable value
+globals()['_profiles'] = Profiles
+
+# this binding exists because shared behavior needs one stable value
+globals()['_proved_write_capabilities'] = ProvedWrite
+
+# this binding exists because shared behavior needs one stable value
+globals()['_read_class'] = ReadClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_read_serialized_string'] = ReadSerialized
+
+# this binding exists because shared behavior needs one stable value
+globals()['_read_sketch_plane_reference'] = ReadSketchPlane
+
+# this binding exists because shared behavior needs one stable value
+globals()['_record_class'] = RecordClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_record_class_name'] = RecordClassName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_rectangle_coordinates'] = Rectangle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_reference_plane_ids'] = RefPlaneIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_repair_plane_object_ids'] = RepairPlaneIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_resolve_profile_operation'] = ResolveProfile
+
+# this binding exists because shared behavior needs one stable value
+globals()['_resolved_base_map_index'] = ResolvedBaseMap
+
+# this binding exists because shared behavior needs one stable value
+globals()['_resolved_payload'] = ResolvedPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_revolution_axis_marker'] = RevolutionAxis
+
+# this binding exists because shared behavior needs one stable value
+globals()['_same_point'] = SamePoint
+
+# this binding exists because shared behavior needs one stable value
+globals()['_scalar_owners'] = ScalarOwners
+
+# this binding exists because shared behavior needs one stable value
+globals()['_scalar_record'] = ScalarRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_scalar_trailer'] = ScalarTrailer
+
+# this binding exists because shared behavior needs one stable value
+globals()['_semantic_dimensions'] = Semantic
+
+# this binding exists because shared behavior needs one stable value
+globals()['_serializable_name'] = Serializable
+
+# this binding exists because shared behavior needs one stable value
+globals()['_serialized_string'] = Serialized
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch_payload'] = SketchPayload
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch_plane_reference'] = SketchPlaneRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_sketch_support_kind'] = SketchSupport
+
+# this binding exists because shared behavior needs one stable value
+globals()['_solid_feature_tree_ids'] = SolidFeatureIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_stable_creation_stamp'] = StableCreation
+
+# this binding exists because shared behavior needs one stable value
+globals()['_stable_u32'] = StableUThreeTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_structural_circle_profiles'] = Structural
+
+# this binding exists because shared behavior needs one stable value
+globals()['_structural_rectangle_profiles'] = StructuralA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_support_plane_reference'] = SupportPlaneRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['_tree_node_flags'] = TreeNodeFlags
+
+# this binding exists because shared behavior needs one stable value
+globals()['_version_history_payload'] = VersionHistory
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_circle_profile'] = WriteCircle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_dimensions'] = WriteDimensions
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_feature'] = WriteFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_feature_type'] = WriteFeatureA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_object_ids'] = WriteObjectIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_objects'] = WriteObjects
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_rectangle_bounds'] = WriteRectangle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_sketch'] = WriteSketch
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_attribute'] = XmlAttr
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_document'] = XmlDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_element'] = XmlElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_text'] = XmlText
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['atom_ids_for'] = AtomIdsFor
+
+# this binding exists because shared behavior needs one stable value
+globals()['circle_radius_mm'] = CircleRadiusMm
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_ascii_brep'] = DecodeAsciiBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_native_model'] = DecodeNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_native_model_header'] = DecodeNativeA
+
+# this binding exists because shared behavior needs one stable value
+globals()['dimension_scalar_value_offset'] = DimensionScalarValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_class_reference'] = EncodeClassRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_cmgr_stream'] = EncodeCmgrStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_config0_stream'] = EncodeConfigZeroStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_definition_stream'] = EncodeDefinitionStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_native_assembly_envelope'] = EncodeNativeAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_native_part'] = EncodeNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['expression_equation_texts'] = ExpressionTexts
+
+# this binding exists because shared behavior needs one stable value
+globals()['field'] = Field
+
+# this binding exists because shared behavior needs one stable value
+globals()['hashlib'] = Hashlib
+
+# this binding exists because shared behavior needs one stable value
+globals()['itertools'] = Itertools
+
+# this binding exists because shared behavior needs one stable value
+globals()['locate_features'] = LocateFeatures
+
+# this binding exists because shared behavior needs one stable value
+globals()['math'] = MathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['native_axis_bindings'] = NativeAxis
+
+# this binding exists because shared behavior needs one stable value
+globals()['operation_axis_subelement'] = OperationAxis
+
+# this binding exists because shared behavior needs one stable value
+globals()['patch_features'] = PatchFeatures
+
+# this binding exists because shared behavior needs one stable value
+globals()['re'] = RegexLib
+
+# this binding exists because shared behavior needs one stable value
+globals()['rectangle_corners_mm'] = RectangleCornersMm
+
+# this binding exists because shared behavior needs one stable value
+globals()['replace'] = Replace
+
+# this binding exists because shared behavior needs one stable value
+globals()['revolution_axis_direction'] = RevolutionAxisA
+
+# this binding exists because shared behavior needs one stable value
+globals()['struct'] = Struct

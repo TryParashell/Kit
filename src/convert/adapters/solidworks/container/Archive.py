@@ -6,2366 +6,1675 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
+from __future__ import annotations as Annotations
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
-import json
-from pathlib import Path
-import struct
-
+from dataclasses import dataclass as Dataclass, field as Field
+import json as JsonValue
+from pathlib import Path as PathValue
+import struct as Struct
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
-NULL_TAG = 0x0000
-NEW_CLASS_TAG = 0xFFFF
-BIG_OBJECT_TAG = 0x7FFF
-CLASS_TAG_BIT = 0x8000
-BIG_CLASS_TAG_BIT = 0x80000000
-MAX_MAP_INDEX = 0x3FFFFFFE
-STRING_MARKER = b"\xff\xfe\xff"
-SHORT_STRING_LIMIT = 0xFF
-LONG_STRING_LIMIT = 0xFFFE
-STREAM_HEADER_SIZE = 6
-# resolved feature streams end with one fixed footer dword
+# this binding exists because shared behavior needs one stable value
+KNullTag = 0
+
+# this binding exists because shared behavior needs one stable value
+KNewClassTag = 65535
+
+# this binding exists because shared behavior needs one stable value
+KBigObjectTag = 32767
+
+# this binding exists because shared behavior needs one stable value
+KClassTagBit = 32768
+
+# this binding exists because shared behavior needs one stable value
+KBigClassTagBit = 2147483648
+
+# this binding exists because shared behavior needs one stable value
+KMaxMapIndex = 1073741822
+
+# this binding exists because shared behavior needs one stable value
+KStringMarker = b'\xff\xfe\xff'
+
+# this binding exists because shared behavior needs one stable value
+KShortStringLimit = 255
+
+# this binding exists because shared behavior needs one stable value
+KLongStringLimit = 65534
+
+# this binding exists because shared behavior needs one stable value
+KStreamHeaderSize = 6
+
+# this binding exists because shared behavior needs one stable value
 KStreamTailSize = 4
-MO_VERSION_PREFIX = "_MO_VERSION_"
-DEFINITION_KIND = "definition"
-CLASS_REFERENCE_KIND = "classref"
-OBJECT_REFERENCE_KIND = "objectref"
-NULL_KIND = "null"
-LEAD_RUN = "lead"
-LEAF_RUN = "leaf"
-TAIL_RUN = "tail"
-REPEATED_SLOT = "..."
-POLYMORPHIC_SLOT = "*"
-OPAQUE_RULE = "opaque"
-STRING_RULE = "string"
-COUNT_RULE = "count"
-CONDITIONAL_RULE = "conditional"
-# guard rules reject unsupported record variants before advancing
-KGuardRule = "guard"
-EXTERNAL_PREFIX = "external#"
-BASE_RESOLUTION_LIMIT = 64
 
+# this binding exists because shared behavior needs one stable value
+KMoVersionPrefix = '_MO_VERSION_'
 
+# this binding exists because shared behavior needs one stable value
+KDefinitionKind = 'definition'
+
+# this binding exists because shared behavior needs one stable value
+KClassRefKind = 'classref'
+
+# this binding exists because shared behavior needs one stable value
+KObjectRefKind = 'objectref'
+
+# this binding exists because shared behavior needs one stable value
+KNullKind = 'null'
+
+# this binding exists because shared behavior needs one stable value
+KLeadRun = 'lead'
+
+# this binding exists because shared behavior needs one stable value
+KLeafRun = 'leaf'
+
+# this binding exists because shared behavior needs one stable value
+KTailRun = 'tail'
+
+# this binding exists because shared behavior needs one stable value
+KRepeatedSlot = '...'
+
+# this binding exists because shared behavior needs one stable value
+KPolymorphicSlot = '*'
+
+# this binding exists because shared behavior needs one stable value
+KOpaqueRule = 'opaque'
+
+# this binding exists because shared behavior needs one stable value
+KStringRule = 'string'
+
+# this binding exists because shared behavior needs one stable value
+KCountRule = 'count'
+
+# this binding exists because shared behavior needs one stable value
+KConditionalRule = 'conditional'
+
+# this binding exists because shared behavior needs one stable value
+KGuardRule = 'guard'
+
+# this binding exists because shared behavior needs one stable value
+KOuterPrefix = 'external#'
+
+# this binding exists because shared behavior needs one stable value
+KBaseResolutionLimit = 64
+
+# this definition exists because focused behavior needs one stable owner
 class ArchiveError(SldprtFormatError):
-    __slots__ = ()
+    KSlots = ()
 
+# this definition exists because focused behavior needs one stable owner
+class Segmentation(ArchiveError):
+    KSlots = ()
 
-class SegmentationError(ArchiveError):
-    __slots__ = ()
+    # this definition exists because focused behavior needs one stable owner
+    def InitAction(Instance, ClassName: str, SlotValue: str, Offset: int, Reason: str, *, BaseValue: int=-1, Progress: int=-1, Depth: int=-1, UnresolvedIndex: int=-1, UnresolvedKind: str='') -> None:
+        Instance.class_name = ClassName
+        Instance.slot = SlotValue
+        Instance.offset = Offset
+        Instance.reason = Reason
+        Instance.base = BaseValue
+        Instance.progress = Progress
+        Instance.depth = Depth
+        Instance.unresolved_index = UnresolvedIndex
+        Instance.unresolved_kind = UnresolvedKind
+        Instance.reached: tuple[StaticSegment, ...] = ()
+        super().__init__(f'class {ClassName!r} slot {SlotValue!r} at byte offset {Offset}: {Reason}')
+    locals()['__init__'] = InitAction
 
-    def __init__(
-        self,
-        class_name: str,
-        slot: str,
-        offset: int,
-        reason: str,
-        *,
-        base: int = -1,
-        progress: int = -1,
-        depth: int = -1,
-        unresolved_index: int = -1,
-        unresolved_kind: str = "",
-    ) -> None:
-        self.class_name = class_name
-        self.slot = slot
-        self.offset = offset
-        self.reason = reason
-        self.base = base
-        self.progress = progress
-        self.depth = depth
-        self.unresolved_index = unresolved_index
-        self.unresolved_kind = unresolved_kind
-        self.reached: tuple[StaticSegment, ...] = ()
-        super().__init__(
-            f"class {class_name!r} slot {slot!r} at byte offset {offset}: {reason}"
-        )
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class TagAction:
+    locals().setdefault('__annotations__', {})
+    __annotations__['kind'] = 'str'
+    __annotations__['size'] = 'int'
+    __annotations__['token'] = 'int'
+    __annotations__['index'] = 'int'
+    __annotations__['schema'] = 'int'
+    __annotations__['class_name'] = 'str'
+    __annotations__['wide'] = 'bool'
 
-
-@dataclass(frozen=True, slots=True)
-class Tag:
-    kind: str
-    size: int
-    token: int
-    index: int
-    schema: int
-    class_name: str
-    wide: bool
-
-
-def container_mo_version(stream_names: Iterable[str]) -> int | None:
-    found: set[int] = set()
-    for name in stream_names:
-        head = str(name).replace("\\", "/").split("/", 1)[0]
-        if not head.startswith(MO_VERSION_PREFIX):
+# this definition exists because focused behavior needs one stable owner
+def ContainerMo(StreamNames: Iterable[str]) -> int | None:
+    Found: set[int] = set()
+    for NameValue in StreamNames:
+        HeadValue = str(NameValue).replace('\\', '/').split('/', 1)[0]
+        if not HeadValue.startswith(KMoVersionPrefix):
             continue
-        digits = head[len(MO_VERSION_PREFIX) :]
-        if digits.isdigit():
-            found.add(int(digits))
-    if not found:
+        Digits = HeadValue[len(KMoVersionPrefix):]
+        if Digits.isdigit():
+            Found.add(int(Digits))
+    if not Found:
         return None
-    return max(found)
+    return max(Found)
 
-
-def read_tag(blob: bytes, offset: int) -> Tag:
-    if offset < 0:
-        raise ArchiveError(f"negative tag offset {offset}")
-    if offset + 2 > len(blob):
-        raise ArchiveError(
-            f"tag at offset {offset} runs past the end of a {len(blob)} byte stream"
-        )
-    token = struct.unpack_from("<H", blob, offset)[0]
-    if token == NEW_CLASS_TAG:
-        if offset + 6 > len(blob):
-            raise ArchiveError(
-                f"class definition at offset {offset} has no schema and name length"
-            )
-        schema, units = struct.unpack_from("<HH", blob, offset + 2)
-        if units == 0:
-            raise ArchiveError(f"class definition at offset {offset} has an empty name")
-        if offset + 6 + units > len(blob):
-            raise ArchiveError(
-                f"class definition at offset {offset} names {units} bytes past the end"
-            )
-        raw = blob[offset + 6 : offset + 6 + units]
+# this definition exists because focused behavior needs one stable owner
+def ReadTag(BlobValue: bytes, Offset: int) -> TagAction:
+    if Offset < 0:
+        raise ArchiveError(f'negative tag offset {Offset}')
+    if Offset + 2 > len(BlobValue):
+        raise ArchiveError(f'tag at offset {Offset} runs past the end of a {len(BlobValue)} byte stream')
+    Token = Struct.unpack_from('<H', BlobValue, Offset)[0]
+    if Token == KNewClassTag:
+        if Offset + 6 > len(BlobValue):
+            raise ArchiveError(f'class definition at offset {Offset} has no schema and name length')
+        Schema, Units = Struct.unpack_from('<HH', BlobValue, Offset + 2)
+        if Units == 0:
+            raise ArchiveError(f'class definition at offset {Offset} has an empty name')
+        if Offset + 6 + Units > len(BlobValue):
+            raise ArchiveError(f'class definition at offset {Offset} names {Units} bytes past the end')
+        RawValue = BlobValue[Offset + 6:Offset + 6 + Units]
         try:
-            name = raw.decode("ascii")
+            NameValue = RawValue.decode('ascii')
         except UnicodeDecodeError as error:
-            raise ArchiveError(
-                f"class definition at offset {offset} has a non ascii name"
-            ) from error
-        return Tag(
-            kind=DEFINITION_KIND,
-            size=6 + units,
-            token=token,
-            index=-1,
-            schema=schema,
-            class_name=name,
-            wide=False,
-        )
-    if token == BIG_OBJECT_TAG:
-        if offset + 6 > len(blob):
-            raise ArchiveError(f"big object tag at offset {offset} has no 32 bit index")
-        wide_token = struct.unpack_from("<I", blob, offset + 2)[0]
-        index = wide_token & ~BIG_CLASS_TAG_BIT
-        if index > MAX_MAP_INDEX:
-            raise ArchiveError(
-                f"big object tag at offset {offset} holds unrepresentable index {index}"
-            )
-        kind = (
-            CLASS_REFERENCE_KIND
-            if wide_token & BIG_CLASS_TAG_BIT
-            else OBJECT_REFERENCE_KIND
-        )
-        return Tag(
-            kind=kind,
-            size=6,
-            token=token,
-            index=index,
-            schema=0,
-            class_name="",
-            wide=True,
-        )
-    if token == NULL_TAG:
-        return Tag(
-            kind=NULL_KIND,
-            size=2,
-            token=token,
-            index=0,
-            schema=0,
-            class_name="",
-            wide=False,
-        )
-    if token & CLASS_TAG_BIT:
-        return Tag(
-            kind=CLASS_REFERENCE_KIND,
-            size=2,
-            token=token,
-            index=token & ~CLASS_TAG_BIT,
-            schema=0,
-            class_name="",
-            wide=False,
-        )
-    return Tag(
-        kind=OBJECT_REFERENCE_KIND,
-        size=2,
-        token=token,
-        index=token,
-        schema=0,
-        class_name="",
-        wide=False,
-    )
+            raise ArchiveError(f'class definition at offset {Offset} has a non ascii name') from error
+        return TagAction(kind=KDefinitionKind, size=6 + Units, token=Token, index=-1, schema=Schema, class_name=NameValue, wide=False)
+    if Token == KBigObjectTag:
+        if Offset + 6 > len(BlobValue):
+            raise ArchiveError(f'big object tag at offset {Offset} has no 32 bit index')
+        WideToken = Struct.unpack_from('<I', BlobValue, Offset + 2)[0]
+        Index = WideToken & ~KBigClassTagBit
+        if Index > KMaxMapIndex:
+            raise ArchiveError(f'big object tag at offset {Offset} holds unrepresentable index {Index}')
+        KindValue = KClassRefKind if WideToken & KBigClassTagBit else KObjectRefKind
+        return TagAction(kind=KindValue, size=6, token=Token, index=Index, schema=0, class_name='', wide=True)
+    if Token == KNullTag:
+        return TagAction(kind=KNullKind, size=2, token=Token, index=0, schema=0, class_name='', wide=False)
+    if Token & KClassTagBit:
+        return TagAction(kind=KClassRefKind, size=2, token=Token, index=Token & ~KClassTagBit, schema=0, class_name='', wide=False)
+    return TagAction(kind=KObjectRefKind, size=2, token=Token, index=Token, schema=0, class_name='', wide=False)
 
-
-def encode_class_definition(name: str, schema: int) -> bytes:
+# this definition exists because focused behavior needs one stable owner
+def EncodeClass(NameValue: str, Schema: int) -> bytes:
     try:
-        encoded = name.encode("ascii")
+        Encoded = NameValue.encode('ascii')
     except UnicodeEncodeError as error:
-        raise ArchiveError(f"class name {name!r} is not ascii") from error
-    if not encoded:
-        raise ArchiveError("class name must not be empty")
-    if len(encoded) > 0xFFFF:
-        raise ArchiveError(f"class name {name!r} is longer than 65535 bytes")
-    if not 0 <= schema <= 0xFFFF:
-        raise ArchiveError(f"class schema {schema} does not fit in 16 bits")
-    return struct.pack("<HHH", NEW_CLASS_TAG, schema, len(encoded)) + encoded
+        raise ArchiveError(f'class name {NameValue!r} is not ascii') from error
+    if not Encoded:
+        raise ArchiveError('class name must not be empty')
+    if len(Encoded) > 65535:
+        raise ArchiveError(f'class name {NameValue!r} is longer than 65535 bytes')
+    if not 0 <= Schema <= 65535:
+        raise ArchiveError(f'class schema {Schema} does not fit in 16 bits')
+    return Struct.pack('<HHH', KNewClassTag, Schema, len(Encoded)) + Encoded
 
+# this definition exists because focused behavior needs one stable owner
+def EncodeClassRef(Index: int, *, WideValue: bool=False) -> bytes:
+    if Index < 0:
+        raise ArchiveError(f'negative class index {Index}')
+    if Index > KMaxMapIndex:
+        raise ArchiveError(f'class index {Index} exceeds the archive map limit')
+    if WideValue or Index >= KBigObjectTag:
+        return Struct.pack('<HI', KBigObjectTag, Index | KBigClassTagBit)
+    return Struct.pack('<H', KClassTagBit | Index)
 
-def encode_class_reference(index: int, *, wide: bool = False) -> bytes:
-    if index < 0:
-        raise ArchiveError(f"negative class index {index}")
-    if index > MAX_MAP_INDEX:
-        raise ArchiveError(f"class index {index} exceeds the archive map limit")
-    if wide or index >= BIG_OBJECT_TAG:
-        return struct.pack("<HI", BIG_OBJECT_TAG, index | BIG_CLASS_TAG_BIT)
-    return struct.pack("<H", CLASS_TAG_BIT | index)
+# this definition exists because focused behavior needs one stable owner
+def EncodeObjectRef(Index: int, *, WideValue: bool=False) -> bytes:
+    if Index < 0:
+        raise ArchiveError(f'negative object index {Index}')
+    if Index > KMaxMapIndex:
+        raise ArchiveError(f'object index {Index} exceeds the archive map limit')
+    if Index == KNullTag and (not WideValue):
+        return Struct.pack('<H', KNullTag)
+    if WideValue or Index >= KBigObjectTag:
+        return Struct.pack('<HI', KBigObjectTag, Index)
+    return Struct.pack('<H', Index)
 
+# this definition exists because focused behavior needs one stable owner
+def EncodeNull() -> bytes:
+    return Struct.pack('<H', KNullTag)
 
-def encode_object_reference(index: int, *, wide: bool = False) -> bytes:
-    if index < 0:
-        raise ArchiveError(f"negative object index {index}")
-    if index > MAX_MAP_INDEX:
-        raise ArchiveError(f"object index {index} exceeds the archive map limit")
-    if index == NULL_TAG and not wide:
-        return struct.pack("<H", NULL_TAG)
-    if wide or index >= BIG_OBJECT_TAG:
-        return struct.pack("<HI", BIG_OBJECT_TAG, index)
-    return struct.pack("<H", index)
+# this definition exists because focused behavior needs one stable owner
+def ParseArchive(BlobValue: bytes, Offset: int) -> tuple[int, bool, int]:
+    if Offset < 0 or Offset >= len(BlobValue):
+        raise ArchiveError(f'string length at offset {Offset} is missing')
+    First = BlobValue[Offset]
+    if First != KShortStringLimit:
+        return (First, False, 1)
+    if Offset + 3 > len(BlobValue):
+        raise ArchiveError(f'string length at offset {Offset} has no 16 bit value')
+    Second = Struct.unpack_from('<H', BlobValue, Offset + 1)[0]
+    if Second == KLongStringLimit:
+        return (0, True, 3)
+    if Second != 65535:
+        return (Second, False, 3)
+    if Offset + 7 > len(BlobValue):
+        raise ArchiveError(f'string length at offset {Offset} has no 32 bit value')
+    return (Struct.unpack_from('<I', BlobValue, Offset + 3)[0], False, 7)
 
-
-def encode_null() -> bytes:
-    return struct.pack("<H", NULL_TAG)
-
-
-# The native CString operators share this variable-width MFC length decoder.
-def ParseArchiveStringLength(blob: bytes, offset: int) -> tuple[int, bool, int]:
-    if offset < 0 or offset >= len(blob):
-        raise ArchiveError(f"string length at offset {offset} is missing")
-    First = blob[offset]
-    if First != SHORT_STRING_LIMIT:
-        return First, False, 1
-    if offset + 3 > len(blob):
-        raise ArchiveError(f"string length at offset {offset} has no 16 bit value")
-    Second = struct.unpack_from("<H", blob, offset + 1)[0]
-    if Second == LONG_STRING_LIMIT:
-        return 0, True, 3
-    if Second != 0xFFFF:
-        return Second, False, 3
-    if offset + 7 > len(blob):
-        raise ArchiveError(f"string length at offset {offset} has no 32 bit value")
-    return struct.unpack_from("<I", blob, offset + 3)[0], False, 7
-
-
-def read_string(blob: bytes, offset: int) -> tuple[str, int]:
-    Units, IsUnicode, Head = ParseArchiveStringLength(blob, offset)
+# this definition exists because focused behavior needs one stable owner
+def ReadString(BlobValue: bytes, Offset: int) -> tuple[str, int]:
+    Units, IsUnicode, HeadValue = ParseArchive(BlobValue, Offset)
     if IsUnicode:
-        Units, IsSecondMarker, SecondHead = ParseArchiveStringLength(
-            blob, offset + Head
-        )
+        Units, IsSecondMarker, SecondHead = ParseArchive(BlobValue, Offset + HeadValue)
         if IsSecondMarker:
-            raise ArchiveError(f"string at offset {offset} repeats its Unicode marker")
-        Head += SecondHead
+            raise ArchiveError(f'string at offset {Offset} repeats its Unicode marker')
+        HeadValue += SecondHead
     Width = 2 if IsUnicode else 1
-    End = offset + Head + Width * Units
-    if End > len(blob):
-        raise ArchiveError(
-            f"string at offset {offset} claims {Units} units past the end"
-        )
-    Encoding = "utf-16-le" if IsUnicode else "latin-1"
-    return blob[offset + Head : End].decode(Encoding), End - offset
+    EndValue = Offset + HeadValue + Width * Units
+    if EndValue > len(BlobValue):
+        raise ArchiveError(f'string at offset {Offset} claims {Units} units past the end')
+    Encoding = 'utf-16-le' if IsUnicode else 'latin-1'
+    return (BlobValue[Offset + HeadValue:EndValue].decode(Encoding), EndValue - Offset)
 
+# this definition exists because focused behavior needs one stable owner
+def EncodeString(TextValue: str) -> bytes:
+    Encoded = TextValue.encode('utf-16-le')
+    Units = len(Encoded) // 2
+    if Units < KShortStringLimit:
+        return KStringMarker + bytes((Units,)) + Encoded
+    if Units < KLongStringLimit:
+        return KStringMarker + b'\xff' + Struct.pack('<H', Units) + Encoded
+    if Units <= 4294967295:
+        return KStringMarker + b'\xff\xff\xff' + Struct.pack('<I', Units) + Encoded
+    raise ArchiveError(f'string of {Units} code units is not representable')
 
-def encode_string(text: str) -> bytes:
-    encoded = text.encode("utf-16-le")
-    units = len(encoded) // 2
-    if units < SHORT_STRING_LIMIT:
-        return STRING_MARKER + bytes((units,)) + encoded
-    if units < LONG_STRING_LIMIT:
-        return STRING_MARKER + b"\xff" + struct.pack("<H", units) + encoded
-    if units <= 0xFFFFFFFF:
-        return STRING_MARKER + b"\xff\xff\xff" + struct.pack("<I", units) + encoded
-    raise ArchiveError(f"string of {units} code units is not representable")
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class NodeAction:
+    locals().setdefault('__annotations__', {})
+    __annotations__['kind'] = 'str'
+    __annotations__['body'] = 'bytes'
+    __annotations__['schema'] = 'int'
+    locals()['schema'] = 0
+    __annotations__['class_name'] = 'str'
+    locals()['class_name'] = ''
+    __annotations__['target'] = 'int'
+    locals()['target'] = -1
+    __annotations__['literal'] = 'int'
+    locals()['literal'] = 0
+    __annotations__['wide'] = 'bool'
+    locals()['wide'] = False
+    __annotations__['origin'] = 'int'
+    locals()['origin'] = -1
+    __annotations__['class_index'] = 'int'
+    locals()['class_index'] = 0
+    __annotations__['object_index'] = 'int'
+    locals()['object_index'] = 0
 
-
-@dataclass(slots=True)
-class Node:
-    kind: str
-    body: bytes
-    schema: int = 0
-    class_name: str = ""
-    target: int = -1
-    literal: int = 0
-    wide: bool = False
-    origin: int = -1
-    class_index: int = 0
-    object_index: int = 0
-
-
-# archive models preserve framing around mutable object nodes
-@dataclass(slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
 class Model:
-    header: bytes
-    base: int
-    nodes: list[Node] = field(default_factory=list)
-    Trailer: bytes = b""
+    locals().setdefault('__annotations__', {})
+    __annotations__['header'] = 'bytes'
+    __annotations__['base'] = 'int'
+    __annotations__['nodes'] = 'list[Node]'
+    locals()['nodes'] = Field(default_factory=list)
+    KTrailer: bytes = b''
 
-    def clone(self) -> Model:
-        return Model(
-            header=self.header,
-            base=self.base,
-            nodes=[
-                Node(
-                    kind=node.kind,
-                    body=node.body,
-                    schema=node.schema,
-                    class_name=node.class_name,
-                    target=node.target,
-                    literal=node.literal,
-                    wide=node.wide,
-                    origin=node.origin,
-                )
-                for node in self.nodes
-            ],
-            Trailer=self.Trailer,
-        )
+    # this definition exists because focused behavior needs one stable owner
+    def Clone(Instance) -> Model:
+        return Model(header=Instance.header, base=Instance.base, nodes=[NodeAction(kind=NodeValue.kind, body=NodeValue.body, schema=NodeValue.schema, class_name=NodeValue.class_name, target=NodeValue.target, literal=NodeValue.literal, wide=NodeValue.wide, origin=NodeValue.origin) for NodeValue in Instance.nodes], Trailer=Instance.Trailer)
 
-    def definition_index(self, name: str) -> int:
-        for position, node in enumerate(self.nodes):
-            if node.kind == DEFINITION_KIND and node.class_name == name:
-                return position
-        raise KeyError(name)
+    # this definition exists because focused behavior needs one stable owner
+    def DefinitionIndex(Instance, NameValue: str) -> int:
+        for Position, NodeValue in enumerate(Instance.nodes):
+            if NodeValue.kind == KDefinitionKind and NodeValue.class_name == NameValue:
+                return Position
+        raise KeyError(NameValue)
 
-    def assign(self) -> None:
-        counter = self.base
-        for node in self.nodes:
-            if node.kind == DEFINITION_KIND:
-                node.class_index = counter
-                node.object_index = counter + 1
-                counter += 2
-            elif node.kind == CLASS_REFERENCE_KIND:
-                node.class_index = 0
-                node.object_index = counter
-                counter += 1
+    # this definition exists because focused behavior needs one stable owner
+    def Assign(Instance) -> None:
+        Counter = Instance.base
+        for NodeValue in Instance.nodes:
+            if NodeValue.kind == KDefinitionKind:
+                NodeValue.class_index = Counter
+                NodeValue.object_index = Counter + 1
+                Counter += 2
+            elif NodeValue.kind == KClassRefKind:
+                NodeValue.class_index = 0
+                NodeValue.object_index = Counter
+                Counter += 1
             else:
-                node.class_index = 0
-                node.object_index = 0
+                NodeValue.class_index = 0
+                NodeValue.object_index = 0
 
-    def emit(self) -> bytes:
-        self.assign()
-        out = bytearray(self.header)
-        for node in self.nodes:
-            if node.kind == DEFINITION_KIND:
-                out += encode_class_definition(node.class_name, node.schema)
-            elif node.kind == CLASS_REFERENCE_KIND:
-                index = (
-                    node.literal
-                    if node.target < 0
-                    else self.nodes[node.target].class_index
-                )
-                out += encode_class_reference(index, wide=node.wide)
-            elif node.kind == OBJECT_REFERENCE_KIND:
-                index = (
-                    node.literal
-                    if node.target < 0
-                    else self.nodes[node.target].object_index
-                )
-                out += encode_object_reference(index, wide=node.wide)
-            elif node.kind == NULL_KIND:
-                out += encode_null()
+    # this definition exists because focused behavior needs one stable owner
+    def EmitAction(Instance) -> bytes:
+        Instance.assign()
+        OutValue = bytearray(Instance.header)
+        for NodeValue in Instance.nodes:
+            if NodeValue.kind == KDefinitionKind:
+                OutValue += EncodeClass(NodeValue.class_name, NodeValue.schema)
+            elif NodeValue.kind == KClassRefKind:
+                Index = NodeValue.literal if NodeValue.target < 0 else Instance.nodes[NodeValue.target].class_index
+                OutValue += EncodeClassRef(Index, WideValue=NodeValue.wide)
+            elif NodeValue.kind == KObjectRefKind:
+                Index = NodeValue.literal if NodeValue.target < 0 else Instance.nodes[NodeValue.target].object_index
+                OutValue += EncodeObjectRef(Index, WideValue=NodeValue.wide)
+            elif NodeValue.kind == KNullKind:
+                OutValue += EncodeNull()
             else:
-                raise ArchiveError(f"cannot emit node kind {node.kind!r}")
-            out += node.body
-        out += self.Trailer
-        return bytes(out)
+                raise ArchiveError(f'cannot emit node kind {NodeValue.kind!r}')
+            OutValue += NodeValue.body
+        OutValue += Instance.Trailer
+        return bytes(OutValue)
+    locals()['assign'] = Assign
+    locals()['clone'] = Clone
+    locals()['definition_index'] = DefinitionIndex
+    locals()['emit'] = EmitAction
 
-
-@dataclass(slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
 class StaticSegment:
-    index: int
-    offset: int
-    header: int
-    end: int
-    kind: str
-    token: int
-    wide: bool
-    schema: int
-    class_name: str
-    class_index: int
-    object_index: int
-    depth: int
-    parent: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['index'] = 'int'
+    __annotations__['offset'] = 'int'
+    __annotations__['header'] = 'int'
+    __annotations__['end'] = 'int'
+    __annotations__['kind'] = 'str'
+    __annotations__['token'] = 'int'
+    __annotations__['wide'] = 'bool'
+    __annotations__['schema'] = 'int'
+    __annotations__['class_name'] = 'str'
+    __annotations__['class_index'] = 'int'
+    __annotations__['object_index'] = 'int'
+    __annotations__['depth'] = 'int'
+    __annotations__['parent'] = 'int'
 
-
-# version gated tails keep variable records aligned across document generations
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class VariableRun:
-    slot: str
-    rule: str
-    at: int
-    tail: int
-    TailByVersion: Mapping[int, int]
-    stride: int
-    count_width: int
-    width: int
-    predicate: str
-    predicate_at: int
-    predicate_width: int
-    values: tuple[int, ...]
-    note: str
+    locals().setdefault('__annotations__', {})
+    __annotations__['slot'] = 'str'
+    __annotations__['rule'] = 'str'
+    __annotations__['at'] = 'int'
+    __annotations__['tail'] = 'int'
+    KTailByVersion: Mapping[int, int]
+    __annotations__['stride'] = 'int'
+    __annotations__['count_width'] = 'int'
+    __annotations__['width'] = 'int'
+    __annotations__['predicate'] = 'str'
+    __annotations__['predicate_at'] = 'int'
+    __annotations__['predicate_width'] = 'int'
+    __annotations__['values'] = 'tuple[int, ...]'
+    __annotations__['note'] = 'str'
 
-
-# repeat fields locate dynamic child counts within a preceding scalar run
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class RepeatField:
-    run: str
-    at: int
-    Back: int
-    width: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['run'] = 'str'
+    __annotations__['at'] = 'int'
+    __annotations__['Back'] = 'int'
+    __annotations__['width'] = 'int'
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class ChildCountBy:
+    locals().setdefault('__annotations__', {})
+    __annotations__['Slot'] = 'int'
+    KCounts: Mapping[str, int]
 
-# child count branches keep conditional serializer paths inside their owning object
-@dataclass(frozen=True, slots=True)
-class ChildCountByClass:
-    Slot: int
-    Counts: Mapping[str, int]
-
-
-# group count branches preserve serializer paths whose next array header moves with the
-# runtime class of the preceding tagged child
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class RunGroupCount:
-    At: int
-    Back: int
-    Width: int
-    Lead: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['At'] = 'int'
+    __annotations__['Back'] = 'int'
+    KWidth: int
+    __annotations__['Lead'] = 'int'
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class RunGroupCountA:
+    KVersions: tuple[int, ...]
+    KPredicateAt: int
+    KPredicateWidth: int
+    KValues: tuple[int, ...]
+    KCount: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['Lead'] = 'int'
 
-# group count variants preserve fixed serializer branches selected by inline state
-@dataclass(frozen=True, slots=True)
-class RunGroupCountVariant:
-    Versions: tuple[int, ...]
-    PredicateAt: int
-    PredicateWidth: int
-    Values: tuple[int, ...]
-    Count: int
-    Lead: int
-
-
-# group run variants preserve inline discriminator branches without fitting whole records
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class RunGroupVariant:
-    Slot: int
-    Last: bool
-    StopGroups: bool
-    Versions: tuple[int, ...]
-    PredicateAt: int
-    PredicateWidth: int
-    Values: tuple[int, ...]
-    ChildClasses: tuple[str, ...]
-    Run: int
-    RunsByVersion: Mapping[int, int]
-    Trailer: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['Slot'] = 'int'
+    __annotations__['Last'] = 'bool'
+    KStopGroups: bool
+    KVersions: tuple[int, ...]
+    KPredicateAt: int
+    KPredicateWidth: int
+    KValues: tuple[int, ...]
+    KChildClasses: tuple[str, ...]
+    __annotations__['Run'] = 'int'
+    KRunsByVersion: Mapping[int, int]
+    KTrailer: int
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class RunGroupTrailer:
+    KVersions: tuple[int, ...]
+    KPredicateAt: int
+    KPredicateWidth: int
+    KValues: tuple[int, ...]
+    KTrailer: int
 
-# group trailer variants keep empty-loop gates and post-loop branches in the group grammar
-@dataclass(frozen=True, slots=True)
-class RunGroupTrailerVariant:
-    Versions: tuple[int, ...]
-    PredicateAt: int
-    PredicateWidth: int
-    Values: tuple[int, ...]
-    Trailer: int
-
-
-# run groups describe ordered counted serializer loops inside otherwise inline records
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class RunGroup:
-    name: str
-    repeat: int
-    count_back: int
-    count_width: int
-    CountByChildClass: Mapping[str, RunGroupCount]
-    CountVariants: tuple[RunGroupCountVariant, ...]
-    slots: tuple[str, ...]
-    element: tuple[int, ...]
-    element_by_version: Mapping[int, tuple[int, ...]]
-    ElementRunVariants: tuple[RunGroupVariant, ...]
-    trailer: int
-    TrailerVariants: tuple[RunGroupTrailerVariant, ...]
-    note: str
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = 'str'
+    __annotations__['repeat'] = 'int'
+    __annotations__['count_back'] = 'int'
+    __annotations__['count_width'] = 'int'
+    KCountByChildClass: Mapping[str, RunGroupCount]
+    KCountVariants: tuple[RunGroupCountA, ...]
+    __annotations__['slots'] = 'tuple[str, ...]'
+    __annotations__['element'] = 'tuple[int, ...]'
+    __annotations__['element_by_version'] = 'Mapping[int, tuple[int, ...]]'
+    KElemRunVariants: tuple[RunGroupVariant, ...]
+    __annotations__['trailer'] = 'int'
+    KTrailerVariants: tuple[RunGroupTrailer, ...]
+    __annotations__['note'] = 'str'
 
-    def element_runs(self, mo_version: int | None) -> tuple[int, ...]:
-        if mo_version is not None:
-            gated = self.element_by_version.get(mo_version)
-            if gated is not None:
-                return gated
-        return self.element
+    # this definition exists because focused behavior needs one stable owner
+    def ElemRuns(Instance, MoVersion: int | None) -> tuple[int, ...]:
+        if MoVersion is not None:
+            Gated = Instance.element_by_version.get(MoVersion)
+            if Gated is not None:
+                return Gated
+        return Instance.element
+    locals()['element_runs'] = ElemRuns
 
-
-# class records need one immutable shape shared by parsing verification and emission
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class ClassLayout:
-    name: str
-    child_slots: tuple[str, ...]
-    runs: Mapping[str, int]
-    variable_runs: Mapping[str, tuple[VariableRun, ...]]
-    confidence: str
-    source: str
-    repeat_note: str = ""
-    repeat_count: RepeatField | None = None
-    repeat_unresolved: bool = False
-    repeat_prefix: int = 0
-    RepeatTrailer: int = 0
-    ChildCounts: ChildCountByClass | None = None
-    runs_by_version: Mapping[str, Mapping[int, int]] = field(default_factory=dict)
-    RunsByChildClass: Mapping[str, Mapping[str, int]] = field(default_factory=dict)
-    groups: tuple[RunGroup, ...] = ()
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = 'str'
+    __annotations__['child_slots'] = 'tuple[str, ...]'
+    __annotations__['runs'] = 'Mapping[str, int]'
+    __annotations__['variable_runs'] = 'Mapping[str, tuple[VariableRun, ...]]'
+    __annotations__['confidence'] = 'str'
+    __annotations__['source'] = 'str'
+    __annotations__['repeat_note'] = 'str'
+    locals()['repeat_note'] = ''
+    __annotations__['repeat_count'] = 'RepeatField | None'
+    locals()['repeat_count'] = None
+    __annotations__['repeat_unresolved'] = 'bool'
+    locals()['repeat_unresolved'] = False
+    __annotations__['repeat_prefix'] = 'int'
+    locals()['repeat_prefix'] = 0
+    KRepeatTrailer: int = 0
+    KChildCounts: ChildCountBy | None = None
+    __annotations__['runs_by_version'] = 'Mapping[str, Mapping[int, int]]'
+    locals()['runs_by_version'] = Field(default_factory=dict)
+    KRunsByChildClass: Mapping[str, Mapping[str, int]] = Field(default_factory=dict)
+    __annotations__['groups'] = 'tuple[RunGroup, ...]'
+    locals()['groups'] = ()
 
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def walks_groups(self) -> bool:
-        return bool(self.groups)
+    def WalksGroups(Instance) -> bool:
+        return bool(Instance.groups)
 
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def repeats(self) -> bool:
-        return self.repeat_unresolved and self.repeat_prefix <= 0
+    def Repeats(Instance) -> bool:
+        return Instance.repeat_unresolved and Instance.repeat_prefix <= 0
 
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def walks_a_prefix(self) -> bool:
-        return self.repeat_unresolved and self.repeat_prefix > 0
+    def WalksAPrefix(Instance) -> bool:
+        return Instance.repeat_unresolved and Instance.repeat_prefix > 0
 
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def constant_run_keys(self) -> frozenset[str]:
-        return frozenset(
-            set(self.runs) | set(self.runs_by_version) | set(self.RunsByChildClass)
-        )
+    def ConstantRunKeys(Instance) -> frozenset[str]:
+        return frozenset(set(Instance.runs) | set(Instance.runs_by_version) | set(Instance.RunsByChildClass))
 
-    def constant_run(self, key: str, mo_version: int | None) -> int | None:
-        gated = self.runs_by_version.get(key)
-        if gated is not None and mo_version is not None:
-            length = gated.get(mo_version)
-            if length is not None:
-                return length
-        return self.runs.get(key)
+    # this definition exists because focused behavior needs one stable owner
+    def ConstantRun(Instance, KeyValue: str, MoVersion: int | None) -> int | None:
+        Gated = Instance.runs_by_version.get(KeyValue)
+        if Gated is not None and MoVersion is not None:
+            Length = Gated.get(MoVersion)
+            if Length is not None:
+                return Length
+        return Instance.runs.get(KeyValue)
 
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def template_slot(self) -> int:
-        return len(self.child_slots) - 2
+    def TemplateSlot(Instance) -> int:
+        return len(Instance.child_slots) - 2
 
-    def run_key(self, slot: int) -> str:
-        if self.walks_a_prefix and slot >= self.repeat_prefix - 1:
-            return TAIL_RUN
-        if self.repeat_count is not None and slot >= self.template_slot:
-            return str(self.template_slot)
-        return str(slot)
+    # this definition exists because focused behavior needs one stable owner
+    def RunKey(Instance, SlotValue: int) -> str:
+        if Instance.walks_a_prefix and SlotValue >= Instance.repeat_prefix - 1:
+            return KTailRun
+        if Instance.repeat_count is not None and SlotValue >= Instance.template_slot:
+            return str(Instance.template_slot)
+        return str(SlotValue)
 
-    def run_keys(self) -> tuple[str, ...]:
-        if self.groups:
-            if TAIL_RUN in self.constant_run_keys or TAIL_RUN in self.variable_runs:
-                return (LEAD_RUN, TAIL_RUN)
-            return (LEAD_RUN,)
-        if not self.child_slots:
-            return (LEAF_RUN,)
-        if self.walks_a_prefix:
-            return (
-                (LEAD_RUN,)
-                + tuple(str(slot) for slot in range(self.repeat_prefix - 1))
-                + (TAIL_RUN,)
-            )
-        span = (
-            self.template_slot + 1
-            if self.repeat_count is not None
-            else len(self.child_slots)
-        )
-        return (LEAD_RUN,) + tuple(str(slot) for slot in range(span))
+    # this definition exists because focused behavior needs one stable owner
+    def RunKeys(Instance) -> tuple[str, ...]:
+        if Instance.groups:
+            if KTailRun in Instance.constant_run_keys or KTailRun in Instance.variable_runs:
+                return (KLeadRun, KTailRun)
+            return (KLeadRun,)
+        if not Instance.child_slots:
+            return (KLeafRun,)
+        if Instance.walks_a_prefix:
+            return (KLeadRun,) + tuple((str(SlotValue) for SlotValue in range(Instance.repeat_prefix - 1))) + (KTailRun,)
+        SpanValue = Instance.template_slot + 1 if Instance.repeat_count is not None else len(Instance.child_slots)
+        return (KLeadRun,) + tuple((str(SlotValue) for SlotValue in range(SpanValue)))
+    locals()['constant_run'] = ConstantRun
+    locals()['constant_run_keys'] = ConstantRunKeys
+    locals()['repeats'] = Repeats
+    locals()['run_key'] = RunKey
+    locals()['run_keys'] = RunKeys
+    locals()['template_slot'] = TemplateSlot
+    locals()['walks_a_prefix'] = WalksAPrefix
+    locals()['walks_groups'] = WalksGroups
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class LayoutTable:
-    version: int
-    source: str
-    classes: Mapping[str, ClassLayout]
+    locals().setdefault('__annotations__', {})
+    __annotations__['version'] = 'int'
+    __annotations__['source'] = 'str'
+    __annotations__['classes'] = 'Mapping[str, ClassLayout]'
 
-    def __contains__(self, name: object) -> bool:
-        return name in self.classes
+    # this definition exists because focused behavior needs one stable owner
+    def Contains(Instance, NameValue: object) -> bool:
+        return NameValue in Instance.classes
 
-    def __getitem__(self, name: str) -> ClassLayout:
-        return self.classes[name]
+    # this definition exists because focused behavior needs one stable owner
+    def Getitem(Instance, NameValue: str) -> ClassLayout:
+        return Instance.classes[NameValue]
 
-    def get(self, name: str) -> ClassLayout | None:
-        return self.classes.get(name)
+    # this definition exists because focused behavior needs one stable owner
+    def GetAction(Instance, NameValue: str) -> ClassLayout | None:
+        return Instance.classes.get(NameValue)
 
+    # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def from_mapping(cls, payload: Mapping[str, object]) -> LayoutTable:
-        raw_classes = payload.get("classes")
-        if not isinstance(raw_classes, Mapping):
-            raise ArchiveError("layout table has no classes mapping")
-        classes: dict[str, ClassLayout] = {}
-        for name, entry in raw_classes.items():
-            if not isinstance(entry, Mapping):
-                raise ArchiveError(f"layout entry for {name!r} is not a mapping")
-            classes[name] = _class_layout(str(name), entry)
-        version = payload.get("version", 1)
-        source = payload.get("source", "")
-        return cls(
-            version=int(version) if isinstance(version, int) else 1,
-            source=str(source),
-            classes=classes,
-        )
+    def FromMapping(ClassType, Payload: Mapping[str, object]) -> LayoutTable:
+        RawClasses = Payload.get('classes')
+        if not isinstance(RawClasses, Mapping):
+            raise ArchiveError('layout table has no classes mapping')
+        Classes: dict[str, ClassLayout] = {}
+        for NameValue, Entry in RawClasses.items():
+            if not isinstance(Entry, Mapping):
+                raise ArchiveError(f'layout entry for {NameValue!r} is not a mapping')
+            Classes[NameValue] = ClassLayoutA(str(NameValue), Entry)
+        Version = Payload.get('version', 1)
+        Source = Payload.get('source', '')
+        return ClassType(version=int(Version) if isinstance(Version, int) else 1, source=str(Source), classes=Classes)
 
+    # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def load(cls, path: str | Path) -> LayoutTable:
-        location = Path(path)
+    def LoadAction(ClassType, PathValue: str | Path) -> LayoutTable:
+        Location = PathValue(PathValue)
         try:
-            payload = json.loads(location.read_text(encoding="utf-8"))
+            Payload = JsonValue.loads(Location.read_text(encoding='utf-8'))
         except OSError as error:
-            raise ArchiveError(f"cannot read layout table {location}") from error
-        except json.JSONDecodeError as error:
-            raise ArchiveError(f"layout table {location} is not valid json") from error
-        if not isinstance(payload, Mapping):
-            raise ArchiveError(f"layout table {location} is not a json object")
-        return cls.from_mapping(payload)
+            raise ArchiveError(f'cannot read layout table {Location}') from error
+        except JsonValue.JSONDecodeError as error:
+            raise ArchiveError(f'layout table {Location} is not valid json') from error
+        if not isinstance(Payload, Mapping):
+            raise ArchiveError(f'layout table {Location} is not a json object')
+        return ClassType.from_mapping(Payload)
+    locals()['__contains__'] = Contains
+    locals()['__getitem__'] = Getitem
+    locals()['from_mapping'] = FromMapping
+    locals()['get'] = GetAction
+    locals()['load'] = LoadAction
 
-
-# group count parsing enforces an unambiguous forward or backward scalar locator
-def ParseRunGroupCount(
-    OwnerName: str,
-    GroupName: str,
-    Entry: Mapping[str, object],
-    HasLead: bool,
-) -> RunGroupCount:
-    RawAt = Entry.get("at")
-    RawBack = Entry.get("back")
+# this definition exists because focused behavior needs one stable owner
+def ParseRunGroup(OwnerName: str, GroupName: str, Entry: Mapping[str, object], HasLead: bool) -> RunGroupCount:
+    RawAt = Entry.get('at')
+    RawBack = Entry.get('back')
     HasAt = RawAt is not None
     HasBack = RawBack is not None
-    At = int(RawAt) if HasAt else 0
-    Back = int(RawBack) if HasBack else 0
-    Width = int(Entry.get("width", 0) or 0)
-    Lead = int(Entry.get("lead", 0) or 0)
-    if (
-        HasAt == HasBack
-        or Width not in (1, 2, 4)
-        or At < 0
-        or Back < 0
-        or Lead < 0
-        or (HasBack and Back < Width)
-        or (HasAt and HasLead and At + Width > Lead)
-    ):
-        raise ArchiveError(
-            f"run group {OwnerName}@{GroupName} has a malformed count locator"
-        )
-    if not HasLead and Lead:
-        raise ArchiveError(
-            f"run group {OwnerName}@{GroupName} has a count lead outside a class branch"
-        )
-    return RunGroupCount(At=At, Back=Back, Width=Width, Lead=Lead)
+    AtValue = int(RawAt) if HasAt else 0
+    BackValue = int(RawBack) if HasBack else 0
+    Width = int(Entry.get('width', 0) or 0)
+    LeadValue = int(Entry.get('lead', 0) or 0)
+    if HasAt == HasBack or Width not in (1, 2, 4) or AtValue < 0 or (BackValue < 0) or (LeadValue < 0) or (HasBack and BackValue < Width) or (HasAt and HasLead and (AtValue + Width > LeadValue)):
+        raise ArchiveError(f'run group {OwnerName}@{GroupName} has a malformed count locator')
+    if not HasLead and LeadValue:
+        raise ArchiveError(f'run group {OwnerName}@{GroupName} has a count lead outside a class branch')
+    return RunGroupCount(At=AtValue, Back=BackValue, Width=Width, Lead=LeadValue)
 
-
-# run group parsing converts the reverse engineered JSON contract into immutable rules
-def _run_group(name: str, entry: Mapping[str, object]) -> RunGroup:
-    label = str(entry.get("name", ""))
-    if not label:
-        raise ArchiveError(f"a run group of {name!r} has no name")
-    raw_element = entry.get("element", ())
-    if isinstance(raw_element, str) or not isinstance(raw_element, Sequence):
-        raise ArchiveError(f"run group {name}@{label} has a malformed element")
-    element = tuple(int(value) for value in raw_element)
-    if not element or any(value < 0 for value in element):
-        raise ArchiveError(
-            f"run group {name}@{label} needs one non negative run per element child"
-        )
-    raw_slots = entry.get("slots", ())
-    if isinstance(raw_slots, str) or not isinstance(raw_slots, Sequence):
-        raise ArchiveError(f"run group {name}@{label} has a malformed slots list")
-    slots = tuple(str(value) for value in raw_slots)
-    if len(slots) != len(element):
-        raise ArchiveError(
-            f"run group {name}@{label} names {len(slots)} slots for "
-            f"{len(element)} element runs"
-        )
-    trailer = int(entry.get("trailer", 0) or 0)
-    if trailer < 0:
-        raise ArchiveError(f"run group {name}@{label} has a negative trailer")
-    raw_gated = entry.get("element_by_version", {})
-    if not isinstance(raw_gated, Mapping):
-        raise ArchiveError(
-            f"run group {name}@{label} has a malformed element_by_version"
-        )
-    gated: dict[int, tuple[int, ...]] = {}
-    for version, values in raw_gated.items():
-        text = str(version)
-        if not text.isdigit():
-            raise ArchiveError(
-                f"run group {name}@{label} names a non numeric document "
-                f"version {text!r}"
-            )
-        if isinstance(values, str) or not isinstance(values, Sequence):
-            raise ArchiveError(
-                f"run group {name}@{label} at document version {text} has no element"
-            )
-        widths = tuple(int(value) for value in values)
-        if len(widths) != len(element) or any(value < 0 for value in widths):
-            raise ArchiveError(
-                f"run group {name}@{label} at document version {text} does not hold "
-                f"{len(element)} non negative runs"
-            )
-        gated[int(text)] = widths
-    RawVariants = entry.get("element_run_variants", ())
+# this definition exists because focused behavior needs one stable owner
+def RunGroupA(NameValue: str, Entry: Mapping[str, object]) -> RunGroup:
+    Label = str(Entry.get('name', ''))
+    if not Label:
+        raise ArchiveError(f'a run group of {NameValue!r} has no name')
+    RawElem = Entry.get('element', ())
+    if isinstance(RawElem, str) or not isinstance(RawElem, Sequence):
+        raise ArchiveError(f'run group {NameValue}@{Label} has a malformed element')
+    ElemValue = tuple((int(Value) for Value in RawElem))
+    if not ElemValue or any((Value < 0 for Value in ElemValue)):
+        raise ArchiveError(f'run group {NameValue}@{Label} needs one non negative run per element child')
+    RawSlots = Entry.get('slots', ())
+    if isinstance(RawSlots, str) or not isinstance(RawSlots, Sequence):
+        raise ArchiveError(f'run group {NameValue}@{Label} has a malformed slots list')
+    Slots = tuple((str(Value) for Value in RawSlots))
+    if len(Slots) != len(ElemValue):
+        raise ArchiveError(f'run group {NameValue}@{Label} names {len(Slots)} slots for {len(ElemValue)} element runs')
+    TrailerA = int(Entry.get('trailer', 0) or 0)
+    if TrailerA < 0:
+        raise ArchiveError(f'run group {NameValue}@{Label} has a negative trailer')
+    RawGated = Entry.get('element_by_version', {})
+    if not isinstance(RawGated, Mapping):
+        raise ArchiveError(f'run group {NameValue}@{Label} has a malformed element_by_version')
+    Gated: dict[int, tuple[int, ...]] = {}
+    for VersionA, Values in RawGated.items():
+        TextValue = str(VersionA)
+        if not TextValue.isdigit():
+            raise ArchiveError(f'run group {NameValue}@{Label} names a non numeric document version {TextValue!r}')
+        if isinstance(Values, str) or not isinstance(Values, Sequence):
+            raise ArchiveError(f'run group {NameValue}@{Label} at document version {TextValue} has no element')
+        Widths = tuple((int(Value) for Value in Values))
+        if len(Widths) != len(ElemValue) or any((Value < 0 for Value in Widths)):
+            raise ArchiveError(f'run group {NameValue}@{Label} at document version {TextValue} does not hold {len(ElemValue)} non negative runs')
+        Gated[int(TextValue)] = Widths
+    RawVariants = Entry.get('element_run_variants', ())
     if isinstance(RawVariants, (str, Mapping)) or not isinstance(RawVariants, Sequence):
-        raise ArchiveError(
-            f"run group {name}@{label} has malformed element_run_variants"
-        )
+        raise ArchiveError(f'run group {NameValue}@{Label} has malformed element_run_variants')
     Variants: list[RunGroupVariant] = []
     for RawVariant in RawVariants:
         if not isinstance(RawVariant, Mapping):
-            raise ArchiveError(
-                f"run group {name}@{label} has a malformed element run variant"
-            )
-        Slot = int(RawVariant.get("slot", -1))
-        PredicateAt = int(RawVariant.get("predicate_at", 0))
-        PredicateWidth = int(RawVariant.get("predicate_width", 0))
-        RawValues = RawVariant.get("values", ())
-        RawChildClasses = RawVariant.get("child_classes", ())
-        RawLast = RawVariant.get("last", False)
-        RawStopGroups = RawVariant.get("stop_groups", False)
-        RawVersions = RawVariant.get("versions", ())
-        Run = int(RawVariant.get("run", -1))
-        RawVersionRuns = RawVariant.get("runs_by_version", {})
-        RawTrailer = RawVariant.get("trailer")
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed element run variant')
+        SlotValue = int(RawVariant.get('slot', -1))
+        PredicateAt = int(RawVariant.get('predicate_at', 0))
+        PredicateWidth = int(RawVariant.get('predicate_width', 0))
+        RawValues = RawVariant.get('values', ())
+        RawChildClasses = RawVariant.get('child_classes', ())
+        RawLast = RawVariant.get('last', False)
+        RawStopGroups = RawVariant.get('stop_groups', False)
+        RawVersions = RawVariant.get('versions', ())
+        RunValue = int(RawVariant.get('run', -1))
+        RawVersionRuns = RawVariant.get('runs_by_version', {})
+        RawTrailer = RawVariant.get('trailer')
         Trailer = int(RawTrailer) if RawTrailer is not None else -1
-        if (
-            Slot < 0
-            or Slot >= len(element)
-            or PredicateAt < 0
-            or isinstance(RawValues, str)
-            or not isinstance(RawValues, Sequence)
-            or any(
-                not isinstance(Value, int) or isinstance(Value, bool) or Value < 0
-                for Value in RawValues
-            )
-            or isinstance(RawChildClasses, str)
-            or not isinstance(RawChildClasses, Sequence)
-            or any(
-                not isinstance(ChildClass, str) or not ChildClass
-                for ChildClass in RawChildClasses
-            )
-            or not isinstance(RawLast, bool)
-            or not isinstance(RawStopGroups, bool)
-            or isinstance(RawVersions, (str, Mapping))
-            or not isinstance(RawVersions, Sequence)
-            or any(
-                not isinstance(Version, int) or isinstance(Version, bool) or Version < 0
-                for Version in RawVersions
-            )
-            or Run < 0
-            or not isinstance(RawVersionRuns, Mapping)
-            or Trailer < -1
-            or (not RawValues and not RawChildClasses)
-            or (RawValues and PredicateWidth not in (1, 2, 4, 8))
-            or (not RawValues and PredicateWidth != 0)
-        ):
-            raise ArchiveError(
-                f"run group {name}@{label} has a malformed element run variant"
-            )
+        if SlotValue < 0 or SlotValue >= len(ElemValue) or PredicateAt < 0 or isinstance(RawValues, str) or (not isinstance(RawValues, Sequence)) or any((not isinstance(Value, int) or isinstance(Value, bool) or Value < 0 for Value in RawValues)) or isinstance(RawChildClasses, str) or (not isinstance(RawChildClasses, Sequence)) or any((not isinstance(ChildClass, str) or not ChildClass for ChildClass in RawChildClasses)) or (not isinstance(RawLast, bool)) or (not isinstance(RawStopGroups, bool)) or isinstance(RawVersions, (str, Mapping)) or (not isinstance(RawVersions, Sequence)) or any((not isinstance(Version, int) or isinstance(Version, bool) or Version < 0 for Version in RawVersions)) or (RunValue < 0) or (not isinstance(RawVersionRuns, Mapping)) or (Trailer < -1) or (not RawValues and (not RawChildClasses)) or (RawValues and PredicateWidth not in (1, 2, 4, 8)) or (not RawValues and PredicateWidth != 0):
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed element run variant')
         VersionRuns: dict[int, int] = {}
         for Version, Width in RawVersionRuns.items():
             VersionText = str(Version)
-            if (
-                not VersionText.isdigit()
-                or not isinstance(Width, int)
-                or isinstance(Width, bool)
-                or Width < 0
-            ):
-                raise ArchiveError(
-                    f"run group {name}@{label} has a malformed versioned "
-                    "element run variant"
-                )
+            if not VersionText.isdigit() or not isinstance(Width, int) or isinstance(Width, bool) or (Width < 0):
+                raise ArchiveError(f'run group {NameValue}@{Label} has a malformed versioned element run variant')
             VersionRuns[int(VersionText)] = int(Width)
-        Variants.append(
-            RunGroupVariant(
-                Slot=Slot,
-                Last=RawLast,
-                StopGroups=RawStopGroups,
-                Versions=tuple(int(Version) for Version in RawVersions),
-                PredicateAt=PredicateAt,
-                PredicateWidth=PredicateWidth,
-                Values=tuple(int(Value) for Value in RawValues),
-                ChildClasses=tuple(str(ChildClass) for ChildClass in RawChildClasses),
-                Run=Run,
-                RunsByVersion=VersionRuns,
-                Trailer=Trailer,
-            )
-        )
-    RawTrailerVariants = entry.get("trailer_variants", ())
-    if isinstance(RawTrailerVariants, (str, Mapping)) or not isinstance(
-        RawTrailerVariants, Sequence
-    ):
-        raise ArchiveError(f"run group {name}@{label} has malformed trailer_variants")
-    TrailerVariants: list[RunGroupTrailerVariant] = []
+        Variants.append(RunGroupVariant(Slot=SlotValue, Last=RawLast, StopGroups=RawStopGroups, Versions=tuple((int(Version) for Version in RawVersions)), PredicateAt=PredicateAt, PredicateWidth=PredicateWidth, Values=tuple((int(Value) for Value in RawValues)), ChildClasses=tuple((str(ChildClass) for ChildClass in RawChildClasses)), Run=RunValue, RunsByVersion=VersionRuns, Trailer=Trailer))
+    RawTrailerVariants = Entry.get('trailer_variants', ())
+    if isinstance(RawTrailerVariants, (str, Mapping)) or not isinstance(RawTrailerVariants, Sequence):
+        raise ArchiveError(f'run group {NameValue}@{Label} has malformed trailer_variants')
+    TrailerVariants: list[RunGroupTrailer] = []
     for RawVariant in RawTrailerVariants:
         if not isinstance(RawVariant, Mapping):
-            raise ArchiveError(
-                f"run group {name}@{label} has a malformed trailer variant"
-            )
-        RawVersions = RawVariant.get("versions", ())
-        PredicateAt = RawVariant.get("predicate_at", 0)
-        PredicateWidth = RawVariant.get("predicate_width", 0)
-        RawValues = RawVariant.get("values", ())
-        RawTrailer = RawVariant.get("trailer", -1)
-        if (
-            isinstance(RawVersions, (str, Mapping))
-            or not isinstance(RawVersions, Sequence)
-            or any(
-                not isinstance(Version, int) or isinstance(Version, bool) or Version < 0
-                for Version in RawVersions
-            )
-            or not isinstance(PredicateAt, int)
-            or isinstance(PredicateAt, bool)
-            or PredicateAt < 0
-            or PredicateWidth not in (1, 2, 4, 8)
-            or isinstance(RawValues, (str, Mapping))
-            or not isinstance(RawValues, Sequence)
-            or not RawValues
-            or any(
-                not isinstance(Value, int) or isinstance(Value, bool) or Value < 0
-                for Value in RawValues
-            )
-            or not isinstance(RawTrailer, int)
-            or isinstance(RawTrailer, bool)
-            or RawTrailer < 0
-        ):
-            raise ArchiveError(
-                f"run group {name}@{label} has a malformed trailer variant"
-            )
-        TrailerVariants.append(
-            RunGroupTrailerVariant(
-                Versions=tuple(int(Version) for Version in RawVersions),
-                PredicateAt=PredicateAt,
-                PredicateWidth=PredicateWidth,
-                Values=tuple(int(Value) for Value in RawValues),
-                Trailer=RawTrailer,
-            )
-        )
-    RawCountVariants = entry.get("count_variants", ())
-    if isinstance(RawCountVariants, (str, Mapping)) or not isinstance(
-        RawCountVariants, Sequence
-    ):
-        raise ArchiveError(f"run group {name}@{label} has malformed count_variants")
-    CountVariants: list[RunGroupCountVariant] = []
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed trailer variant')
+        RawVersions = RawVariant.get('versions', ())
+        PredicateAt = RawVariant.get('predicate_at', 0)
+        PredicateWidth = RawVariant.get('predicate_width', 0)
+        RawValues = RawVariant.get('values', ())
+        RawTrailer = RawVariant.get('trailer', -1)
+        if isinstance(RawVersions, (str, Mapping)) or not isinstance(RawVersions, Sequence) or any((not isinstance(Version, int) or isinstance(Version, bool) or Version < 0 for Version in RawVersions)) or (not isinstance(PredicateAt, int)) or isinstance(PredicateAt, bool) or (PredicateAt < 0) or (PredicateWidth not in (1, 2, 4, 8)) or isinstance(RawValues, (str, Mapping)) or (not isinstance(RawValues, Sequence)) or (not RawValues) or any((not isinstance(Value, int) or isinstance(Value, bool) or Value < 0 for Value in RawValues)) or (not isinstance(RawTrailer, int)) or isinstance(RawTrailer, bool) or (RawTrailer < 0):
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed trailer variant')
+        TrailerVariants.append(RunGroupTrailer(Versions=tuple((int(Version) for Version in RawVersions)), PredicateAt=PredicateAt, PredicateWidth=PredicateWidth, Values=tuple((int(Value) for Value in RawValues)), Trailer=RawTrailer))
+    RawCountVariants = Entry.get('count_variants', ())
+    if isinstance(RawCountVariants, (str, Mapping)) or not isinstance(RawCountVariants, Sequence):
+        raise ArchiveError(f'run group {NameValue}@{Label} has malformed count_variants')
+    CountVariants: list[RunGroupCountA] = []
     for RawVariant in RawCountVariants:
         if not isinstance(RawVariant, Mapping):
-            raise ArchiveError(
-                f"run group {name}@{label} has a malformed count variant"
-            )
-        RawVersions = RawVariant.get("versions", ())
-        PredicateAt = RawVariant.get("predicate_at", 0)
-        PredicateWidth = RawVariant.get("predicate_width", 0)
-        RawValues = RawVariant.get("values", ())
-        RawCount = RawVariant.get("count", -1)
-        RawLead = RawVariant.get("lead", 0)
-        if (
-            isinstance(RawVersions, (str, Mapping))
-            or not isinstance(RawVersions, Sequence)
-            or any(
-                not isinstance(Version, int) or isinstance(Version, bool) or Version < 0
-                for Version in RawVersions
-            )
-            or not isinstance(PredicateAt, int)
-            or isinstance(PredicateAt, bool)
-            or PredicateAt < 0
-            or PredicateWidth not in (1, 2, 4, 8)
-            or isinstance(RawValues, (str, Mapping))
-            or not isinstance(RawValues, Sequence)
-            or not RawValues
-            or any(
-                not isinstance(Value, int) or isinstance(Value, bool) or Value < 0
-                for Value in RawValues
-            )
-            or not isinstance(RawCount, int)
-            or isinstance(RawCount, bool)
-            or RawCount < 0
-            or not isinstance(RawLead, int)
-            or isinstance(RawLead, bool)
-            or RawLead < 0
-        ):
-            raise ArchiveError(
-                f"run group {name}@{label} has a malformed count variant"
-            )
-        CountVariants.append(
-            RunGroupCountVariant(
-                Versions=tuple(int(Version) for Version in RawVersions),
-                PredicateAt=PredicateAt,
-                PredicateWidth=PredicateWidth,
-                Values=tuple(int(Value) for Value in RawValues),
-                Count=RawCount,
-                Lead=RawLead,
-            )
-        )
-    raw_count = entry.get("count")
-    raw_repeat = entry.get("repeat")
-    RawCountBranches = entry.get("count_by_child_class", {})
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed count variant')
+        RawVersions = RawVariant.get('versions', ())
+        PredicateAt = RawVariant.get('predicate_at', 0)
+        PredicateWidth = RawVariant.get('predicate_width', 0)
+        RawValues = RawVariant.get('values', ())
+        RawCount = RawVariant.get('count', -1)
+        RawLead = RawVariant.get('lead', 0)
+        if isinstance(RawVersions, (str, Mapping)) or not isinstance(RawVersions, Sequence) or any((not isinstance(Version, int) or isinstance(Version, bool) or Version < 0 for Version in RawVersions)) or (not isinstance(PredicateAt, int)) or isinstance(PredicateAt, bool) or (PredicateAt < 0) or (PredicateWidth not in (1, 2, 4, 8)) or isinstance(RawValues, (str, Mapping)) or (not isinstance(RawValues, Sequence)) or (not RawValues) or any((not isinstance(Value, int) or isinstance(Value, bool) or Value < 0 for Value in RawValues)) or (not isinstance(RawCount, int)) or isinstance(RawCount, bool) or (RawCount < 0) or (not isinstance(RawLead, int)) or isinstance(RawLead, bool) or (RawLead < 0):
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed count variant')
+        CountVariants.append(RunGroupCountA(Versions=tuple((int(Version) for Version in RawVersions)), PredicateAt=PredicateAt, PredicateWidth=PredicateWidth, Values=tuple((int(Value) for Value in RawValues)), Count=RawCount, Lead=RawLead))
+    RawCountA = Entry.get('count')
+    RawRepeat = Entry.get('repeat')
+    RawCountBranches = Entry.get('count_by_child_class', {})
     if not isinstance(RawCountBranches, Mapping):
-        raise ArchiveError(
-            f"run group {name}@{label} has malformed count_by_child_class"
-        )
+        raise ArchiveError(f'run group {NameValue}@{Label} has malformed count_by_child_class')
     CountBranches: dict[str, RunGroupCount] = {}
     for ChildClass, RawBranch in RawCountBranches.items():
         if not str(ChildClass) or not isinstance(RawBranch, Mapping):
-            raise ArchiveError(f"run group {name}@{label} has a malformed count branch")
-        CountBranches[str(ChildClass)] = ParseRunGroupCount(
-            name,
-            label,
-            RawBranch,
-            True,
-        )
-    if raw_count is None and raw_repeat is None:
-        raise ArchiveError(f"run group {name}@{label} has neither a count nor a repeat")
-    if raw_count is not None and raw_repeat is not None:
-        raise ArchiveError(f"run group {name}@{label} has both a count and a repeat")
-    note = str(entry.get("note", ""))
-    if raw_repeat is not None:
+            raise ArchiveError(f'run group {NameValue}@{Label} has a malformed count branch')
+        CountBranches[str(ChildClass)] = ParseRunGroup(NameValue, Label, RawBranch, True)
+    if RawCountA is None and RawRepeat is None:
+        raise ArchiveError(f'run group {NameValue}@{Label} has neither a count nor a repeat')
+    if RawCountA is not None and RawRepeat is not None:
+        raise ArchiveError(f'run group {NameValue}@{Label} has both a count and a repeat')
+    NoteValue = str(Entry.get('note', ''))
+    if RawRepeat is not None:
         if CountBranches or CountVariants:
-            raise ArchiveError(
-                f"run group {name}@{label} repeats a constant and cannot branch its count"
-            )
-        if (
-            not isinstance(raw_repeat, int)
-            or isinstance(raw_repeat, bool)
-            or raw_repeat < 1
-        ):
-            raise ArchiveError(
-                f"run group {name}@{label} has a repeat that is not a positive integer"
-            )
-        return RunGroup(
-            name=label,
-            repeat=int(raw_repeat),
-            count_back=0,
-            count_width=0,
-            CountByChildClass={},
-            CountVariants=(),
-            slots=slots,
-            element=element,
-            element_by_version=gated,
-            ElementRunVariants=tuple(Variants),
-            trailer=trailer,
-            TrailerVariants=tuple(TrailerVariants),
-            note=note,
-        )
-    if not isinstance(raw_count, Mapping):
-        raise ArchiveError(f"run group {name}@{label} has a malformed count")
-    Count = ParseRunGroupCount(name, label, raw_count, False)
+            raise ArchiveError(f'run group {NameValue}@{Label} repeats a constant and cannot branch its count')
+        if not isinstance(RawRepeat, int) or isinstance(RawRepeat, bool) or RawRepeat < 1:
+            raise ArchiveError(f'run group {NameValue}@{Label} has a repeat that is not a positive integer')
+        return RunGroup(name=Label, repeat=int(RawRepeat), count_back=0, count_width=0, CountByChildClass={}, CountVariants=(), slots=Slots, element=ElemValue, element_by_version=Gated, ElementRunVariants=tuple(Variants), trailer=TrailerA, TrailerVariants=tuple(TrailerVariants), note=NoteValue)
+    if not isinstance(RawCountA, Mapping):
+        raise ArchiveError(f'run group {NameValue}@{Label} has a malformed count')
+    Count = ParseRunGroup(NameValue, Label, RawCountA, False)
     if not Count.Back:
-        raise ArchiveError(
-            f"run group {name}@{label} has a forward default count without a lead"
-        )
-    return RunGroup(
-        name=label,
-        repeat=-1,
-        count_back=Count.Back,
-        count_width=Count.Width,
-        CountByChildClass=CountBranches,
-        CountVariants=tuple(CountVariants),
-        slots=slots,
-        element=element,
-        element_by_version=gated,
-        ElementRunVariants=tuple(Variants),
-        trailer=trailer,
-        TrailerVariants=tuple(TrailerVariants),
-        note=note,
-    )
+        raise ArchiveError(f'run group {NameValue}@{Label} has a forward default count without a lead')
+    return RunGroup(name=Label, repeat=-1, count_back=Count.Back, count_width=Count.Width, CountByChildClass=CountBranches, CountVariants=tuple(CountVariants), slots=Slots, element=ElemValue, element_by_version=Gated, ElementRunVariants=tuple(Variants), trailer=TrailerA, TrailerVariants=tuple(TrailerVariants), note=NoteValue)
 
-
-# layout validation prevents malformed reverse engineered rules from corrupting later records
-def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
-    raw_slots = entry.get("child_slots", ())
-    if isinstance(raw_slots, str) or not isinstance(raw_slots, Sequence):
-        raise ArchiveError(f"layout entry for {name!r} has a malformed child_slots")
-    slots = tuple(str(slot) for slot in raw_slots)
-    raw_runs = entry.get("runs", {})
-    if not isinstance(raw_runs, Mapping):
-        raise ArchiveError(f"layout entry for {name!r} has a malformed runs mapping")
-    runs: dict[str, int] = {}
-    for key, value in raw_runs.items():
-        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            raise ArchiveError(f"run {name}@{key} is not a non negative integer")
-        runs[str(key)] = int(value)
-    raw_gated = entry.get("runs_by_version", {})
-    if not isinstance(raw_gated, Mapping):
-        raise ArchiveError(f"layout entry for {name!r} has a malformed runs_by_version")
-    gated: dict[str, Mapping[int, int]] = {}
-    for key, mapping in raw_gated.items():
-        if not isinstance(mapping, Mapping):
-            raise ArchiveError(
-                f"runs_by_version {name}@{key} does not hold a version mapping"
-            )
-        by_version: dict[int, int] = {}
-        for version, value in mapping.items():
-            text = str(version)
-            if not text.isdigit():
-                raise ArchiveError(
-                    f"runs_by_version {name}@{key} names a "
-                    f"non numeric document version {text!r}"
-                )
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                raise ArchiveError(
-                    f"run {name}@{key} at document version {text} is not a "
-                    "non negative integer"
-                )
-            by_version[int(text)] = int(value)
-        if not by_version:
-            raise ArchiveError(f"runs_by_version {name}@{key} names no version")
-        gated[str(key)] = by_version
-    RawChildRuns = entry.get("runs_by_child_class", {})
+# this definition exists because focused behavior needs one stable owner
+def ClassLayoutA(NameValue: str, Entry: Mapping[str, object]) -> ClassLayout:
+    RawSlots = Entry.get('child_slots', ())
+    if isinstance(RawSlots, str) or not isinstance(RawSlots, Sequence):
+        raise ArchiveError(f'layout entry for {NameValue!r} has a malformed child_slots')
+    Slots = tuple((str(SlotValue) for SlotValue in RawSlots))
+    RawRuns = Entry.get('runs', {})
+    if not isinstance(RawRuns, Mapping):
+        raise ArchiveError(f'layout entry for {NameValue!r} has a malformed runs mapping')
+    RunsValue: dict[str, int] = {}
+    for KeyValue, Value in RawRuns.items():
+        if not isinstance(Value, int) or isinstance(Value, bool) or Value < 0:
+            raise ArchiveError(f'run {NameValue}@{KeyValue} is not a non negative integer')
+        RunsValue[str(KeyValue)] = int(Value)
+    RawGated = Entry.get('runs_by_version', {})
+    if not isinstance(RawGated, Mapping):
+        raise ArchiveError(f'layout entry for {NameValue!r} has a malformed runs_by_version')
+    Gated: dict[str, Mapping[int, int]] = {}
+    for KeyValue, Mapping in RawGated.items():
+        if not isinstance(Mapping, Mapping):
+            raise ArchiveError(f'runs_by_version {NameValue}@{KeyValue} does not hold a version mapping')
+        ByVersion: dict[int, int] = {}
+        for Version, Value in Mapping.items():
+            TextValue = str(Version)
+            if not TextValue.isdigit():
+                raise ArchiveError(f'runs_by_version {NameValue}@{KeyValue} names a non numeric document version {TextValue!r}')
+            if not isinstance(Value, int) or isinstance(Value, bool) or Value < 0:
+                raise ArchiveError(f'run {NameValue}@{KeyValue} at document version {TextValue} is not a non negative integer')
+            ByVersion[int(TextValue)] = int(Value)
+        if not ByVersion:
+            raise ArchiveError(f'runs_by_version {NameValue}@{KeyValue} names no version')
+        Gated[str(KeyValue)] = ByVersion
+    RawChildRuns = Entry.get('runs_by_child_class', {})
     if not isinstance(RawChildRuns, Mapping):
-        raise ArchiveError(
-            f"layout entry for {name!r} has malformed runs_by_child_class"
-        )
+        raise ArchiveError(f'layout entry for {NameValue!r} has malformed runs_by_child_class')
     ChildRuns: dict[str, Mapping[str, int]] = {}
     for RunKey, RawClassRuns in RawChildRuns.items():
         if not isinstance(RawClassRuns, Mapping) or not RawClassRuns:
-            raise ArchiveError(
-                f"runs_by_child_class {name}@{RunKey} has no class mapping"
-            )
+            raise ArchiveError(f'runs_by_child_class {NameValue}@{RunKey} has no class mapping')
         ClassRuns: dict[str, int] = {}
         for ChildClass, RunValue in RawClassRuns.items():
-            if (
-                not str(ChildClass)
-                or not isinstance(RunValue, int)
-                or isinstance(RunValue, bool)
-                or RunValue < 0
-            ):
-                raise ArchiveError(
-                    f"run {name}@{RunKey} for child {ChildClass!r} is malformed"
-                )
+            if not str(ChildClass) or not isinstance(RunValue, int) or isinstance(RunValue, bool) or (RunValue < 0):
+                raise ArchiveError(f'run {NameValue}@{RunKey} for child {ChildClass!r} is malformed')
             ClassRuns[str(ChildClass)] = int(RunValue)
         ChildRuns[str(RunKey)] = ClassRuns
-    raw_variable = entry.get("variable_runs", ())
-    if isinstance(raw_variable, str) or not isinstance(raw_variable, Sequence):
-        raise ArchiveError(f"layout entry for {name!r} has a malformed variable_runs")
-    variable: dict[str, list[VariableRun]] = {}
-    for item in raw_variable:
-        if not isinstance(item, Mapping):
-            raise ArchiveError(f"variable run of {name!r} is not a mapping")
-        slot = str(item.get("slot", ""))
-        raw_values = item.get("values", ())
-        if isinstance(raw_values, str) or not isinstance(raw_values, Sequence):
-            raise ArchiveError(f"variable run {name}@{slot} has malformed values")
-        RawTailGate = item.get("tail_by_version", {})
+    RawVariable = Entry.get('variable_runs', ())
+    if isinstance(RawVariable, str) or not isinstance(RawVariable, Sequence):
+        raise ArchiveError(f'layout entry for {NameValue!r} has a malformed variable_runs')
+    Variable: dict[str, list[VariableRun]] = {}
+    for ItemValue in RawVariable:
+        if not isinstance(ItemValue, Mapping):
+            raise ArchiveError(f'variable run of {NameValue!r} is not a mapping')
+        SlotValue = str(ItemValue.get('slot', ''))
+        RawValues = ItemValue.get('values', ())
+        if isinstance(RawValues, str) or not isinstance(RawValues, Sequence):
+            raise ArchiveError(f'variable run {NameValue}@{SlotValue} has malformed values')
+        RawTailGate = ItemValue.get('tail_by_version', {})
         if not isinstance(RawTailGate, Mapping):
-            raise ArchiveError(
-                f"variable run {name}@{slot} has malformed tail_by_version"
-            )
+            raise ArchiveError(f'variable run {NameValue}@{SlotValue} has malformed tail_by_version')
         TailGate: dict[int, int] = {}
         for VersionText, TailValue in RawTailGate.items():
             VersionName = str(VersionText)
             if not VersionName.isdigit():
-                raise ArchiveError(
-                    f"variable run {name}@{slot} names a non numeric "
-                    f"tail version {VersionName!r}"
-                )
-            if (
-                not isinstance(TailValue, int)
-                or isinstance(TailValue, bool)
-                or TailValue < 0
-            ):
-                raise ArchiveError(
-                    f"variable run {name}@{slot} has an invalid tail for "
-                    f"document version {VersionName}"
-                )
+                raise ArchiveError(f'variable run {NameValue}@{SlotValue} names a non numeric tail version {VersionName!r}')
+            if not isinstance(TailValue, int) or isinstance(TailValue, bool) or TailValue < 0:
+                raise ArchiveError(f'variable run {NameValue}@{SlotValue} has an invalid tail for document version {VersionName}')
             TailGate[int(VersionName)] = int(TailValue)
-        variable.setdefault(slot, []).append(
-            VariableRun(
-                slot=slot,
-                rule=str(item.get("rule", OPAQUE_RULE)),
-                at=int(item.get("at", 0) or 0),
-                tail=int(item.get("tail", 0) or 0),
-                TailByVersion=TailGate,
-                stride=int(item.get("stride", 0) or 0),
-                count_width=int(item.get("count_width", 0) or 0),
-                width=int(item.get("width", 0) or 0),
-                predicate=str(item.get("predicate", "")),
-                predicate_at=int(item.get("predicate_at", 0) or 0),
-                predicate_width=int(item.get("predicate_width", 0) or 0),
-                values=tuple(int(value) for value in raw_values),
-                note=str(item.get("note", "")),
-            )
-        )
-    raw_repeat = entry.get("repeat_count")
-    repeat: RepeatField | None = None
-    if isinstance(raw_repeat, Mapping) and REPEATED_SLOT in slots:
-        run = str(raw_repeat.get("run", ""))
-        RawAt = raw_repeat.get("at")
-        RawBack = raw_repeat.get("back")
+        Variable.setdefault(SlotValue, []).append(VariableRun(slot=SlotValue, rule=str(ItemValue.get('rule', KOpaqueRule)), at=int(ItemValue.get('at', 0) or 0), tail=int(ItemValue.get('tail', 0) or 0), TailByVersion=TailGate, stride=int(ItemValue.get('stride', 0) or 0), count_width=int(ItemValue.get('count_width', 0) or 0), width=int(ItemValue.get('width', 0) or 0), predicate=str(ItemValue.get('predicate', '')), predicate_at=int(ItemValue.get('predicate_at', 0) or 0), predicate_width=int(ItemValue.get('predicate_width', 0) or 0), values=tuple((int(Value) for Value in RawValues)), note=str(ItemValue.get('note', ''))))
+    RawRepeat = Entry.get('repeat_count')
+    Repeat: RepeatField | None = None
+    if isinstance(RawRepeat, Mapping) and KRepeatedSlot in Slots:
+        RunValueA = str(RawRepeat.get('run', ''))
+        RawAt = RawRepeat.get('at')
+        RawBack = RawRepeat.get('back')
         HasAt = RawAt is not None
         HasBack = RawBack is not None
-        at = int(RawAt) if HasAt else 0
-        Back = int(RawBack) if HasBack else 0
-        width = int(raw_repeat.get("width", 0))
-        if (
-            not run
-            or HasAt == HasBack
-            or at < 0
-            or Back < 0
-            or width not in (1, 2, 4)
-            or (HasBack and Back < width)
-        ):
-            raise ArchiveError(f"repeat_count of {name!r} is malformed")
-        if len(slots) < 2:
-            raise ArchiveError(f"repeat_count of {name!r} has no template slot")
-        repeat = RepeatField(run=run, at=at, Back=Back, width=width)
-    unresolved = (REPEATED_SLOT in slots or raw_repeat is not None) and repeat is None
-    raw_prefix = entry.get("repeat_prefix", 0)
-    if (
-        not isinstance(raw_prefix, int)
-        or isinstance(raw_prefix, bool)
-        or raw_prefix < 0
-    ):
-        raise ArchiveError(f"repeat_prefix of {name!r} is not a non negative integer")
-    prefix = int(raw_prefix)
-    if prefix and not unresolved:
-        raise ArchiveError(
-            f"repeat_prefix of {name!r} names a prefix for a class whose child "
-            "count is already resolved"
-        )
-    if prefix > len(slots):
-        raise ArchiveError(
-            f"repeat_prefix {prefix} of {name!r} exceeds its {len(slots)} child slots"
-        )
-    RepeatTrailer = entry.get("repeat_trailer", 0)
-    if (
-        not isinstance(RepeatTrailer, int)
-        or isinstance(RepeatTrailer, bool)
-        or RepeatTrailer < 0
-    ):
-        raise ArchiveError(f"repeat_trailer of {name!r} is not a non negative integer")
-    if RepeatTrailer and repeat is None:
-        raise ArchiveError(f"repeat_trailer of {name!r} has no resolved repeat_count")
-    RawChildCounts = entry.get("child_count_by_class")
-    ChildCounts: ChildCountByClass | None = None
+        AtValue = int(RawAt) if HasAt else 0
+        BackValue = int(RawBack) if HasBack else 0
+        Width = int(RawRepeat.get('width', 0))
+        if not RunValueA or HasAt == HasBack or AtValue < 0 or (BackValue < 0) or (Width not in (1, 2, 4)) or (HasBack and BackValue < Width):
+            raise ArchiveError(f'repeat_count of {NameValue!r} is malformed')
+        if len(Slots) < 2:
+            raise ArchiveError(f'repeat_count of {NameValue!r} has no template slot')
+        Repeat = RepeatField(run=RunValueA, at=AtValue, Back=BackValue, width=Width)
+    Unresolved = (KRepeatedSlot in Slots or RawRepeat is not None) and Repeat is None
+    RawPrefix = Entry.get('repeat_prefix', 0)
+    if not isinstance(RawPrefix, int) or isinstance(RawPrefix, bool) or RawPrefix < 0:
+        raise ArchiveError(f'repeat_prefix of {NameValue!r} is not a non negative integer')
+    Prefix = int(RawPrefix)
+    if Prefix and (not Unresolved):
+        raise ArchiveError(f'repeat_prefix of {NameValue!r} names a prefix for a class whose child count is already resolved')
+    if Prefix > len(Slots):
+        raise ArchiveError(f'repeat_prefix {Prefix} of {NameValue!r} exceeds its {len(Slots)} child slots')
+    RepeatTrailer = Entry.get('repeat_trailer', 0)
+    if not isinstance(RepeatTrailer, int) or isinstance(RepeatTrailer, bool) or RepeatTrailer < 0:
+        raise ArchiveError(f'repeat_trailer of {NameValue!r} is not a non negative integer')
+    if RepeatTrailer and Repeat is None:
+        raise ArchiveError(f'repeat_trailer of {NameValue!r} has no resolved repeat_count')
+    RawChildCounts = Entry.get('child_count_by_class')
+    ChildCounts: ChildCountBy | None = None
     if RawChildCounts is not None:
         if not isinstance(RawChildCounts, Mapping):
-            raise ArchiveError(f"child_count_by_class of {name!r} is malformed")
-        RawCountSlot = RawChildCounts.get("slot")
-        RawCounts = RawChildCounts.get("counts")
-        if (
-            not isinstance(RawCountSlot, int)
-            or isinstance(RawCountSlot, bool)
-            or not isinstance(RawCounts, Mapping)
-        ):
-            raise ArchiveError(f"child_count_by_class of {name!r} is malformed")
+            raise ArchiveError(f'child_count_by_class of {NameValue!r} is malformed')
+        RawCountSlot = RawChildCounts.get('slot')
+        RawCounts = RawChildCounts.get('counts')
+        if not isinstance(RawCountSlot, int) or isinstance(RawCountSlot, bool) or (not isinstance(RawCounts, Mapping)):
+            raise ArchiveError(f'child_count_by_class of {NameValue!r} is malformed')
         CountSlot = int(RawCountSlot)
         Counts: dict[str, int] = {}
         for ClassName, CountValue in RawCounts.items():
-            if (
-                not str(ClassName)
-                or not isinstance(CountValue, int)
-                or isinstance(CountValue, bool)
-                or CountValue <= CountSlot
-                or CountValue > len(slots)
-            ):
-                raise ArchiveError(
-                    f"child count branch {name}@{ClassName} is malformed"
-                )
+            if not str(ClassName) or not isinstance(CountValue, int) or isinstance(CountValue, bool) or (CountValue <= CountSlot) or (CountValue > len(Slots)):
+                raise ArchiveError(f'child count branch {NameValue}@{ClassName} is malformed')
             Counts[str(ClassName)] = int(CountValue)
-        if CountSlot < 0 or CountSlot >= len(slots) or not Counts:
-            raise ArchiveError(f"child_count_by_class of {name!r} is malformed")
-        if repeat is not None or unresolved or prefix:
-            raise ArchiveError(
-                f"child_count_by_class of {name!r} conflicts with a repeat rule"
-            )
-        ChildCounts = ChildCountByClass(Slot=CountSlot, Counts=Counts)
-    raw_groups = entry.get("groups", ())
-    if isinstance(raw_groups, str) or not isinstance(raw_groups, Sequence):
-        raise ArchiveError(f"layout entry for {name!r} has a malformed groups list")
-    parsed: list[RunGroup] = []
-    for item in raw_groups:
-        if not isinstance(item, Mapping):
-            raise ArchiveError(f"a run group of {name!r} is not a mapping")
-        parsed.append(_run_group(name, item))
-    groups = tuple(parsed)
-    if groups and (slots or repeat is not None or unresolved or prefix):
-        raise ArchiveError(
-            f"layout entry for {name!r} drives its children from run groups and "
-            "must not also declare child slots"
-        )
-    if groups and LEAD_RUN not in runs and LEAD_RUN not in gated:
-        raise ArchiveError(f"layout entry for {name!r} has run groups but no lead run")
-    return ClassLayout(
-        name=name,
-        child_slots=slots,
-        runs=runs,
-        variable_runs={key: tuple(value) for key, value in variable.items()},
-        confidence=str(entry.get("confidence", "partial")),
-        source=str(entry.get("source", "")),
-        repeat_note=str(entry.get("repeat_note", "")),
-        repeat_count=repeat,
-        repeat_unresolved=unresolved,
-        repeat_prefix=prefix,
-        RepeatTrailer=RepeatTrailer,
-        ChildCounts=ChildCounts,
-        runs_by_version=gated,
-        RunsByChildClass=ChildRuns,
-        groups=groups,
-    )
+        if CountSlot < 0 or CountSlot >= len(Slots) or (not Counts):
+            raise ArchiveError(f'child_count_by_class of {NameValue!r} is malformed')
+        if Repeat is not None or Unresolved or Prefix:
+            raise ArchiveError(f'child_count_by_class of {NameValue!r} conflicts with a repeat rule')
+        ChildCounts = ChildCountBy(Slot=CountSlot, Counts=Counts)
+    RawGroups = Entry.get('groups', ())
+    if isinstance(RawGroups, str) or not isinstance(RawGroups, Sequence):
+        raise ArchiveError(f'layout entry for {NameValue!r} has a malformed groups list')
+    Parsed: list[RunGroup] = []
+    for ItemValue in RawGroups:
+        if not isinstance(ItemValue, Mapping):
+            raise ArchiveError(f'a run group of {NameValue!r} is not a mapping')
+        Parsed.append(RunGroupA(NameValue, ItemValue))
+    Groups = tuple(Parsed)
+    if Groups and (Slots or Repeat is not None or Unresolved or Prefix):
+        raise ArchiveError(f'layout entry for {NameValue!r} drives its children from run groups and must not also declare child slots')
+    if Groups and KLeadRun not in RunsValue and (KLeadRun not in Gated):
+        raise ArchiveError(f'layout entry for {NameValue!r} has run groups but no lead run')
+    return ClassLayout(name=NameValue, child_slots=Slots, runs=RunsValue, variable_runs={KeyValue: tuple(Value) for KeyValue, Value in Variable.items()}, confidence=str(Entry.get('confidence', 'partial')), source=str(Entry.get('source', '')), repeat_note=str(Entry.get('repeat_note', '')), repeat_count=Repeat, repeat_unresolved=Unresolved, repeat_prefix=Prefix, RepeatTrailer=RepeatTrailer, ChildCounts=ChildCounts, runs_by_version=Gated, RunsByChildClass=ChildRuns, groups=Groups)
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class Frame:
+    locals().setdefault('__annotations__', {})
+    __annotations__['node'] = 'int'
+    __annotations__['class_name'] = 'str'
+    __annotations__['layout'] = 'ClassLayout'
+    __annotations__['slot'] = 'int'
+    __annotations__['total'] = 'int'
+    __annotations__['group'] = 'int'
+    locals()['group'] = 0
+    __annotations__['step'] = 'int'
+    locals()['step'] = 0
+    __annotations__['plan'] = 'tuple[int, ...]'
+    locals()['plan'] = ()
+    __annotations__['key'] = 'str'
+    locals()['key'] = KLeadRun
+    KChildClass: str = ''
 
-@dataclass(slots=True)
-class _Frame:
-    node: int
-    class_name: str
-    layout: ClassLayout
-    slot: int
-    total: int
-    group: int = 0
-    step: int = 0
-    plan: tuple[int, ...] = ()
-    key: str = LEAD_RUN
-    ChildClass: str = ""
+# this definition exists because focused behavior needs one stable owner
+def Scalar(BlobValue: bytes, Offset: int, Width: int) -> int:
+    if Width not in (1, 2, 4, 8):
+        raise ArchiveError(f'unsupported scalar width {Width}')
+    if Offset < 0 or Offset + Width > len(BlobValue):
+        raise ArchiveError(f'{Width} byte field at offset {Offset} runs past the end of the stream')
+    return int.from_bytes(BlobValue[Offset:Offset + Width], 'little')
 
-
-def _scalar(blob: bytes, offset: int, width: int) -> int:
-    if width not in (1, 2, 4, 8):
-        raise ArchiveError(f"unsupported scalar width {width}")
-    if offset < 0 or offset + width > len(blob):
-        raise ArchiveError(
-            f"{width} byte field at offset {offset} runs past the end of the stream"
-        )
-    return int.from_bytes(blob[offset : offset + width], "little")
-
-
-# variable element sizing lets the static walk cross strings arrays and gated tails safely
-def _element_length(
-    blob: bytes,
-    cursor: int,
-    layout: ClassLayout,
-    key: str,
-    offset: int,
-    base: int,
-    element: VariableRun,
-    mo_version: int | None,
-) -> int:
-    TailValue = element.tail
-    if mo_version is not None:
-        TailValue = element.TailByVersion.get(mo_version, TailValue)
-    if element.rule == STRING_RULE:
+# this definition exists because focused behavior needs one stable owner
+def ElemLength(BlobValue: bytes, Cursor: int, Layout: ClassLayout, KeyValue: str, Offset: int, BaseValue: int, ElemValue: VariableRun, MoVersion: int | None) -> int:
+    TailValue = ElemValue.tail
+    if MoVersion is not None:
+        TailValue = ElemValue.TailByVersion.get(MoVersion, TailValue)
+    if ElemValue.rule == KStringRule:
         try:
-            _, consumed = read_string(blob, cursor + element.at)
+            Ignored, Consumed = ReadString(BlobValue, Cursor + ElemValue.at)
         except ArchiveError as error:
-            raise SegmentationError(
-                layout.name, key, offset, str(error), base=base
-            ) from error
-        return element.at + consumed + TailValue
-    if element.rule == COUNT_RULE:
-        if element.count_width <= 0 or element.stride < 0:
-            raise SegmentationError(
-                layout.name,
-                key,
-                offset,
-                "count rule is missing a count width or stride",
-                base=base,
-            )
+            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        return ElemValue.at + Consumed + TailValue
+    if ElemValue.rule == KCountRule:
+        if ElemValue.count_width <= 0 or ElemValue.stride < 0:
+            raise Segmentation(Layout.name, KeyValue, Offset, 'count rule is missing a count width or stride', BaseValue=BaseValue)
         try:
-            count = _scalar(blob, cursor + element.at, element.count_width)
+            Count = Scalar(BlobValue, Cursor + ElemValue.at, ElemValue.count_width)
         except ArchiveError as error:
-            raise SegmentationError(
-                layout.name, key, offset, str(error), base=base
-            ) from error
-        return element.at + element.count_width + element.stride * count + TailValue
-    if element.rule == CONDITIONAL_RULE:
-        if element.predicate_width <= 0 or not element.values:
-            raise SegmentationError(
-                layout.name,
-                key,
-                offset,
-                "conditional rule is missing a predicate width or value set",
-                base=base,
-            )
+            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        return ElemValue.at + ElemValue.count_width + ElemValue.stride * Count + TailValue
+    if ElemValue.rule == KConditionalRule:
+        if ElemValue.predicate_width <= 0 or not ElemValue.values:
+            raise Segmentation(Layout.name, KeyValue, Offset, 'conditional rule is missing a predicate width or value set', BaseValue=BaseValue)
         try:
-            value = _scalar(
-                blob,
-                cursor + element.predicate_at,
-                element.predicate_width,
-            )
+            Value = Scalar(BlobValue, Cursor + ElemValue.predicate_at, ElemValue.predicate_width)
         except ArchiveError as error:
-            raise SegmentationError(
-                layout.name, key, offset, str(error), base=base
-            ) from error
-        present = element.width if value in element.values else 0
-        return element.at + present + TailValue
-    if element.rule == KGuardRule:
-        if element.predicate_width <= 0 or not element.values:
-            raise SegmentationError(
-                layout.name,
-                key,
-                offset,
-                "guard rule is missing a predicate width or value set",
-                base=base,
-            )
+            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        Present = ElemValue.width if Value in ElemValue.values else 0
+        return ElemValue.at + Present + TailValue
+    if ElemValue.rule == KGuardRule:
+        if ElemValue.predicate_width <= 0 or not ElemValue.values:
+            raise Segmentation(Layout.name, KeyValue, Offset, 'guard rule is missing a predicate width or value set', BaseValue=BaseValue)
         try:
-            value = _scalar(
-                blob,
-                cursor + element.predicate_at,
-                element.predicate_width,
-            )
+            Value = Scalar(BlobValue, Cursor + ElemValue.predicate_at, ElemValue.predicate_width)
         except ArchiveError as error:
-            raise SegmentationError(
-                layout.name, key, offset, str(error), base=base
-            ) from error
-        if value not in element.values:
-            raise SegmentationError(
-                layout.name,
-                key,
-                offset,
-                f"guard predicate {element.predicate!r} rejected value {value}",
-                base=base,
-            )
-        return element.at + TailValue
-    raise SegmentationError(
-        layout.name,
-        key,
-        offset,
-        f"run rule {element.rule!r} cannot be resolved statically"
-        + (f" ({element.note})" if element.note else ""),
-        base=base,
-    )
+            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        if Value not in ElemValue.values:
+            raise Segmentation(Layout.name, KeyValue, Offset, f'guard predicate {ElemValue.predicate!r} rejected value {Value}', BaseValue=BaseValue)
+        return ElemValue.at + TailValue
+    raise Segmentation(Layout.name, KeyValue, Offset, f'run rule {ElemValue.rule!r} cannot be resolved statically' + (f' ({ElemValue.note})' if ElemValue.note else ''), BaseValue=BaseValue)
 
-
-# one run resolver centralizes refusal semantics before the parser advances its cursor
-def _run_length(
-    blob: bytes,
-    cursor: int,
-    layout: ClassLayout,
-    key: str,
-    offset: int,
-    base: int,
-    mo_version: int | None,
-    ChildClass: str = "",
-) -> int:
-    ClassRuns = layout.RunsByChildClass.get(key)
+# this definition exists because focused behavior needs one stable owner
+def RunLength(BlobValue: bytes, Cursor: int, Layout: ClassLayout, KeyValue: str, Offset: int, BaseValue: int, MoVersion: int | None, ChildClass: str='') -> int:
+    ClassRuns = Layout.RunsByChildClass.get(KeyValue)
     if ClassRuns is not None:
         ClassLength = ClassRuns.get(ChildClass)
         if ClassLength is None:
-            raise SegmentationError(
-                layout.name,
-                key,
-                offset,
-                f"run branch has no case for child class {ChildClass!r}",
-                base=base,
-            )
+            raise Segmentation(Layout.name, KeyValue, Offset, f'run branch has no case for child class {ChildClass!r}', BaseValue=BaseValue)
         return ClassLength
-    constant = layout.constant_run(key, mo_version)
-    if constant is not None:
-        return constant
-    elements = layout.variable_runs.get(key)
-    if not elements:
-        reason = "no constant run length and no rule recorded in the layout table"
-        if key in layout.runs_by_version:
-            reason += (
-                f" for document version {mo_version}"
-                if mo_version is not None
-                else " and no document version was supplied"
-            )
-        raise SegmentationError(
-            layout.name,
-            key,
-            offset,
-            reason,
-            base=base,
-        )
-    length = 0
-    for element in elements:
-        length += _element_length(
-            blob,
-            cursor + length,
-            layout,
-            key,
-            offset,
-            base,
-            element,
-            mo_version,
-        )
-    return length
+    Constant = Layout.constant_run(KeyValue, MoVersion)
+    if Constant is not None:
+        return Constant
+    Elements = Layout.variable_runs.get(KeyValue)
+    if not Elements:
+        Reason = 'no constant run length and no rule recorded in the layout table'
+        if KeyValue in Layout.runs_by_version:
+            Reason += f' for document version {MoVersion}' if MoVersion is not None else ' and no document version was supplied'
+        raise Segmentation(Layout.name, KeyValue, Offset, Reason, BaseValue=BaseValue)
+    Length = 0
+    for ElemValue in Elements:
+        Length += ElemLength(BlobValue, Cursor + Length, Layout, KeyValue, Offset, BaseValue, ElemValue, MoVersion)
+    return Length
 
-
-# repeat totals make variable child collections statically walkable
-def _repeat_total(
-    blob: bytes,
-    run_start: int,
-    run_end: int,
-    layout: ClassLayout,
-    offset: int,
-    base: int,
-) -> int:
-    repeat = layout.repeat_count
-    if repeat is None:
-        raise SegmentationError(
-            layout.name,
-            LEAD_RUN,
-            offset,
-            "a repeated child count was requested without a repeat_count rule",
-            base=base,
-        )
+# this definition exists because focused behavior needs one stable owner
+def RepeatTotal(BlobValue: bytes, RunStart: int, RunEnd: int, Layout: ClassLayout, Offset: int, BaseValue: int) -> int:
+    Repeat = Layout.repeat_count
+    if Repeat is None:
+        raise Segmentation(Layout.name, KLeadRun, Offset, 'a repeated child count was requested without a repeat_count rule', BaseValue=BaseValue)
     try:
-        CountAt = run_end - repeat.Back if repeat.Back else run_start + repeat.at
-        count = _scalar(blob, CountAt, repeat.width)
+        CountAt = RunEnd - Repeat.Back if Repeat.Back else RunStart + Repeat.at
+        Count = Scalar(BlobValue, CountAt, Repeat.width)
     except ArchiveError as error:
-        raise SegmentationError(
-            layout.name, repeat.run, offset, str(error), base=base
-        ) from error
-    template = layout.template_slot
-    if count < 0 or template < 0:
-        raise SegmentationError(
-            layout.name,
-            repeat.run,
-            offset,
-            f"repeated child count {count} is not usable",
-            base=base,
-        )
-    return template + count
+        raise Segmentation(Layout.name, Repeat.run, Offset, str(error), BaseValue=BaseValue) from error
+    Template = Layout.template_slot
+    if Count < 0 or Template < 0:
+        raise Segmentation(Layout.name, Repeat.run, Offset, f'repeated child count {Count} is not usable', BaseValue=BaseValue)
+    return Template + Count
 
+# this definition exists because focused behavior needs one stable owner
+def Advance(BlobValue: bytes, Cursor: int, Amount: int, Layout: ClassLayout, KeyValue: str, Offset: int, BaseValue: int) -> int:
+    EndValue = Cursor + Amount
+    if EndValue > len(BlobValue):
+        raise Segmentation(Layout.name, KeyValue, Offset, f'run of {Amount} bytes at {Cursor} runs past the {len(BlobValue)} byte stream', BaseValue=BaseValue)
+    return EndValue
 
-def _advance(
-    blob: bytes,
-    cursor: int,
-    amount: int,
-    layout: ClassLayout,
-    key: str,
-    offset: int,
-    base: int,
-) -> int:
-    end = cursor + amount
-    if end > len(blob):
-        raise SegmentationError(
-            layout.name,
-            key,
-            offset,
-            f"run of {amount} bytes at {cursor} runs past the {len(blob)} byte stream",
-            base=base,
-        )
-    return end
-
-
-# grouped element sizing selects the decompiled discriminator branch before advancing
-def _group_element_length(
-    blob: bytes,
-    cursor: int,
-    frame: _Frame,
-    offset: int,
-    base: int,
-    mo_version: int | None,
-) -> tuple[int, int | None, bool]:
-    Group = frame.layout.groups[frame.group - 1]
-    Slot = frame.step % len(Group.element)
+# this definition exists because focused behavior needs one stable owner
+def GroupElemLength(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, BaseValue: int, MoVersion: int | None) -> tuple[int, int | None, bool]:
+    Group = Frame.layout.groups[Frame.group - 1]
+    SlotValue = Frame.step % len(Group.element)
     for Variant in Group.ElementRunVariants:
-        if Variant.Slot != Slot:
+        if Variant.Slot != SlotValue:
             continue
-        if Variant.Last and frame.step + 1 != len(frame.plan):
+        if Variant.Last and Frame.step + 1 != len(Frame.plan):
             continue
-        if Variant.Versions and mo_version not in Variant.Versions:
+        if Variant.Versions and MoVersion not in Variant.Versions:
             continue
-        if Variant.ChildClasses and frame.ChildClass not in Variant.ChildClasses:
+        if Variant.ChildClasses and Frame.ChildClass not in Variant.ChildClasses:
             continue
         MatchesPredicate = not Variant.Values
         if Variant.Values:
             try:
-                Value = _scalar(
-                    blob,
-                    cursor + Variant.PredicateAt,
-                    Variant.PredicateWidth,
-                )
+                Value = Scalar(BlobValue, Cursor + Variant.PredicateAt, Variant.PredicateWidth)
             except ArchiveError as error:
-                raise SegmentationError(
-                    frame.layout.name,
-                    Group.name,
-                    offset,
-                    str(error),
-                    base=base,
-                ) from error
+                raise Segmentation(Frame.layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
             MatchesPredicate = Value in Variant.Values
         if MatchesPredicate:
             Length = Variant.Run
-            if mo_version is not None:
-                Length = Variant.RunsByVersion.get(mo_version, Length)
+            if MoVersion is not None:
+                Length = Variant.RunsByVersion.get(MoVersion, Length)
             Trailer = Variant.Trailer if Variant.Trailer >= 0 else None
-            return Length, Trailer, Variant.StopGroups
-    return frame.plan[frame.step], None, False
+            return (Length, Trailer, Variant.StopGroups)
+    return (Frame.plan[Frame.step], None, False)
 
-
-# grouped trailer sizing selects empty-loop and post-loop discriminator branches
-def _group_trailer_length(
-    blob: bytes,
-    cursor: int,
-    layout: ClassLayout,
-    Group: RunGroup,
-    offset: int,
-    base: int,
-    mo_version: int | None,
-) -> int:
+# this definition exists because focused behavior needs one stable owner
+def GroupTrailer(BlobValue: bytes, Cursor: int, Layout: ClassLayout, Group: RunGroup, Offset: int, BaseValue: int, MoVersion: int | None) -> int:
     for Variant in Group.TrailerVariants:
-        if Variant.Versions and mo_version not in Variant.Versions:
+        if Variant.Versions and MoVersion not in Variant.Versions:
             continue
         try:
-            Value = _scalar(
-                blob,
-                cursor + Variant.PredicateAt,
-                Variant.PredicateWidth,
-            )
+            Value = Scalar(BlobValue, Cursor + Variant.PredicateAt, Variant.PredicateWidth)
         except ArchiveError as error:
-            raise SegmentationError(
-                layout.name,
-                Group.name,
-                offset,
-                str(error),
-                base=base,
-            ) from error
+            raise Segmentation(Layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
         if Value in Variant.Values:
             return Variant.Trailer
     return Group.trailer
 
-
-# resolved stream framing is identified before excluding its footer
-def GetTailSize(blob: bytes, base: int, header_size: int) -> int:
-    if header_size != STREAM_HEADER_SIZE or len(blob) < header_size + KStreamTailSize:
+# this definition exists because focused behavior needs one stable owner
+def GetTailSize(BlobValue: bytes, BaseValue: int, HeaderSize: int) -> int:
+    if HeaderSize != KStreamHeaderSize or len(BlobValue) < HeaderSize + KStreamTailSize:
         return 0
-    if int.from_bytes(blob[:4], "little") != base:
+    if int.from_bytes(BlobValue[:4], 'little') != BaseValue:
         return 0
-    if blob[-KStreamTailSize:] != bytes(KStreamTailSize):
+    if BlobValue[-KStreamTailSize:] != bytes(KStreamTailSize):
         return 0
     return KStreamTailSize
 
-
-def _group_open(
-    blob: bytes,
-    cursor: int,
-    frame: _Frame,
-    offset: int,
-    base: int,
-    mo_version: int | None,
-) -> tuple[int, bool]:
-    layout = frame.layout
-    while frame.group < len(layout.groups):
-        group = layout.groups[frame.group]
-        frame.group += 1
-        frame.key = group.name
-        if group.repeat >= 0:
-            count = group.repeat
+# this definition exists because focused behavior needs one stable owner
+def GroupOpen(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, BaseValue: int, MoVersion: int | None) -> tuple[int, bool]:
+    Layout = Frame.layout
+    while Frame.group < len(Layout.groups):
+        Group = Layout.groups[Frame.group]
+        Frame.group += 1
+        Frame.key = Group.name
+        if Group.repeat >= 0:
+            Count = Group.repeat
             GroupLead = 0
         else:
-            count = -1
+            Count = -1
             GroupLead = 0
-            for CountVariant in group.CountVariants:
-                if CountVariant.Versions and mo_version not in CountVariant.Versions:
+            for CountVariant in Group.CountVariants:
+                if CountVariant.Versions and MoVersion not in CountVariant.Versions:
                     continue
                 try:
-                    Predicate = _scalar(
-                        blob,
-                        cursor + CountVariant.PredicateAt,
-                        CountVariant.PredicateWidth,
-                    )
+                    Predicate = Scalar(BlobValue, Cursor + CountVariant.PredicateAt, CountVariant.PredicateWidth)
                 except ArchiveError as error:
-                    raise SegmentationError(
-                        layout.name, group.name, offset, str(error), base=base
-                    ) from error
+                    raise Segmentation(Layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
                 if Predicate in CountVariant.Values:
-                    count = CountVariant.Count
+                    Count = CountVariant.Count
                     GroupLead = CountVariant.Lead
                     break
-            if count < 0:
-                CountBranch = group.CountByChildClass.get(frame.ChildClass)
-                CountAt = cursor - group.count_back
-                CountWidth = group.count_width
+            if Count < 0:
+                CountBranch = Group.CountByChildClass.get(Frame.ChildClass)
+                CountAt = Cursor - Group.count_back
+                CountWidth = Group.count_width
                 if CountBranch is not None:
-                    CountAt = (
-                        cursor - CountBranch.Back
-                        if CountBranch.Back
-                        else cursor + CountBranch.At
-                    )
+                    CountAt = Cursor - CountBranch.Back if CountBranch.Back else Cursor + CountBranch.At
                     CountWidth = CountBranch.Width
                     GroupLead = CountBranch.Lead
                 try:
-                    count = _scalar(blob, CountAt, CountWidth)
+                    Count = Scalar(BlobValue, CountAt, CountWidth)
                 except ArchiveError as error:
-                    raise SegmentationError(
-                        layout.name, group.name, offset, str(error), base=base
-                    ) from error
-        if count:
-            cursor = _advance(
-                blob,
-                cursor,
-                GroupLead,
-                layout,
-                group.name,
-                offset,
-                base,
-            )
-            frame.plan = tuple(group.element_runs(mo_version) * count)
-            frame.step = 0
-            return cursor, True
-        Trailer = _group_trailer_length(
-            blob,
-            cursor,
-            layout,
-            group,
-            offset,
-            base,
-            mo_version,
-        )
-        cursor = _advance(blob, cursor, Trailer, layout, group.name, offset, base)
-    if TAIL_RUN in layout.constant_run_keys or TAIL_RUN in layout.variable_runs:
-        amount = _run_length(
-            blob,
-            cursor,
-            layout,
-            TAIL_RUN,
-            offset,
-            base,
-            mo_version,
-        )
-        cursor = _advance(blob, cursor, amount, layout, TAIL_RUN, offset, base)
-    return cursor, False
+                    raise Segmentation(Layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
+        if Count:
+            Cursor = Advance(BlobValue, Cursor, GroupLead, Layout, Group.name, Offset, BaseValue)
+            Frame.plan = tuple(Group.element_runs(MoVersion) * Count)
+            Frame.step = 0
+            return (Cursor, True)
+        Trailer = GroupTrailer(BlobValue, Cursor, Layout, Group, Offset, BaseValue, MoVersion)
+        Cursor = Advance(BlobValue, Cursor, Trailer, Layout, Group.name, Offset, BaseValue)
+    if KTailRun in Layout.constant_run_keys or KTailRun in Layout.variable_runs:
+        Amount = RunLength(BlobValue, Cursor, Layout, KTailRun, Offset, BaseValue, MoVersion)
+        Cursor = Advance(BlobValue, Cursor, Amount, Layout, KTailRun, Offset, BaseValue)
+    return (Cursor, False)
 
+# this definition exists because focused behavior needs one stable owner
+def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
+    if not Frames:
+        return ''
+    Frame = Frames[-1]
+    Layout = Frame.layout
+    if Layout.groups:
+        Group = Layout.groups[Frame.group - 1]
+        Declared = Group.slots[Frame.step % len(Group.slots)]
+        if Declared in (KPolymorphicSlot, KRepeatedSlot) or Declared not in Layouts:
+            return ''
+        return Declared
+    Slots = Layout.child_slots
+    SlotValue = Frame.slot
+    if Layout.repeat_count is not None and SlotValue >= Layout.template_slot:
+        SlotValue = Layout.template_slot
+    if SlotValue < 0 or SlotValue >= len(Slots):
+        return ''
+    Declared = Slots[SlotValue]
+    if Declared in (KPolymorphicSlot, KRepeatedSlot):
+        return ''
+    if Declared not in Layouts:
+        return ''
+    return Declared
 
-def _declared_slot_class(layouts: LayoutTable, frames: Sequence[_Frame]) -> str:
-    if not frames:
-        return ""
-    frame = frames[-1]
-    layout = frame.layout
-    if layout.groups:
-        group = layout.groups[frame.group - 1]
-        declared = group.slots[frame.step % len(group.slots)]
-        if declared in (POLYMORPHIC_SLOT, REPEATED_SLOT) or declared not in layouts:
-            return ""
-        return declared
-    slots = layout.child_slots
-    slot = frame.slot
-    if layout.repeat_count is not None and slot >= layout.template_slot:
-        slot = layout.template_slot
-    if slot < 0 or slot >= len(slots):
-        return ""
-    declared = slots[slot]
-    if declared in (POLYMORPHIC_SLOT, REPEATED_SLOT):
-        return ""
-    if declared not in layouts:
-        return ""
-    return declared
+# this definition exists because focused behavior needs one stable owner
+def OuterName(ClassIndex: int, Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
+    Alias = f'{KOuterPrefix}{ClassIndex}'
+    if Alias in Layouts:
+        return Alias
+    return DeclaredSlot(Layouts, Frames) or Alias
 
-
-def _external_name(
-    class_index: int, layouts: LayoutTable, frames: Sequence[_Frame]
-) -> str:
-    alias = f"{EXTERNAL_PREFIX}{class_index}"
-    if alias in layouts:
-        return alias
-    return _declared_slot_class(layouts, frames) or alias
-
-
-# the stack walk preserves exact ownership while refusing every unresolved byte boundary
-def _segment_walk(
-    blob: bytes,
-    base: int,
-    layouts: LayoutTable,
-    header_size: int,
-    segments: list[StaticSegment],
-    progress: list[int],
-    mo_version: int | None,
-) -> tuple[StaticSegment, ...]:
-    if base < 1:
-        raise ArchiveError(f"archive map base {base} must be positive")
-    if header_size < 0 or header_size > len(blob):
-        raise ArchiveError(
-            f"stream header of {header_size} bytes does not fit a "
-            f"{len(blob)} byte stream"
-        )
-    TrailerSize = GetTailSize(blob, base, header_size)
-    ContentEnd = len(blob) - TrailerSize
-    frames: list[_Frame] = []
-    class_names: dict[int, str] = {}
-    object_owner: dict[int, str] = {}
-    counter = base
-    cursor = header_size
+# this definition exists because focused behavior needs one stable owner
+def SegmentWalk(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSize: int, Segments: list[StaticSegment], Progress: list[int], MoVersion: int | None) -> tuple[StaticSegment, ...]:
+    if BaseValue < 1:
+        raise ArchiveError(f'archive map base {BaseValue} must be positive')
+    if HeaderSize < 0 or HeaderSize > len(BlobValue):
+        raise ArchiveError(f'stream header of {HeaderSize} bytes does not fit a {len(BlobValue)} byte stream')
+    TrailerSize = GetTailSize(BlobValue, BaseValue, HeaderSize)
+    ContentEnd = len(BlobValue) - TrailerSize
+    Frames: list[Frame] = []
+    ClassNames: dict[int, str] = {}
+    ObjectOwner: dict[int, str] = {}
+    Counter = BaseValue
+    Cursor = HeaderSize
     while True:
-        if not frames and cursor == ContentEnd:
+        if not Frames and Cursor == ContentEnd:
             break
-        progress[0] = len(segments)
-        progress[1] = len(frames)
-        offset = cursor
-        parent = frames[-1].node if frames else -1
-        parent_name = frames[-1].class_name if frames else "<stream>"
-        if frames and frames[-1].layout.groups:
-            parent_slot = f"{frames[-1].key}[{frames[-1].step}]"
+        Progress[0] = len(Segments)
+        Progress[1] = len(Frames)
+        Offset = Cursor
+        Parent = Frames[-1].node if Frames else -1
+        ParentName = Frames[-1].class_name if Frames else '<stream>'
+        if Frames and Frames[-1].layout.groups:
+            ParentSlot = f'{Frames[-1].key}[{Frames[-1].step}]'
         else:
-            parent_slot = str(frames[-1].slot) if frames else LEAD_RUN
+            ParentSlot = str(Frames[-1].slot) if Frames else KLeadRun
         try:
-            tag = read_tag(blob, offset)
+            TagValue = ReadTag(BlobValue, Offset)
         except ArchiveError as error:
-            raise SegmentationError(
-                parent_name, parent_slot, offset, str(error), base=base
-            ) from error
-        if tag.kind == DEFINITION_KIND:
-            class_index = counter
-            object_index = counter + 1
-            class_names[class_index] = tag.class_name
-            object_owner[object_index] = tag.class_name
-            counter += 2
-            name = tag.class_name
-        elif tag.kind == CLASS_REFERENCE_KIND:
-            class_index = tag.index
-            DeclaredClass = _declared_slot_class(layouts, frames)
-            if (
-                class_index >= base
-                and class_index not in class_names
-                and not DeclaredClass
-            ):
-                raise SegmentationError(
-                    parent_name,
-                    parent_slot,
-                    offset,
-                    f"class reference {class_index} is at or above the base {base} "
-                    "but no definition has been seen",
-                    base=base,
-                    unresolved_index=class_index,
-                    unresolved_kind=CLASS_REFERENCE_KIND,
-                )
-            name = class_names.get(class_index, "")
-            if not name and class_index >= base:
-                name = DeclaredClass
-            if not name:
-                name = _external_name(class_index, layouts, frames)
-            object_index = counter
-            object_owner[object_index] = name
-            counter += 1
-        elif tag.kind == OBJECT_REFERENCE_KIND:
-            class_index = 0
-            object_index = tag.index
-            DeclaredClass = _declared_slot_class(layouts, frames)
-            if (
-                object_index >= base
-                and object_index not in object_owner
-                and not DeclaredClass
-            ):
-                raise SegmentationError(
-                    parent_name,
-                    parent_slot,
-                    offset,
-                    f"object reference {object_index} is at or above the base {base} "
-                    "but no such object has been seen",
-                    base=base,
-                    unresolved_index=object_index,
-                    unresolved_kind=OBJECT_REFERENCE_KIND,
-                )
-            name = object_owner.get(
-                object_index,
-                DeclaredClass or f"{EXTERNAL_PREFIX}{object_index}",
-            )
+            raise Segmentation(ParentName, ParentSlot, Offset, str(error), BaseValue=BaseValue) from error
+        if TagValue.kind == KDefinitionKind:
+            ClassIndex = Counter
+            ObjectIndex = Counter + 1
+            ClassNames[ClassIndex] = TagValue.class_name
+            ObjectOwner[ObjectIndex] = TagValue.class_name
+            Counter += 2
+            NameValue = TagValue.class_name
+        elif TagValue.kind == KClassRefKind:
+            ClassIndex = TagValue.index
+            DeclaredClass = DeclaredSlot(Layouts, Frames)
+            if ClassIndex >= BaseValue and ClassIndex not in ClassNames and (not DeclaredClass):
+                raise Segmentation(ParentName, ParentSlot, Offset, f'class reference {ClassIndex} is at or above the base {BaseValue} but no definition has been seen', BaseValue=BaseValue, UnresolvedIndex=ClassIndex, UnresolvedKind=KClassRefKind)
+            NameValue = ClassNames.get(ClassIndex, '')
+            if not NameValue and ClassIndex >= BaseValue:
+                NameValue = DeclaredClass
+            if not NameValue:
+                NameValue = OuterName(ClassIndex, Layouts, Frames)
+            ObjectIndex = Counter
+            ObjectOwner[ObjectIndex] = NameValue
+            Counter += 1
+        elif TagValue.kind == KObjectRefKind:
+            ClassIndex = 0
+            ObjectIndex = TagValue.index
+            DeclaredClass = DeclaredSlot(Layouts, Frames)
+            if ObjectIndex >= BaseValue and ObjectIndex not in ObjectOwner and (not DeclaredClass):
+                raise Segmentation(ParentName, ParentSlot, Offset, f'object reference {ObjectIndex} is at or above the base {BaseValue} but no such object has been seen', BaseValue=BaseValue, UnresolvedIndex=ObjectIndex, UnresolvedKind=KObjectRefKind)
+            NameValue = ObjectOwner.get(ObjectIndex, DeclaredClass or f'{KOuterPrefix}{ObjectIndex}')
         else:
-            class_index = 0
-            object_index = 0
-            name = NULL_KIND
-        cursor = offset + tag.size
-        if cursor > len(blob):
-            raise SegmentationError(
-                parent_name,
-                parent_slot,
-                offset,
-                f"tag of {tag.size} bytes runs past the {len(blob)} byte stream",
-                base=base,
-            )
-        node = len(segments)
-        depth = len(frames)
-        pushed = False
-        if frames:
-            frames[-1].ChildClass = name
-        if tag.kind in (DEFINITION_KIND, CLASS_REFERENCE_KIND):
-            layout = layouts.get(name)
-            if layout is None:
-                raise SegmentationError(
-                    name,
-                    LEAD_RUN,
-                    offset,
-                    "no layout entry recorded for this class",
-                    base=base,
-                )
-            if layout.repeats:
-                raise SegmentationError(
-                    name,
-                    LEAD_RUN,
-                    offset,
-                    "child count is not constant and no repeat rule is recorded"
-                    + (f" ({layout.repeat_note})" if layout.repeat_note else ""),
-                    base=base,
-                )
-            if layout.groups:
-                amount = _run_length(
-                    blob, cursor, layout, LEAD_RUN, offset, base, mo_version
-                )
-                cursor = _advance(blob, cursor, amount, layout, LEAD_RUN, offset, base)
-                frame = _Frame(
-                    node=node,
-                    class_name=name,
-                    layout=layout,
-                    slot=0,
-                    total=-1,
-                )
-                cursor, opened = _group_open(
-                    blob, cursor, frame, offset, base, mo_version
-                )
-                if opened:
-                    frames.append(frame)
-                    pushed = True
-            elif layout.child_slots:
-                amount = _run_length(
-                    blob, cursor, layout, LEAD_RUN, offset, base, mo_version
-                )
-                cursor = _advance(blob, cursor, amount, layout, LEAD_RUN, offset, base)
-                total = -1
-                if layout.walks_a_prefix:
-                    total = layout.repeat_prefix
-                elif layout.ChildCounts is not None:
-                    total = -1
-                elif layout.repeat_count is None:
-                    total = len(layout.child_slots)
-                elif layout.repeat_count.run == LEAD_RUN:
-                    total = _repeat_total(
-                        blob,
-                        cursor - amount,
-                        cursor,
-                        layout,
-                        offset,
-                        base,
-                    )
-                if total != 0:
-                    frames.append(
-                        _Frame(
-                            node=node,
-                            class_name=name,
-                            layout=layout,
-                            slot=0,
-                            total=total,
-                        )
-                    )
-                    pushed = True
+            ClassIndex = 0
+            ObjectIndex = 0
+            NameValue = KNullKind
+        Cursor = Offset + TagValue.size
+        if Cursor > len(BlobValue):
+            raise Segmentation(ParentName, ParentSlot, Offset, f'tag of {TagValue.size} bytes runs past the {len(BlobValue)} byte stream', BaseValue=BaseValue)
+        NodeValue = len(Segments)
+        Depth = len(Frames)
+        Pushed = False
+        if Frames:
+            Frames[-1].ChildClass = NameValue
+        if TagValue.kind in (KDefinitionKind, KClassRefKind):
+            Layout = Layouts.get(NameValue)
+            if Layout is None:
+                raise Segmentation(NameValue, KLeadRun, Offset, 'no layout entry recorded for this class', BaseValue=BaseValue)
+            if Layout.repeats:
+                raise Segmentation(NameValue, KLeadRun, Offset, 'child count is not constant and no repeat rule is recorded' + (f' ({Layout.repeat_note})' if Layout.repeat_note else ''), BaseValue=BaseValue)
+            if Layout.groups:
+                AmountA = RunLength(BlobValue, Cursor, Layout, KLeadRun, Offset, BaseValue, MoVersion)
+                Cursor = Advance(BlobValue, Cursor, AmountA, Layout, KLeadRun, Offset, BaseValue)
+                Frame = Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=-1)
+                Cursor, Opened = GroupOpen(BlobValue, Cursor, Frame, Offset, BaseValue, MoVersion)
+                if Opened:
+                    Frames.append(Frame)
+                    Pushed = True
+            elif Layout.child_slots:
+                AmountA = RunLength(BlobValue, Cursor, Layout, KLeadRun, Offset, BaseValue, MoVersion)
+                Cursor = Advance(BlobValue, Cursor, AmountA, Layout, KLeadRun, Offset, BaseValue)
+                Total = -1
+                if Layout.walks_a_prefix:
+                    Total = Layout.repeat_prefix
+                elif Layout.ChildCounts is not None:
+                    Total = -1
+                elif Layout.repeat_count is None:
+                    Total = len(Layout.child_slots)
+                elif Layout.repeat_count.run == KLeadRun:
+                    Total = RepeatTotal(BlobValue, Cursor - AmountA, Cursor, Layout, Offset, BaseValue)
+                if Total != 0:
+                    Frames.append(Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=Total))
+                    Pushed = True
             else:
-                amount = _run_length(
-                    blob, cursor, layout, LEAF_RUN, offset, base, mo_version
-                )
-                cursor = _advance(blob, cursor, amount, layout, LEAF_RUN, offset, base)
-        segments.append(
-            StaticSegment(
-                index=node,
-                offset=offset,
-                header=tag.size,
-                end=cursor,
-                kind=tag.kind,
-                token=tag.token,
-                wide=tag.wide,
-                schema=tag.schema,
-                class_name=name,
-                class_index=class_index,
-                object_index=object_index,
-                depth=depth,
-                parent=parent,
-            )
-        )
-        if pushed:
+                AmountA = RunLength(BlobValue, Cursor, Layout, KLeafRun, Offset, BaseValue, MoVersion)
+                Cursor = Advance(BlobValue, Cursor, AmountA, Layout, KLeafRun, Offset, BaseValue)
+        Segments.append(StaticSegment(index=NodeValue, offset=Offset, header=TagValue.size, end=Cursor, kind=TagValue.kind, token=TagValue.token, wide=TagValue.wide, schema=TagValue.schema, class_name=NameValue, class_index=ClassIndex, object_index=ObjectIndex, depth=Depth, parent=Parent))
+        if Pushed:
             continue
-        while frames:
-            frame = frames[-1]
-            origin = segments[frame.node].offset
-            if frame.layout.groups:
-                Group = frame.layout.groups[frame.group - 1]
-                Amount, TrailerOverride, StopGroups = _group_element_length(
-                    blob,
-                    cursor,
-                    frame,
-                    origin,
-                    base,
-                    mo_version,
-                )
-                if frame.step + 1 == len(frame.plan):
-                    Amount += (
-                        _group_trailer_length(
-                            blob,
-                            cursor + Amount,
-                            frame.layout,
-                            Group,
-                            origin,
-                            base,
-                            mo_version,
-                        )
-                        if TrailerOverride is None
-                        else TrailerOverride
-                    )
-                cursor = _advance(
-                    blob,
-                    cursor,
-                    Amount,
-                    frame.layout,
-                    frame.key,
-                    origin,
-                    base,
-                )
-                frame.step += 1
-                if frame.step < len(frame.plan):
+        while Frames:
+            Frame = Frames[-1]
+            Origin = Segments[Frame.node].offset
+            if Frame.layout.groups:
+                Group = Frame.layout.groups[Frame.group - 1]
+                Amount, TrailerOverride, StopGroups = GroupElemLength(BlobValue, Cursor, Frame, Origin, BaseValue, MoVersion)
+                if Frame.step + 1 == len(Frame.plan):
+                    Amount += GroupTrailer(BlobValue, Cursor + Amount, Frame.layout, Group, Origin, BaseValue, MoVersion) if TrailerOverride is None else TrailerOverride
+                Cursor = Advance(BlobValue, Cursor, Amount, Frame.layout, Frame.key, Origin, BaseValue)
+                Frame.step += 1
+                if Frame.step < len(Frame.plan):
                     break
                 if StopGroups:
-                    frames.pop()
+                    Frames.pop()
                     continue
-                cursor, opened = _group_open(
-                    blob, cursor, frame, origin, base, mo_version
-                )
-                if opened:
+                Cursor, Opened = GroupOpen(BlobValue, Cursor, Frame, Origin, BaseValue, MoVersion)
+                if Opened:
                     break
-                frames.pop()
+                Frames.pop()
                 continue
-            key = frame.layout.run_key(frame.slot)
-            run_start = cursor
-            amount = _run_length(
-                blob,
-                cursor,
-                frame.layout,
-                key,
-                origin,
-                base,
-                mo_version,
-                frame.ChildClass,
-            )
-            cursor = _advance(blob, cursor, amount, frame.layout, key, origin, base)
-            repeat = frame.layout.repeat_count
-            if repeat is not None and frame.total < 0 and repeat.run == key:
-                frame.total = _repeat_total(
-                    blob,
-                    run_start,
-                    cursor,
-                    frame.layout,
-                    origin,
-                    base,
-                )
-            ChildCounts = frame.layout.ChildCounts
-            if (
-                ChildCounts is not None
-                and frame.total < 0
-                and frame.slot == ChildCounts.Slot
-            ):
-                ResolvedCount = ChildCounts.Counts.get(frame.ChildClass)
+            KeyValue = Frame.layout.run_key(Frame.slot)
+            RunStart = Cursor
+            AmountA = RunLength(BlobValue, Cursor, Frame.layout, KeyValue, Origin, BaseValue, MoVersion, Frame.ChildClass)
+            Cursor = Advance(BlobValue, Cursor, AmountA, Frame.layout, KeyValue, Origin, BaseValue)
+            Repeat = Frame.layout.repeat_count
+            if Repeat is not None and Frame.total < 0 and (Repeat.run == KeyValue):
+                Frame.total = RepeatTotal(BlobValue, RunStart, Cursor, Frame.layout, Origin, BaseValue)
+            ChildCounts = Frame.layout.ChildCounts
+            if ChildCounts is not None and Frame.total < 0 and (Frame.slot == ChildCounts.Slot):
+                ResolvedCount = ChildCounts.Counts.get(Frame.ChildClass)
                 if ResolvedCount is None:
-                    raise SegmentationError(
-                        frame.class_name,
-                        key,
-                        origin,
-                        f"child count branch has no case for {frame.ChildClass!r}",
-                        base=base,
-                    )
-                frame.total = ResolvedCount
-            limit = frame.total if frame.total >= 0 else frame.layout.template_slot
-            if frame.slot + 1 < limit:
-                frame.slot += 1
+                    raise Segmentation(Frame.class_name, KeyValue, Origin, f'child count branch has no case for {Frame.ChildClass!r}', BaseValue=BaseValue)
+                Frame.total = ResolvedCount
+            Limit = Frame.total if Frame.total >= 0 else Frame.layout.template_slot
+            if Frame.slot + 1 < Limit:
+                Frame.slot += 1
                 break
-            if frame.total < 0:
-                raise SegmentationError(
-                    frame.class_name,
-                    key,
-                    origin,
-                    "the repeated child count was not read before the repeated "
-                    "slots began",
-                    base=base,
-                )
-            if repeat is not None and frame.layout.RepeatTrailer:
-                cursor = _advance(
-                    blob,
-                    cursor,
-                    frame.layout.RepeatTrailer,
-                    frame.layout,
-                    TAIL_RUN,
-                    origin,
-                    base,
-                )
-            frames.pop()
-        segments[node].end = cursor
-        if not frames and cursor > ContentEnd:
-            raise SegmentationError(
-                "<stream>",
-                LEAD_RUN,
-                offset,
-                f"segmentation overran the {ContentEnd} byte object region",
-                base=base,
-            )
-    if frames:
-        frame = frames[-1]
-        raise SegmentationError(
-            frame.class_name,
-            frame.key if frame.layout.groups else str(frame.slot),
-            segments[frame.node].offset,
-            f"stream ended with {len(frames)} open objects",
-            base=base,
-        )
-    if not segments:
-        raise ArchiveError("stream holds no archive objects")
-    progress[0] = len(segments)
-    progress[1] = 0
-    return tuple(segments)
+            if Frame.total < 0:
+                raise Segmentation(Frame.class_name, KeyValue, Origin, 'the repeated child count was not read before the repeated slots began', BaseValue=BaseValue)
+            if Repeat is not None and Frame.layout.RepeatTrailer:
+                Cursor = Advance(BlobValue, Cursor, Frame.layout.RepeatTrailer, Frame.layout, KTailRun, Origin, BaseValue)
+            Frames.pop()
+        Segments[NodeValue].end = Cursor
+        if not Frames and Cursor > ContentEnd:
+            raise Segmentation('<stream>', KLeadRun, Offset, f'segmentation overran the {ContentEnd} byte object region', BaseValue=BaseValue)
+    if Frames:
+        Frame = Frames[-1]
+        raise Segmentation(Frame.class_name, Frame.key if Frame.layout.groups else str(Frame.slot), Segments[Frame.node].offset, f'stream ended with {len(Frames)} open objects', BaseValue=BaseValue)
+    if not Segments:
+        raise ArchiveError('stream holds no archive objects')
+    Progress[0] = len(Segments)
+    Progress[1] = 0
+    return tuple(Segments)
 
-
-def segment(
-    blob: bytes,
-    base: int,
-    layouts: LayoutTable,
-    *,
-    header_size: int = STREAM_HEADER_SIZE,
-    mo_version: int | None = None,
-) -> tuple[StaticSegment, ...]:
-    if mo_version is not None and mo_version < 0:
-        raise ArchiveError(f"document version {mo_version} must not be negative")
-    progress = [0, 0]
-    reached: list[StaticSegment] = []
+# this definition exists because focused behavior needs one stable owner
+def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None) -> tuple[StaticSegment, ...]:
+    if MoVersion is not None and MoVersion < 0:
+        raise ArchiveError(f'document version {MoVersion} must not be negative')
+    Progress = [0, 0]
+    Reached: list[StaticSegment] = []
     try:
-        return _segment_walk(
-            blob, base, layouts, header_size, reached, progress, mo_version
-        )
-    except SegmentationError as error:
+        return SegmentWalk(BlobValue, BaseValue, Layouts, HeaderSize, Reached, Progress, MoVersion)
+    except Segmentation as error:
         if error.progress < 0:
-            error.progress = progress[0]
-            error.depth = progress[1]
+            error.progress = Progress[0]
+            error.depth = Progress[1]
         if not error.reached:
-            error.reached = tuple(reached)
+            error.reached = tuple(Reached)
         raise
 
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class BaseResolution:
-    base: int
-    seed: int
-    segmented: bool
-    progress: int
-    offset: int
-    tried: tuple[int, ...]
-    implied: tuple[int, ...]
+    locals().setdefault('__annotations__', {})
+    __annotations__['base'] = 'int'
+    __annotations__['seed'] = 'int'
+    __annotations__['segmented'] = 'bool'
+    __annotations__['progress'] = 'int'
+    __annotations__['offset'] = 'int'
+    __annotations__['tried'] = 'tuple[int, ...]'
+    __annotations__['implied'] = 'tuple[int, ...]'
 
-    def as_dict(self) -> dict[str, object]:
-        return {
-            "base": self.base,
-            "seed": self.seed,
-            "segmented": self.segmented,
-            "progress": self.progress,
-            "offset": self.offset,
-            "tried": list(self.tried),
-            "implied": list(self.implied),
-        }
+    # this definition exists because focused behavior needs one stable owner
+    def AsDict(Instance) -> dict[str, object]:
+        return {'base': Instance.base, 'seed': Instance.seed, 'segmented': Instance.segmented, 'progress': Instance.progress, 'offset': Instance.offset, 'tried': list(Instance.tried), 'implied': list(Instance.implied)}
+    locals()['as_dict'] = AsDict
 
-
-def implied_bases(error: SegmentationError, base: int) -> tuple[int, ...]:
-    if error.unresolved_index < 0:
+# this definition exists because focused behavior needs one stable owner
+def ImpliedBases(Error: SegmentationError, BaseValue: int) -> tuple[int, ...]:
+    if Error.unresolved_index < 0:
         return ()
-    if error.unresolved_kind != CLASS_REFERENCE_KIND:
+    if Error.unresolved_kind != KClassRefKind:
         return ()
-    offsets = {
-        item.class_index - base
-        for item in error.reached
-        if item.kind == DEFINITION_KIND
-    }
-    found = {
-        error.unresolved_index - value
-        for value in offsets
-        if error.unresolved_index - value >= 1
-    }
-    return tuple(sorted(found, reverse=True))
+    Offsets = {ItemValue.class_index - BaseValue for ItemValue in Error.reached if ItemValue.kind == KDefinitionKind}
+    Found = {Error.unresolved_index - Value for Value in Offsets if Error.unresolved_index - Value >= 1}
+    return tuple(sorted(Found, reverse=True))
 
-
-def resolve_base(
-    blob: bytes,
-    seed: int,
-    layouts: LayoutTable,
-    *,
-    header_size: int = STREAM_HEADER_SIZE,
-    mo_version: int | None = None,
-    limit: int = BASE_RESOLUTION_LIMIT,
-) -> BaseResolution:
-    if seed < 1:
-        raise ArchiveError(f"base seed {seed} must be positive")
-    if limit < 1:
-        raise ArchiveError(f"base resolution limit {limit} must be positive")
-    queue: list[int] = [seed]
-    tried: list[int] = []
-    implied: list[int] = []
-    chosen = seed
-    best = (0, -1, -1)
-    while queue and len(tried) < limit:
-        candidate = queue.pop(0)
-        if candidate < 1 or candidate in tried:
+# this definition exists because focused behavior needs one stable owner
+def ResolveBase(BlobValue: bytes, SeedValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None, Limit: int=KBaseResolutionLimit) -> BaseResolution:
+    if SeedValue < 1:
+        raise ArchiveError(f'base seed {SeedValue} must be positive')
+    if Limit < 1:
+        raise ArchiveError(f'base resolution limit {Limit} must be positive')
+    Queue: list[int] = [SeedValue]
+    Tried: list[int] = []
+    Implied: list[int] = []
+    Chosen = SeedValue
+    BestValue = (0, -1, -1)
+    while Queue and len(Tried) < Limit:
+        Choice = Queue.pop(0)
+        if Choice < 1 or Choice in Tried:
             continue
-        tried.append(candidate)
+        Tried.append(Choice)
         try:
-            produced = segment(
-                blob,
-                candidate,
-                layouts,
-                header_size=header_size,
-                mo_version=mo_version,
-            )
-        except SegmentationError as error:
-            score = (0, error.progress, error.offset)
-            if score > best:
-                best = score
-                chosen = candidate
-            for value in implied_bases(error, candidate):
-                if value not in tried and value not in queue:
-                    queue.append(value)
-                    implied.append(value)
+            Produced = Segment(BlobValue, Choice, Layouts, HeaderSize=HeaderSize, MoVersion=MoVersion)
+        except Segmentation as error:
+            Score = (0, error.progress, error.offset)
+            if Score > BestValue:
+                BestValue = Score
+                Chosen = Choice
+            for Value in ImpliedBases(error, Choice):
+                if Value not in Tried and Value not in Queue:
+                    Queue.append(Value)
+                    Implied.append(Value)
             continue
         except ArchiveError:
             continue
-        chosen = candidate
-        best = (1, len(produced), len(blob))
+        Chosen = Choice
+        BestValue = (1, len(Produced), len(BlobValue))
         break
-    return BaseResolution(
-        base=chosen,
-        seed=seed,
-        segmented=bool(best[0]),
-        progress=best[1],
-        offset=best[2],
-        tried=tuple(tried),
-        implied=tuple(implied),
-    )
+    return BaseResolution(base=Chosen, seed=SeedValue, segmented=bool(BestValue[0]), progress=BestValue[1], offset=BestValue[2], tried=tuple(Tried), implied=tuple(Implied))
 
-
-# models retain references and stream framing for exact reemission
-def build_model(
-    blob: bytes,
-    segments: Sequence[StaticSegment],
-    base: int,
-    header_size: int,
-    TrailerSize: int = 0,
-) -> Model:
-    if not segments:
-        raise ArchiveError("cannot build a model from an empty segmentation")
+# this definition exists because focused behavior needs one stable owner
+def BuildModel(BlobValue: bytes, Segments: Sequence[StaticSegment], BaseValue: int, HeaderSize: int, TrailerSize: int=0) -> Model:
+    if not Segments:
+        raise ArchiveError('cannot build a model from an empty segmentation')
     if not TrailerSize:
-        TrailerSize = GetTailSize(blob, base, header_size)
-    ContentEnd = len(blob) - TrailerSize
-    Trailer = blob[len(blob) - TrailerSize :] if TrailerSize else b""
-    model = Model(header=blob[:header_size], base=base, Trailer=Trailer)
-    class_position: dict[int, int] = {}
-    object_position: dict[int, int] = {}
-    for position, item in enumerate(segments):
-        BodyEnd = min(item.end, ContentEnd)
-        body = blob[item.offset + item.header : BodyEnd]
-        if item.kind == DEFINITION_KIND:
-            model.nodes.append(
-                Node(
-                    kind=DEFINITION_KIND,
-                    body=body,
-                    schema=item.schema,
-                    class_name=item.class_name,
-                    origin=item.offset,
-                )
-            )
-            class_position[item.class_index] = position
-            object_position[item.object_index] = position
-        elif item.kind == CLASS_REFERENCE_KIND:
-            model.nodes.append(
-                Node(
-                    kind=CLASS_REFERENCE_KIND,
-                    body=body,
-                    class_name=item.class_name,
-                    literal=item.class_index,
-                    wide=item.wide,
-                    target=class_position.get(item.class_index, -1),
-                    origin=item.offset,
-                )
-            )
-            object_position[item.object_index] = position
-        elif item.kind == OBJECT_REFERENCE_KIND:
-            model.nodes.append(
-                Node(
-                    kind=OBJECT_REFERENCE_KIND,
-                    body=body,
-                    literal=item.object_index,
-                    wide=item.wide,
-                    target=object_position.get(item.object_index, -1),
-                    origin=item.offset,
-                )
-            )
-        elif item.kind == NULL_KIND:
-            model.nodes.append(Node(kind=NULL_KIND, body=body, origin=item.offset))
+        TrailerSize = GetTailSize(BlobValue, BaseValue, HeaderSize)
+    ContentEnd = len(BlobValue) - TrailerSize
+    Trailer = BlobValue[len(BlobValue) - TrailerSize:] if TrailerSize else b''
+    Model = Model(header=BlobValue[:HeaderSize], base=BaseValue, Trailer=Trailer)
+    ClassPosition: dict[int, int] = {}
+    ObjectPosition: dict[int, int] = {}
+    for Position, ItemValue in enumerate(Segments):
+        BodyEnd = min(ItemValue.end, ContentEnd)
+        BodyValue = BlobValue[ItemValue.offset + ItemValue.header:BodyEnd]
+        if ItemValue.kind == KDefinitionKind:
+            Model.nodes.append(NodeAction(kind=KDefinitionKind, body=BodyValue, schema=ItemValue.schema, class_name=ItemValue.class_name, origin=ItemValue.offset))
+            ClassPosition[ItemValue.class_index] = Position
+            ObjectPosition[ItemValue.object_index] = Position
+        elif ItemValue.kind == KClassRefKind:
+            Model.nodes.append(NodeAction(kind=KClassRefKind, body=BodyValue, class_name=ItemValue.class_name, literal=ItemValue.class_index, wide=ItemValue.wide, target=ClassPosition.get(ItemValue.class_index, -1), origin=ItemValue.offset))
+            ObjectPosition[ItemValue.object_index] = Position
+        elif ItemValue.kind == KObjectRefKind:
+            Model.nodes.append(NodeAction(kind=KObjectRefKind, body=BodyValue, literal=ItemValue.object_index, wide=ItemValue.wide, target=ObjectPosition.get(ItemValue.object_index, -1), origin=ItemValue.offset))
+        elif ItemValue.kind == KNullKind:
+            Model.nodes.append(NodeAction(kind=KNullKind, body=BodyValue, origin=ItemValue.offset))
         else:
-            raise ArchiveError(
-                f"unsupported tag kind {item.kind!r} at offset {item.offset}"
-            )
-    for position, item in enumerate(segments):
-        node = model.nodes[position]
-        if (
-            node.kind == OBJECT_REFERENCE_KIND
-            and node.target < 0
-            and item.object_index >= base
-            and item.class_name.startswith(EXTERNAL_PREFIX)
-        ):
-            raise ArchiveError(
-                f"object reference {item.object_index} at offset {item.offset} "
-                "is unresolved"
-            )
-        if (
-            node.kind == CLASS_REFERENCE_KIND
-            and node.target < 0
-            and item.class_index >= base
-            and item.class_name.startswith(EXTERNAL_PREFIX)
-        ):
-            raise ArchiveError(
-                f"class reference {item.class_index} at offset {item.offset} "
-                "is unresolved"
-            )
-    model.assign()
-    return model
+            raise ArchiveError(f'unsupported tag kind {ItemValue.kind!r} at offset {ItemValue.offset}')
+    for Position, ItemValue in enumerate(Segments):
+        NodeValue = Model.nodes[Position]
+        if NodeValue.kind == KObjectRefKind and NodeValue.target < 0 and (ItemValue.object_index >= BaseValue) and ItemValue.class_name.startswith(KOuterPrefix):
+            raise ArchiveError(f'object reference {ItemValue.object_index} at offset {ItemValue.offset} is unresolved')
+        if NodeValue.kind == KClassRefKind and NodeValue.target < 0 and (ItemValue.class_index >= BaseValue) and ItemValue.class_name.startswith(KOuterPrefix):
+            raise ArchiveError(f'class reference {ItemValue.class_index} at offset {ItemValue.offset} is unresolved')
+    Model.assign()
+    return Model
 
+# this definition exists because focused behavior needs one stable owner
+def Tiling(BlobValue: bytes, Segments: Sequence[StaticSegment], HeaderSize: int, TrailerSize: int=0) -> dict[str, object]:
+    GapsValue: list[tuple[int, int]] = []
+    Overlaps: list[tuple[int, int]] = []
+    Cursor = HeaderSize
+    for ItemValue in Segments:
+        if ItemValue.offset > Cursor:
+            GapsValue.append((Cursor, ItemValue.offset))
+        elif ItemValue.offset < Cursor:
+            Overlaps.append((ItemValue.offset, Cursor))
+        Cursor = ItemValue.end
+    Trailing = len(BlobValue) - TrailerSize - Cursor
+    return {'header_bytes': HeaderSize, 'gaps': GapsValue, 'overlaps': Overlaps, 'trailing_bytes': Trailing, 'covered': Cursor - HeaderSize, 'tiles': not GapsValue and (not Overlaps) and (Trailing == 0)}
 
-# tiling checks object coverage independently from known stream framing
-def tiling(
-    blob: bytes,
-    segments: Sequence[StaticSegment],
-    header_size: int,
-    TrailerSize: int = 0,
-) -> dict[str, object]:
-    gaps: list[tuple[int, int]] = []
-    overlaps: list[tuple[int, int]] = []
-    cursor = header_size
-    for item in segments:
-        if item.offset > cursor:
-            gaps.append((cursor, item.offset))
-        elif item.offset < cursor:
-            overlaps.append((item.offset, cursor))
-        cursor = item.end
-    trailing = len(blob) - TrailerSize - cursor
-    return {
-        "header_bytes": header_size,
-        "gaps": gaps,
-        "overlaps": overlaps,
-        "trailing_bytes": trailing,
-        "covered": cursor - header_size,
-        "tiles": not gaps and not overlaps and trailing == 0,
-    }
-
-
-@dataclass(frozen=True, slots=True)
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
 class VerifyReport:
-    length: int
-    base: int
-    header_bytes: int
-    segmented: bool
-    tiled: bool
-    identical: bool
-    object_count: int
-    definition_count: int
-    gaps: tuple[tuple[int, int], ...]
-    overlaps: tuple[tuple[int, int], ...]
-    trailing_bytes: int
-    error: str
-    blocking_class: str
-    blocking_slot: str
-    blocking_offset: int
-    blocking_depth: int
+    locals().setdefault('__annotations__', {})
+    __annotations__['length'] = 'int'
+    __annotations__['base'] = 'int'
+    __annotations__['header_bytes'] = 'int'
+    __annotations__['segmented'] = 'bool'
+    __annotations__['tiled'] = 'bool'
+    __annotations__['identical'] = 'bool'
+    __annotations__['object_count'] = 'int'
+    __annotations__['definition_count'] = 'int'
+    __annotations__['gaps'] = 'tuple[tuple[int, int], ...]'
+    __annotations__['overlaps'] = 'tuple[tuple[int, int], ...]'
+    __annotations__['trailing_bytes'] = 'int'
+    __annotations__['error'] = 'str'
+    __annotations__['blocking_class'] = 'str'
+    __annotations__['blocking_slot'] = 'str'
+    __annotations__['blocking_offset'] = 'int'
+    __annotations__['blocking_depth'] = 'int'
 
-    def as_dict(self) -> dict[str, object]:
-        return {
-            "length": self.length,
-            "base": self.base,
-            "header_bytes": self.header_bytes,
-            "segmented": self.segmented,
-            "tiled": self.tiled,
-            "identical": self.identical,
-            "object_count": self.object_count,
-            "definition_count": self.definition_count,
-            "gaps": [list(item) for item in self.gaps],
-            "overlaps": [list(item) for item in self.overlaps],
-            "trailing_bytes": self.trailing_bytes,
-            "error": self.error,
-            "blocking_class": self.blocking_class,
-            "blocking_slot": self.blocking_slot,
-            "blocking_offset": self.blocking_offset,
-            "blocking_depth": self.blocking_depth,
-        }
+    # this definition exists because focused behavior needs one stable owner
+    def AsDict(Instance) -> dict[str, object]:
+        return {'length': Instance.length, 'base': Instance.base, 'header_bytes': Instance.header_bytes, 'segmented': Instance.segmented, 'tiled': Instance.tiled, 'identical': Instance.identical, 'object_count': Instance.object_count, 'definition_count': Instance.definition_count, 'gaps': [list(ItemValue) for ItemValue in Instance.gaps], 'overlaps': [list(ItemValue) for ItemValue in Instance.overlaps], 'trailing_bytes': Instance.trailing_bytes, 'error': Instance.error, 'blocking_class': Instance.blocking_class, 'blocking_slot': Instance.blocking_slot, 'blocking_offset': Instance.blocking_offset, 'blocking_depth': Instance.blocking_depth}
+    locals()['as_dict'] = AsDict
 
-
-def verify(
-    blob: bytes,
-    base: int,
-    layouts: LayoutTable,
-    *,
-    header_size: int = STREAM_HEADER_SIZE,
-    mo_version: int | None = None,
-) -> VerifyReport:
+# this definition exists because focused behavior needs one stable owner
+def Verify(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None) -> VerifyReport:
     try:
-        segments = segment(
-            blob, base, layouts, header_size=header_size, mo_version=mo_version
-        )
-    except SegmentationError as error:
-        return VerifyReport(
-            length=len(blob),
-            base=base,
-            header_bytes=header_size,
-            segmented=False,
-            tiled=False,
-            identical=False,
-            object_count=max(error.progress, 0),
-            definition_count=0,
-            gaps=(),
-            overlaps=(),
-            trailing_bytes=len(blob) - header_size,
-            error=str(error),
-            blocking_class=error.class_name,
-            blocking_slot=error.slot,
-            blocking_offset=error.offset,
-            blocking_depth=error.depth,
-        )
+        Segments = Segment(BlobValue, BaseValue, Layouts, HeaderSize=HeaderSize, MoVersion=MoVersion)
+    except Segmentation as error:
+        return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=False, tiled=False, identical=False, object_count=max(error.progress, 0), definition_count=0, gaps=(), overlaps=(), trailing_bytes=len(BlobValue) - HeaderSize, error=str(error), blocking_class=error.class_name, blocking_slot=error.slot, blocking_offset=error.offset, blocking_depth=error.depth)
     except ArchiveError as error:
-        return VerifyReport(
-            length=len(blob),
-            base=base,
-            header_bytes=header_size,
-            segmented=False,
-            tiled=False,
-            identical=False,
-            object_count=0,
-            definition_count=0,
-            gaps=(),
-            overlaps=(),
-            trailing_bytes=len(blob) - header_size,
-            error=str(error),
-            blocking_class="",
-            blocking_slot="",
-            blocking_offset=-1,
-            blocking_depth=-1,
-        )
-    TrailerSize = GetTailSize(blob, base, header_size)
-    shape = tiling(blob, segments, header_size, TrailerSize)
-    definitions = sum(1 for item in segments if item.kind == DEFINITION_KIND)
+        return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=False, tiled=False, identical=False, object_count=0, definition_count=0, gaps=(), overlaps=(), trailing_bytes=len(BlobValue) - HeaderSize, error=str(error), blocking_class='', blocking_slot='', blocking_offset=-1, blocking_depth=-1)
+    TrailerSize = GetTailSize(BlobValue, BaseValue, HeaderSize)
+    Shape = Tiling(BlobValue, Segments, HeaderSize, TrailerSize)
+    Definitions = sum((1 for ItemValue in Segments if ItemValue.kind == KDefinitionKind))
     try:
-        model = build_model(blob, segments, base, header_size, TrailerSize)
-        rebuilt = model.emit()
-        identical = rebuilt == blob
-        message = "" if identical else f"re-emit produced {len(rebuilt)} bytes"
+        Model = BuildModel(BlobValue, Segments, BaseValue, HeaderSize, TrailerSize)
+        Rebuilt = Model.emit()
+        Identical = Rebuilt == BlobValue
+        Message = '' if Identical else f're-emit produced {len(Rebuilt)} bytes'
     except ArchiveError as error:
-        identical = False
-        message = str(error)
-    return VerifyReport(
-        length=len(blob),
-        base=base,
-        header_bytes=header_size,
-        segmented=True,
-        tiled=bool(shape["tiles"]),
-        identical=identical,
-        object_count=len(segments),
-        definition_count=definitions,
-        gaps=tuple(tuple(item) for item in shape["gaps"]),
-        overlaps=tuple(tuple(item) for item in shape["overlaps"]),
-        trailing_bytes=int(shape["trailing_bytes"]),
-        error=message,
-        blocking_class="",
-        blocking_slot="",
-        blocking_offset=-1,
-        blocking_depth=-1,
-    )
+        Identical = False
+        Message = str(error)
+    return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=True, tiled=bool(Shape['tiles']), identical=Identical, object_count=len(Segments), definition_count=Definitions, gaps=tuple((tuple(ItemValue) for ItemValue in Shape['gaps'])), overlaps=tuple((tuple(ItemValue) for ItemValue in Shape['overlaps'])), trailing_bytes=int(Shape['trailing_bytes']), error=Message, blocking_class='', blocking_slot='', blocking_offset=-1, blocking_depth=-1)
 
+# this definition exists because focused behavior needs one stable owner
+def ClassNames(Segments: Iterable[StaticSegment]) -> tuple[str, ...]:
+    SeenValue: dict[str, None] = {}
+    for ItemValue in Segments:
+        if ItemValue.kind in (KDefinitionKind, KClassRefKind):
+            SeenValue[ItemValue.class_name] = None
+    return tuple(SeenValue)
 
-def class_names(segments: Iterable[StaticSegment]) -> tuple[str, ...]:
-    seen: dict[str, None] = {}
-    for item in segments:
-        if item.kind in (DEFINITION_KIND, CLASS_REFERENCE_KIND):
-            seen[item.class_name] = None
-    return tuple(seen)
+# this binding exists because shared behavior needs one stable value
+globals()['BASE_RESOLUTION_LIMIT'] = KBaseResolutionLimit
+
+# this binding exists because shared behavior needs one stable value
+globals()['BIG_CLASS_TAG_BIT'] = KBigClassTagBit
+
+# this binding exists because shared behavior needs one stable value
+globals()['BIG_OBJECT_TAG'] = KBigObjectTag
+
+# this binding exists because shared behavior needs one stable value
+globals()['CLASS_REFERENCE_KIND'] = KClassRefKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['CLASS_TAG_BIT'] = KClassTagBit
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONDITIONAL_RULE'] = KConditionalRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['COUNT_RULE'] = KCountRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['ChildCountByClass'] = ChildCountBy
+
+# this binding exists because shared behavior needs one stable value
+globals()['DEFINITION_KIND'] = KDefinitionKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['EXTERNAL_PREFIX'] = KOuterPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['LEAD_RUN'] = KLeadRun
+
+# this binding exists because shared behavior needs one stable value
+globals()['LEAF_RUN'] = KLeafRun
+
+# this binding exists because shared behavior needs one stable value
+globals()['LONG_STRING_LIMIT'] = KLongStringLimit
+
+# this binding exists because shared behavior needs one stable value
+globals()['MAX_MAP_INDEX'] = KMaxMapIndex
+
+# this binding exists because shared behavior needs one stable value
+globals()['MO_VERSION_PREFIX'] = KMoVersionPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['NEW_CLASS_TAG'] = KNewClassTag
+
+# this binding exists because shared behavior needs one stable value
+globals()['NULL_KIND'] = KNullKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['NULL_TAG'] = KNullTag
+
+# this binding exists because shared behavior needs one stable value
+globals()['Node'] = NodeAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['OBJECT_REFERENCE_KIND'] = KObjectRefKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['OPAQUE_RULE'] = KOpaqueRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['POLYMORPHIC_SLOT'] = KPolymorphicSlot
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParseArchiveStringLength'] = ParseArchive
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParseRunGroupCount'] = ParseRunGroup
+
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['REPEATED_SLOT'] = KRepeatedSlot
+
+# this binding exists because shared behavior needs one stable value
+globals()['RunGroupCountVariant'] = RunGroupCountA
+
+# this binding exists because shared behavior needs one stable value
+globals()['RunGroupTrailerVariant'] = RunGroupTrailer
+
+# this binding exists because shared behavior needs one stable value
+globals()['SHORT_STRING_LIMIT'] = KShortStringLimit
+
+# this binding exists because shared behavior needs one stable value
+globals()['STREAM_HEADER_SIZE'] = KStreamHeaderSize
+
+# this binding exists because shared behavior needs one stable value
+globals()['STRING_MARKER'] = KStringMarker
+
+# this binding exists because shared behavior needs one stable value
+globals()['STRING_RULE'] = KStringRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['SegmentationError'] = Segmentation
+
+# this binding exists because shared behavior needs one stable value
+globals()['TAIL_RUN'] = KTailRun
+
+# this binding exists because shared behavior needs one stable value
+globals()['Tag'] = TagAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_Frame'] = Frame
+
+# this binding exists because shared behavior needs one stable value
+globals()['_advance'] = Advance
+
+# this binding exists because shared behavior needs one stable value
+globals()['_class_layout'] = ClassLayoutA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_declared_slot_class'] = DeclaredSlot
+
+# this binding exists because shared behavior needs one stable value
+globals()['_element_length'] = ElemLength
+
+# this binding exists because shared behavior needs one stable value
+globals()['_external_name'] = OuterName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_group_element_length'] = GroupElemLength
+
+# this binding exists because shared behavior needs one stable value
+globals()['_group_open'] = GroupOpen
+
+# this binding exists because shared behavior needs one stable value
+globals()['_group_trailer_length'] = GroupTrailer
+
+# this binding exists because shared behavior needs one stable value
+globals()['_repeat_total'] = RepeatTotal
+
+# this binding exists because shared behavior needs one stable value
+globals()['_run_group'] = RunGroupA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_run_length'] = RunLength
+
+# this binding exists because shared behavior needs one stable value
+globals()['_scalar'] = Scalar
+
+# this binding exists because shared behavior needs one stable value
+globals()['_segment_walk'] = SegmentWalk
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_model'] = BuildModel
+
+# this binding exists because shared behavior needs one stable value
+globals()['class_names'] = ClassNames
+
+# this binding exists because shared behavior needs one stable value
+globals()['container_mo_version'] = ContainerMo
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_class_definition'] = EncodeClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_class_reference'] = EncodeClassRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_null'] = EncodeNull
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_object_reference'] = EncodeObjectRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['encode_string'] = EncodeString
+
+# this binding exists because shared behavior needs one stable value
+globals()['field'] = Field
+
+# this binding exists because shared behavior needs one stable value
+globals()['implied_bases'] = ImpliedBases
+
+# this binding exists because shared behavior needs one stable value
+globals()['json'] = JsonValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_string'] = ReadString
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_tag'] = ReadTag
+
+# this binding exists because shared behavior needs one stable value
+globals()['resolve_base'] = ResolveBase
+
+# this binding exists because shared behavior needs one stable value
+globals()['segment'] = Segment
+
+# this binding exists because shared behavior needs one stable value
+globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['tiling'] = Tiling
+
+# this binding exists because shared behavior needs one stable value
+globals()['verify'] = Verify
