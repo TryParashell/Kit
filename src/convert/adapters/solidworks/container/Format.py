@@ -160,6 +160,24 @@ def DimensionScalar(
     return None
 
 
+# keeps legacy callers compatible while internal identifiers follow current naming rules
+def LegacyScalar(
+    DataValue: bytes,
+    TextEnd: int,
+    EndValue: int,
+    *,
+    TrailingBytes: int = 0,
+    **CompatArgs: int,
+) -> int | None:
+    LegacyKey = "trailing_bytes"
+    if LegacyKey in CompatArgs:
+        TrailingBytes = CompatArgs.pop(LegacyKey)
+    if CompatArgs:
+        UnknownKey = next(iter(CompatArgs))
+        raise TypeError(f"unexpected keyword argument {UnknownKey!r}")
+    return DimensionScalar(DataValue, TextEnd, EndValue, TrailingBytes=TrailingBytes)
+
+
 # this definition exists because focused behavior needs one stable owner
 def IsCadPath(Value: str) -> bool:
     return PureWindowsPath(Value).suffix.casefold() in KFormatIdBySuffix
@@ -332,7 +350,7 @@ globals()["_RESOLVED_LANE_SUFFIX"] = KResolvedLaneSuffix
 globals()["annotations"] = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dimension_scalar_value_offset"] = DimensionScalar
+globals()["dimension_scalar_value_offset"] = LegacyScalar
 
 # this binding exists because shared behavior needs one stable value
 globals()["drawing_stream_names"] = DrawingStream

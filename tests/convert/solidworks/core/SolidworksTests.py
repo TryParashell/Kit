@@ -189,16 +189,19 @@ def TestPLHOSD() -> None:
         "featsolidbodyfolder",
         "solidbodyfolder",
     }
-    SourceRoot = FilePath(SolidworksAdapter.__file__).parent
+    SourceRoot = FilePath(SolidworksAdapter.__file__).parents[1]
     Occurrences = {ItemValue: [] for ItemValue in ValueList}
-    for TargetPath in SourceRoot.glob("*.py"):
-        if TargetPath.stem.startswith("assembly") and TargetPath.stem != "assembly":
+    for TargetPath in SourceRoot.rglob("*.py"):
+        RelativePath = TargetPath.relative_to(SourceRoot)
+        if "programs" in RelativePath.parts or TargetPath.name == "AssemblyCore.py":
             continue
         TreeInfo = AstInfo.parse(TargetPath.read_text(encoding="utf-8"))
         for NodeInfo in AstInfo.walk(TreeInfo):
             if isinstance(NodeInfo, AstInfo.Constant) and NodeInfo.value in Occurrences:
-                Occurrences[NodeInfo.value].append(TargetPath.name)
-    assert Occurrences == {ItemValue: ["Format.py"] for ItemValue in ValueList}
+                Occurrences[NodeInfo.value].append(RelativePath.as_posix())
+    assert Occurrences == {
+        ItemValue: ["container/Format.py"] for ItemValue in ValueList
+    }
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
