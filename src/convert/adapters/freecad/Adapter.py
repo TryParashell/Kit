@@ -2003,7 +2003,7 @@ def OuterLinkMap(
 
 
 # this definition orders part documents before dependent assembly documents
-def ComponentPlanKey(
+def IsAssemblyPlan(
     ItemValue: tuple[str, FilePath, ComponentDefinition, CadDoc],
 ) -> bool:
     return ItemValue[2].kind == ComponentKind.ASSEMBLY
@@ -2028,7 +2028,7 @@ def ComponentPlans(
         Component = ComponentDoc(DocValue, Definition, Documents)
         if Component is not None:
             Plans.append((DefinitionId, PathValue, Definition, Component))
-    Plans.sort(key=ComponentPlanKey)
+    Plans.sort(key=IsAssemblyPlan)
     return Plans
 
 
