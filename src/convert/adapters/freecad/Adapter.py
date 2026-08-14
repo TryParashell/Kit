@@ -582,99 +582,113 @@ def IsExtrusion(Feature: Any) -> bool:
     return EnumText(Feature.operation) in {"", "create", "join", "cut", "intersect"}
 
 
-# this definition exists because focused behavior needs one stable owner
-def FeatureParts(
-    DocValue: CadDocument,
-    SketchNative: Mapping[str, bool],
-    SketchCarrierReasons: Mapping[str, CarrierReason],
-) -> tuple[int, int, frozenset[CarrierReason]]:
+# this definition rejects records that do not represent transferable timeline features
+def IsFeatureCandidate(
+    Feature: AnyValue,
+    DependentFeatureIds: set[str],
+    FinalFeatureIds: set[str | None],
+) -> bool:
+    KindValue = EnumText(Feature.kind)
+    if KindValue == FeatureKind.IMPORTED.value:
+        return False
+    NativeType = str(Feature.attributes.get("native_type", "")).casefold()
+    if KindValue == FeatureKind.REFERENCE.value and NativeType in {"plane", "sketch"}:
+        return False
+    IsUnusedNative = (
+        KindValue == FeatureKind.NATIVE.value
+        and Feature.id not in DependentFeatureIds
+        and Feature.id not in FinalFeatureIds
+        and not Feature.input_feature_ids
+        and Feature.sketch_id is None
+        and not Feature.parameter_ids
+        and not Feature.selection_ids
+    )
+    return not IsUnusedNative
+
+
+# this definition selects only timeline features that require transfer accounting
+def FeatureCandidates(DocValue: CadDocument) -> tuple[AnyValue, ...]:
     DependentFeatureIds = {
         FeatureId
         for Feature in DocValue.feature_timeline
         for FeatureId in Feature.input_feature_ids
     }
     FinalFeatureIds = {BodyValue.final_feature_id for BodyValue in DocValue.bodies}
-    Features = tuple(
-        (
-            Feature
-            for Feature in DocValue.feature_timeline
-            if EnumText(Feature.kind) != FeatureKind.IMPORTED.value
-            and (
-                not (
-                    EnumText(Feature.kind) == FeatureKind.REFERENCE.value
-                    and str(Feature.attributes.get("native_type", "")).casefold()
-                    in {"plane", "sketch"}
-                )
-            )
-            and (
-                not (
-                    EnumText(Feature.kind) == FeatureKind.NATIVE.value
-                    and Feature.id not in DependentFeatureIds
-                    and (Feature.id not in FinalFeatureIds)
-                    and (not Feature.input_feature_ids)
-                    and (Feature.sketch_id is None)
-                    and (not Feature.parameter_ids)
-                    and (not Feature.selection_ids)
-                )
-            )
-        )
+    return tuple(
+        Feature
+        for Feature in DocValue.feature_timeline
+        if IsFeatureCandidate(Feature, DependentFeatureIds, FinalFeatureIds)
     )
+
+
+# this definition identifies feature kinds that the native writer can reconstruct
+def IsWritableFeature(
+    DocValue: CadDocument, Feature: AnyValue, SketchNative: Mapping[str, bool]
+) -> bool:
+    KindValue = EnumText(Feature.kind)
+    if Feature.suppressed or KindValue not in KFeatureWriteValues:
+        return False
+    if KindValue == FeatureKind.EXTRUSION.value:
+        return bool(Feature.sketch_id) and SketchNative.get(
+            Feature.sketch_id or "", False
+        ) and IsExtrusion(Feature)
+    if KindValue == FeatureKind.FILLET.value:
+        Definition = Feature.definition
+        return (
+            isinstance(Definition, FilletFeature)
+            and not Definition.variable_radius_parameter_ids
+            and bool(Feature.input_feature_ids)
+            and HasFeatureEdges(DocValue, Feature)
+        )
+    if KindValue == FeatureKind.CHAMFER.value:
+        Definition = Feature.definition
+        return (
+            isinstance(Definition, ChamferFeature)
+            and Definition.mode == "equal_distance"
+            and Definition.second_distance is None
+            and Definition.angle is None
+            and bool(Feature.input_feature_ids)
+            and HasFeatureEdges(DocValue, Feature)
+        )
+    return False
+
+
+# this definition explains why a timeline feature requires carrier preservation
+def FeatureCarrierReasons(
+    Feature: AnyValue, SketchCarrierReasons: Mapping[str, CarrierReason]
+) -> frozenset[CarrierReason]:
+    KindValue = EnumText(Feature.kind)
+    if Feature.suppressed or KindValue == FeatureKind.REFERENCE.value:
+        return frozenset({CarrierReason.TARGET_UNSUPPORTED})
+    if KindValue == FeatureKind.NATIVE.value:
+        return frozenset({CarrierReason.SOURCE_OPAQUE})
+    Reasons: set[CarrierReason] = set()
+    if KindValue == FeatureKind.EXTRUSION.value:
+        SketchReason = SketchCarrierReasons.get(Feature.sketch_id or "")
+        if SketchReason is not None:
+            Reasons.add(SketchReason)
+        if not Feature.sketch_id or not IsExtrusion(Feature):
+            Reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+    return frozenset(Reasons or {CarrierReason.WRITER_UNIMPLEMENTED})
+
+
+# this definition counts native and carrier feature transfer paths
+def FeatureParts(
+    DocValue: CadDocument,
+    SketchNative: Mapping[str, bool],
+    SketchCarrierReasons: Mapping[str, CarrierReason],
+) -> tuple[int, int, frozenset[CarrierReason]]:
+    Features = FeatureCandidates(DocValue)
     if HasNativeGraph(DocValue) and DocValue.assembly is None:
         return (len(Features), 0, frozenset())
-    Native = 0
     Carrier = 0
     Reasons: set[CarrierReason] = set()
     for Feature in Features:
-        KindValue = EnumText(Feature.kind)
-        Writable = not Feature.suppressed and KindValue in KFeatureWriteValues
-        if KindValue == FeatureKind.EXTRUSION.value:
-            Writable = (
-                Writable
-                and bool(Feature.sketch_id)
-                and SketchNative.get(Feature.sketch_id or "", False)
-                and IsExtrusion(Feature)
-            )
-        elif KindValue == FeatureKind.FILLET.value:
-            Writable = (
-                Writable
-                and isinstance(Feature.definition, FilletFeature)
-                and (not Feature.definition.variable_radius_parameter_ids)
-                and bool(Feature.input_feature_ids)
-                and HasFeatureEdges(DocValue, Feature)
-            )
-        elif KindValue == FeatureKind.CHAMFER.value:
-            Writable = (
-                Writable
-                and isinstance(Feature.definition, ChamferFeature)
-                and (Feature.definition.mode == "equal_distance")
-                and (Feature.definition.second_distance is None)
-                and (Feature.definition.angle is None)
-                and bool(Feature.input_feature_ids)
-                and HasFeatureEdges(DocValue, Feature)
-            )
-        else:
-            Writable = False
-        Native += 1
-        if not Writable:
-            Carrier += 1
-            FeatureReasons: set[CarrierReason] = set()
-            if Feature.suppressed:
-                FeatureReasons.add(CarrierReason.TARGET_UNSUPPORTED)
-            elif KindValue == FeatureKind.REFERENCE.value:
-                FeatureReasons.add(CarrierReason.TARGET_UNSUPPORTED)
-            elif KindValue == FeatureKind.NATIVE.value:
-                FeatureReasons.add(CarrierReason.SOURCE_OPAQUE)
-            else:
-                if KindValue == FeatureKind.EXTRUSION.value:
-                    SketchReason = SketchCarrierReasons.get(Feature.sketch_id or "")
-                    if SketchReason is not None:
-                        FeatureReasons.add(SketchReason)
-                    if not Feature.sketch_id or not IsExtrusion(Feature):
-                        FeatureReasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
-                if not FeatureReasons:
-                    FeatureReasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
-            Reasons.update(FeatureReasons)
-    return (Native, Carrier, frozenset(Reasons))
+        if IsWritableFeature(DocValue, Feature, SketchNative):
+            continue
+        Carrier += 1
+        Reasons.update(FeatureCarrierReasons(Feature, SketchCarrierReasons))
+    return (len(Features), Carrier, frozenset(Reasons))
 
 
 # this definition exists because focused behavior needs one stable owner

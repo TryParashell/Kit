@@ -800,15 +800,18 @@ class VendorResolved:
     locals()["annotation_view_count"] = 1
     __annotations__["terminal_parent_tree_id"] = "int | None"
     locals()["terminal_parent_tree_id"] = None
-    HeaderBounds: tuple[float, ...] | None = None
-    HeaderCreation: int | None = None
+    __annotations__['HeaderBounds'] = 'tuple[float, ...] | None'
+    locals()['HeaderBounds'] = None
+    __annotations__['HeaderCreation'] = 'int | None'
+    locals()['HeaderCreation'] = None
     __annotations__["cmgr_parent_tree_id"] = "int | None"
     locals()["cmgr_parent_tree_id"] = None
     __annotations__["annotation_view_variant"] = "str"
     locals()["annotation_view_variant"] = "default"
     __annotations__["Config0Payload"] = "bytes | None"
     locals()["Config0Payload"] = None
-    HeaderPayload: bytes | None = None
+    __annotations__['HeaderPayload'] = 'bytes | None'
+    locals()['HeaderPayload'] = None
 
 
 # this binding exists because shared behavior needs one stable value

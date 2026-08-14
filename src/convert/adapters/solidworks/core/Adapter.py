@@ -6732,6 +6732,60 @@ def OperationId(Operation: NativeOperation, Producer: int, LocalId: int) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
+def TimelineInputs(
+    Feature: NativeFeature,
+    Operation: NativeOperation | None,
+    Sketch: NativeSketch | None,
+    PlaneById: Mapping[int, NativePlane],
+    PrincipalIds: set[int],
+    PreviousValue: int | None,
+) -> list[int]:
+    if Operation is not None:
+        return list(Operation.dependencies)
+    if Sketch is not None:
+        return [Sketch.support_plane_id]
+    if Feature.object_id not in PlaneById:
+        return []
+    RefIds = list(PlaneById[Feature.object_id].reference_ids)
+    if not RefIds and Feature.object_id not in PrincipalIds and PreviousValue is not None:
+        RefIds.append(PreviousValue)
+    return RefIds
+
+
+# this definition exists because operation kinds need neutral boolean semantics
+def TimelineOp(
+    Operation: NativeOperation | None, SelectionIds: set[str]
+) -> tuple[BoolOperation | str | None, tuple[str, ...]]:
+    if Operation is None:
+        return (None, ())
+    KindMap: dict[str, BoolOperation | None] = {
+        "join": BoolOperation.JOIN,
+        "cut": BoolOperation.CUT,
+        "revolve_join": BoolOperation.JOIN,
+        "revolve_cut": BoolOperation.CUT,
+        "hole": BoolOperation.CUT,
+        "combine_join": BoolOperation.JOIN,
+        "surface": BoolOperation.CREATE,
+        "fillet": None,
+        "chamfer": None,
+        "shell": None,
+        "dome": None,
+        "scale": None,
+        "move_body": None,
+    }
+    OperationValue = KindMap.get(Operation.kind, Operation.kind)
+    Selected = tuple(
+        (
+            SelectionId
+            for Producer, LocalId, Ignored in OperationA(Operation)
+            for SelectionId in (OperationId(Operation, Producer, LocalId),)
+            if SelectionId in SelectionIds
+        )
+    )
+    return (OperationValue, Selected)
+
+
+# this definition exists because focused behavior needs one stable owner
 def Timeline(
     Model: NativeModel, Selections: tuple[Selection, ...]
 ) -> tuple[FeatureStep, ...]:
@@ -6749,20 +6803,9 @@ def Timeline(
     for Order, Feature in enumerate(Model.features):
         Operation = OperationById.get(Feature.object_id)
         Sketch = SketchById.get(Feature.object_id)
-        Inputs: list[int] = []
-        if Operation is not None:
-            Inputs.extend(Operation.dependencies)
-        elif Sketch is not None:
-            Inputs.append(Sketch.support_plane_id)
-        elif Feature.object_id in PlaneById:
-            RefIds = PlaneById[Feature.object_id].reference_ids
-            Inputs.extend(RefIds)
-            if (
-                not RefIds
-                and Feature.object_id not in PrincipalPlaneIds
-                and (PreviousOperation is not None)
-            ):
-                Inputs.append(PreviousOperation)
+        Inputs = TimelineInputs(
+            Feature, Operation, Sketch, PlaneById, PrincipalPlaneIds, PreviousOperation
+        )
         Dependencies = tuple(
             (
                 FeatureId(NativeId)
@@ -6784,43 +6827,9 @@ def Timeline(
             "xml_tag": Feature.xml_tag,
             "native_properties": Feature.properties,
         }
-        OperationValue: BoolOperation | str | None = None
-        Selected: tuple[str, ...] = ()
+        OperationValue, Selected = TimelineOp(Operation, SelectionIds)
         if Operation is not None:
             Attributes.update(OperationAttrs(Operation))
-            if Operation.kind == "join":
-                OperationValue = BoolOperation.JOIN
-            elif Operation.kind == "cut":
-                OperationValue = BoolOperation.CUT
-            elif Operation.kind in {
-                "fillet",
-                "chamfer",
-                "shell",
-                "dome",
-                "scale",
-                "move_body",
-            }:
-                OperationValue = None
-            elif Operation.kind == "revolve_join":
-                OperationValue = BoolOperation.JOIN
-            elif Operation.kind == "revolve_cut":
-                OperationValue = BoolOperation.CUT
-            elif Operation.kind == "hole":
-                OperationValue = BoolOperation.CUT
-            elif Operation.kind == "combine_join":
-                OperationValue = BoolOperation.JOIN
-            elif Operation.kind == "surface":
-                OperationValue = BoolOperation.CREATE
-            else:
-                OperationValue = Operation.kind
-            Selected = tuple(
-                (
-                    SelectionId
-                    for Producer, LocalId, Ignored in OperationA(Operation)
-                    for SelectionId in (OperationId(Operation, Producer, LocalId),)
-                    if SelectionId in SelectionIds
-                )
-            )
             if Operation.kind != "surface":
                 PreviousOperation = Operation.object_id
         Result.append(
