@@ -15,7 +15,6 @@ from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from convert.adapters.base.ContractTypes import KSourceType, KTargetType
-from convert.engine import ConversionResult
 
 globals().update(
     {

@@ -10,20 +10,9 @@ from __future__ import annotations
 from dataclasses import replace as ReplaceValue
 import pytest as PytestLib
 from interchange import (
-    AssemblyData,
     CadDocument,
     DocumentError,
-    CadSource,
-    Capability,
-    ComponentDef,
-    ComponentDoc,
     ComponentInst,
-    ComponentKind,
-    Configuration,
-    MateConstraint,
-    MateEntity,
-    MateEntityKind,
-    MateKind,
     TransformMatrix,
     SurfaceMesh,
     SpaceVector,

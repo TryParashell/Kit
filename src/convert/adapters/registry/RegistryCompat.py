@@ -12,8 +12,6 @@ from typing import Any as AnyValue
 from typing import Iterable as TypeIterable
 from typing import Mapping as TypeMap
 
-from convert.adapters.base.AdapterProtocols import CadReaderAdapter
-from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.base.ContractTypes import KSourceType
 from convert.adapters.base.ContractTypes import KTargetType
 
