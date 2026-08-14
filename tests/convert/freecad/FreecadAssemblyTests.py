@@ -199,7 +199,7 @@ def GeomFree(Source):
 
 
 # this definition exists because assembly declarations need focused structural verification
-def VerifyAsmObjectStructure(RootValue: ET.Element) -> None:
+def VerifyAsmNodes(RootValue: ET.Element) -> None:
     Objects = RootValue.findall("./Objects/Object")
     Types = [ItemValue.get("type") for ItemValue in Objects]
     assert Types.count("Assembly::AssemblyObject") == 1
@@ -223,7 +223,7 @@ def VerifyAsmObjectStructure(RootValue: ET.Element) -> None:
     ) == Pytest.approx((100.0, 20.0, 30.0))
 
 
-# this definition exists because mate assertions share one precise XML lookup contract
+# this definition exists because mate assertions share one precise xml lookup contract
 def AsmMateContext(
     RootValue: ET.Element,
 ) -> tuple[ET.Element, ET.Element, ET.Element, dict[str, ET.Element]]:
@@ -249,7 +249,7 @@ def AsmMateContext(
 
 
 # this definition exists because native mate identity and proxy fields form one contract
-def VerifyAsmMateIdentity(RootValue: ET.Element) -> None:
+def VerifyMateIds(RootValue: ET.Element) -> None:
     MateValue, Ignored, Ignored, Ignored = AsmMateContext(RootValue)
     JointType = PropAction(MateValue, "JointType").find("Integer")
     EntityIds = PropAction(MateValue, "EntityIds").findall("./StringList/String")
@@ -269,7 +269,7 @@ def VerifyAsmMateIdentity(RootValue: ET.Element) -> None:
 
 
 # this definition exists because mate references must remain attached to encoded occurrences
-def VerifyAsmMateReferences(RootValue: ET.Element) -> None:
+def VerifyMateRefs(RootValue: ET.Element) -> None:
     MateValue, AsmRoot, LinkValue, DataValue = AsmMateContext(RootValue)
     ComponentLinks = PropAction(MateValue, "ComponentLinks").findall(
         "./StringList/String"
@@ -306,9 +306,9 @@ def TestFcstdAsmHas(TmpPath) -> None:
     WriteFreecad(AsmDoc(), Output)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    VerifyAsmObjectStructure(RootValue)
-    VerifyAsmMateIdentity(RootValue)
-    VerifyAsmMateReferences(RootValue)
+    VerifyAsmNodes(RootValue)
+    VerifyMateIds(RootValue)
+    VerifyMateRefs(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -586,8 +586,8 @@ def TestFcstdNesteA(TmpPath) -> None:
     assert DeclValue.get("name") in {ItemValue.get("value") for ItemValue in Group}
 
 
-# this definition exists because nested component history has an independent XML contract
-def VerifyNestedComponent(
+# this definition exists because nested component history has an independent xml contract
+def VerifyNestedDoc(
     ComponentRoot: ET.Element,
 ) -> tuple[dict[str, str | None], list[str]]:
     ComponentObjects = ComponentRoot.findall("./Objects/Object")
@@ -637,7 +637,7 @@ def VerifyNestedComponent(
 
 
 # this definition exists because nested assembly assertions share one decoded object graph
-def NestedRootContext(
+def NestedContext(
     RootValue: ET.Element,
     ComponentTypes: dict[str, str | None],
     SourceChildren: list[str],
@@ -682,7 +682,7 @@ def NestedRootContext(
 
 
 # this definition exists because nested proxies must retain their external target and dependency graph
-def VerifyNestedProxyIdentity(
+def VerifyProxyIds(
     RootValue: ET.Element,
     Objects: list[ET.Element],
     AsmLinkName: str,
@@ -718,7 +718,7 @@ def VerifyNestedProxyIdentity(
 
 
 # this definition exists because nested placements and mate references must preserve their frames
-def VerifyNestedPlacementAndMate(
+def VerifyNestMate(
     AsmLink: ET.Element,
     Proxy: ET.Element,
     DataValue: dict[str, ET.Element],
@@ -749,7 +749,7 @@ def VerifyNestedPlacementAndMate(
 
 
 # this definition exists because generated metadata groups must stay outside the assembly root
-def VerifyNestedRootMembership(
+def VerifyRootGroup(
     DataValue: dict[str, ET.Element], AsmLinkName: str
 ) -> None:
     AsmRoot = next(
@@ -777,13 +777,13 @@ def TestFcstdNested(TmpPath) -> None:
     Component = TmpPath / "nested_history" / "Piston.FCStd"
     with Zipfile.ZipFile(Component) as Archive:
         ComponentRoot = XmlTree.fromstring(Archive.read("Document.xml"))
-    ComponentTypes, SourceChildren = VerifyNestedComponent(ComponentRoot)
+    ComponentTypes, SourceChildren = VerifyNestedDoc(ComponentRoot)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
     Objects, DataValue, AsmLinkName, AsmLink, Origin, Children, Proxy = (
-        NestedRootContext(RootValue, ComponentTypes, SourceChildren)
+        NestedContext(RootValue, ComponentTypes, SourceChildren)
     )
-    VerifyNestedProxyIdentity(
+    VerifyProxyIds(
         RootValue,
         Objects,
         AsmLinkName,
@@ -793,8 +793,8 @@ def TestFcstdNested(TmpPath) -> None:
         Proxy,
         SourceChildren,
     )
-    VerifyNestedPlacementAndMate(AsmLink, Proxy, DataValue, AsmLinkName, Children)
-    VerifyNestedRootMembership(DataValue, AsmLinkName)
+    VerifyNestMate(AsmLink, Proxy, DataValue, AsmLinkName, Children)
+    VerifyRootGroup(DataValue, AsmLinkName)
 
 
 # this definition exists because focused behavior needs one stable owner
