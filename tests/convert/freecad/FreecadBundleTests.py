@@ -175,7 +175,7 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
 
         locals()["now"] = NowAction
 
-    MonkeyPatch.setattr(FreecadAdapter, "datetime", FixedDateTime)
+    MonkeyPatch.setattr(FreecadAdapter, "Datetime", FixedDateTime)
     Source, Ignored = MeshSource(Linked=True)
     Output = TmpPath / "assembly.FCStd"
     Component = TmpPath / "assembly" / "Piston.FCStd"
