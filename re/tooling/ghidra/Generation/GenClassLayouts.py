@@ -14,6 +14,8 @@ from pathlib import Path as PathInfo
 import sys as System
 from typing import Dict as DictInfo, List as ListInfo, Mapping, Sequence, Tuple
 
+from convert.Security.PathBoundary import ResolveFolder, ResolveLocal, ResolveOutput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KHereInfo = PathInfo(__file__).resolve().parent
 if str(KHereInfo) not in System.path:
@@ -959,13 +961,13 @@ def MainRun() -> int:
     ParserInfo.add_argument("--out", default=str(KDefaultOut))
     ArgsInfo = ParserInfo.parse_args()
     PayloadInfo = Generate(
-        PathInfo(ArgsInfo.segments),
-        PathInfo(ArgsInfo.decompiled),
-        PathInfo(ArgsInfo.external),
-        PathInfo(ArgsInfo.versioned),
+        ResolveFolder(ArgsInfo.segments),
+        ResolveLocal(ArgsInfo.decompiled),
+        ResolveLocal(ArgsInfo.external),
+        ResolveLocal(ArgsInfo.versioned),
         ArgsInfo.labels,
     )
-    Destination = PathInfo(ArgsInfo.out)
+    Destination = ResolveOutput(ArgsInfo.out)
     Destination.parent.mkdir(parents=True, exist_ok=True)
     with Destination.open("w", encoding="utf-8") as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)

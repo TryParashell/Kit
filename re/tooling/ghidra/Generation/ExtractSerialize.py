@@ -12,6 +12,8 @@ import json as JsonData
 import re as Regex
 from typing import Dict as DictInfo, List as ListInfo, Optional, Tuple
 
+from convert.Security.PathBoundary import ResolveInput, ResolveOutput
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def GetLegacyAttr(SelfRef, NameText):
@@ -132,7 +134,21 @@ def ParseInt(TextValueData: str) -> int:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def StripComments(TextValueData: str) -> str:
-    return Regex.sub("/\\*.*?\\*/", " ", TextValueData, flags=Regex.S)
+    OutputDataInfo: ListInfo[str] = []
+    CursorIndex = 0
+    while CursorIndex < len(TextValueData):
+        StartIndex = TextValueData.find("/*", CursorIndex)
+        if StartIndex < 0:
+            OutputDataInfo.append(TextValueData[CursorIndex:])
+            break
+        OutputDataInfo.append(TextValueData[CursorIndex:StartIndex])
+        EndIndex = TextValueData.find("*/", StartIndex + 2)
+        if EndIndex < 0:
+            OutputDataInfo.append(" ")
+            break
+        OutputDataInfo.append(" ")
+        CursorIndex = EndIndex + 2
+    return "".join(OutputDataInfo)
 
 
 # dump indexing stays independent so record lookup remains a narrow immutable responsibility
@@ -141,7 +157,9 @@ def LoadDumpMaps(
 ) -> tuple[DictInfo[str, dict], DictInfo[str, dict]]:
     ByAddress: DictInfo[str, dict] = {}
     for PathInfoData in Paths:
-        with open(PathInfoData, encoding="utf-8", errors="replace") as ReadHandle:
+        with ResolveInput(PathInfoData).open(
+            encoding="utf-8", errors="replace"
+        ) as ReadHandle:
             RawData = ReadHandle.read()
         Lines = RawData.splitlines()
         Starts = [
@@ -500,15 +518,15 @@ def MainRun() -> int:
     ParserInfo.add_argument("--classes", required=True)
     ParserInfo.add_argument("--out", required=True)
     ArgValues = ParserInfo.parse_args()
-    DumpData = DumpRecord(ArgValues.dumps)
-    with open(ArgValues.map, encoding="utf-8") as MapHandle:
+    DumpData = DumpRecord([ResolveInput(PathData) for PathData in ArgValues.dumps])
+    with ResolveInput(ArgValues.map).open(encoding="utf-8") as MapHandle:
         SerialMap = JsonData.load(MapHandle)
-    with open(ArgValues.classes, encoding="utf-8") as ClassHandle:
+    with ResolveInput(ArgValues.classes).open(encoding="utf-8") as ClassHandle:
         Classes = [LineText.strip() for LineText in ClassHandle if LineText.strip()]
     PayloadInfo: DictInfo[str, dict] = {}
     for NameTextInfo in Classes:
         PayloadInfo[NameTextInfo] = BuildClassEntry(DumpData, SerialMap, NameTextInfo)
-    with open(ArgValues.out, "w", encoding="utf-8") as Handle:
+    with ResolveOutput(ArgValues.out).open("w", encoding="utf-8") as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)
         Handle.write("\n")
     OkInfo = sum(

@@ -12,6 +12,8 @@ import json as JsonData
 import pathlib as Pathlib
 import sys as System
 
+from convert.Security.PathBoundary import ResolveInput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
 
@@ -46,7 +48,7 @@ KSigStride = 12
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def HostDll(Explicit: str | None) -> Pathlib.Path:
     if Explicit:
-        return Pathlib.Path(Explicit)
+        return ResolveInput(Explicit)
     if KVendored.is_file():
         return KVendored
     return KInstalled
