@@ -1370,9 +1370,7 @@ def BuildBundleMut(
         Result, Payload = BundleMember(
             Component, Choice, Settings, StateMut.Names, StateMut.Stamps
         )
-        StoreMemberMut(
-            Payload, TargetValue, FinalTarget, FinalOverwrite, StateMut
-        )
+        StoreMemberMut(Payload, TargetValue, FinalTarget, FinalOverwrite, StateMut)
         NativeResult = (
             Result.application_usable
             and Result.vendor_loadable
@@ -1980,9 +1978,7 @@ def BuildAsmMut(
         return
     RootName = AsmValue.definition(AsmValue.root_definition_id).name
     AsmName = RootName or ModelName or "Assembly"
-    Encoding = EncodeNativeAsm(
-        AsmValue, Portable.configurations, AsmName, BundleNames
-    )
+    Encoding = EncodeNativeAsm(AsmValue, Portable.configurations, AsmName, BundleNames)
     SavedMates, MatesComplete = SavedGenerated(Portable, Encoding)
     if MatesComplete:
         Encoding = Replace(
@@ -2896,9 +2892,7 @@ def PatchNativeMut(
     NativeBrep, BrepNative = PatchBrepCapsMut(
         DocValue, Streams, OriginalStreams, Native
     )
-    Divergences = PatchAsmCapsMut(
-        DocValue, Streams, BundleNames, BrepNative, Native
-    )
+    Divergences = PatchAsmCapsMut(DocValue, Streams, BundleNames, BrepNative, Native)
     return PatchResult(
         DocValue, Streams, OriginalStreams, NativeBrep, Native, Divergences
     )
@@ -3789,9 +3783,7 @@ def PatchAsmDataMut(
         if Decoded is None:
             return None
         Archive, Native = Decoded
-    RewrittenMates = PatchAsmMateMut(
-        AsmValue, Native, StreamsMut, DocValue.source.path
-    )
+    RewrittenMates = PatchAsmMateMut(AsmValue, Native, StreamsMut, DocValue.source.path)
     if RewrittenMates:
         Decoded = DecodePatchedAsm(StreamsMut)
         if Decoded is None:
