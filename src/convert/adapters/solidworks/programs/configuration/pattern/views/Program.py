@@ -17,10 +17,10 @@ from .Registry import (
 
 
 # the source interval records where the reusable manager was observed
-KSourceRange = (24240, 24822)
+KSourceRange = (24328, 24840)
 
 # exact closure rejects any future field-width or ordering drift
-KReferenceLength = 582
+KReferenceLength = 512
 
 # legacy source range access remains available for recovered stream diagnostics
 globals()["SourceRange"] = KSourceRange

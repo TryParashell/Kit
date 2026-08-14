@@ -1743,15 +1743,15 @@ def HasCoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
     return Coedge.reversed != (EdgeValue.end_parameter < EdgeValue.start_parameter)
 
 
-# this definition exists because focused behavior needs one stable owner
-def IsPlanarLoop(
+# planar point extraction stays isolated because line and surface evidence must precede polygon tests
+def GetPlanarPoints(
     Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
-) -> bool:
+):
     if len(LoopValue.coedge_ids) < 3:
-        return False
+        return None
     Surface = Graph.surfaces[FaceValue.surface_id]
     if not isinstance(Surface, PlaneSurface):
-        return False
+        return None
     Points: list[tuple[float, float]] = []
     Allowed = max(Tolerance, FaceValue.tolerance, 1e-07) * 10.0
     for CoedgeId in LoopValue.coedge_ids:
@@ -1759,7 +1759,7 @@ def IsPlanarLoop(
         EdgeValue = Graph.edges[Coedge.edge_id]
         Curve = Graph.curves[EdgeValue.curve_id]
         if not isinstance(Curve, LineCurve):
-            return False
+            return None
         First = (
             EdgeValue.end_parameter if Coedge.reversed else EdgeValue.start_parameter
         )
@@ -1770,7 +1770,7 @@ def IsPlanarLoop(
         EndValue = CurvePoint(Curve, LastValue)
         Middle = CurvePoint(Curve, (First + LastValue) / 2.0)
         if Start is None or EndValue is None or Middle is None:
-            return False
+            return None
         if any(
             (
                 Residual is None or Residual > Allowed
@@ -1781,60 +1781,81 @@ def IsPlanarLoop(
                 )
             )
         ):
-            return False
+            return None
         UvValue = SurfaceUv(Surface, Start)
         if UvValue is None:
-            return False
+            return None
         Points.append(UvValue)
-    if len(Points) < 3:
-        return False
-    SpanValue = max(
-        (
-            max((Value[AxisValue] for Value in Points))
-            - min((Value[AxisValue] for Value in Points))
-            for AxisValue in (0, 1)
-        )
-    )
-    Epsilon = Allowed * max(1.0, SpanValue)
-    Turns = []
-    for Index, Middle in enumerate(Points):
-        LeftValue = Points[Index - 1]
-        Right = Points[(Index + 1) % len(Points)]
-        TurnValue = (Middle[0] - LeftValue[0]) * (Right[1] - Middle[1]) - (
-            Middle[1] - LeftValue[1]
-        ) * (Right[0] - Middle[0])
+    return (tuple(Points), Allowed) if len(Points) >= 3 else None
+
+
+# planar cross products stay centralized because convexity and intersection tests share exact arithmetic
+def GetCrossValue(
+    LeftPoint: tuple[float, float],
+    RightPoint: tuple[float, float],
+    TestPoint: tuple[float, float],
+) -> float:
+    return (RightPoint[0] - LeftPoint[0]) * (TestPoint[1] - LeftPoint[1]) - (
+        RightPoint[1] - LeftPoint[1]
+    ) * (TestPoint[0] - LeftPoint[0])
+
+
+# convexity checking remains a predicate because only consistently signed nonzero turns are proven
+def IsConvexLoop(Points: tuple[tuple[float, float], ...], Epsilon: float) -> bool:
+    Turns: list[bool] = []
+    for Index, MiddlePoint in enumerate(Points):
+        LeftPoint = Points[Index - 1]
+        RightPoint = Points[(Index + 1) % len(Points)]
+        TurnValue = GetCrossValue(LeftPoint, MiddlePoint, RightPoint)
         if abs(TurnValue) <= Epsilon:
             return False
         Turns.append(TurnValue > 0.0)
-    if any((Value != Turns[0] for Value in Turns[1:])):
-        return False
+    return not any(Value != Turns[0] for Value in Turns[1:])
+
+
+# intersection detection remains a predicate because self crossing loops cannot prove planar topology
+def HasCrossings(Points: tuple[tuple[float, float], ...], Epsilon: float) -> bool:
     for FirstIndex, FirstStart in enumerate(Points):
         FirstEnd = Points[(FirstIndex + 1) % len(Points)]
+        Adjacent = {
+            FirstIndex,
+            (FirstIndex + 1) % len(Points),
+            (FirstIndex - 1) % len(Points),
+        }
         for SecondIndex in range(FirstIndex + 1, len(Points)):
-            if SecondIndex in {
-                FirstIndex,
-                (FirstIndex + 1) % len(Points),
-                (FirstIndex - 1) % len(Points),
-            }:
+            if SecondIndex in Adjacent:
                 continue
             SecondStart = Points[SecondIndex]
             SecondEnd = Points[(SecondIndex + 1) % len(Points)]
-            Crosses = []
-            for LeftValue, Right, Point in (
-                (FirstStart, FirstEnd, SecondStart),
-                (FirstStart, FirstEnd, SecondEnd),
-                (SecondStart, SecondEnd, FirstStart),
-                (SecondStart, SecondEnd, FirstEnd),
-            ):
-                Value = (Right[0] - LeftValue[0]) * (Point[1] - LeftValue[1]) - (
-                    Right[1] - LeftValue[1]
-                ) * (Point[0] - LeftValue[0])
-                if abs(Value) <= Epsilon:
-                    return False
-                Crosses.append(Value > 0.0)
-            if Crosses[0] != Crosses[1] and Crosses[2] != Crosses[3]:
-                return False
-    return True
+            CrossValues = (
+                GetCrossValue(FirstStart, FirstEnd, SecondStart),
+                GetCrossValue(FirstStart, FirstEnd, SecondEnd),
+                GetCrossValue(SecondStart, SecondEnd, FirstStart),
+                GetCrossValue(SecondStart, SecondEnd, FirstEnd),
+            )
+            if any(abs(Value) <= Epsilon for Value in CrossValues):
+                return True
+            Signs = tuple(Value > 0.0 for Value in CrossValues)
+            if Signs[0] != Signs[1] and Signs[2] != Signs[3]:
+                return True
+    return False
+
+
+# planar loop proof composes point convexity and crossing evidence because each can reject independently
+def IsPlanarLoop(
+    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+) -> bool:
+    PointData = GetPlanarPoints(Graph, FaceValue, LoopValue, Tolerance)
+    if PointData is None:
+        return False
+    Points, Allowed = PointData
+    SpanValue = max(
+        max(Value[AxisValue] for Value in Points)
+        - min(Value[AxisValue] for Value in Points)
+        for AxisValue in (0, 1)
+    )
+    Epsilon = Allowed * max(1.0, SpanValue)
+    return IsConvexLoop(Points, Epsilon) and not HasCrossings(Points, Epsilon)
 
 
 # this definition exists because focused behavior needs one stable owner
