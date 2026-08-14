@@ -34,6 +34,7 @@ KSkipFolders = frozenset(
         ".git",
         ".mypy_cache",
         ".pytest_cache",
+        ".rescratch",
         ".ruff_cache",
         ".venv",
         "__pycache__",

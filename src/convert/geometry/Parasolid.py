@@ -768,6 +768,14 @@ def WriteSolidAttrs(Output: bytearray, BaseValue: int, BodyData: int, Faces: Seq
     ColouredFaceLegal = (0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0)
     BodyLegal = (0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     ImplicitBodyLegal = (0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0)
+    OrderFaces, Neighbors = FaceAttrOrder(Faces)
+    WriteFaceAttMut(Output, Faces, FaceDefinitions, NodeIds, Neighbors)
+    FirstAttrs = WriteFaceDefMut(Output, OrderFaces, FaceDefinitions, FaceDefNext, FaceIds, StandardActions, RetainedActions, FaceLegal, ColouredFaceLegal)
+    WriteBodyAttMut(Output, BaseValue, BodyData, FirstAttrs, BodyAttrs, BodyValues, BodyDefinitions, BodyDefNext, BodyIds, NodeIds, FeatureId, StandardActions, RetainedActions, BodyLegal, ImplicitBodyLegal)
+
+
+# face attribute ordering preserves optional vendor ranks and linked list neighbors
+def FaceAttrOrder(Faces: Sequence[tuple[object, ...]]) -> tuple[dict[str, Sequence[tuple[object, ...]]], dict[tuple[str, str], tuple[int, int]]]:
     OrderFaces: dict[str, Sequence[tuple[object, ...]]] = {}
     Neighbors: dict[tuple[str, str], tuple[int, int]] = {}
     for KindValueData, AttrPosition in (('unchanged', 0), ('downstream', 1), ('colour', 2)):
@@ -782,6 +790,11 @@ def WriteSolidAttrs(Output: bytearray, BaseValue: int, BodyData: int, Faces: Seq
             PreviousAttr = Values[Position - 1][2][AttrPosition] if Position else 0
             NextAttrData = Values[Position + 1][2][AttrPosition] if Position + 1 < len(Values) else 0
             Neighbors[ValueData[0], KindValueData] = (NextAttrData, PreviousAttr)
+    return OrderFaces, Neighbors
+
+
+# face attribute writing emits linked values without owning ordering policy
+def WriteFaceAttMut(Output: bytearray, Faces: Sequence[tuple[object, ...]], FaceDefinitions: Mapping[str, int], NodeIds: Mapping[int, int], Neighbors: Mapping[tuple[str, str], tuple[int, int]]) -> None:
     for FaceId, Owner, Attrs, Values, UnchangedId, Ignored in Faces:
         Unchanged, Downstream, Colour = Attrs
         UnchangedValue, DownstreamValue, ColourValue = Values
@@ -792,6 +805,10 @@ def WriteSolidAttrs(Output: bytearray, BaseValue: int, BodyData: int, Faces: Seq
         VTwelveIntVals(Output, UnchangedValue, (PreservedUnchangedId,))
         VTwelveIntVals(Output, DownstreamValue, (0, 1671915899, 31269538, 0, 0, 0))
         VTwelveRealVals(Output, ColourValue, (0.792156862745098, 0.8196078431372549, 0.9333333333333333))
+
+
+# face definition writing emits schemas and returns each linked list head
+def WriteFaceDefMut(Output: bytearray, OrderFaces: Mapping[str, Sequence[tuple[object, ...]]], FaceDefinitions: Mapping[str, int], FaceDefNext: Mapping[str, int], FaceIds: Mapping[str, int], StandardActions: Sequence[int], RetainedActions: Sequence[int], FaceLegal: Sequence[int], ColouredFaceLegal: Sequence[int]) -> tuple[int, int, int]:
     VTwelveAttrDef(Output, FaceDefinitions['unchanged'], FaceDefNext['unchanged'], FaceIds['unchanged'], 9000, RetainedActions, ColouredFaceLegal, (1,))
     VTwelveAttrId(Output, FaceIds['unchanged'], 'SWEntUnchanged')
     VTwelveAttrDef(Output, FaceDefinitions['downstream'], FaceDefNext['downstream'], FaceIds['downstream'], 9000, StandardActions, FaceLegal, (1, 1, 1))
@@ -801,14 +818,16 @@ def WriteSolidAttrs(Output: bytearray, BaseValue: int, BodyData: int, Faces: Seq
     FirstUnchanged = OrderFaces['unchanged'][0][2][0]
     FirstDownstream = OrderFaces['downstream'][0][2][1]
     FirstColour = OrderFaces['colour'][0][2][2]
+    return FirstUnchanged, FirstDownstream, FirstColour
+
+
+# body attribute writing emits the body chain definitions and scalar values
+def WriteBodyAttMut(Output: bytearray, BaseValue: int, BodyData: int, FirstAttrs: tuple[int, int, int], BodyAttrs: Mapping[str, int], BodyValues: Mapping[str, int], BodyDefinitions: Mapping[str, int], BodyDefNext: Mapping[str, int], BodyIds: Mapping[str, int], NodeIds: Mapping[int, int], FeatureId: int, StandardActions: Sequence[int], RetainedActions: Sequence[int], BodyLegal: Sequence[int], ImplicitBodyLegal: Sequence[int]) -> None:
+    FirstUnchanged, FirstDownstream, FirstColour = FirstAttrs
     VTwelvePtrList(Output, BaseValue + 15, (FirstDownstream, BodyAttrs['timestamp'], BodyAttrs['feature'], BodyAttrs['implicit'], FirstUnchanged, BodyAttrs['match'], BodyAttrs['density'], BodyAttrs['lightweight'], BodyAttrs['recipe'], FirstColour, BaseValue + 2, 0, 0, 0, 0, 0, 0, 0, 0, 0), 11)
-    Timestamp = BodyAttrs['timestamp']
-    Feature = BodyAttrs['feature']
-    Implicit = BodyAttrs['implicit']
-    Match = BodyAttrs['match']
-    Density = BodyAttrs['density']
-    Lightweight = BodyAttrs['lightweight']
-    Recipe = BodyAttrs['recipe']
+    Timestamp, Feature, Implicit = BodyAttrs['timestamp'], BodyAttrs['feature'], BodyAttrs['implicit']
+    Match, Density = BodyAttrs['match'], BodyAttrs['density']
+    Lightweight, Recipe = BodyAttrs['lightweight'], BodyAttrs['recipe']
     VTwelveAttr(Output, Timestamp, NodeIds[Timestamp], BodyDefinitions['timestamp'], BodyData, 0, Feature, 0, 0, (0, BodyValues['timestamp']))
     VTwelveAttr(Output, Feature, NodeIds[Feature], BodyDefinitions['feature'], BodyData, Timestamp, Implicit, 0, 0, (0, BodyValues['feature']))
     VTwelveAttr(Output, Implicit, NodeIds[Implicit], BodyDefinitions['implicit'], BodyData, Feature, Match, 0, 0, (BodyValues['implicit'], 0))
@@ -978,53 +997,69 @@ def CheckedAttr(ValueData: int) -> int:
 def WriteBodyTree(Model: BrepModel, Topology: BrepTopology, FaceOwners: Mapping[str, int], SheetSchema: bool, NextAttr: int, Output: bytearray) -> int:
     Assigned: set[str] = set()
     for BodyData in Model.bodies:
-        RootValue = CheckedAttr(NextAttr)
-        NextAttr += 1
-        RegionKinds = {Topology.regions[RegionId].solid for RegionId in BodyData.region_ids}
-        if len(RegionKinds) != 1:
-            raise ParaWriteError(f'B-rep body {BodyData.id} mixes solid and sheet regions')
-        Solid = RegionKinds == {True}
-        NativeRegions: list[int] = []
-        for RegionId in BodyData.region_ids:
-            Region = Topology.regions[RegionId]
-            if not Solid and len(Region.shell_use_ids) != 1:
-                raise ParaWriteError(f'B-rep sheet region {Region.id} must contain one shell')
-            NativeRegion = CheckedAttr(NextAttr)
-            NextAttr += 1
-            NativeRegions.append(NativeRegion)
-            NativeLumps: list[int] = []
-            for ShellUseId in Region.shell_use_ids:
-                ShellUse = Topology.shell_uses[ShellUseId]
-                Shell = Topology.shells[ShellUse.shell_id]
-                Owned: list[int] = []
-                for FaceUseId in Shell.face_use_ids:
-                    FaceId = Topology.face_uses[FaceUseId].face_id
-                    if FaceId in Assigned:
-                        raise ParaWriteError(f'B-rep face {FaceId} belongs to multiple bodies')
-                    Assigned.add(FaceId)
-                    Owned.append(FaceOwners[FaceId])
-                HeadValue, NextAttr = WriteFaceList(Output, Owned, NextAttr, 21 if SheetSchema else 19)
-                if not Solid:
-                    EntityFiftyOne(Output, 1, NativeRegion, 29, (HeadValue, 0, 0, 0, 0, 0))
-                    continue
-                LumpValue = CheckedAttr(NextAttr)
-                ShellNode = CheckedAttr(NextAttr + 1)
-                ShellLink = CheckedAttr(NextAttr + 2)
-                NextAttr += 3
-                NativeLumps.append(LumpValue)
-                EntityFiftyOne(Output, 2, LumpValue, 31, (ShellNode, 0, 0, 0, 0, 0))
-                EntityFiftyOne(Output, 2, ShellNode, 33, (ShellLink, 0, 0, 0, 0, 0))
-                EntityFiftyOne(Output, 2, ShellLink, 35, (HeadValue, 0, 0, 0, 0, 0))
-            if Solid:
-                EntityFiftyOne(Output, 1, NativeRegion, 27, FixedRefs(NativeLumps, 'Parasolid writer regions support at most six shells'))
-        if len(NativeRegions) > 5:
-            raise ParaWriteError(f'B-rep body {BodyData.id} has more than five regions')
-        RootRefs = [0, *NativeRegions]
-        RootRefs.extend((0 for Ignored in range(6 - len(RootRefs))))
-        EntityFiftyOne(Output, 2, RootValue, 23, tuple(RootRefs))
+        NextAttr = WriteOneBodyMut(BodyData, Topology, FaceOwners, SheetSchema, NextAttr, Output, Assigned)
     if Assigned != set(Topology.faces):
         raise ParaWriteError('B-rep contains a face outside every body')
     return NextAttr
+
+
+# body hierarchy writing owns each root and its ordered native regions
+def WriteOneBodyMut(BodyData: BrepBody, Topology: BrepTopology, FaceOwners: Mapping[str, int], SheetSchema: bool, NextAttr: int, Output: bytearray, Assigned: set[str]) -> int:
+    RootValue = CheckedAttr(NextAttr)
+    NextAttr += 1
+    RegionKinds = {Topology.regions[RegionId].solid for RegionId in BodyData.region_ids}
+    if len(RegionKinds) != 1:
+        raise ParaWriteError(f'B-rep body {BodyData.id} mixes solid and sheet regions')
+    Solid = RegionKinds == {True}
+    NativeRegions: list[int] = []
+    for RegionId in BodyData.region_ids:
+        NativeRegion, NextAttr = WriteRegionMut(Topology.regions[RegionId], Topology, FaceOwners, SheetSchema, Solid, NextAttr, Output, Assigned)
+        NativeRegions.append(NativeRegion)
+    if len(NativeRegions) > 5:
+        raise ParaWriteError(f'B-rep body {BodyData.id} has more than five regions')
+    RootRefs = [0, *NativeRegions]
+    RootRefs.extend((0 for Ignored in range(6 - len(RootRefs))))
+    EntityFiftyOne(Output, 2, RootValue, 23, tuple(RootRefs))
+    return NextAttr
+
+
+# region hierarchy writing connects one region to its shell records
+def WriteRegionMut(Region: BrepRegion, Topology: BrepTopology, FaceOwners: Mapping[str, int], SheetSchema: bool, Solid: bool, NextAttr: int, Output: bytearray, Assigned: set[str]) -> tuple[int, int]:
+    if not Solid and len(Region.shell_use_ids) != 1:
+        raise ParaWriteError(f'B-rep sheet region {Region.id} must contain one shell')
+    NativeRegion = CheckedAttr(NextAttr)
+    NextAttr += 1
+    NativeLumps: list[int] = []
+    for ShellUseId in Region.shell_use_ids:
+        NextAttr, LumpValue = WriteShellMut(ShellUseId, NativeRegion, Topology, FaceOwners, SheetSchema, Solid, NextAttr, Output, Assigned)
+        if LumpValue is not None:
+            NativeLumps.append(LumpValue)
+    if Solid:
+        EntityFiftyOne(Output, 1, NativeRegion, 27, FixedRefs(NativeLumps, 'Parasolid writer regions support at most six shells'))
+    return NativeRegion, NextAttr
+
+
+# shell hierarchy writing validates face ownership and emits native shell links
+def WriteShellMut(ShellUseId: str, NativeRegion: int, Topology: BrepTopology, FaceOwners: Mapping[str, int], SheetSchema: bool, Solid: bool, NextAttr: int, Output: bytearray, Assigned: set[str]) -> tuple[int, int | None]:
+    ShellUse = Topology.shell_uses[ShellUseId]
+    ShellData = Topology.shells[ShellUse.shell_id]
+    Owned: list[int] = []
+    for FaceUseId in ShellData.face_use_ids:
+        FaceId = Topology.face_uses[FaceUseId].face_id
+        if FaceId in Assigned:
+            raise ParaWriteError(f'B-rep face {FaceId} belongs to multiple bodies')
+        Assigned.add(FaceId)
+        Owned.append(FaceOwners[FaceId])
+    HeadValue, NextAttr = WriteFaceList(Output, Owned, NextAttr, 21 if SheetSchema else 19)
+    if not Solid:
+        EntityFiftyOne(Output, 1, NativeRegion, 29, (HeadValue, 0, 0, 0, 0, 0))
+        return NextAttr, None
+    LumpValue = CheckedAttr(NextAttr)
+    ShellNode, ShellLink = CheckedAttr(NextAttr + 1), CheckedAttr(NextAttr + 2)
+    EntityFiftyOne(Output, 2, LumpValue, 31, (ShellNode, 0, 0, 0, 0, 0))
+    EntityFiftyOne(Output, 2, ShellNode, 33, (ShellLink, 0, 0, 0, 0, 0))
+    EntityFiftyOne(Output, 2, ShellLink, 35, (HeadValue, 0, 0, 0, 0, 0))
+    return NextAttr + 3, LumpValue
 
 # this declaration exists because focused behavior needs one stable owner
 def WriteFaceList(Output: bytearray, Owners: Sequence[int], NextAttr: int, KindValue: int) -> tuple[int, int]:

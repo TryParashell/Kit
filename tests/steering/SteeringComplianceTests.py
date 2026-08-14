@@ -510,6 +510,19 @@ KValidValue = 1
         CaseSelf.assertEqual(InvalidResult.returncode, 2)
 
 
+# path filtering stays focused because local analysis databases are not repository source
+class TestPathFilter(Unittest.TestCase):
+
+    # scratch trees stay excluded because broad local checks must not traverse generated analyzer data
+    def CheckScratch(CaseSelf) -> None:
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            RootPath = FilePath(TmpPath)
+            SourcePath = RootPath / ".rescratch" / "Broken.py"
+            SourcePath.parent.mkdir()
+            SourcePath.write_text("def bad():\n    pass\n", encoding="utf-8")
+            CaseSelf.assertEqual(CheckPaths([RootPath]), [])
+
+
 # self checking prevents regressions because enforcement sources must follow their own rules
 class TestBootstrap(Unittest.TestCase):
 
