@@ -7027,948 +7027,177 @@ def AddFeaturesMut(
         AddFeatureMut(Context, Geometry, Features, Feature)
 
 
-# this definition exists because focused behavior needs one stable owner
-def BuildDocXml(
-    Manifest: Mapping[str, Any],
-    ManifestData: str,
-    ManifestShaTwoFiveSix: str,
-    OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
-    NativeOuterLinks: Mapping[str, str] | None = None,
-    DocTimestamp: str = "1980-01-01T00:00:00Z",
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
-) -> tuple[bytes, dict[str, bytes]]:
-    OuterLinks = OuterLinks or {}
-    NativeOuterLinks = NativeOuterLinks or {}
-    NativeDocShaTwoFiveSix = NativeDocShaTwo(Manifest)
-    SourceData = Manifest.get("source", {})
-    SourceFormatId = (
-        TextAction(SourceData.get("format_id"))
-        if isinstance(SourceData, Mapping)
-        else ""
-    )
-    ManifestMeta = Manifest.get("metadata", {})
-    FreecadMeta = (
-        ManifestMeta.get("freecad", {}) if isinstance(ManifestMeta, Mapping) else {}
-    )
-    NativeValues = (
-        Items(FreecadMeta.get("objects", []))
-        if isinstance(FreecadMeta, Mapping)
-        else []
-    )
-    AsmValue = AsmData(Manifest)
-    NativeReplay = bool(NativeValues) and AsmValue is None
-    RepresentedNativeNames = (
-        Represented(Manifest, AsmValue) if AsmValue is not None else set()
-    )
-    ReplayValues = NativeValues
-    if not NativeReplay:
-        ReplayValues = [
-            Value
-            for Value in NativeValues
-            if TextAction(Value.get("name")) not in RepresentedNativeNames
-        ]
-        while True:
-            ReplayNames = {TextAction(Value.get("name")) for Value in ReplayValues}
-            ClosedValues = [
-                Value
-                for Value in ReplayValues
-                if all(
-                    (
-                        TextAction(Dependency) in ReplayNames
-                        for Dependency in Sequence(Value.get("dependencies", []))
-                    )
-                )
-            ]
-            if len(ClosedValues) == len(ReplayValues):
-                break
-            ReplayValues = ClosedValues
-    Graph = ObjectGraph()
-    NativeGraph: dict[str, Object] = {}
-    if ReplayValues:
-
-        # this callback exists because local behavior needs one focused transformation
-        for Value in sorted(
-            ReplayValues, key=lambda ItemValue: int(Number(ItemValue.get("order")))
-        ):
-            ObjValue = NativeObject(Value)
-            if ObjValue.name in NativeGraph:
-                raise ValueError(
-                    f"duplicate native FreeCAD object metadata: {ObjValue.name}"
-                )
-            NativeGraph[ObjValue.name] = ObjValue
-            Graph.Names.add(ObjValue.name)
-            Graph.Objects.append(ObjValue)
-    NativeObjectTargets = {
-        NameValue: ObjValue.name for NameValue, ObjValue in NativeGraph.items()
+# this definition exists because body membership follows the final feature dependency closure
+def BodyMembers(
+    Geometry: DocGeometry, Features: DocFeatures, FinalFeatureId: str
+) -> list[str]:
+    FeatureById = {
+        TextAction(Value.get("id")): Value
+        for Value in Features.FeatureItems
+        if TextAction(Value.get("id"))
     }
-    ParametersData = Items(Manifest.get("parameters", []))
-    Parameters = ParamCatalog(ParametersData)
-    ParamSheet = Graph.add("Spreadsheet::Sheet", "Parameters", "Parameters")
-    ParamSheet.properties.extend(Parameters.sheet_properties())
-    MetaValue = Graph.add("App::FeaturePython", "KitMetadata", "Metadata")
-    MetaValue.properties.extend(
+    Pending = [FinalFeatureId]
+    MemberIds: set[str] = set()
+    while Pending:
+        FeatureId = Pending.pop()
+        if FeatureId in MemberIds or FeatureId not in FeatureById:
+            continue
+        MemberIds.add(FeatureId)
+        Pending.extend(
+            TextAction(Value)
+            for Value in Sequence(FeatureById[FeatureId].get("input_feature_ids", []))
+        )
+    Members: list[str] = []
+    for ItemValue in Features.FeatureItems:
+        FeatureId = TextAction(ItemValue.get("id"))
+        if FeatureId not in MemberIds:
+            continue
+        SketchName = Geometry.SketchNames.get(TextAction(ItemValue.get("sketch_id")), "")
+        if SketchName and SketchName not in Members:
+            Members.append(SketchName)
+        FeatureName = Features.FeatureNames.get(FeatureId, "")
+        if FeatureName and FeatureName not in Members:
+            Members.append(FeatureName)
+    return Members
+
+
+# this definition exists because one body coordinates feature membership tip and native replay
+def AddBodyMut(
+    Context: DocContext,
+    Geometry: DocGeometry,
+    Features: DocFeatures,
+    BodyValue: Mapping[str, Any],
+) -> None:
+    BodyId = TextAction(BodyValue.get("id"))
+    FinalFeatureId = TextAction(BodyValue.get("final_feature_id"))
+    FinalFeature = Features.FeatureNames.get(FinalFeatureId, Features.CurrentName)
+    Members = BodyMembers(Geometry, Features, FinalFeatureId)
+    NativeBody = FreecadAttrs(BodyValue)
+    NativeName = TextAction(NativeBody.get("name"))
+    ObjValue = Context.NativeGraph.get(NativeName) if Context.NativeReplay else None
+    if ObjValue is not None:
+        Properties = NativeA(NativeBody)
+        MergeNamedMut(Properties, StringProp("Label", BodyValue.get("name", BodyId)))
+        if FinalFeature:
+            MergeNamedMut(Properties, LinkProp("Tip", FinalFeature))
+        setattr(ObjValue, "properties", Properties)
+        Context.NativeTargets[NativeName] = ObjValue.name
+    else:
+        ObjValue = Context.Graph.add(
+            TextAction(NativeBody.get("type_id"), "App::DocumentObjectGroup"),
+            NativeBody.get("name", BodyValue.get("name", BodyId)),
+            "Body",
+        )
+        ObjValue.properties.extend(
+            [
+                StringProp("Label", BodyValue.get("name", BodyId)),
+                LinkListProp("Group", Members),
+                LinkProp("Tip", FinalFeature, Dynamic=True),
+                MakePlacement("Placement", MatrixTransform(KIdentityMatrix)),
+                StringProp("KitId", BodyId, Dynamic=True),
+                JsonProp("TopologyJSON", BodyValue.get("topology", {})),
+                JsonProp("SourceBodyJSON", BodyValue),
+                BoolProp("Visibility", True),
+            ]
+        )
+        MaterialId = TextAction(BodyValue.get("material_id"))
+        if MaterialId:
+            ObjValue.properties.append(StringProp("MaterialId", MaterialId, Dynamic=True))
+        ObjValue.dependencies.extend(Members)
+    Features.BodyNames[BodyId] = ObjValue.name
+    Features.BodyTargets[BodyId] = FinalFeature or ObjValue.name
+    Features.BodyObjects.append(ObjValue.name)
+
+
+# this definition exists because bodies must preserve their source ordering
+def AddBodiesMut(
+    Context: DocContext, Geometry: DocGeometry, Features: DocFeatures
+) -> None:
+    for BodyValue in Items(Context.Manifest.get("bodies", [])):
+        AddBodyMut(Context, Geometry, Features, BodyValue)
+
+
+# this definition exists because selection paths resolve neutral ids and native object names
+def SelectionTargets(
+    Context: DocContext,
+    TargetById: Mapping[str, str],
+    Selection: Mapping[str, Any],
+) -> tuple[list[tuple[str, str]], list[str]]:
+    Targets: list[tuple[str, str]] = []
+    EntityKinds: list[str] = []
+    for PathItem in Items(Selection.get("path", [])):
+        EntityId = TextAction(PathItem.get("entity_id"))
+        Target = TargetById.get(EntityId, Context.NativeTargets.get(EntityId, ""))
+        if not Target:
+            continue
+        Targets.append((Target, TextAction(PathItem.get("subelement"))))
+        EntityKinds.append(TextAction(PathItem.get("entity_kind")))
+    return (Targets, EntityKinds)
+
+
+# this definition exists because one selection preserves path query point and dependency metadata
+def AddSelectionMut(
+    Context: DocContext,
+    Features: DocFeatures,
+    TargetById: Mapping[str, str],
+    Selection: Mapping[str, Any],
+) -> None:
+    SelectionId = TextAction(Selection.get("id"))
+    ObjValue = Context.Graph.add(
+        "App::FeaturePython", Selection.get("name", SelectionId), "Selection"
+    )
+    Targets, EntityKinds = SelectionTargets(Context, TargetById, Selection)
+    ObjValue.properties.extend(
         [
-            StringProp("Label", "Kit Metadata"),
-            StringProp(KManifestEncodingProp, KManifestEncoding, Dynamic=True),
-            StringProp(KManifestShaTwoFiveSixPrA, ManifestShaTwoFiveSix, Dynamic=True),
-            StringProp(KManifestDataProp, ManifestData, Dynamic=True),
-            StringProp(
-                "SchemaVersion", Manifest.get("schema_version", "1.0"), Dynamic=True
-            ),
-            JsonProp("ParameterAliasesJSON", Parameters.Aliases),
+            StringProp("Label", Selection.get("name", SelectionId)),
+            StringProp("KitSelectionId", SelectionId, Dynamic=True),
+            LinkSubListProp("Selection", Targets, Dynamic=True),
+            StringListProp("EntityKinds", EntityKinds, Dynamic=True),
+            JsonProp("QueryJSON", Selection.get("query", {})),
+            JsonProp("SourceSelectionJSON", Selection),
             BoolProp("Visibility", False),
         ]
     )
-    PlanesGroup = Graph.add("App::DocumentObjectGroup", "SupportPlanes", "Group")
-    SketchesGroup = Graph.add("App::DocumentObjectGroup", "Sketches", "Group")
-    SelectionsGroup = Graph.add("App::DocumentObjectGroup", "Selections", "Group")
-    ConfigurationsGroup = Graph.add(
-        "App::DocumentObjectGroup", "Configurations", "Group"
-    )
-    TimelineGroup = Graph.add("App::DocumentObjectGroup", "FeatureTimeline", "Group")
-    BodiesGroup = Graph.add("App::DocumentObjectGroup", "Bodies", "Group")
-    PlaneItems = Items(Manifest.get("support_planes", Manifest.get("planes", [])))
-    PlaneById = {TextAction(ItemValue.get("id")): ItemValue for ItemValue in PlaneItems}
-    PlaneNames: dict[str, str] = {}
-    PlaneObjects: list[str] = []
-    for Plane in PlaneItems:
-        PlaneId = TextAction(Plane.get("id"))
-        PlaneAttributes = Plane.get("attributes", {})
-        NativePlane = (
-            PlaneAttributes.get("freecad", {})
-            if isinstance(PlaneAttributes, Mapping)
-            else {}
+    Point = Selection.get("point")
+    if Point is not None:
+        ObjValue.properties.append(
+            VectorProp("SelectionPoint", Vector(Point, (0.0, 0.0, 0.0)), Dynamic=True)
         )
-        NativePlaneName = TextAction(NativePlane.get("name"))
-        ObjValue = NativeGraph.get(NativePlaneName) if NativeReplay else None
-        if ObjValue is None:
-            ObjValue = Graph.add(
-                TextAction(NativePlane.get("type_id"), "App::Plane"),
-                NativePlane.get("name", Plane.get("name", PlaneId)),
-                "Plane",
-            )
-        if NativePlaneName:
-            NativeObjectTargets[NativePlaneName] = ObjValue.name
-        PlaneNames[PlaneId] = ObjValue.name
-        PlaneObjects.append(ObjValue.name)
-        Transform = (
-            Plane.get("transform", {})
-            if isinstance(Plane.get("transform"), Mapping)
-            else {}
-        )
-        Expressions: list[tuple[str, str]] = []
-        OffsetParamId = TextAction(Plane.get("offset_parameter_id"))
-        if OffsetParamId:
-            Expression = Parameters.expression(OffsetParamId)
-            Origin = Vector(Transform.get("origin"), (0.0, 0.0, 0.0))
-            Normal = Normalize(Vector(Transform.get("z_axis"), (0.0, 0.0, 1.0)))
-            Value = Parameters.value(OffsetParamId)
-            for Coordinate, Component, OriginValue in zip(
-                ("x", "y", "z"), Normal, Origin
-            ):
-                if abs(Component) > 0.999999 and MathValue.isclose(
-                    abs(OriginValue), abs(Value), rel_tol=1e-09, abs_tol=1e-09
-                ):
-                    SignValue = "-" if OriginValue * Value < 0 else ""
-                    Expressions.append(
-                        (
-                            f"Placement.Base.{Coordinate}",
-                            SignValue + TextAction(Expression),
-                        )
-                    )
-        NativePlaneProperties = (
-            NativePlane.get("properties", {})
-            if isinstance(NativePlane, Mapping)
-            else {}
-        )
-        if isinstance(NativePlaneProperties, Mapping) and NativePlaneProperties:
-            Properties = NativeA(NativePlane)
-            Replacements = [
-                StringProp("Label", Plane.get("name", PlaneId)),
-                MakePlacement("Placement", Transform),
-                BoolProp("Visibility", False),
-            ]
-            for Replacement in Replacements:
-                MergeNamedMut(Properties, Replacement)
-            if not NativeReplay:
-                Properties.extend(
-                    [
-                        StringProp("KitId", PlaneId, Dynamic=True),
-                        JsonProp("SourcePlaneJSON", Plane),
-                    ]
-                )
-            setattr(ObjValue, "properties", Properties)
-        else:
-            ObjValue.properties.extend(
-                [
-                    StringProp("Label", Plane.get("name", PlaneId)),
-                    MakePlacement("Placement", Transform),
-                    ExpressionProp(Expressions),
-                    StringProp("KitId", PlaneId, Dynamic=True),
-                    JsonProp("SourcePlaneJSON", Plane),
-                    BoolProp("Visibility", False),
-                ]
-            )
-        if Expressions and (not NativeReplay):
-            ObjValue.dependencies.append(ParamSheet.name)
-    SketchItems = Items(Manifest.get("sketches", []))
-    SketchNames: dict[str, str] = {}
-    SketchNativeProfileCounts: dict[str, int] = {}
-    SketchNativeProfileSound: dict[str, bool] = {}
-    SketchObjects: list[str] = []
-    for Sketch in SketchItems:
-        SketchId = TextAction(Sketch.get("id"))
-        SketchNativeProfileCounts[SketchId] = NativeClosed(Sketch)
-        SketchNativeProfileSound[SketchId] = HasNativeProf(Sketch)
-        PlaneId = TextAction(Sketch.get("support_plane_id"))
-        Plane = PlaneById.get(PlaneId, {"transform": {}})
-        PlaneName = PlaneNames.get(PlaneId, "")
-        SketchAttributes = Sketch.get("attributes", {})
-        NativeSketch = (
-            SketchAttributes.get("freecad", {})
-            if isinstance(SketchAttributes, Mapping)
-            else {}
-        )
-        NativeSketchName = TextAction(NativeSketch.get("name"))
-        ObjValue = NativeGraph.get(NativeSketchName) if NativeReplay else None
-        if ObjValue is None:
-            ObjValue = Graph.add(
-                TextAction(NativeSketch.get("type_id"), SketchTypeId),
-                NativeSketch.get("name", Sketch.get("name", SketchId)),
-                "Sketch",
-                Touched=True,
-                Extensions=("Part::AttachExtension",),
-            )
-        SketchNames[SketchId] = ObjValue.name
-        if NativeSketchName:
-            NativeObjectTargets[NativeSketchName] = ObjValue.name
-        SketchObjects.append(ObjValue.name)
-        Properties, Dependencies = BuildSketch(
-            Sketch,
-            Plane,
-            PlaneName,
-            Parameters,
-            NativeReplay,
-            SourceFormatId == "solidworks.sldprt",
-        )
-        if NativeReplay and NativeSketch:
-            setattr(ObjValue, "properties", Properties)
-        else:
-            ObjValue.properties.extend(Properties)
-        if NativeSketch and (not NativeReplay):
-            ObjValue.transient_properties.append(
-                XmlTree.Element(
-                    "_Property",
-                    {
-                        "name": "_ElementMapVersion",
-                        "type": "App::PropertyString",
-                        "status": "234881024",
-                    },
-                )
-            )
-        ObjValue.dependencies.extend(
-            (Dependency for Dependency in Dependencies if Dependency)
-        )
-    SelectionItems = {
-        TextAction(ItemValue.get("id")): ItemValue
-        for ItemValue in Items(Manifest.get("selections", []))
-    }
+    ObjValue.dependencies.extend(Target for Target, Ignored in Targets)
+    Features.SelectionNames[SelectionId] = ObjValue.name
+    Features.SelectionObjects.append(ObjValue.name)
 
-    # this callback exists because local behavior needs one focused transformation
-    FeatureItems = sorted(
-        Items(Manifest.get("feature_timeline", Manifest.get("timeline", []))),
-        key=lambda ItemValue: int(Number(ItemValue.get("order"))),
-    )
-    FeatureNames: dict[str, str] = {}
-    SolidFeatureNames: dict[str, str] = {}
-    FeatureObjects: list[str] = []
-    CurrentName = ""
-    FinalShapeFileName = ""
-    PayloadEntries: dict[str, bytes] = {}
-    ReplayEntryNames: set[str] | None = None
-    if not NativeReplay:
-        ReplayEntryNames = {
-            FileName
-            for Value in ReplayValues
-            for PropElem in NativeA(Value)
-            for NodeValue in PropElem.iter()
-            if NodeValue.tag != "XLink" and (FileName := NodeValue.get("file", ""))
-        }
-    if NativeValues and isinstance(FreecadMeta, Mapping):
-        for ItemValue in Items(FreecadMeta.get("entries", [])):
-            SourceStream = TextAction(ItemValue.get("source_stream"))
-            DataValue = PayloadBytes(ItemValue)
-            if not SourceStream or DataValue is None:
-                raise ValueError("native FreeCAD entry metadata is incomplete")
-            if ReplayEntryNames is not None and SourceStream not in ReplayEntryNames:
-                continue
-            Entry = ValidatedEntry(SourceStream)
-            if Entry in {KDocEntry, KManifestEntry} or Entry in PayloadEntries:
-                raise ValueError(
-                    "native FreeCAD entry metadata conflicts with the archive"
-                )
-            PayloadEntries[Entry] = DataValue
-    for Feature in FeatureItems:
-        FeatureId = TextAction(Feature.get("id"))
-        FeatureName = TextAction(Feature.get("name"), FeatureId)
-        KindValue = TextAction(EnumAction(Feature.get("kind"))).lower()
-        Operation = TextAction(EnumAction(Feature.get("operation"))).lower()
-        Attributes = (
-            Feature.get("attributes", {})
-            if isinstance(Feature.get("attributes"), Mapping)
-            else {}
-        )
-        Definition = (
-            Feature.get("definition", {})
-            if isinstance(Feature.get("definition"), Mapping)
-            else {}
-        )
-        NativeDefinitionData = (
-            Definition.get("object_data", {})
-            if TextAction(Definition.get("$type")) == "NativeFeatureDefinition"
-            and TextAction(Definition.get("format_id")) == FormatId
-            and isinstance(Definition.get("object_data"), Mapping)
-            else {}
-        )
-        Inputs = [
-            TextAction(Value)
-            for Value in Sequence(Feature.get("input_feature_ids", []))
-        ]
-        InputBaseName = next(
-            (
-                SolidFeatureNames[Value]
-                for Value in reversed(Inputs)
-                if Value in SolidFeatureNames
-            ),
-            "",
-        )
-        BaseName = InputBaseName or CurrentName
-        FeatureSketchName = SketchNames.get(TextAction(Feature.get("sketch_id")), "")
-        NativeFeature = Attributes.get("freecad", {})
-        NativeFeatureName = (
-            TextAction(NativeFeature.get("name"))
-            if isinstance(NativeFeature, Mapping)
-            else ""
-        )
-        if NativeReplay and NativeFeatureName in NativeGraph:
-            Final = NativeGraph[NativeFeatureName]
-            NativePropSource = (
-                NativeDefinitionData or NativeFeature
-                if isinstance(NativeFeature, Mapping)
-                else NativeDefinitionData
-            )
-            Properties = NativeA(NativePropSource)
-            NativeDefinitionType = TextAction(Definition.get("type_id"))
-            if NativeDefinitionData and NativeDefinitionType:
-                setattr(Final, "type_id", NativeDefinitionType)
-            PropNames = {ItemValue.get("name", "") for ItemValue in Properties}
-            if "Label" in PropNames:
-                MergeNamedMut(Properties, StringProp("Label", FeatureName))
-            if KindValue == "extrusion":
-                Length = abs(
-                    Number(
-                        Definition.get("length"), Number(Attributes.get("length_mm"))
-                    )
-                )
-                Replacements = [
-                    FloatProp("Length", Length, "App::PropertyLength"),
-                    FloatProp(
-                        "Length2",
-                        abs(Number(Definition.get("second_length"))),
-                        "App::PropertyLength",
-                    ),
-                    BoolProp("Midplane", bool(Definition.get("symmetric"))),
-                    BoolProp("Reversed", bool(Definition.get("reversed"))),
-                ]
-                Direction = Definition.get("direction")
-                if Direction is not None:
-                    Replacements.append(
-                        VectorProp("Direction", Vector(Direction, (0.0, 0.0, 1.0)))
-                    )
-                for Replacement in Replacements:
-                    if Replacement.get("name", "") in PropNames:
-                        MergeNamedMut(Properties, Replacement)
-            elif KindValue == "fillet":
-                Radius = abs(
-                    Number(
-                        Definition.get("radius"), Number(Attributes.get("radius_mm"))
-                    )
-                )
-                for NameValue in ("Radius", "DrivingRadius"):
-                    if NameValue in PropNames:
-                        MergeNamedMut(
-                            Properties,
-                            FloatProp(NameValue, Radius, "App::PropertyLength"),
-                        )
-            if "Suppressed" in PropNames or bool(Feature.get("suppressed")):
-                MergeNamedMut(
-                    Properties,
-                    BoolProp(
-                        "Suppressed",
-                        bool(Feature.get("suppressed")),
-                        Dynamic="Suppressed" not in PropNames,
-                    ),
-                )
-            setattr(Final, "properties", Properties)
-            FeatureNames[FeatureId] = Final.name
-            SolidFeatureNames[FeatureId] = Final.name
-            FeatureObjects.append(Final.name)
-            CurrentName = Final.name
-            NativeObjectTargets[NativeFeatureName] = Final.name
-            continue
-        if KindValue == "extrusion" and (
-            SourceFormatId == "solidworks.sldprt"
-            and (
-                not SketchNativeProfileCounts.get(
-                    TextAction(Feature.get("sketch_id")), 0
-                )
-                or not SketchNativeProfileSound.get(
-                    TextAction(Feature.get("sketch_id")), False
-                )
-            )
-            or bool(Feature.get("suppressed"))
-        ):
-            Length = abs(
-                Number(Definition.get("length"), Number(Attributes.get("length_mm")))
-            )
-            SecondLength = abs(Number(Definition.get("second_length")))
-            ParamId = FeatureParam(Feature, Parameters, Length)
-            Expression = Parameters.expression(ParamId)
-            Final = Graph.add("Part::Feature", FeatureName, "Feature")
-            Final.properties.extend(
-                [
-                    StringProp("Label", FeatureName),
-                    ExpressionProp([("Length", Expression)] if Expression else []),
-                    FloatProp("Length", Length, "App::PropertyLength", Dynamic=True),
-                    FloatProp(
-                        "SecondLength",
-                        SecondLength,
-                        "App::PropertyLength",
-                        Dynamic=True,
-                    ),
-                    BoolProp(
-                        "Midplane", bool(Definition.get("symmetric")), Dynamic=True
-                    ),
-                    BoolProp(
-                        "Reversed", bool(Definition.get("reversed")), Dynamic=True
-                    ),
-                    VectorProp(
-                        "Direction",
-                        Vector(Definition.get("direction"), (0.0, 0.0, 1.0)),
-                        Dynamic=True,
-                    ),
-                    *FeatureMeta(Feature, "feature-data"),
-                    BoolProp("NativeExecutable", False, Dynamic=True),
-                    StringProp(
-                        "NativeExecutionReason",
-                        (
-                            "suppressed"
-                            if bool(Feature.get("suppressed"))
-                            else (
-                                "no_native_closed_profile"
-                                if not SketchNativeProfileCounts.get(
-                                    TextAction(Feature.get("sketch_id")), 0
-                                )
-                                else "profile_topology_not_statically_sound"
-                            )
-                        ),
-                        Dynamic=True,
-                    ),
-                    *DefinitionProps(Definition),
-                    JsonProp("NativeDefinitionJSON", Definition),
-                    ShapeProp(),
-                    BoolProp("Visibility", False),
-                ]
-            )
-            if FeatureSketchName:
-                Final.properties.append(
-                    LinkProp("Profile", FeatureSketchName, Dynamic=True)
-                )
-                Final.dependencies.append(FeatureSketchName)
-            if Expression:
-                Final.dependencies.append(ParamSheet.name)
-            FeatureNames[FeatureId] = Final.name
-            FeatureObjects.append(Final.name)
-            if InputBaseName:
-                SolidFeatureNames[FeatureId] = InputBaseName
-                CurrentName = InputBaseName
-            continue
-        if KindValue == "extrusion":
-            SketchId = TextAction(Feature.get("sketch_id"))
-            SketchName = SketchNames.get(SketchId, "")
-            PlaneId = TextAction(
-                next(
-                    (
-                        ItemValue.get("support_plane_id")
-                        for ItemValue in SketchItems
-                        if TextAction(ItemValue.get("id")) == SketchId
-                    ),
-                    "",
-                )
-            )
-            Plane = PlaneById.get(PlaneId, {})
-            Transform = (
-                Plane.get("transform", {})
-                if isinstance(Plane.get("transform"), Mapping)
-                else {}
-            )
-            Normal = Normalize(Vector(Transform.get("z_axis"), (0.0, 0.0, 1.0)))
-            ReversedDirection = bool(
-                Definition.get(
-                    "reversed",
-                    Number(
-                        Attributes.get("direction_multiplier"),
-                        -1.0 if Operation == "cut" else 1.0,
-                    )
-                    < 0,
-                )
-            )
-            ExplicitDirection = Definition.get("direction")
-            Direction = (
-                Normalize(Vector(ExplicitDirection, Normal))
-                if ExplicitDirection is not None
-                else tuple(
-                    (
-                        Component * (-1.0 if ReversedDirection else 1.0)
-                        for Component in Normal
-                    )
-                )
-            )
-            Length = abs(
-                Number(Definition.get("length"), Number(Attributes.get("length_mm")))
-            )
-            SecondLength = abs(Number(Definition.get("second_length")))
-            Symmetric = bool(Definition.get("symmetric"))
-            ParamId = FeatureParam(Feature, Parameters, Length)
-            Expression = Parameters.expression(ParamId)
-            OperationKind = (
-                "join"
-                if BaseName and Operation in CreateOperationNames
-                else Operation or "create"
-            )
-            OperationType = BoolOperationTypeByKind.get(OperationKind)
-            ToolType = BoolOperationTypeByKind["create"]
-            ToolRequested = FeatureName if not BaseName else f"{FeatureName}_Profile"
-            ToolValue = Graph.add(
-                ToolType.type_id, ToolRequested, ToolType.label, Touched=True
-            )
-            ToolValue.properties.extend(
-                [
-                    StringProp(
-                        "Label",
-                        (
-                            FeatureName
-                            if ToolRequested == FeatureName
-                            else f"{FeatureName} profile extrusion"
-                        ),
-                    ),
-                    LinkProp("Base", SketchName),
-                    VectorProp("Dir", Direction),
-                    EnumerationProA("DirMode", 0),
-                    FloatProp("LengthFwd", Length, "App::PropertyDistance"),
-                    FloatProp("LengthRev", SecondLength, "App::PropertyDistance"),
-                    BoolProp("Solid", True),
-                    BoolProp("Reversed", False),
-                    BoolProp("Symmetric", Symmetric),
-                    StringProp(
-                        "EndCondition",
-                        TextAction(
-                            EnumAction(Definition.get("end_condition")), "blind"
-                        ),
-                        Dynamic=True,
-                    ),
-                    ExpressionProp([("LengthFwd", Expression)] if Expression else []),
-                    ShapeProp(),
-                    *FeatureMeta(
-                        Feature, "profile-extrusion" if BaseName else "feature"
-                    ),
-                    BoolProp("Visibility", not BaseName),
-                ]
-            )
-            ToolValue.dependencies.append(SketchName)
-            if Expression:
-                ToolValue.dependencies.append(ParamSheet.name)
-            if not BaseName:
-                Final = ToolValue
-            elif OperationType is not None and OperationType.input_mode == "base_tool":
-                Final = Graph.add(
-                    OperationType.type_id,
-                    FeatureName,
-                    OperationType.label,
-                    Touched=True,
-                )
-                Final.properties.extend(
-                    [
-                        StringProp("Label", FeatureName),
-                        LinkProp("Base", BaseName),
-                        LinkProp("Tool", ToolValue.name),
-                        BoolProp("Refine", True),
-                        ExpressionProp([]),
-                        ShapeProp(),
-                        *FeatureMeta(Feature, "feature"),
-                        BoolProp("Visibility", True),
-                    ]
-                )
-                Final.dependencies.extend([BaseName, ToolValue.name])
-                ToolValue.properties[-1] = BoolProp("Visibility", False)
-            elif OperationType is not None and OperationType.input_mode == "shapes":
-                Final = Graph.add(
-                    OperationType.type_id,
-                    FeatureName,
-                    OperationType.label,
-                    Touched=True,
-                )
-                Final.properties.extend(
-                    [
-                        StringProp("Label", FeatureName),
-                        LinkListProp("Shapes", [BaseName, ToolValue.name]),
-                        BoolProp("Refine", True),
-                        ExpressionProp([]),
-                        ShapeProp(),
-                        *FeatureMeta(Feature, "feature"),
-                        BoolProp("Visibility", True),
-                    ]
-                )
-                Final.dependencies.extend([BaseName, ToolValue.name])
-                ToolValue.properties[-1] = BoolProp("Visibility", False)
-            else:
-                Final = ToolValue
-            FeatureNames[FeatureId] = Final.name
-            SolidFeatureNames[FeatureId] = Final.name
-            FeatureObjects.append(Final.name)
-            CurrentName = Final.name
-        elif KindValue == "fillet" and SourceFormatId == "solidworks.sldprt":
-            Radius = abs(
-                Number(Definition.get("radius"), Number(Attributes.get("radius_mm")))
-            )
-            ParamId = FeatureParam(Feature, Parameters, Radius)
-            Expression = Parameters.expression(ParamId)
-            Final = Graph.add("Part::Feature", FeatureName, "Feature")
-            Final.properties.extend(
-                [
-                    StringProp("Label", FeatureName),
-                    ExpressionProp(
-                        [("DrivingRadius", Expression)] if Expression else []
-                    ),
-                    FloatProp(
-                        "DrivingRadius", Radius, "App::PropertyLength", Dynamic=True
-                    ),
-                    *FeatureMeta(Feature, "feature-data"),
-                    BoolProp("NativeExecutable", False, Dynamic=True),
-                    StringProp(
-                        "NativeExecutionReason",
-                        "topology_selection_not_statically_provable",
-                        Dynamic=True,
-                    ),
-                    *DefinitionProps(Definition),
-                    JsonProp("NativeDefinitionJSON", Definition),
-                    ShapeProp(),
-                    BoolProp("Visibility", False),
-                ]
-            )
-            if InputBaseName:
-                Final.properties.append(
-                    LinkProp("InputFeature", InputBaseName, Dynamic=True)
-                )
-                Final.dependencies.append(InputBaseName)
-            if Expression:
-                Final.dependencies.append(ParamSheet.name)
-            FeatureNames[FeatureId] = Final.name
-            FeatureObjects.append(Final.name)
-            if InputBaseName:
-                SolidFeatureNames[FeatureId] = InputBaseName
-                CurrentName = InputBaseName
-        elif KindValue == "fillet" and InputBaseName:
-            Radius = abs(
-                Number(Definition.get("radius"), Number(Attributes.get("radius_mm")))
-            )
-            ParamId = FeatureParam(Feature, Parameters, Radius)
-            Expression = Parameters.expression(ParamId)
-            EdgeIndices: list[int] = []
-            SemanticEdgeIndices: list[int] = []
-            for KeyValue in (
-                "selected_native_local_edge_ids",
-                "native_local_edge_ids",
-                "edge_ids",
-                "edges",
-            ):
-                Values = Attributes.get(KeyValue, [])
-                EdgeIndices.extend(
-                    (
-                        int(Number(Value))
-                        for Value in Sequence(Values)
-                        if Number(Value) > 0
-                    )
-                )
-            for SelectionId in Sequence(Feature.get("selection_ids", [])):
-                Selection = SelectionItems.get(TextAction(SelectionId), {})
-                for PathItem in Items(Selection.get("path", [])):
-                    SubElem = TextAction(PathItem.get("subelement"))
-                    Match = RegexLib.fullmatch(
-                        "(?:Edge|edge:)(\\d+)", SubElem, RegexLib.IGNORECASE
-                    )
-                    if Match:
-                        EdgeIndices.append(int(Match.group(1)))
-                Query = (
-                    Selection.get("query", {})
-                    if isinstance(Selection.get("query"), Mapping)
-                    else {}
-                )
-                if (
-                    TextAction(Query.get("topology_role"))
-                    == "extrusion_terminal_profile_boundary"
-                ):
-                    SemanticEdgeIndices.append(3)
-                for KeyValue in ("edge_index", "native_local_id", "index"):
-                    if Number(Query.get(KeyValue)) > 0:
-                        EdgeIndices.append(int(Number(Query.get(KeyValue))))
-            if SemanticEdgeIndices:
-                EdgeIndices = SemanticEdgeIndices
-            EdgeIndices = list(dict.fromkeys(EdgeIndices)) or [1]
-            Final = Graph.add("Part::Fillet", FeatureName, "Fillet", Touched=True)
-            EdgeFileName = f"{Final.name}.Edges"
-            PayloadEntries[EdgeFileName] = FilletEdgesData(EdgeIndices, Radius)
-            Expressions = [("DrivingRadius", Expression)] if Expression else []
-            Final.properties.extend(
-                [
-                    StringProp("Label", FeatureName),
-                    LinkProp("Base", BaseName),
-                    FilletEdgesProp(EdgeFileName),
-                    EdgeLinkProp(BaseName, EdgeIndices),
-                    ExpressionProp(Expressions),
-                    FloatProp(
-                        "DrivingRadius", Radius, "App::PropertyLength", Dynamic=True
-                    ),
-                    ShapeProp(),
-                    *FeatureMeta(Feature, "feature"),
-                    BoolProp("Visibility", True),
-                ]
-            )
-            Final.dependencies.extend(
-                [BaseName] + ([ParamSheet.name] if Expression else [])
-            )
-            FeatureNames[FeatureId] = Final.name
-            SolidFeatureNames[FeatureId] = Final.name
-            FeatureObjects.append(Final.name)
-            CurrentName = Final.name
-        else:
-            Imported = KindValue == "imported"
-            Final = Graph.add("Part::Feature", FeatureName, "Feature", Touched=True)
-            Final.properties.extend(
-                [
-                    StringProp("Label", FeatureName),
-                    ExpressionProp([]),
-                    *FeatureMeta(Feature, "imported" if Imported else "feature-data"),
-                    StringProp(
-                        "NativeTypeId", Definition.get("type_id", ""), Dynamic=True
-                    ),
-                    *DefinitionProps(Definition),
-                    JsonProp("NativeDefinitionJSON", Definition),
-                    BoolProp("Visibility", not bool(Feature.get("suppressed"))),
-                    ShapeProp(),
-                ]
-            )
-            if BaseName:
-                Final.properties.append(
-                    LinkProp("InputFeature", BaseName, Dynamic=True)
-                )
-                Final.dependencies.append(BaseName)
-            if FeatureSketchName:
-                Final.properties.append(
-                    LinkProp("Profile", FeatureSketchName, Dynamic=True)
-                )
-                Final.dependencies.append(FeatureSketchName)
-            if ParametersData:
-                Final.properties.extend(
-                    [
-                        LinkProp("Parameters", ParamSheet.name, Dynamic=True),
-                        StringListProp(
-                            "ParameterIds",
-                            [
-                                TextAction(Value)
-                                for Value in Sequence(Feature.get("parameter_ids", []))
-                            ],
-                            Dynamic=True,
-                        ),
-                    ]
-                )
-                Final.dependencies.append(ParamSheet.name)
-            FeatureNames[FeatureId] = Final.name
-            FeatureObjects.append(Final.name)
-            if SourceFormatId == "solidworks.sldprt":
-                if InputBaseName:
-                    SolidFeatureNames[FeatureId] = InputBaseName
-                    CurrentName = InputBaseName
-            elif KindValue not in {"native", "reference"}:
-                SolidFeatureNames[FeatureId] = Final.name
-                CurrentName = Final.name
-        if bool(Feature.get("suppressed")) and (not NativeReplay):
-            ReplaceNameMut(
-                Final.properties, "Visibility", BoolProp("Visibility", False)
-            )
-        if isinstance(NativeFeature, Mapping):
-            if NativeFeatureName:
-                NativeObjectTargets[NativeFeatureName] = Final.name
-    BodyObjects: list[str] = []
-    BodyNames: dict[str, str] = {}
-    BodyShapeTargets: dict[str, str] = {}
-    FeatureById = {
-        TextAction(ItemValue.get("id")): ItemValue
-        for ItemValue in FeatureItems
-        if TextAction(ItemValue.get("id"))
-    }
 
-    # this definition exists because focused behavior needs one stable owner
-    def BodyMembers(FinalFeatureId: str) -> list[str]:
-        Pending = [FinalFeatureId]
-        MemberIds: set[str] = set()
-        while Pending:
-            FeatureId = Pending.pop()
-            if FeatureId in MemberIds or FeatureId not in FeatureById:
-                continue
-            MemberIds.add(FeatureId)
-            Pending.extend(
-                (
-                    TextAction(Value)
-                    for Value in Sequence(
-                        FeatureById[FeatureId].get("input_feature_ids", [])
-                    )
-                )
-            )
-        Members: list[str] = []
-        for ItemValue in FeatureItems:
-            FeatureId = TextAction(ItemValue.get("id"))
-            if FeatureId not in MemberIds:
-                continue
-            SketchName = SketchNames.get(TextAction(ItemValue.get("sketch_id")), "")
-            if SketchName and SketchName not in Members:
-                Members.append(SketchName)
-            FeatureName = FeatureNames.get(FeatureId, "")
-            if FeatureName and FeatureName not in Members:
-                Members.append(FeatureName)
-        return Members
-
-    for BodyValue in Items(Manifest.get("bodies", [])):
-        BodyId = TextAction(BodyValue.get("id"))
-        FinalFeatureId = TextAction(BodyValue.get("final_feature_id"))
-        FinalFeature = FeatureNames.get(FinalFeatureId, CurrentName)
-        Members = BodyMembers(FinalFeatureId)
-        BodyAttributes = BodyValue.get("attributes", {})
-        NativeBody = (
-            BodyAttributes.get("freecad", {})
-            if isinstance(BodyAttributes, Mapping)
-            else {}
-        )
-        NativeBodyName = (
-            TextAction(NativeBody.get("name"))
-            if isinstance(NativeBody, Mapping)
-            else ""
-        )
-        ObjValue = NativeGraph.get(NativeBodyName) if NativeReplay else None
-        if ObjValue is not None:
-            Properties = NativeA(NativeBody)
-            MergeNamedMut(
-                Properties, StringProp("Label", BodyValue.get("name", BodyId))
-            )
-            if FinalFeature:
-                MergeNamedMut(Properties, LinkProp("Tip", FinalFeature))
-            setattr(ObjValue, "properties", Properties)
-            NativeObjectTargets[NativeBodyName] = ObjValue.name
-        else:
-            ObjValue = Graph.add(
-                TextAction(NativeBody.get("type_id"), "App::DocumentObjectGroup"),
-                NativeBody.get("name", BodyValue.get("name", BodyId)),
-                "Body",
-            )
-            ObjValue.properties.extend(
-                [
-                    StringProp("Label", BodyValue.get("name", BodyId)),
-                    LinkListProp("Group", Members),
-                    LinkProp("Tip", FinalFeature, Dynamic=True),
-                    MakePlacement("Placement", MatrixTransform(KIdentityMatrix)),
-                    StringProp("KitId", BodyId, Dynamic=True),
-                    JsonProp("TopologyJSON", BodyValue.get("topology", {})),
-                    JsonProp("SourceBodyJSON", BodyValue),
-                    BoolProp("Visibility", True),
-                ]
-            )
-            MaterialId = TextAction(BodyValue.get("material_id"))
-            if MaterialId:
-                ObjValue.properties.append(
-                    StringProp("MaterialId", MaterialId, Dynamic=True)
-                )
-            ObjValue.dependencies.extend(Members)
-        BodyNames[BodyId] = ObjValue.name
-        BodyShapeTargets[BodyId] = FinalFeature or ObjValue.name
-        BodyObjects.append(ObjValue.name)
-    TargetById = {**PlaneNames, **SketchNames, **FeatureNames, **BodyNames}
-    TargetById.update({NameValue: NameValue for NameValue in Graph.Names})
-    SelectionNames: dict[str, str] = {}
-    SelectionObjects: list[str] = []
-    for Selection in SelectionItems.values():
-        SelectionId = TextAction(Selection.get("id"))
-        ObjValue = Graph.add(
-            "App::FeaturePython", Selection.get("name", SelectionId), "Selection"
-        )
-        Targets: list[tuple[str, str]] = []
-        EntityKinds: list[str] = []
-        for PathItem in Items(Selection.get("path", [])):
-            EntityId = TextAction(PathItem.get("entity_id"))
-            Target = TargetById.get(EntityId, NativeObjectTargets.get(EntityId, ""))
-            if not Target:
-                continue
-            Targets.append((Target, TextAction(PathItem.get("subelement"))))
-            EntityKinds.append(TextAction(PathItem.get("entity_kind")))
-        ObjValue.properties.extend(
-            [
-                StringProp("Label", Selection.get("name", SelectionId)),
-                StringProp("KitSelectionId", SelectionId, Dynamic=True),
-                LinkSubListProp("Selection", Targets, Dynamic=True),
-                StringListProp("EntityKinds", EntityKinds, Dynamic=True),
-                JsonProp("QueryJSON", Selection.get("query", {})),
-                JsonProp("SourceSelectionJSON", Selection),
-                BoolProp("Visibility", False),
-            ]
-        )
-        Point = Selection.get("point")
-        if Point is not None:
-            ObjValue.properties.append(
-                VectorProp(
-                    "SelectionPoint", Vector(Point, (0.0, 0.0, 0.0)), Dynamic=True
-                )
-            )
-        ObjValue.dependencies.extend((Target for Target, Ignored in Targets))
-        SelectionNames[SelectionId] = ObjValue.name
-        SelectionObjects.append(ObjValue.name)
-    for Feature in FeatureItems:
+# this definition exists because feature and plane objects need their resolved selection links
+def LinkSelectionsMut(
+    Context: DocContext, Geometry: DocGeometry, Features: DocFeatures
+) -> None:
+    for Feature in Features.FeatureItems:
         Target = next(
             (
-                ItemValue
-                for ItemValue in Graph.Objects
-                if ItemValue.name == FeatureNames.get(TextAction(Feature.get("id")), "")
+                Value
+                for Value in Context.Graph.Objects
+                if Value.name == Features.FeatureNames.get(TextAction(Feature.get("id")), "")
             ),
             None,
         )
-        LinkedSelections = [
-            SelectionNames[SelectionId]
+        Linked = [
+            Features.SelectionNames[SelectionId]
             for Value in Sequence(Feature.get("selection_ids", []))
-            if (SelectionId := TextAction(Value)) in SelectionNames
+            if (SelectionId := TextAction(Value)) in Features.SelectionNames
         ]
-        if Target is not None and LinkedSelections:
-            MergeNamedMut(
-                Target.properties,
-                LinkListProp("Selections", LinkedSelections, Dynamic=True),
-            )
-            Target.dependencies.extend(LinkedSelections)
-    for Plane in PlaneItems:
-        SelectionName = SelectionNames.get(
+        if Target is not None and Linked:
+            MergeNamedMut(Target.properties, LinkListProp("Selections", Linked, Dynamic=True))
+            Target.dependencies.extend(Linked)
+    for Plane in Geometry.PlaneItems:
+        SelectionName = Features.SelectionNames.get(
             TextAction(Plane.get("support_selection_id")), ""
         )
         Target = next(
             (
-                ItemValue
-                for ItemValue in Graph.Objects
-                if ItemValue.name == PlaneNames.get(TextAction(Plane.get("id")), "")
+                Value
+                for Value in Context.Graph.Objects
+                if Value.name == Geometry.PlaneNames.get(TextAction(Plane.get("id")), "")
             ),
             None,
         )
@@ -7978,317 +7207,426 @@ def BuildDocXml(
                 LinkProp("SupportSelection", SelectionName, Dynamic=True),
             )
             Target.dependencies.append(SelectionName)
-    ConfigItems = Items(Manifest.get("configurations", []))
-    ConfigNames: dict[str, str] = {}
-    ConfigObjects: list[str] = []
-    for Config in ConfigItems:
+
+
+# this definition exists because selections must precede their feature and plane link updates
+def AddSelectionsMut(
+    Context: DocContext, Geometry: DocGeometry, Features: DocFeatures
+) -> None:
+    TargetById = {
+        **Geometry.PlaneNames,
+        **Geometry.SketchNames,
+        **Features.FeatureNames,
+        **Features.BodyNames,
+    }
+    TargetById.update({NameValue: NameValue for NameValue in Context.Graph.Names})
+    for Selection in Geometry.SelectionItems.values():
+        AddSelectionMut(Context, Features, TargetById, Selection)
+    LinkSelectionsMut(Context, Geometry, Features)
+
+
+# this definition exists because one configuration records overrides suppression and parent links
+def SetConfigMut(
+    Context: DocContext,
+    Features: DocFeatures,
+    Config: Mapping[str, Any],
+    ObjectName: str,
+) -> None:
+    ObjValue = next(Value for Value in Context.Graph.Objects if Value.name == ObjectName)
+    ConfigId = TextAction(Config.get("id"))
+    ParentName = Features.ConfigNames.get(TextAction(Config.get("parent_id")), "")
+    SuppressedFeatures = [
+        Features.FeatureNames[FeatureId]
+        for Value in Sequence(Config.get("suppressed_feature_ids", []))
+        if (FeatureId := TextAction(Value)) in Features.FeatureNames
+    ]
+    ObjValue.properties.extend(
+        [
+            StringProp("Label", Config.get("name", ConfigId)),
+            StringProp("KitConfigurationId", ConfigId, Dynamic=True),
+            BoolProp("Active", bool(Config.get("active")), Dynamic=True),
+            LinkListProp("SuppressedFeatures", SuppressedFeatures, Dynamic=True),
+            LinkProp("Parameters", Context.ParamSheet.name, Dynamic=True),
+            JsonProp("ParameterOverridesJSON", Config.get("overrides", [])),
+            JsonProp("SourceConfigurationJSON", Config),
+            BoolProp("Visibility", False),
+        ]
+    )
+    if ParentName:
+        ObjValue.properties.append(LinkProp("ParentConfiguration", ParentName, Dynamic=True))
+    ObjValue.dependencies.extend(
+        [Context.ParamSheet.name, *SuppressedFeatures] + ([ParentName] if ParentName else [])
+    )
+
+
+# this definition exists because configurations need all object names before parent links resolve
+def AddConfigsMut(Context: DocContext, Features: DocFeatures) -> None:
+    for Config in Features.ConfigItems:
         ConfigId = TextAction(Config.get("id"))
-        ObjValue = Graph.add(
+        ObjValue = Context.Graph.add(
             "App::FeaturePython", Config.get("name", ConfigId), "Configuration"
         )
-        ConfigNames[ConfigId] = ObjValue.name
-        ConfigObjects.append(ObjValue.name)
-    for Config, ObjectName in zip(ConfigItems, ConfigObjects, strict=True):
-        ObjValue = next(
-            (ItemValue for ItemValue in Graph.Objects if ItemValue.name == ObjectName)
+        Features.ConfigNames[ConfigId] = ObjValue.name
+        Features.ConfigObjects.append(ObjValue.name)
+    for Config, ObjectName in zip(
+        Features.ConfigItems, Features.ConfigObjects, strict=True
+    ):
+        SetConfigMut(Context, Features, Config, ObjectName)
+
+
+# this definition exists because native payloads resolve their intended feature body or source object
+def PayloadTarget(
+    Context: DocContext,
+    Features: DocFeatures,
+    Payload: Mapping[str, Any],
+    Attributes: Mapping[str, Any],
+) -> tuple[str, str]:
+    FeatureId = TextAction(
+        Attributes.get("feature_id", Attributes.get("final_feature_id"))
+    )
+    BodyId = TextAction(Attributes.get("body_id"))
+    SourceObject = TextAction(Attributes.get("freecad_object"))
+    TargetName = Context.NativeTargets.get(SourceObject, "")
+    if not TargetName and FeatureId:
+        TargetName = Features.FeatureNames.get(FeatureId, "")
+    if not TargetName and BodyId:
+        TargetName = Features.BodyTargets.get(BodyId, "")
+    if not TargetName and not SourceObject:
+        TargetName = Features.CurrentName
+    return (TargetName, TextAction(Attributes.get("freecad_property"), "Shape"))
+
+
+# this definition exists because trusted native breps require their referenced sidecar streams
+def AddSidecarsMut(
+    Features: DocFeatures,
+    Payload: Mapping[str, Any],
+    Attributes: Mapping[str, Any],
+    TargetName: str,
+    PropName: str,
+) -> dict[str, str]:
+    SidecarEntries: dict[str, str] = {}
+    for Sidecar in Items(Attributes.get("freecad_sidecars", [])):
+        SourceStream = TextAction(Sidecar.get("source_stream"))
+        SidecarData = PayloadBytes(Sidecar)
+        if not SourceStream or SidecarData is None:
+            continue
+        Suffix = PurePosixPath(SourceStream).name
+        SourcePrefix = PurePosixPath(TextAction(Payload.get("source_stream"))).stem
+        if Suffix.startswith(SourcePrefix):
+            Suffix = Suffix[len(SourcePrefix) :]
+        SidecarEntry = f"{TargetName}.{SafeAction(PropName, 'Shape')}{Suffix}"
+        SidecarEntries[SourceStream] = SidecarEntry
+        Features.PayloadEntries[SidecarEntry] = SidecarData
+    return SidecarEntries
+
+
+# this definition exists because native shape properties need rewritten primary and sidecar files
+def PayloadProp(
+    Attributes: Mapping[str, Any],
+    ShapeEntry: str,
+    PropName: str,
+    SidecarEntries: Mapping[str, str],
+    IsTrusted: bool,
+) -> XmlTree.Element:
+    PropElem = ElemFromData(Attributes.get("freecad_property_data")) if IsTrusted else None
+    if PropElem is None or PropElem.tag != "Property":
+        PropElem = ShapeProp(ShapeEntry, SafeAction(PropName, "Shape"))
+    for Child in PropElem.findall(".//*[@file]"):
+        SourceStream = Child.get("file", "")
+        Child.set(
+            "file",
+            ShapeEntry
+            if Child.tag == "Part"
+            else SidecarEntries.get(SourceStream, SourceStream),
         )
-        ConfigId = TextAction(Config.get("id"))
-        ParentName = ConfigNames.get(TextAction(Config.get("parent_id")), "")
-        SuppressedFeatures = [
-            FeatureNames[FeatureId]
-            for Value in Sequence(Config.get("suppressed_feature_ids", []))
-            if (FeatureId := TextAction(Value)) in FeatureNames
-        ]
-        ObjValue.properties.extend(
+    return PropElem
+
+
+# this definition exists because proven brep payloads must attach to an emitted shape object
+def AddNativeMut(
+    Context: DocContext,
+    Features: DocFeatures,
+    Payload: Mapping[str, Any],
+    Attributes: Mapping[str, Any],
+    DataValue: bytes,
+    NativeBrep: bytes,
+    TargetName: str,
+    PropName: str,
+    Index: int,
+) -> None:
+    Target = next(
+        (Value for Value in Context.Graph.Objects if Value.name == TargetName), None
+    )
+    if Target is None:
+        Target = Context.Graph.add(
+            "Part::Feature",
+            f"NativeBRep_{Index}",
+            TextAction(Payload.get("id"), f"Native BRep {Index}"),
+        )
+        Target.properties.extend(
             [
-                StringProp("Label", Config.get("name", ConfigId)),
-                StringProp("KitConfigurationId", ConfigId, Dynamic=True),
-                BoolProp("Active", bool(Config.get("active")), Dynamic=True),
-                LinkListProp("SuppressedFeatures", SuppressedFeatures, Dynamic=True),
-                LinkProp("Parameters", ParamSheet.name, Dynamic=True),
-                JsonProp("ParameterOverridesJSON", Config.get("overrides", [])),
-                JsonProp("SourceConfigurationJSON", Config),
-                BoolProp("Visibility", False),
+                StringProp("Label", TextAction(Payload.get("id"), f"Native BRep {Index}")),
+                StringProp("KitPayloadId", Payload.get("id"), Dynamic=True),
+                BoolProp("Visibility", True),
             ]
         )
-        if ParentName:
-            ObjValue.properties.append(
-                LinkProp("ParentConfiguration", ParentName, Dynamic=True)
-            )
-        ObjValue.dependencies.extend(
-            [ParamSheet.name, *SuppressedFeatures]
-            + ([ParentName] if ParentName else [])
+        Features.BodyObjects.append(Target.name)
+        TargetName = Target.name
+    ShapeEntry = f"{Target.name}.{SafeAction(PropName, 'Shape')}.brp"
+    Features.PayloadEntries[ShapeEntry] = NativeBrep
+    IsTrusted = NativeBrep == DataValue
+    Sidecars = (
+        AddSidecarsMut(Features, Payload, Attributes, Target.name, PropName)
+        if IsTrusted
+        else {}
+    )
+    MergeNamedMut(
+        Target.properties,
+        PayloadProp(Attributes, ShapeEntry, PropName, Sidecars, IsTrusted),
+    )
+    if PropName == "Shape" and Target.name == Features.CurrentName:
+        Features.FinalShapeFile = ShapeEntry
+
+
+# this definition exists because one native payload preserves raw bytes and optional proven shape data
+def AddPayloadMut(
+    Context: DocContext,
+    Features: DocFeatures,
+    Payload: Mapping[str, Any],
+    Index: int,
+) -> None:
+    DataValue = PayloadBytes(Payload)
+    if DataValue is None:
+        return
+    PayloadId = SafeAction(Payload.get("id", f"payload_{Index}"), "payload")
+    Entry = str(
+        PurePosixPath("interchange", "native", PayloadId + PayloadSuffix(Payload))
+    )
+    Features.PayloadEntries[Entry] = DataValue
+    RawAttrs = Payload.get("attributes", {})
+    Attributes = RawAttrs if isinstance(RawAttrs, Mapping) else {}
+    TargetName, PropName = PayloadTarget(Context, Features, Payload, Attributes)
+    NativeBrep = (
+        FreecadBrep(Payload, DataValue, Context.NativeDocHash, Context.TrustedBreps)
+        if PayloadRole(Payload) == "brep"
+        else None
+    )
+    if NativeBrep is not None:
+        AddNativeMut(
+            Context,
+            Features,
+            Payload,
+            Attributes,
+            DataValue,
+            NativeBrep,
+            TargetName,
+            PropName,
+            Index,
         )
-    Payloads = Items(Manifest.get("brep_payloads", Manifest.get("native_payloads", [])))
+
+
+# this definition exists because native payloads must preserve their source ordering
+def AddPayloadsMut(Context: DocContext, Features: DocFeatures) -> None:
+    Payloads = Items(
+        Context.Manifest.get(
+            "brep_payloads", Context.Manifest.get("native_payloads", [])
+        )
+    )
     for Index, Payload in enumerate(Payloads, start=1):
-        DataValue = PayloadBytes(Payload)
-        if DataValue is None:
-            continue
-        PayloadId = SafeAction(Payload.get("id", f"payload_{Index}"), "payload")
-        Entry = str(
-            PurePosixPath("interchange", "native", PayloadId + PayloadSuffix(Payload))
-        )
-        PayloadEntries[Entry] = DataValue
-        Attributes = (
-            Payload.get("attributes", {})
-            if isinstance(Payload.get("attributes"), Mapping)
-            else {}
-        )
-        TargetFeatureId = TextAction(
-            Attributes.get("feature_id", Attributes.get("final_feature_id"))
-        )
-        TargetBodyId = TextAction(Attributes.get("body_id"))
-        SourceObject = TextAction(Attributes.get("freecad_object"))
-        PropName = TextAction(Attributes.get("freecad_property"), "Shape")
-        TargetName = NativeObjectTargets.get(SourceObject, "")
-        if not TargetName and TargetFeatureId:
-            TargetName = FeatureNames.get(TargetFeatureId, "")
-        if not TargetName and TargetBodyId:
-            TargetName = BodyShapeTargets.get(TargetBodyId, "")
-        if not TargetName and (not SourceObject):
-            TargetName = CurrentName
-        NativeBrep = (
-            FreecadBrep(Payload, DataValue, NativeDocShaTwoFiveSix, TrustedNativeBreps)
-            if PayloadRole(Payload) == "brep"
-            else None
-        )
-        if NativeBrep is not None:
-            Target = next(
-                (
-                    ItemValue
-                    for ItemValue in Graph.Objects
-                    if ItemValue.name == TargetName
-                ),
-                None,
-            )
-            if Target is None:
-                Target = Graph.add(
-                    "Part::Feature",
-                    f"NativeBRep_{Index}",
-                    TextAction(Payload.get("id"), f"Native BRep {Index}"),
-                )
-                Target.properties.extend(
-                    [
-                        StringProp(
-                            "Label",
-                            TextAction(Payload.get("id"), f"Native BRep {Index}"),
-                        ),
-                        StringProp("KitPayloadId", Payload.get("id"), Dynamic=True),
-                        BoolProp("Visibility", True),
-                    ]
-                )
-                BodyObjects.append(Target.name)
-                TargetName = Target.name
-            if Target is not None:
-                ShapeEntry = f"{Target.name}.{SafeAction(PropName, 'Shape')}.brp"
-                PayloadEntries[ShapeEntry] = NativeBrep
-                SidecarEntries: dict[str, str] = {}
-                for Sidecar in (
-                    Items(Attributes.get("freecad_sidecars", []))
-                    if NativeBrep == DataValue
-                    else []
-                ):
-                    SourceStream = TextAction(Sidecar.get("source_stream"))
-                    SidecarData = PayloadBytes(Sidecar)
-                    if not SourceStream or SidecarData is None:
-                        continue
-                    Suffix = PurePosixPath(SourceStream).name
-                    SourcePrefix = PurePosixPath(
-                        TextAction(Payload.get("source_stream"))
-                    ).stem
-                    if Suffix.startswith(SourcePrefix):
-                        Suffix = Suffix[len(SourcePrefix) :]
-                    SidecarEntry = (
-                        f"{Target.name}.{SafeAction(PropName, 'Shape')}{Suffix}"
-                    )
-                    SidecarEntries[SourceStream] = SidecarEntry
-                    PayloadEntries[SidecarEntry] = SidecarData
-                PropElem = (
-                    ElemFromData(Attributes.get("freecad_property_data"))
-                    if NativeBrep == DataValue
-                    else None
-                )
-                if PropElem is None or PropElem.tag != "Property":
-                    PropElem = ShapeProp(ShapeEntry, SafeAction(PropName, "Shape"))
-                for Child in PropElem.findall(".//*[@file]"):
-                    SourceStream = Child.get("file", "")
-                    Child.set(
-                        "file",
-                        (
-                            ShapeEntry
-                            if Child.tag == "Part"
-                            else SidecarEntries.get(SourceStream, SourceStream)
-                        ),
-                    )
-                MergeNamedMut(Target.properties, PropElem)
-                if PropName == "Shape" and Target.name == CurrentName:
-                    FinalShapeFileName = ShapeEntry
-    DocBreps, NeutralShapeFileName = AddBrepMut(
-        Graph, Manifest, PayloadEntries, CurrentName
+        AddPayloadMut(Context, Features, Payload, Index)
+
+
+# this definition exists because document representations must follow native payload object creation
+def AddRepresentMut(Context: DocContext, Features: DocFeatures) -> None:
+    Features.DocBreps, NeutralShape = AddBrepMut(
+        Context.Graph,
+        Context.Manifest,
+        Features.PayloadEntries,
+        Features.CurrentName,
     )
-    if NeutralShapeFileName:
-        FinalShapeFileName = NeutralShapeFileName
-    DocMeshes = AddMeshesMut(Graph, Manifest, PayloadEntries, CurrentName)
-    AsmRoot, ItemCount, MateCount = AddAsmMut(
-        Graph, Manifest, PayloadEntries, OuterLinks, TrustedNativeBreps
+    if NeutralShape:
+        Features.FinalShapeFile = NeutralShape
+    Features.DocMeshes = AddMeshesMut(
+        Context.Graph,
+        Context.Manifest,
+        Features.PayloadEntries,
+        Features.CurrentName,
     )
-    PlanesGroup.properties.extend(
+    (
+        Features.AssemblyRoot,
+        Features.AssemblyItems,
+        Features.AssemblyMates,
+    ) = AddAsmMut(
+        Context.Graph,
+        Context.Manifest,
+        Features.PayloadEntries,
+        Context.OuterLinks,
+        Context.TrustedBreps,
+    )
+
+
+# this definition exists because document groups share canonical label membership and visibility properties
+def SetDocGroupMut(
+    GroupValue: Object, Label: str, Members: list[str], Visibility: bool
+) -> None:
+    GroupValue.properties.extend(
         [
-            StringProp("Label", "Support Planes"),
-            LinkListProp("Group", PlaneObjects),
-            BoolProp("Visibility", False),
+            StringProp("Label", Label),
+            LinkListProp("Group", Members),
+            BoolProp("Visibility", Visibility),
         ]
     )
-    PlanesGroup.dependencies.extend(PlaneObjects)
-    SketchesGroup.properties.extend(
-        [
-            StringProp("Label", "Sketches"),
-            LinkListProp("Group", SketchObjects),
-            BoolProp("Visibility", False),
-        ]
+    GroupValue.dependencies.extend(Members)
+
+
+# this definition exists because document support groups need finalized emitted memberships
+def SetDocGroupsMut(
+    Context: DocContext, Geometry: DocGeometry, Features: DocFeatures
+) -> None:
+    SetDocGroupMut(
+        Context.PlanesGroup, "Support Planes", Geometry.PlaneObjects, False
     )
-    SketchesGroup.dependencies.extend(SketchObjects)
-    SelectionsGroup.properties.extend(
-        [
-            StringProp("Label", "Selections"),
-            LinkListProp("Group", SelectionObjects),
-            BoolProp("Visibility", False),
-        ]
+    SetDocGroupMut(Context.SketchesGroup, "Sketches", Geometry.SketchObjects, False)
+    SetDocGroupMut(
+        Context.SelectionsGroup, "Selections", Features.SelectionObjects, False
     )
-    SelectionsGroup.dependencies.extend(SelectionObjects)
-    ConfigurationsGroup.properties.extend(
-        [
-            StringProp("Label", "Configurations"),
-            LinkListProp("Group", ConfigObjects),
-            BoolProp("Visibility", False),
-        ]
+    SetDocGroupMut(
+        Context.ConfigsGroup, "Configurations", Features.ConfigObjects, False
     )
-    ConfigurationsGroup.dependencies.extend(ConfigObjects)
-    TimelineGroup.properties.extend(
-        [
-            StringProp("Label", "Feature Timeline"),
-            LinkListProp("Group", FeatureObjects),
-            BoolProp("Visibility", True),
-        ]
+    SetDocGroupMut(
+        Context.TimelineGroup, "Feature Timeline", Features.FeatureObjects, True
     )
-    TimelineGroup.dependencies.extend(FeatureObjects)
-    BodiesGroup.properties.extend(
-        [
-            StringProp("Label", "Bodies"),
-            LinkListProp("Group", [*BodyObjects, *DocBreps]),
-            BoolProp("Visibility", True),
-        ]
+    SetDocGroupMut(
+        Context.BodiesGroup,
+        "Bodies",
+        [*Features.BodyObjects, *Features.DocBreps],
+        True,
     )
-    BodiesGroup.dependencies.extend([*BodyObjects, *DocBreps])
+
+
+# this definition exists because external consumers need one deterministic primary document object
+def ChooseOuter(Context: DocContext, Features: DocFeatures) -> str:
     SoleBodyShape = (
-        next(iter(BodyShapeTargets.values())) if len(BodyShapeTargets) == 1 else ""
+        next(iter(Features.BodyTargets.values()))
+        if len(Features.BodyTargets) == 1
+        else ""
     )
-    OuterTarget = (
-        DocBreps[0]
-        if DocBreps
-        else (
-            DocMeshes[0]
-            if DocMeshes
-            else AsmRoot
-            or CurrentName
-            or SoleBodyShape
-            or (BodiesGroup.name if BodyObjects else "")
-            or (FeatureObjects[-1] if FeatureObjects else "")
-            or BodiesGroup.name
-        )
+    if Features.DocBreps:
+        return Features.DocBreps[0]
+    if Features.DocMeshes:
+        return Features.DocMeshes[0]
+    return (
+        Features.AssemblyRoot
+        or Features.CurrentName
+        or SoleBodyShape
+        or (Context.BodiesGroup.name if Features.BodyObjects else "")
+        or (Features.FeatureObjects[-1] if Features.FeatureObjects else "")
+        or Context.BodiesGroup.name
     )
+
+
+# this definition exists because outer target links and metadata must describe the finalized graph
+def SetOuterMut(Context: DocContext, Features: DocFeatures) -> None:
+    Features.OuterTarget = ChooseOuter(Context, Features)
     TargetObject = next(
-        (ItemValue for ItemValue in Graph.Objects if ItemValue.name == OuterTarget),
+        (
+            Value
+            for Value in Context.Graph.Objects
+            if Value.name == Features.OuterTarget
+        ),
         None,
     )
-    if TargetObject is not None and (not NativeReplay):
+    if TargetObject is not None and not Context.NativeReplay:
         TargetObject.properties.append(
-            LinkProp("Sketches", SketchesGroup.name, Dynamic=True)
+            LinkProp("Sketches", Context.SketchesGroup.name, Dynamic=True)
         )
-        TargetObject.dependencies.append(SketchesGroup.name)
-        if OuterTarget not in FeatureObjects:
+        TargetObject.dependencies.append(Context.SketchesGroup.name)
+        if Features.OuterTarget not in Features.FeatureObjects:
             TargetObject.properties.append(
-                LinkProp("FeatureTimeline", TimelineGroup.name, Dynamic=True)
+                LinkProp("FeatureTimeline", Context.TimelineGroup.name, Dynamic=True)
             )
-            TargetObject.dependencies.append(TimelineGroup.name)
-    MetaValue.properties.extend(
+            TargetObject.dependencies.append(Context.TimelineGroup.name)
+    Context.MetaObject.properties.extend(
         [
-            StringProp("FinalFeature", CurrentName, Dynamic=True),
-            StringProp("ExternalLinkTarget", OuterTarget, Dynamic=True),
-            StringProp("CachedShapeEntry", FinalShapeFileName, Dynamic=True),
-            StringProp("AssemblyRoot", AsmRoot, Dynamic=True),
-            IntegerProp("AssemblyOccurrenceCount", ItemCount, Dynamic=True),
-            IntegerProp("AssemblyMateCount", MateCount, Dynamic=True),
+            StringProp("FinalFeature", Features.CurrentName, Dynamic=True),
+            StringProp("ExternalLinkTarget", Features.OuterTarget, Dynamic=True),
+            StringProp("CachedShapeEntry", Features.FinalShapeFile, Dynamic=True),
+            StringProp("AssemblyRoot", Features.AssemblyRoot, Dynamic=True),
+            IntegerProp("AssemblyOccurrenceCount", Features.AssemblyItems, Dynamic=True),
+            IntegerProp("AssemblyMateCount", Features.AssemblyMates, Dynamic=True),
             StringListProp(
-                "NativePayloadEntries", sorted(PayloadEntries), Dynamic=True
+                "NativePayloadEntries", sorted(Features.PayloadEntries), Dynamic=True
             ),
         ]
     )
-    Source = (
-        Manifest.get("source", {})
-        if isinstance(Manifest.get("source"), Mapping)
-        else {}
-    )
+
+
+# this definition exists because replayed external links must use newly written archive paths
+def RewriteLinksMut(Context: DocContext) -> None:
+    if not Context.NativeReplay or not Context.NativeOuterLinks:
+        return
+    for ObjValue in Context.NativeGraph.values():
+        for PropElem in ObjValue.properties:
+            for Xlink in PropElem.findall(".//XLink[@file]"):
+                SourceFile = Xlink.get("file", "")
+                if SourceFile in Context.NativeOuterLinks:
+                    Xlink.set("file", Context.NativeOuterLinks[SourceFile])
+
+
+# this definition exists because document identity derives from stable source path and digest values
+def DocIdentity(Context: DocContext) -> tuple[str, str]:
+    Source = Context.Manifest.get("source", {})
+    Source = Source if isinstance(Source, Mapping) else {}
     Label = PurePosixPath(TextAction(Source.get("path"), "Kit")).stem or "Kit"
-    DocId = TextAction(Source.get("sha256"), ManifestShaTwoFiveSix)
-    if NativeReplay and NativeOuterLinks:
-        for ObjValue in NativeGraph.values():
-            for PropElem in ObjValue.properties:
-                for Xlink in PropElem.findall(".//XLink[@file]"):
-                    SourceFile = Xlink.get("file", "")
-                    if SourceFile in NativeOuterLinks:
-                        Xlink.set("file", NativeOuterLinks[SourceFile])
-    StringHasher = (
-        FreecadMeta.get("string_hasher", {}) if isinstance(FreecadMeta, Mapping) else {}
-    )
-    RootAttributes = {
+    return (Label, TextAction(Source.get("sha256"), Context.ManifestHash))
+
+
+# this definition exists because document root versions preserve replay metadata only during native replay
+def RootXmlAttrs(Context: DocContext) -> dict[str, str]:
+    Attributes = {
         "SchemaVersion": KTargetSchemaVersion,
         "ProgramVersion": (
-            TextAction(FreecadMeta.get("program_version"), KTargetProgramVersion)
-            if NativeReplay and isinstance(FreecadMeta, Mapping)
+            TextAction(Context.FreecadMeta.get("program_version"), KTargetProgramVersion)
+            if Context.NativeReplay
             else KTargetProgramVersion
         ),
         "FileVersion": (
-            TextAction(FreecadMeta.get("file_version"), KTargetFileVersion)
-            if NativeReplay and isinstance(FreecadMeta, Mapping)
+            TextAction(Context.FreecadMeta.get("file_version"), KTargetFileVersion)
+            if Context.NativeReplay
             else KTargetFileVersion
         ),
     }
+    StringHasher = Context.FreecadMeta.get("string_hasher", {})
     if isinstance(StringHasher, Mapping):
         AttrValue = TextAction(StringHasher.get("attribute"))
         if AttrValue:
-            RootAttributes["StringHasher"] = AttrValue
-    RootValue = XmlTree.Element("Document", RootAttributes)
-    if isinstance(StringHasher, Mapping):
-        for Value in Items(StringHasher.get("nodes", [])):
-            NodeValue = ElemFromData(Value)
-            if NodeValue is not None and NodeValue.tag in StringHasherTags:
-                RootValue.append(NodeValue)
-        for Entry in Items(StringHasher.get("entries", [])):
-            SourceStream = TextAction(Entry.get("source_stream"))
-            DataValue = PayloadBytes(Entry)
-            PathValue = PurePosixPath(SourceStream)
-            if (
-                SourceStream
-                and DataValue is not None
-                and (not PathValue.is_absolute())
-                and (".." not in PathValue.parts)
-            ):
-                PayloadEntries[SourceStream] = DataValue
-    SanitizePayload(Graph.Objects, PayloadEntries)
-    NativeDocProperties = (
-        ElemFromData(FreecadMeta.get("document_properties"))
-        if NativeReplay and isinstance(FreecadMeta, Mapping)
-        else None
-    )
-    RootValue.append(
-        NativeDocProperties
-        if NativeDocProperties is not None and NativeDocProperties.tag == "Properties"
-        else DocProperties(Label, DocId, DocTimestamp)
-    )
-    Objects = XmlTree.SubElement(
-        RootValue, "Objects", {"Count": str(len(Graph.Objects)), "Dependencies": "1"}
-    )
+            Attributes["StringHasher"] = AttrValue
+    return Attributes
+
+
+# this definition exists because replayed string hasher nodes and payloads must remain paired
+def AddHasherMut(
+    Context: DocContext, Features: DocFeatures, RootValue: XmlTree.Element
+) -> None:
+    StringHasher = Context.FreecadMeta.get("string_hasher", {})
+    if not isinstance(StringHasher, Mapping):
+        return
+    for Value in Items(StringHasher.get("nodes", [])):
+        NodeValue = ElemFromData(Value)
+        if NodeValue is not None and NodeValue.tag in StringHasherTags:
+            RootValue.append(NodeValue)
+    for Entry in Items(StringHasher.get("entries", [])):
+        SourceStream = TextAction(Entry.get("source_stream"))
+        DataValue = PayloadBytes(Entry)
+        PathValue = PurePosixPath(SourceStream)
+        if SourceStream and DataValue is not None and not PathValue.is_absolute() and (
+            ".." not in PathValue.parts
+        ):
+            Features.PayloadEntries[SourceStream] = DataValue
+
+
+# this definition exists because object dependencies need deduplicated ordered xml entries
+def AddDepsMut(Graph: ObjectGraph, Objects: XmlTree.Element) -> None:
     for ObjValue in Graph.Objects:
         Dependencies = [
             Value for Value in dict.fromkeys(ObjValue.dependencies) if Value
@@ -8300,7 +7638,11 @@ def BuildDocXml(
         )
         for Target in Dependencies:
             XmlTree.SubElement(Dependency, "Dep", {"Name": Target})
-    ObjectIds = {ObjValue.object_id for ObjValue in Graph.Objects if ObjValue.object_id}
+
+
+# this definition exists because object ids must remain unique while preserving native assignments
+def AddObjectsMut(Graph: ObjectGraph, Objects: XmlTree.Element) -> None:
+    ObjectIds = {Value.object_id for Value in Graph.Objects if Value.object_id}
     NumericIds = [int(Value) for Value in ObjectIds if Value.isdigit()]
     NextObjectId = max(NumericIds, default=0) + 1
     for ObjValue in Graph.Objects:
@@ -8315,16 +7657,80 @@ def BuildDocXml(
         if ObjValue.touched:
             Attributes["Touched"] = "1"
         XmlTree.SubElement(Objects, "Object", Attributes)
+
+
+# this definition exists because object property data must follow the emitted object ordering
+def AddDataMut(Graph: ObjectGraph, RootValue: XmlTree.Element) -> None:
     ObjectData = XmlTree.SubElement(
         RootValue, "ObjectData", {"Count": str(len(Graph.Objects))}
     )
     for ObjValue in Graph.Objects:
         SerializeObject(ObjectData, ObjValue)
+
+
+# this definition exists because final xml serialization coordinates replay metadata graph and payloads
+def SerializeDoc(Context: DocContext, Features: DocFeatures) -> bytes:
+    RewriteLinksMut(Context)
+    RootValue = XmlTree.Element("Document", RootXmlAttrs(Context))
+    AddHasherMut(Context, Features, RootValue)
+    SanitizePayload(Context.Graph.Objects, Features.PayloadEntries)
+    NativeDocProperties = (
+        ElemFromData(Context.FreecadMeta.get("document_properties"))
+        if Context.NativeReplay
+        else None
+    )
+    Label, DocId = DocIdentity(Context)
+    RootValue.append(
+        NativeDocProperties
+        if NativeDocProperties is not None and NativeDocProperties.tag == "Properties"
+        else DocProperties(Label, DocId, Context.Timestamp)
+    )
+    Objects = XmlTree.SubElement(
+        RootValue,
+        "Objects",
+        {"Count": str(len(Context.Graph.Objects)), "Dependencies": "1"},
+    )
+    AddDepsMut(Context.Graph, Objects)
+    AddObjectsMut(Context.Graph, Objects)
+    AddDataMut(Context.Graph, RootValue)
     XmlTree.indent(RootValue, space="  ")
     XmlValue = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
-    return (XmlValue + b"\n", PayloadEntries)
+    return XmlValue + b"\n"
 
 
+# this definition exists because document conversion coordinates each ordered graph and payload phase
+def BuildDocXml(
+    Manifest: Mapping[str, Any],
+    ManifestData: str,
+    ManifestShaTwoFiveSix: str,
+    OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
+    NativeOuterLinks: Mapping[str, str] | None = None,
+    DocTimestamp: str = "1980-01-01T00:00:00Z",
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+) -> tuple[bytes, dict[str, bytes]]:
+    Context = BuildDocContext(
+        Manifest,
+        ManifestData,
+        ManifestShaTwoFiveSix,
+        OuterLinks,
+        NativeOuterLinks,
+        DocTimestamp,
+        TrustedNativeBreps,
+    )
+    Geometry = BuildDocGeom(Context)
+    Features = BuildDocItems(Context)
+    AddPlanesMut(Context, Geometry)
+    AddSketchesMut(Context, Geometry)
+    AddEntryDataMut(Context, Features)
+    AddFeaturesMut(Context, Geometry, Features)
+    AddBodiesMut(Context, Geometry, Features)
+    AddSelectionsMut(Context, Geometry, Features)
+    AddConfigsMut(Context, Features)
+    AddPayloadsMut(Context, Features)
+    AddRepresentMut(Context, Features)
+    SetDocGroupsMut(Context, Geometry, Features)
+    SetOuterMut(Context, Features)
+    return (SerializeDoc(Context, Features), Features.PayloadEntries)
 # this definition exists because focused behavior needs one stable owner
 def ZipEntry(NameValue: str, DataValue: bytes) -> tuple[Zipfile.ZipInfo, bytes]:
     InfoValue = Zipfile.ZipInfo(NameValue, (1980, 1, 1, 0, 0, 0))

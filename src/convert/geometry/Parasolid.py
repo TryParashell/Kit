@@ -240,7 +240,7 @@ def CheckTopoOwn(SelfData: BrepTopology) -> None:
             raise ParaWriteError(f'B-rep edge {EdgeId} has non-manifold coedge usage')
 
 
-# face orientation combines the nested topology reversals used by Parasolid fins
+# face orientation combines the nested topology reversals used by parasolid fins
 def IsFaceForward(SelfData: BrepTopology, FaceId: str) -> bool:
     FaceData = SelfData.faces[FaceId]
     FaceUse = SelfData.face_uses[SelfData.face_face_use[FaceId]]
@@ -1081,12 +1081,7 @@ def CurveValues(Curve: object) -> tuple[int, tuple[float, ...]]:
 
 # this declaration exists because focused behavior needs one stable owner
 def WriteNurbsMut(Output: bytearray, Wrapper: int, Curve: NurbsCurve, NextAttr: int) -> int:
-    if Curve.periodic:
-        raise ParaWriteError(f'Parasolid B-rep writing does not support periodic NURBS curve {Curve.id}')
-    if not 1 <= Curve.degree <= 65535:
-        raise ParaWriteError(f'Parasolid NURBS curve {Curve.id} has an unsupported degree')
-    if len(Curve.control_points) > 4294967295:
-        raise ParaWriteError(f'Parasolid NURBS curve {Curve.id} has too many control points')
+    CheckNurbsCurve(Curve)
     Descriptor = CheckedAttr(NextAttr)
     Control = CheckedAttr(NextAttr + 1)
     Multiplicity = CheckedAttr(NextAttr + 2)
@@ -1112,21 +1107,19 @@ def WriteNurbsMut(Output: bytearray, Wrapper: int, Curve: NurbsCurve, NextAttr: 
     WriteFloatsMut(Output, 128, Knots, Curve.knots)
     return NextAttr
 
+
+# curve validation isolates limits shared by the parasolid nurbs record writer
+def CheckNurbsCurve(Curve: NurbsCurve) -> None:
+    if Curve.periodic:
+        raise ParaWriteError(f'Parasolid B-rep writing does not support periodic NURBS curve {Curve.id}')
+    if not 1 <= Curve.degree <= 65535:
+        raise ParaWriteError(f'Parasolid NURBS curve {Curve.id} has an unsupported degree')
+    if len(Curve.control_points) > 4294967295:
+        raise ParaWriteError(f'Parasolid NURBS curve {Curve.id} has too many control points')
+
 # this declaration exists because focused behavior needs one stable owner
 def WriteNurbsSMut(Output: bytearray, Wrapper: int, SurfValue: NurbsSurface, NextAttr: int) -> int:
-    if SurfValue.periodic_u or SurfValue.periodic_v:
-        raise ParaWriteError(f'Parasolid B-rep writing does not support periodic NURBS surface {SurfValue.id}')
-    if not 1 <= SurfValue.degree_u <= 8 or not 1 <= SurfValue.degree_v <= 8:
-        raise ParaWriteError(f'Parasolid NURBS surface {SurfValue.id} requires degrees from one through eight')
-    UCount = len(SurfValue.control_points)
-    VCount = len(SurfValue.control_points[0])
-    Points = tuple((Point for RowValue in SurfValue.control_points for Point in RowValue))
-    Weights = tuple((ValueData for RowValue in SurfValue.weights for ValueData in RowValue))
-    Poles = HomogPoints(Points, Weights)
-    Intended = (UCount, VCount, SurfValue.degree_u, SurfValue.degree_v, 4 if Weights else 3)
-    Inferred = InferSurfShape(len(Poles), SurfValue.multiplicities_u, SurfValue.multiplicities_v)
-    if Inferred != Intended:
-        raise ParaWriteError(f'Parasolid writer cannot infer NURBS surface {SurfValue.id} shape {Intended}')
+    Poles = NurbsSurfPoles(SurfValue)
     Descriptor = CheckedAttr(NextAttr)
     Control = CheckedAttr(NextAttr + 1)
     UMultiplicity = CheckedAttr(NextAttr + 2)
@@ -1152,6 +1145,24 @@ def WriteNurbsSMut(Output: bytearray, Wrapper: int, SurfValue: NurbsSurface, Nex
     WriteFloatsMut(Output, 128, UKnots, SurfValue.knots_u)
     WriteFloatsMut(Output, 128, VKnots, SurfValue.knots_v)
     return NextAttr
+
+
+# surface pole preparation validates shape before the binary writer allocates records
+def NurbsSurfPoles(SurfValue: NurbsSurface) -> tuple[float, ...]:
+    if SurfValue.periodic_u or SurfValue.periodic_v:
+        raise ParaWriteError(f'Parasolid B-rep writing does not support periodic NURBS surface {SurfValue.id}')
+    if not 1 <= SurfValue.degree_u <= 8 or not 1 <= SurfValue.degree_v <= 8:
+        raise ParaWriteError(f'Parasolid NURBS surface {SurfValue.id} requires degrees from one through eight')
+    UCount = len(SurfValue.control_points)
+    VCount = len(SurfValue.control_points[0])
+    Points = tuple((Point for RowValue in SurfValue.control_points for Point in RowValue))
+    Weights = tuple((ValueData for RowValue in SurfValue.weights for ValueData in RowValue))
+    Poles = HomogPoints(Points, Weights)
+    Intended = (UCount, VCount, SurfValue.degree_u, SurfValue.degree_v, 4 if Weights else 3)
+    Inferred = InferSurfShape(len(Poles), SurfValue.multiplicities_u, SurfValue.multiplicities_v)
+    if Inferred != Intended:
+        raise ParaWriteError(f'Parasolid writer cannot infer NURBS surface {SurfValue.id} shape {Intended}')
+    return Poles
 
 # this declaration exists because focused behavior needs one stable owner
 def HomogPoints(Points: Sequence[VectorThree], Weights: Sequence[float]) -> tuple[float, ...]:
@@ -2021,11 +2032,21 @@ def ParseNurbsSurf(DataValue: bytes, OffsetData: int) -> NurbsSurfRecord | None:
     if AttrValue <= 1:
         return None
     if DataValue[Cursor:Cursor + 12] == bytes(12):
-        RefsValueData = XmtSeq(DataValue, Cursor + 12, 5)
-        if RefsValueData is None or any((ValueData <= 1 for ValueData in RefsValueData[0])):
-            return None
-        Values, EndValue = RefsValueData
-        return NurbsSurfRecord(AttrValue, (False, False), (0, 0), (0, 0), (0, 0), (0, 0), False, (False, False), 0, 0, Values, 'compact', OffsetData, DataValue[OffsetData:EndValue])
+        return ParseCompSurf(DataValue, OffsetData, AttrValue, Cursor)
+    return ParseExtSurf(DataValue, OffsetData, AttrValue, Cursor)
+
+
+# compact surface parsing preserves the fixed descriptor representation
+def ParseCompSurf(DataValue: bytes, OffsetData: int, AttrValue: int, Cursor: int) -> NurbsSurfRecord | None:
+    RefsValueData = XmtSeq(DataValue, Cursor + 12, 5)
+    if RefsValueData is None or any((ValueData <= 1 for ValueData in RefsValueData[0])):
+        return None
+    Values, EndValue = RefsValueData
+    return NurbsSurfRecord(AttrValue, (False, False), (0, 0), (0, 0), (0, 0), (0, 0), False, (False, False), 0, 0, Values, 'compact', OffsetData, DataValue[OffsetData:EndValue])
+
+
+# extended surface parsing owns validation of every encoded descriptor field
+def ParseExtSurf(DataValue: bytes, OffsetData: int, AttrValue: int, Cursor: int) -> NurbsSurfRecord | None:
     if Cursor + 30 > len(DataValue):
         return None
     PeriodicValues = DataValue[Cursor:Cursor + 2]
@@ -2079,11 +2100,9 @@ def ParseBCurve(DataValue: bytes, OffsetData: int) -> BCurveRecord | None:
     if Start is None:
         return None
     if Start == OffsetData + 2:
-        CompactAttr = ReadShort(DataValue, Start)
-        CompactDescriptor = ReadShort(DataValue, Start + 2)
-        CompactEnd = Start + 12
-        if CompactAttr is not None and CompactDescriptor is not None and (CompactAttr > 1) and (CompactDescriptor > 1) and (CompactEnd <= len(DataValue)) and (DataValue[Start + 4:CompactEnd] == bytes(8)):
-            return BCurveRecord(CompactAttr, 0, (0, 0, 0, 0, 0), CompactDescriptor, 0, True, 'compact', OffsetData, DataValue[OffsetData:CompactEnd])
+        Compact = ParseCompactCurve(DataValue, OffsetData, Start)
+        if Compact is not None:
+            return Compact
     Decoded = XmtData(DataValue, Start)
     if Decoded is None:
         return None
@@ -2110,6 +2129,20 @@ def ParseBCurve(DataValue: bytes, OffsetData: int) -> BCurveRecord | None:
     if RefsValueData[0] <= 1 or RefsValueData[1] < 1:
         return None
     return BCurveRecord(AttrValue, State, HeaderRefs, RefsValueData[0], RefsValueData[1], Sense, 'extended', OffsetData, DataValue[OffsetData:EndValue])
+
+
+# compact curve parsing isolates the fixed width carrier representation
+def ParseCompactCurve(DataValue: bytes, OffsetData: int, Start: int) -> BCurveRecord | None:
+    CompactAttr = ReadShort(DataValue, Start)
+    CompactDescriptor = ReadShort(DataValue, Start + 2)
+    CompactEnd = Start + 12
+    if CompactAttr is None or CompactDescriptor is None:
+        return None
+    if CompactAttr <= 1 or CompactDescriptor <= 1 or CompactEnd > len(DataValue):
+        return None
+    if DataValue[Start + 4:CompactEnd] != bytes(8):
+        return None
+    return BCurveRecord(CompactAttr, 0, (0, 0, 0, 0, 0), CompactDescriptor, 0, True, 'compact', OffsetData, DataValue[OffsetData:CompactEnd])
 
 # this declaration exists because focused behavior needs one stable owner
 def ParseNurbsCurve(DataValue: bytes, OffsetData: int) -> NurbsCurveRec | None:
@@ -2160,6 +2193,23 @@ def ParseCurveData(DataValue: bytes, OffsetData: int) -> CurveRecord | None:
 
 # this declaration exists because focused behavior needs one stable owner
 def ParseTrimCurve(DataValue: bytes, OffsetData: int) -> TrimCurveRecord | None:
+    HeaderData = ParseTrimHead(DataValue, OffsetData)
+    if HeaderData is None:
+        return None
+    AttrValue, State, HeaderRefs, BasisRef, Sense, ValuesOffset = HeaderData
+    EndValue = ValuesOffset + 64
+    if EndValue > len(DataValue):
+        return None
+    PointOne = PointVector(DataValue, ValuesOffset)
+    PointTwo = PointVector(DataValue, ValuesOffset + 24)
+    Params = Struct.unpack_from('>2d', DataValue, ValuesOffset + 48)
+    if PointOne is None or PointTwo is None or any((not MathValue.isfinite(ValueData) for ValueData in Params)):
+        return None
+    return TrimCurveRecord(AttrValue, State, HeaderRefs, BasisRef, (PointOne, PointTwo), Params, Sense, OffsetData, DataValue[OffsetData:EndValue])
+
+
+# trimmed curve header parsing validates references before reading geometric values
+def ParseTrimHead(DataValue: bytes, OffsetData: int) -> tuple[int, int, tuple[int, ...], int, bool, int] | None:
     Start = RecordStart(DataValue, OffsetData, 133)
     if Start is None:
         return None
@@ -2185,15 +2235,7 @@ def ParseTrimCurve(DataValue: bytes, OffsetData: int) -> TrimCurveRecord | None:
         return None
     BasisRef, BasisWidth = Basis
     ValuesOffset = Cursor + 1 + BasisWidth
-    EndValue = ValuesOffset + 64
-    if EndValue > len(DataValue):
-        return None
-    PointOne = PointVector(DataValue, ValuesOffset)
-    PointTwo = PointVector(DataValue, ValuesOffset + 24)
-    Params = Struct.unpack_from('>2d', DataValue, ValuesOffset + 48)
-    if PointOne is None or PointTwo is None or any((not MathValue.isfinite(ValueData) for ValueData in Params)):
-        return None
-    return TrimCurveRecord(AttrValue, State, HeaderRefs, BasisRef, (PointOne, PointTwo), Params, Sense, OffsetData, DataValue[OffsetData:EndValue])
+    return AttrValue, State, HeaderRefs, BasisRef, Sense, ValuesOffset
 
 # this declaration exists because focused behavior needs one stable owner
 def ArrayFields(DataValue: bytes, OffsetData: int, KindValueData: int) -> tuple[int, int, int] | None:
@@ -2351,20 +2393,10 @@ def ResolveTrimCurv(Record: TrimCurveRecord, Curves: Mapping[int, object]) -> ob
         return None
     if BasisSense and ParamTwo <= ParamOne or (not BasisSense and ParamTwo >= ParamOne):
         return None
-    if isinstance(Basis, LineCurve):
-        Periodic = False
-        Closed = False
-    else:
-        Domain = CurveParamRange(Basis)
-        if Domain is None:
-            return None
-        Lower, Upper, Periodic, Closed = Domain
-        Epsilon = max(abs(Lower), abs(Upper), 1.0) * 1e-12
-        if Periodic:
-            if ParamOne < Lower - Epsilon or ParamOne > Upper + Epsilon or abs(ParamTwo - ParamOne) > Upper - Lower + Epsilon:
-                return None
-        elif ParamOne < Lower - Epsilon or ParamOne > Upper + Epsilon or ParamTwo < Lower - Epsilon or (ParamTwo > Upper + Epsilon):
-            return None
+    DomainValues = TrimCurveDomain(Basis, ParamOne, ParamTwo)
+    if DomainValues is None:
+        return None
+    Periodic, Closed = DomainValues
     EvaluationParams = (ParamOne / KLengthScale, ParamTwo / KLengthScale) if isinstance(Basis, LineCurve) else Record.parameters
     Evaluated = tuple((CurvePoint(Basis, Param) for Param in EvaluationParams))
     TolValue = max(Basis.tolerance, 1e-07) if isinstance(Basis, IntersectionCurve) else 1e-07
@@ -2375,6 +2407,24 @@ def ResolveTrimCurv(Record: TrimCurveRecord, Curves: Mapping[int, object]) -> ob
     Attrs = dict(Basis.attributes)
     Attrs.update({'trimmed': True, 'sense': Record.sense, 'basis_sense': BasisSense, 'state': Record.state, 'header_references': Record.header_references, 'basis_reference': Record.basis_reference, 'basis_curve_id': Basis.id, 'trim_points': Record.points, 'trim_parameters': EvaluationParams, 'trim_parameters_native': Record.parameters, 'trim_record': Record.raw})
     return Replace(Basis, id=NativeId('curve', Record.attribute), attributes=FrozenMapping(Attrs))
+
+
+# trimmed curve domain validation isolates periodic and bounded parameter rules
+def TrimCurveDomain(Basis: object, ParamOne: float, ParamTwo: float) -> tuple[bool, bool] | None:
+    if isinstance(Basis, LineCurve):
+        return False, False
+    Domain = CurveParamRange(Basis)
+    if Domain is None:
+        return None
+    Lower, Upper, Periodic, Closed = Domain
+    Epsilon = max(abs(Lower), abs(Upper), 1.0) * 1e-12
+    if Periodic:
+        IsValid = Lower - Epsilon <= ParamOne <= Upper + Epsilon
+        IsValid = IsValid and abs(ParamTwo - ParamOne) <= Upper - Lower + Epsilon
+    else:
+        IsValid = Lower - Epsilon <= ParamOne <= Upper + Epsilon
+        IsValid = IsValid and Lower - Epsilon <= ParamTwo <= Upper + Epsilon
+    return (Periodic, Closed) if IsValid else None
 
 # this declaration exists because focused behavior needs one stable owner
 def InterFields(DataValue: bytes, OffsetData: int, Start: int) -> IntersectRecord | None:
@@ -2432,6 +2482,25 @@ def PointVector(DataValue: bytes, OffsetData: int) -> VectorThree | None:
 
 # this declaration exists because focused behavior needs one stable owner
 def ParseChart(DataValue: bytes, OffsetData: int) -> ChartRecord | None:
+    HeaderData = ParseChartHead(DataValue, OffsetData)
+    if HeaderData is None:
+        return None
+    Count, AttrValue, BaseParam, BaseScale, ChordalError, AngularError, ParamErrors, Block = HeaderData
+    ExtValue = ParseExtPoints(DataValue, Block, Count)
+    if ExtValue is not None:
+        Points, Params, Tangents, SupportUv, EndValue = ExtValue
+        Layout = 'ext11'
+    else:
+        Compact = ParseCompactPts(DataValue, Block, Count, BaseParam, BaseScale)
+        if Compact is None:
+            return None
+        Points, Params, EndValue = Compact
+        Tangents, SupportUv, Layout = (), ((), ()), 'xyz3'
+    return ChartRecord(AttrValue, BaseParam, BaseScale, ChordalError / KLengthScale, AngularError, ParamErrors, Points, Params, Tangents, SupportUv, Layout, OffsetData, DataValue[OffsetData:EndValue])
+
+
+# chart header parsing validates scalar metadata before reading sampled points
+def ParseChartHead(DataValue: bytes, OffsetData: int) -> tuple[int, int, float, float, float, float, tuple[float, float], int] | None:
     Start = RecordStart(DataValue, OffsetData, 40)
     if Start is None:
         return None
@@ -2452,19 +2521,7 @@ def ParseChart(DataValue: bytes, OffsetData: int) -> ChartRecord | None:
     if ChartCount != Count or not all((MathValue.isfinite(ValueData) for ValueData in (BaseParam, BaseScale, ChordalError, AngularError, *ParamErrors))) or BaseScale <= 0.0 or (ChordalError <= 0.0) or (ParamErrors != (KMissingParam, KMissingParam)):
         return None
     Block = Preamble + 52
-    ExtValue = ParseExtPoints(DataValue, Block, Count)
-    if ExtValue is not None:
-        Points, Params, Tangents, SupportUv, EndValue = ExtValue
-        Layout = 'ext11'
-    else:
-        Compact = ParseCompactPts(DataValue, Block, Count, BaseParam, BaseScale)
-        if Compact is None:
-            return None
-        Points, Params, EndValue = Compact
-        Tangents = ()
-        SupportUv = ((), ())
-        Layout = 'xyz3'
-    return ChartRecord(AttrValue, BaseParam, BaseScale, ChordalError / KLengthScale, AngularError, ParamErrors, Points, Params, Tangents, SupportUv, Layout, OffsetData, DataValue[OffsetData:EndValue])
+    return Count, AttrValue, BaseParam, BaseScale, ChordalError, AngularError, ParamErrors, Block
 
 # this declaration exists because focused behavior needs one stable owner
 def ParseExtPoints(DataValue: bytes, OffsetData: int, Count: int) -> tuple[tuple[VectorThree, ...], tuple[float, ...], tuple[VectorThree, ...], tuple[tuple[tuple[float, float], ...], ...], int] | None:
