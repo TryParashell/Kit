@@ -195,7 +195,9 @@ def SourcePath(Source: Source) -> str:
 
 
 # this definition recursively filters linked documents while preserving invalid metadata
-def FilterOuterValues(Outer: AnyValue, Settings: ReadOptions) -> tuple[list[AnyValue], bool]:
+def FilterOuters(
+    Outer: AnyValue, Settings: ReadOptions
+) -> tuple[list[AnyValue], bool]:
     if not isinstance(Outer, Sequence) or isinstance(Outer, (str, bytes, bytearray)):
         return ([], False)
     StrippedOuter: list[AnyValue] = []
@@ -224,10 +226,14 @@ def FilterOuterValues(Outer: AnyValue, Settings: ReadOptions) -> tuple[list[AnyV
 
 
 # this definition updates only the external document metadata when filtering changes it
-def FilterOuterMeta(MetaValue: Mapping[str, AnyValue], Settings: ReadOptions) -> Mapping[str, AnyValue]:
+def FilterOuterMeta(
+    MetaValue: Mapping[str, AnyValue], Settings: ReadOptions
+) -> Mapping[str, AnyValue]:
     Freecad = MetaValue.get("freecad", {}) if isinstance(MetaValue, Mapping) else {}
-    Outer = Freecad.get("external_documents", []) if isinstance(Freecad, Mapping) else []
-    StrippedOuter, Changed = FilterOuterValues(Outer, Settings)
+    Outer = (
+        Freecad.get("external_documents", []) if isinstance(Freecad, Mapping) else []
+    )
+    StrippedOuter, Changed = FilterOuters(Outer, Settings)
     if not Changed:
         return MetaValue
     FreecadCopy = dict(Freecad)
@@ -583,7 +589,7 @@ def IsExtrusion(Feature: Any) -> bool:
 
 
 # this definition rejects records that do not represent transferable timeline features
-def IsFeatureCandidate(
+def IsFeatureNeeded(
     Feature: AnyValue,
     DependentFeatureIds: set[str],
     FinalFeatureIds: set[str | None],
@@ -607,7 +613,7 @@ def IsFeatureCandidate(
 
 
 # this definition selects only timeline features that require transfer accounting
-def FeatureCandidates(DocValue: CadDocument) -> tuple[AnyValue, ...]:
+def FeatureSet(DocValue: CadDocument) -> tuple[AnyValue, ...]:
     DependentFeatureIds = {
         FeatureId
         for Feature in DocValue.feature_timeline
@@ -617,21 +623,23 @@ def FeatureCandidates(DocValue: CadDocument) -> tuple[AnyValue, ...]:
     return tuple(
         Feature
         for Feature in DocValue.feature_timeline
-        if IsFeatureCandidate(Feature, DependentFeatureIds, FinalFeatureIds)
+        if IsFeatureNeeded(Feature, DependentFeatureIds, FinalFeatureIds)
     )
 
 
 # this definition identifies feature kinds that the native writer can reconstruct
-def IsWritableFeature(
+def CanWriteFeature(
     DocValue: CadDocument, Feature: AnyValue, SketchNative: Mapping[str, bool]
 ) -> bool:
     KindValue = EnumText(Feature.kind)
     if Feature.suppressed or KindValue not in KFeatureWriteValues:
         return False
     if KindValue == FeatureKind.EXTRUSION.value:
-        return bool(Feature.sketch_id) and SketchNative.get(
-            Feature.sketch_id or "", False
-        ) and IsExtrusion(Feature)
+        return (
+            bool(Feature.sketch_id)
+            and SketchNative.get(Feature.sketch_id or "", False)
+            and IsExtrusion(Feature)
+        )
     if KindValue == FeatureKind.FILLET.value:
         Definition = Feature.definition
         return (
@@ -654,7 +662,7 @@ def IsWritableFeature(
 
 
 # this definition explains why a timeline feature requires carrier preservation
-def FeatureCarrierReasons(
+def FeatureReasons(
     Feature: AnyValue, SketchCarrierReasons: Mapping[str, CarrierReason]
 ) -> frozenset[CarrierReason]:
     KindValue = EnumText(Feature.kind)
@@ -678,16 +686,16 @@ def FeatureParts(
     SketchNative: Mapping[str, bool],
     SketchCarrierReasons: Mapping[str, CarrierReason],
 ) -> tuple[int, int, frozenset[CarrierReason]]:
-    Features = FeatureCandidates(DocValue)
+    Features = FeatureSet(DocValue)
     if HasNativeGraph(DocValue) and DocValue.assembly is None:
         return (len(Features), 0, frozenset())
     Carrier = 0
     Reasons: set[CarrierReason] = set()
     for Feature in Features:
-        if IsWritableFeature(DocValue, Feature, SketchNative):
+        if CanWriteFeature(DocValue, Feature, SketchNative):
             continue
         Carrier += 1
-        Reasons.update(FeatureCarrierReasons(Feature, SketchCarrierReasons))
+        Reasons.update(FeatureReasons(Feature, SketchCarrierReasons))
     return (len(Features), Carrier, frozenset(Reasons))
 
 
@@ -875,7 +883,9 @@ def ArchiveMember(
 
 
 # this definition locates the exact native property represented by a payload
-def FindPayloadProperty(Payload: BrepPayload, RootValue: ET.Element) -> ET.Element | None:
+def FindPayloadProp(
+    Payload: BrepPayload, RootValue: ET.Element
+) -> ET.Element | None:
     Attributes = Payload.attributes
     ObjectName = str(Attributes["freecad_object"])
     ObjectType = str(Attributes["freecad_object_type"])
@@ -907,7 +917,7 @@ def FindPayloadProperty(Payload: BrepPayload, RootValue: ET.Element) -> ET.Eleme
 
 
 # this definition verifies every sidecar referenced by a native payload property
-def HasPayloadSidecars(
+def HasSidecars(
     Payload: BrepPayload,
     Archive: zipfile.ZipFile,
     Members: Mapping[str, zipfile.ZipInfo],
@@ -957,11 +967,11 @@ def IsPayloadMatch(
     Attributes = Payload.attributes
     if Attributes[KNativeDocHashAttr] != NativeDigestText:
         return False
-    PropElem = FindPayloadProperty(Payload, RootValue)
+    PropElem = FindPayloadProp(Payload, RootValue)
     return (
         PropElem is not None
         and XmlElemData(PropElem) == Attributes["freecad_property_data"]
-        and HasPayloadSidecars(Payload, Archive, Members, PropElem)
+        and HasSidecars(Payload, Archive, Members, PropElem)
     )
 
 
@@ -989,9 +999,7 @@ def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
                     continue
                 if Payload.data is None:
                     continue
-                KeyValue = ManifestNativeBrepKey(
-                    Mapped, Payload.data, NativeDigestText
-                )
+                KeyValue = ManifestNativeBrepKey(Mapped, Payload.data, NativeDigestText)
                 if KeyValue is not None:
                     Trusted.add(KeyValue)
         finally:
@@ -1013,9 +1021,7 @@ def PayloadNative(
     ):
         return None
     if MappedPayload is not None:
-        KeyValue = ManifestNativeBrepKey(
-            MappedPayload, Payload.data, NativeDigestText
-        )
+        KeyValue = ManifestNativeBrepKey(MappedPayload, Payload.data, NativeDigestText)
         if KeyValue in TrustedNativeBreps:
             return Payload.data
     return ProvenAsciiBrep(Payload.data)
@@ -1029,9 +1035,7 @@ def IsBrepPayload(
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
 ) -> bool:
     return (
-        PayloadNative(
-            Payload, MappedPayload, NativeDigestText, TrustedNativeBreps
-        )
+        PayloadNative(Payload, MappedPayload, NativeDigestText, TrustedNativeBreps)
         is not None
     )
 
@@ -1160,10 +1164,281 @@ def CarrierReasonA(
     return CapabilityCarrierReasons[Capability]
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition selects the strongest carrier reason for one sketch
+def SketchReason(
+    ReasonValues: Sequence[str],
+) -> tuple[CarrierReason, set[CarrierReason]]:
+    Reasons = {CarrierReason(Value) for Value in ReasonValues} or {
+        CarrierReason.WRITER_UNIMPLEMENTED
+    }
+    for Reason in (
+        CarrierReason.SOURCE_OPAQUE,
+        CarrierReason.WRITER_UNIMPLEMENTED,
+        CarrierReason.TARGET_UNSUPPORTED,
+    ):
+        if Reason in Reasons:
+            return (Reason, Reasons)
+    return (CarrierReason.WRITER_UNIMPLEMENTED, Reasons)
+
+
+# this definition records native and carrier sketch transfer parts
+def AddSketchMut(
+    ItemValue: CadDocument,
+    Manifest: Mapping[str, AnyValue],
+    Parts: dict[Capability, list[bool]],
+    CarrierReasons: dict[Capability, set[CarrierReason]],
+) -> tuple[dict[str, bool], dict[str, CarrierReason]]:
+    SketchNative: dict[str, bool] = {}
+    SketchReasons: dict[str, CarrierReason] = {}
+    SketchParts = NativeSketchParts(Manifest)
+    ReasonParts = NativeSketchCarrier(Manifest)
+    for SketchValue, Counts, ReasonValues in zip(
+        ItemValue.sketches, SketchParts, ReasonParts, strict=True
+    ):
+        NativeCount, CarrierCount = Counts
+        Parts[Capability.EDITABLE_SKETCHES].extend(
+            [True] * NativeCount + [False] * CarrierCount
+        )
+        if CarrierCount:
+            PrimaryReason, Reasons = SketchReason(ReasonValues)
+            SketchReasons[SketchValue.id] = PrimaryReason
+            CarrierReasons[Capability.EDITABLE_SKETCHES].update(Reasons)
+        SketchNative[SketchValue.id] = CarrierCount == 0
+    return (SketchNative, SketchReasons)
+
+
+# this definition records feature selection configuration and expression transfer parts
+def AddBasicMut(
+    ItemValue: CadDocument,
+    Manifest: Mapping[str, AnyValue],
+    SourceNative: bool,
+    SketchNative: Mapping[str, bool],
+    SketchReasons: Mapping[str, CarrierReason],
+    Parts: dict[Capability, list[bool]],
+    CarrierReasons: dict[Capability, set[CarrierReason]],
+) -> None:
+    Parts[Capability.PARAMETERS].extend(True for Ignored in ItemValue.parameters)
+    NativeCount, CarrierCount, Reasons = FeatureParts(
+        ItemValue, SketchNative, SketchReasons
+    )
+    Parts[Capability.PARAMETRIC_HISTORY].extend(
+        [True] * NativeCount + [False] * CarrierCount
+    )
+    CarrierReasons[Capability.PARAMETRIC_HISTORY].update(Reasons)
+    Parts[Capability.SUPPORT_PLANES].extend(
+        True for Ignored in ItemValue.support_planes
+    )
+    SelectionCounts = (
+        (len(ItemValue.selections), 0) if SourceNative else SelectionParts(ItemValue)
+    )
+    Parts[Capability.SELECTIONS].extend(
+        [True] * SelectionCounts[0] + [False] * SelectionCounts[1]
+    )
+    Parts[Capability.BODY_STRUCTURE].extend(True for Ignored in ItemValue.bodies)
+    ConfigCounts = ConfigParts(ItemValue)
+    Parts[Capability.CONFIGURATIONS].extend(
+        [True] * ConfigCounts[0] + [False] * ConfigCounts[1]
+    )
+    ExpressionCounts = (
+        (sum(Param.expression is not None for Param in ItemValue.parameters), 0)
+        if SourceNative
+        else NativeExpressionParts(Manifest)
+    )
+    Parts[Capability.EXPRESSIONS].extend(
+        [True] * ExpressionCounts[0] + [False] * ExpressionCounts[1]
+    )
+
+
+# this definition records geometric and tessellation transfer parts
+def AddGeomMut(
+    ItemValue: CadDocument,
+    Manifest: Mapping[str, AnyValue],
+    MappedByIdentity: Mapping[int, Mapping[str, AnyValue]],
+    NativeDigestText: str,
+    TrustedNativeBreps: frozenset[NativeBrepKey],
+    Parts: dict[Capability, list[bool]],
+    CarrierReasons: dict[Capability, set[CarrierReason]],
+) -> None:
+    RawBreps = [
+        IsBrepPayload(
+            Payload,
+            MappedByIdentity.get(id(Payload)),
+            NativeDigestText,
+            TrustedNativeBreps,
+        )
+        for Payload in ItemValue.brep_payloads
+        if Payload.role == PayloadRole.BREP and Payload.data is not None
+    ]
+    if ItemValue.brep is not None:
+        NativeBrep = IsNeutralBrep(ItemValue) or any(RawBreps)
+        Parts[Capability.BREP].append(NativeBrep)
+        if not NativeBrep:
+            CarrierReasons[Capability.BREP].add(CarrierReason.WRITER_UNIMPLEMENTED)
+    else:
+        Parts[Capability.BREP].extend(RawBreps)
+        if any(not Value for Value in RawBreps):
+            CarrierReasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
+    RebuiltCount = (
+        NativeShapeFeatureCount(Manifest)
+        if ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold()
+        else 0
+    )
+    if RebuiltCount and not all(Parts[Capability.BREP]):
+        Parts[Capability.BREP].extend(True for Ignored in range(RebuiltCount))
+    Parts[Capability.TESSELLATION].extend(True for Ignored in ItemValue.meshes)
+    Parts[Capability.TESSELLATION].extend(
+        False
+        for Payload in ItemValue.brep_payloads
+        if Payload.role == PayloadRole.TESSELLATION and Payload.data is not None
+    )
+
+
+# this definition records assembly material and external reference transfer parts
+def AddRefsMut(
+    ItemValue: CadDocument,
+    TargetPath: FilePath | None,
+    Portable: bool,
+    Parts: dict[Capability, list[bool]],
+) -> None:
+    if ItemValue.assembly is not None:
+        Parts[Capability.ASSEMBLIES].append(True)
+        NativeCount, CarrierCount = MateParts(ItemValue)
+        Parts[Capability.ASSEMBLY_MATES].extend(
+            [True] * NativeCount + [False] * CarrierCount
+        )
+        NativeDocuments = TargetPath is not None
+        Parts[Capability.COMPONENT_DOCUMENTS].extend(
+            NativeDocuments for Ignored in ItemValue.assembly.documents
+        )
+        CanWriteOuter = TargetPath is not None and Portable
+        Parts[Capability.EXTERNAL_REFERENCES].extend(
+            CanWriteOuter
+            for Definition in ItemValue.assembly.definitions
+            if Definition.source_path
+        )
+    Parts[Capability.EXTERNAL_REFERENCES].extend(
+        TargetPath is not None and Portable for Ignored in NativeOuter(ItemValue)
+    )
+    Parts[Capability.MATERIALS].extend(
+        True for BodyValue in ItemValue.bodies if BodyValue.material_id
+    )
+
+
+# this definition records native payload transfer parts and carrier reasons
+def AddPayloadMut(
+    ItemValue: CadDocument,
+    MappedByIdentity: Mapping[int, Mapping[str, AnyValue]],
+    NativeDigestText: str,
+    TrustedNativeBreps: frozenset[NativeBrepKey],
+    Parts: dict[Capability, list[bool]],
+    CarrierReasons: dict[Capability, set[CarrierReason]],
+) -> None:
+    EnvelopeIndexes = SourcePayloadIndexes(ItemValue)
+    for Index, Payload in enumerate(ItemValue.brep_payloads):
+        if Index in EnvelopeIndexes:
+            continue
+        NativePayload = PayloadNative(
+            Payload,
+            MappedByIdentity.get(id(Payload)),
+            NativeDigestText,
+            TrustedNativeBreps,
+        )
+        if NativePayload is not None:
+            Parts[Capability.NATIVE_PAYLOADS].append(True)
+            if NativePayload != Payload.data:
+                Parts[Capability.NATIVE_PAYLOADS].append(False)
+                CarrierReasons[Capability.NATIVE_PAYLOADS].add(
+                    CarrierReason.WRITER_UNIMPLEMENTED
+                )
+            continue
+        Parts[Capability.NATIVE_PAYLOADS].append(False)
+        Reason = (
+            CarrierReason.TARGET_UNSUPPORTED
+            if Payload.role == PayloadRole.BREP and ItemValue.brep is not None
+            else CarrierReason.SOURCE_OPAQUE
+        )
+        CarrierReasons[Capability.NATIVE_PAYLOADS].add(Reason)
+
+
+# this definition records provenance values that require carrier preservation
+def AddProvMut(
+    ItemValue: CadDocument, Parts: dict[Capability, list[bool]]
+) -> None:
+    Values = (
+        *ItemValue.parameters,
+        *ItemValue.support_planes,
+        *ItemValue.sketches,
+        *ItemValue.selections,
+        *ItemValue.feature_timeline,
+        *ItemValue.bodies,
+        *ItemValue.meshes,
+        *ItemValue.brep_payloads,
+    )
+    Parts[Capability.PROVENANCE].extend(
+        False for Value in Values if Value.provenance is not None
+    )
+
+
+# this definition adds every capability contribution from one document
+def AddDocPartsMut(
+    ItemValue: CadDocument,
+    TargetPath: FilePath | None,
+    Portable: bool,
+    TrustedNativeBreps: frozenset[NativeBrepKey],
+    Parts: dict[Capability, list[bool]],
+    CarrierReasons: dict[Capability, set[CarrierReason]],
+) -> None:
+    SourceNative = HasNativeGraph(ItemValue)
+    Manifest = DocToManifest(ItemValue)
+    MappedPayloads = ManifestBrep(ItemValue)
+    MappedByIdentity = (
+        {
+            id(Payload): Mapped
+            for Payload, Mapped in zip(
+                ItemValue.brep_payloads, MappedPayloads, strict=True
+            )
+        }
+        if MappedPayloads
+        else {}
+    )
+    NativeDigestText = NativeDocShaTwo(ItemValue)
+    SketchNative, SketchReasons = AddSketchMut(
+        ItemValue, Manifest, Parts, CarrierReasons
+    )
+    AddBasicMut(
+        ItemValue,
+        Manifest,
+        SourceNative,
+        SketchNative,
+        SketchReasons,
+        Parts,
+        CarrierReasons,
+    )
+    AddGeomMut(
+        ItemValue,
+        Manifest,
+        MappedByIdentity,
+        NativeDigestText,
+        TrustedNativeBreps,
+        Parts,
+        CarrierReasons,
+    )
+    AddRefsMut(ItemValue, TargetPath, Portable, Parts)
+    AddPayloadMut(
+        ItemValue,
+        MappedByIdentity,
+        NativeDigestText,
+        TrustedNativeBreps,
+        Parts,
+        CarrierReasons,
+    )
+    AddProvMut(ItemValue, Parts)
+
+
+# this definition computes the capability transfer contract for a freecad write
 def CapabilityA(
     DocValue: CadDocument,
-    TargetPath: Path | None,
+    TargetPath: FilePath | None,
     Portable: bool,
     Exact: bool,
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
@@ -1173,207 +1448,28 @@ def CapabilityA(
         roundtrip_metadata=Capability.ROUNDTRIP_METADATA in DocValue.capabilities,
     )
     if Exact:
-
-        # this callback exists because local behavior needs one focused transformation
         return tuple(
-            (
-                CapabilityTransfer(CapabilityValue, TransferMode.NATIVE)
-                for CapabilityValue in sorted(Required, key=lambda Value: Value.value)
-            )
+            CapabilityTransfer(CapabilityValue, TransferMode.NATIVE)
+            for CapabilityValue in sorted(Required, key=lambda Value: Value.value)
         )
     Parts = {CapabilityValue: [] for CapabilityValue in Capability}
     CarrierReasons = {CapabilityValue: set() for CapabilityValue in Capability}
     for ItemValue in DocTree(DocValue):
-        SourceNative = HasNativeGraph(ItemValue)
-        Manifest = DocToManifest(ItemValue)
-        MappedPayloads = ManifestBrep(ItemValue)
-        MappedByIdentity = (
-            {
-                id(Payload): Mapped
-                for Payload, Mapped in zip(
-                    ItemValue.brep_payloads, MappedPayloads, strict=True
-                )
-            }
-            if MappedPayloads
-            else {}
-        )
-        NativeDigestText = NativeDocShaTwo(ItemValue)
-        SketchParts = NativeSketchParts(Manifest)
-        SketchReasonParts = NativeSketchCarrier(Manifest)
-        SketchNative: dict[str, bool] = {}
-        SketchCarrierReasons: dict[str, CarrierReason] = {}
-        for Sketch, (NativeCount, CarrierCount), ReasonValues in zip(
-            ItemValue.sketches, SketchParts, SketchReasonParts, strict=True
-        ):
-            Parts[Capability.EDITABLE_SKETCHES].extend(
-                [True] * NativeCount + [False] * CarrierCount
-            )
-            if CarrierCount:
-                SketchReasons = {CarrierReason(Value) for Value in ReasonValues} or {
-                    CarrierReason.WRITER_UNIMPLEMENTED
-                }
-                SketchReason = next(
-                    (
-                        Reason
-                        for Reason in (
-                            CarrierReason.SOURCE_OPAQUE,
-                            CarrierReason.WRITER_UNIMPLEMENTED,
-                            CarrierReason.TARGET_UNSUPPORTED,
-                        )
-                        if Reason in SketchReasons
-                    )
-                )
-                SketchCarrierReasons[Sketch.id] = SketchReason
-                CarrierReasons[Capability.EDITABLE_SKETCHES].update(SketchReasons)
-            SketchNative[Sketch.id] = CarrierCount == 0
-        Parts[Capability.PARAMETERS].extend((True for Ignored in ItemValue.parameters))
-        FeatureNative, FeatureCarrier, FeatureReasons = FeatureParts(
-            ItemValue, SketchNative, SketchCarrierReasons
-        )
-        Parts[Capability.PARAMETRIC_HISTORY].extend(
-            [True] * FeatureNative + [False] * FeatureCarrier
-        )
-        CarrierReasons[Capability.PARAMETRIC_HISTORY].update(FeatureReasons)
-        Parts[Capability.SUPPORT_PLANES].extend(
-            (True for Ignored in ItemValue.support_planes)
-        )
-        if SourceNative:
-            Parts[Capability.SELECTIONS].extend(
-                (True for Ignored in ItemValue.selections)
-            )
-        else:
-            NativeSelections, CarrierSelections = SelectionParts(ItemValue)
-            Parts[Capability.SELECTIONS].extend(
-                [True] * NativeSelections + [False] * CarrierSelections
-            )
-        Parts[Capability.BODY_STRUCTURE].extend((True for Ignored in ItemValue.bodies))
-        NativeConfigurations, CarrierConfigurations = ConfigParts(ItemValue)
-        Parts[Capability.CONFIGURATIONS].extend(
-            [True] * NativeConfigurations + [False] * CarrierConfigurations
-        )
-        if SourceNative:
-            ExpressionCount = sum(
-                (Param.expression is not None for Param in ItemValue.parameters)
-            )
-            NativeExpressions, CarrierExpressions = (ExpressionCount, 0)
-        else:
-            NativeExpressions, CarrierExpressions = NativeExpressionParts(Manifest)
-        Parts[Capability.EXPRESSIONS].extend(
-            [True] * NativeExpressions + [False] * CarrierExpressions
-        )
-        RawBreps = [
-            IsBrepPayload(
-                Payload,
-                MappedByIdentity.get(id(Payload)),
-                NativeDigestText,
-                TrustedNativeBreps,
-            )
-            for Payload in ItemValue.brep_payloads
-            if Payload.role == PayloadRole.BREP and Payload.data is not None
-        ]
-        if ItemValue.brep is not None:
-            NativeBrep = IsNeutralBrep(ItemValue) or any(RawBreps)
-            Parts[Capability.BREP].append(NativeBrep)
-            if not NativeBrep:
-                CarrierReasons[Capability.BREP].add(CarrierReason.WRITER_UNIMPLEMENTED)
-        else:
-            Parts[Capability.BREP].extend(RawBreps)
-            if any((not Value for Value in RawBreps)):
-                CarrierReasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
-        RebuiltShapeFeatures = (
-            NativeShapeFeatureCount(Manifest)
-            if ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold()
-            else 0
-        )
-        if RebuiltShapeFeatures and (not all(Parts[Capability.BREP])):
-            Parts[Capability.BREP].extend(
-                (True for Ignored in range(RebuiltShapeFeatures))
-            )
-        Parts[Capability.TESSELLATION].extend((True for Ignored in ItemValue.meshes))
-        Parts[Capability.TESSELLATION].extend(
-            (
-                False
-                for Payload in ItemValue.brep_payloads
-                if Payload.role == PayloadRole.TESSELLATION and Payload.data is not None
-            )
-        )
-        if ItemValue.assembly is not None:
-            Parts[Capability.ASSEMBLIES].append(True)
-            NativeMates, CarrierMates = MateParts(ItemValue)
-            Parts[Capability.ASSEMBLY_MATES].extend(
-                [True] * NativeMates + [False] * CarrierMates
-            )
-            NativeDocuments = TargetPath is not None
-            Parts[Capability.COMPONENT_DOCUMENTS].extend(
-                (NativeDocuments for Ignored in ItemValue.assembly.documents)
-            )
-            CanWriteOuter = TargetPath is not None and Portable
-            Parts[Capability.EXTERNAL_REFERENCES].extend(
-                (
-                    CanWriteOuter
-                    for Definition in ItemValue.assembly.definitions
-                    if Definition.source_path
-                )
-            )
-        Parts[Capability.EXTERNAL_REFERENCES].extend(
-            (TargetPath is not None and Portable for Ignored in NativeOuter(ItemValue))
-        )
-        Parts[Capability.MATERIALS].extend(
-            (True for BodyValue in ItemValue.bodies if BodyValue.material_id)
-        )
-        EnvelopeIndexes = SourcePayloadIndexes(ItemValue)
-        for Index, Payload in enumerate(ItemValue.brep_payloads):
-            if Index in EnvelopeIndexes:
-                continue
-            NativePayload = PayloadNative(
-                Payload,
-                MappedByIdentity.get(id(Payload)),
-                NativeDigestText,
-                TrustedNativeBreps,
-            )
-            if NativePayload is not None:
-                Parts[Capability.NATIVE_PAYLOADS].append(True)
-                if NativePayload != Payload.data:
-                    Parts[Capability.NATIVE_PAYLOADS].append(False)
-                    CarrierReasons[Capability.NATIVE_PAYLOADS].add(
-                        CarrierReason.WRITER_UNIMPLEMENTED
-                    )
-                continue
-            Parts[Capability.NATIVE_PAYLOADS].append(False)
-            CarrierReasons[Capability.NATIVE_PAYLOADS].add(
-                CarrierReason.TARGET_UNSUPPORTED
-                if Payload.role == PayloadRole.BREP and ItemValue.brep is not None
-                else CarrierReason.SOURCE_OPAQUE
-            )
-        ProvenanceValues = (
-            *ItemValue.parameters,
-            *ItemValue.support_planes,
-            *ItemValue.sketches,
-            *ItemValue.selections,
-            *ItemValue.feature_timeline,
-            *ItemValue.bodies,
-            *ItemValue.meshes,
-            *ItemValue.brep_payloads,
-        )
-        Parts[Capability.PROVENANCE].extend(
-            (False for Value in ProvenanceValues if Value.provenance is not None)
+        AddDocPartsMut(
+            ItemValue, TargetPath, Portable, TrustedNativeBreps, Parts, CarrierReasons
         )
     Parts[Capability.ROUNDTRIP_METADATA].append(False)
-
-    # this callback exists because local behavior needs one focused transformation
     return tuple(
-        (
-            CapabilityTransfer(
-                CapabilityValue,
-                (ModeValue := TransferModeA(Parts[CapabilityValue])),
-                (
-                    None
-                    if ModeValue is TransferMode.NATIVE
-                    else CarrierReasonA(CapabilityValue, CarrierReasons)
-                ),
-            )
-            for CapabilityValue in sorted(Required, key=lambda Value: Value.value)
+        CapabilityTransfer(
+            CapabilityValue,
+            (ModeValue := TransferModeA(Parts[CapabilityValue])),
+            (
+                None
+                if ModeValue is TransferMode.NATIVE
+                else CarrierReasonA(CapabilityValue, CarrierReasons)
+            ),
         )
+        for CapabilityValue in sorted(Required, key=lambda Value: Value.value)
     )
 
 

@@ -1474,9 +1474,7 @@ def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
     if RootValue is None or str(RootValue.kind) != ComponentKind.ASSEMBLY.value:
         return None
     Reachable = ReachableDefs(AsmValue, RootDefinitionId)
-    NestedAsm, SelectedMeshIds = NestedAsmData(
-        AsmValue, RootDefinitionId, Reachable
-    )
+    NestedAsm, SelectedMeshIds = NestedAsmData(AsmValue, RootDefinitionId, Reachable)
     SelectedPayloads = NestedPayloads(DocValue, RootDefinitionId)
     SourcePath = RootValue.source_path or f"{RootValue.name}.SLDASM"
     Nested = Replace(
@@ -1661,7 +1659,9 @@ def NativeEnvelope(
 
 
 # this definition exists because capability records need exact typed decoding
-def ParseTransfers(Value: Mapping[str, AnyValue]) -> tuple[CapabilityTransfer, ...] | None:
+def ParseTransfers(
+    Value: Mapping[str, AnyValue],
+) -> tuple[CapabilityTransfer, ...] | None:
     Records = Value.get("transfers")
     if not isinstance(Records, list):
         return None
@@ -2474,7 +2474,9 @@ def IsAsmItem(
 ) -> bool:
     RefValue = GeneratedRef(Source, Index + 1)
     Suffix = f"-{RefValue}"
-    BaseName = Source.name[: -len(Suffix)] if Source.name.endswith(Suffix) else Source.name
+    BaseName = (
+        Source.name[: -len(Suffix)] if Source.name.endswith(Suffix) else Source.name
+    )
     ConfigName = (
         Source.configuration_name
         or AsmValue.definition(Source.definition_id).configuration_name
@@ -2507,6 +2509,7 @@ def IsAsmOrder(
     for Target in Native.occurrences:
         NativeByOwner[Target.owner_definition_id].append(Target)
     for OwnerId, Values in ByOwner.items():
+        # this callback exists because native sibling ordering needs a stable key
         Expected = [
             Encoding.occurrence_ids[ItemValue.id]
             for Ignored, Ignored, ItemValue in sorted(
@@ -6522,12 +6525,20 @@ def NativeMarkerA(Marker: NativeMarker, EntityType: str | None = None) -> Native
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def SketchB(
-    Sketch: NativeSketch, RefMap: dict[str, str], ParamIds: set[str]
-) -> tuple[SketchRule, ...]:
-    Result: list[SketchRule] = []
-    DimensionUsage: Defaultdict[float, int] = Defaultdict(int)
+# this state exists because sketch rule resolution shares occurrence counters
+@DataClass(slots=True)
+class RuleContext:
+    Candidates: Mapping[float, list[tuple[str, str]]]
+    DimensionsByName: Mapping[str, list[NativeDimension]]
+    ParamIdsByName: Mapping[str, list[str]]
+    DimensionUsage: Defaultdict[float, int]
+    ParamUsage: Defaultdict[str, int]
+    RuleIdUsage: Defaultdict[str, int]
+    ParamIds: set[str]
+
+
+# this definition exists because rule resolution needs indexed dimensions and profiles
+def RuleContextA(Sketch: NativeSketch, ParamIds: set[str]) -> RuleContext:
     Candidates: Defaultdict[float, list[tuple[str, str]]] = Defaultdict(list)
     for ProfileIndex, Profile in enumerate(Sketch.profiles):
         if Profile.kind != "rectangle":
@@ -6545,77 +6556,99 @@ def SketchB(
     for Dimension, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions):
         DimensionsByName[Dimension.name].append(Dimension)
         ParamIdsByName[Dimension.name].append(ParamId)
-    ParamUsage: Defaultdict[str, int] = Defaultdict(int)
-    RuleIdUsage: Defaultdict[str, int] = Defaultdict(int)
-    for RuleValue in Sketch.constraints:
-        ResolvedReferences = [RefMap.get(RefValue) for RefValue in RuleValue.references]
-        References = (
-            [RuleRef(RefValue) for RefValue in ResolvedReferences]
-            if ResolvedReferences and all(ResolvedReferences)
-            else []
-        )
-        KindValue = RuleValue.kind
-        NativeName = (
-            RuleValue.parameter.rsplit(":", 1)[-1]
-            if RuleValue.parameter is not None
-            else ""
-        )
-        ItemValue = ParamUsage[NativeName] if NativeName else 0
-        Dimensions = DimensionsByName.get(NativeName, [])
-        Dimension = (
-            Dimensions[min(ItemValue, len(Dimensions) - 1)] if Dimensions else None
-        )
-        if not References and RuleValue.parameter is not None:
-            if Dimension is not None:
-                KeyValue = round(Dimension.value_mm, 9)
-                Available = Candidates.get(KeyValue, [])
-                if Available:
-                    Index = DimensionUsage[KeyValue] % len(Available)
-                    EntityId, InferredKind = Available[Index]
-                    DimensionUsage[KeyValue] += 1
-                    References = [RuleRef(EntityId)]
-                    KindValue = InferredKind
-        ParamId = None
-        if RuleValue.parameter is not None:
-            AvailableParamIds = ParamIdsByName.get(NativeName, [])
-            if AvailableParamIds:
-                Choice = AvailableParamIds[min(ItemValue, len(AvailableParamIds) - 1)]
-                if Choice in ParamIds:
-                    ParamId = Choice
-            ParamUsage[NativeName] += 1
-        RuleIdUsage[RuleValue.id] += 1
-        RuleItem = RuleIdUsage[RuleValue.id]
-        RuleId = f"sldprt:constraint:{RuleValue.id}"
-        if RuleItem > 1:
-            RuleId += f":{RuleItem}"
-        Result.append(
-            SketchRule(
-                id=RuleId,
-                kind=KindValue,
-                references=tuple(References),
-                parameter_id=ParamId,
-                driving=Dimension.native_role != "display" if Dimension else True,
-                provenance=(
-                    ProvenanceA(
-                        RuleValue.id,
-                        RuleValue.native_offset,
-                        8,
-                        "sketch-constraint",
-                        Stream=Sketch.native_stream,
-                    )
-                    if RuleValue.native_offset is not None
-                    else None
-                ),
-                attributes=FrozenMapping(
-                    {
-                        "native_code": RuleValue.native_code,
-                        "native_references": RuleValue.references,
-                        "native_value": RuleValue.value,
-                        "parameter_occurrence": ItemValue + 1 if NativeName else None,
-                    }
-                ),
+    return RuleContext(
+        Candidates,
+        DimensionsByName,
+        ParamIdsByName,
+        Defaultdict(int),
+        Defaultdict(int),
+        Defaultdict(int),
+        ParamIds,
+    )
+
+
+# this definition exists because each native rule needs deterministic occurrence binding
+def RulePartsMut(
+    RuleValue: AnyValue, RefMap: Mapping[str, str], ContextMut: RuleContext
+) -> tuple[AnyValue, ...]:
+    ResolvedRefs = [RefMap.get(RefValue) for RefValue in RuleValue.references]
+    References = (
+        [RuleRef(RefValue) for RefValue in ResolvedRefs]
+        if ResolvedRefs and all(ResolvedRefs)
+        else []
+    )
+    KindValue = RuleValue.kind
+    NativeName = (
+        RuleValue.parameter.rsplit(":", 1)[-1]
+        if RuleValue.parameter is not None
+        else ""
+    )
+    ItemValue = ContextMut.ParamUsage[NativeName] if NativeName else 0
+    Dimensions = ContextMut.DimensionsByName.get(NativeName, [])
+    Dimension = Dimensions[min(ItemValue, len(Dimensions) - 1)] if Dimensions else None
+    if not References and RuleValue.parameter is not None and Dimension is not None:
+        KeyValue = round(Dimension.value_mm, 9)
+        Available = ContextMut.Candidates.get(KeyValue, [])
+        if Available:
+            Index = ContextMut.DimensionUsage[KeyValue] % len(Available)
+            EntityId, KindValue = Available[Index]
+            ContextMut.DimensionUsage[KeyValue] += 1
+            References = [RuleRef(EntityId)]
+    ParamId = None
+    if RuleValue.parameter is not None:
+        AvailableIds = ContextMut.ParamIdsByName.get(NativeName, [])
+        if AvailableIds:
+            Choice = AvailableIds[min(ItemValue, len(AvailableIds) - 1)]
+            ParamId = Choice if Choice in ContextMut.ParamIds else None
+        ContextMut.ParamUsage[NativeName] += 1
+    ContextMut.RuleIdUsage[RuleValue.id] += 1
+    RuleId = f"sldprt:constraint:{RuleValue.id}"
+    if ContextMut.RuleIdUsage[RuleValue.id] > 1:
+        RuleId += f":{ContextMut.RuleIdUsage[RuleValue.id]}"
+    return (References, KindValue, NativeName, ItemValue, Dimension, ParamId, RuleId)
+
+
+# this definition exists because resolved rule parts need one neutral constructor
+def BuildSketchRule(
+    Sketch: NativeSketch,
+    RuleValue: AnyValue,
+    RefMap: Mapping[str, str],
+    ContextMut: RuleContext,
+) -> SketchRule:
+    References, KindValue, NativeName, ItemValue, Dimension, ParamId, RuleId = (
+        RulePartsMut(RuleValue, RefMap, ContextMut)
+    )
+    return SketchRule(
+        id=RuleId,
+        kind=KindValue,
+        references=tuple(References),
+        parameter_id=ParamId,
+        driving=Dimension.native_role != "display" if Dimension else True,
+        provenance=(
+            ProvenanceA(
+                RuleValue.id,
+                RuleValue.native_offset,
+                8,
+                "sketch-constraint",
+                Stream=Sketch.native_stream,
             )
-        )
+            if RuleValue.native_offset is not None
+            else None
+        ),
+        attributes=FrozenMapping(
+            {
+                "native_code": RuleValue.native_code,
+                "native_references": RuleValue.references,
+                "native_value": RuleValue.value,
+                "parameter_occurrence": ItemValue + 1 if NativeName else None,
+            }
+        ),
+    )
+
+
+# this definition exists because rectangle closure needs inferred coincidence rules
+def ProfileRules(Sketch: NativeSketch) -> tuple[SketchRule, ...]:
+    Result: list[SketchRule] = []
     for ProfileIndex, Profile in enumerate(Sketch.profiles):
         if Profile.kind != "rectangle":
             continue
@@ -6633,6 +6666,20 @@ def SketchB(
                 )
             )
     return tuple(Result)
+
+
+# this definition exists because focused behavior needs one stable owner
+def SketchB(
+    Sketch: NativeSketch, RefMap: dict[str, str], ParamIds: set[str]
+) -> tuple[SketchRule, ...]:
+    ContextMut = RuleContextA(Sketch, ParamIds)
+    ExplicitRules = tuple(
+        (
+            BuildSketchRule(Sketch, RuleValue, RefMap, ContextMut)
+            for RuleValue in Sketch.constraints
+        )
+    )
+    return (*ExplicitRules, *ProfileRules(Sketch))
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -6793,7 +6840,11 @@ def TimelineInputs(
     if Feature.object_id not in PlaneById:
         return []
     RefIds = list(PlaneById[Feature.object_id].reference_ids)
-    if not RefIds and Feature.object_id not in PrincipalIds and PreviousValue is not None:
+    if (
+        not RefIds
+        and Feature.object_id not in PrincipalIds
+        and PreviousValue is not None
+    ):
         RefIds.append(PreviousValue)
     return RefIds
 
@@ -7095,6 +7146,40 @@ def BuildExtrude(Operation: NativeOperation | None) -> ExtrusionFeature | None:
     )
 
 
+# this definition exists because detail operations share dimensional construction
+def BuildDetail(
+    Operation: NativeOperation | None,
+) -> HoleFeature | FilletFeature | ChamferFeature | ShellFeature | None:
+    if Operation is None:
+        return None
+    if (
+        Operation.kind == "hole"
+        and Operation.diameter_mm is not None
+        and Operation.length_mm is not None
+    ):
+        return HoleFeature(
+            diameter=ParamValue(Operation.diameter_mm, ValueKind.LENGTH, "mm"),
+            depth=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm"),
+        )
+    if Operation.kind == "fillet" and Operation.radius_mm is not None:
+        return FilletFeature(
+            radius=ParamValue(Operation.radius_mm, ValueKind.LENGTH, "mm")
+        )
+    if (
+        Operation.kind == "chamfer"
+        and Operation.length_mm is not None
+        and Operation.mode == "equal_distance"
+    ):
+        return ChamferFeature(
+            distance=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm")
+        )
+    if Operation.kind == "shell" and Operation.length_mm is not None:
+        return ShellFeature(
+            thickness=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm")
+        )
+    return None
+
+
 # this definition exists because focused behavior needs one stable owner
 def BuildFeature(
     Feature: NativeFeature,
@@ -7121,41 +7206,9 @@ def BuildFeature(
     Revolution = BuildRevolve(Operation, Sketches)
     if Revolution is not None:
         return Revolution
-    if (
-        Operation is not None
-        and Operation.kind == "hole"
-        and (Operation.diameter_mm is not None)
-        and (Operation.length_mm is not None)
-    ):
-        return HoleFeature(
-            diameter=ParamValue(Operation.diameter_mm, ValueKind.LENGTH, "mm"),
-            depth=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm"),
-        )
-    if (
-        Operation is not None
-        and Operation.kind == "fillet"
-        and (Operation.radius_mm is not None)
-    ):
-        return FilletFeature(
-            radius=ParamValue(Operation.radius_mm, ValueKind.LENGTH, "mm")
-        )
-    if (
-        Operation is not None
-        and Operation.kind == "chamfer"
-        and (Operation.length_mm is not None)
-        and (Operation.mode == "equal_distance")
-    ):
-        return ChamferFeature(
-            distance=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm")
-        )
-    if (
-        Operation is not None
-        and Operation.kind == "shell"
-        and (Operation.length_mm is not None)
-    ):
-        return ShellFeature(
-            thickness=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm")
-        )
+    DetailValue = BuildDetail(Operation)
+    if DetailValue is not None:
+        return DetailValue
     if (
         Operation is not None
         and Operation.kind == "dome"
