@@ -14,6 +14,8 @@ import json as JsonData
 import os as OsLayer
 from typing import Dict as DictInfo, List as ListInfo, Sequence, Tuple
 
+from convert.Security.PathBoundary import ResolveFolder, ResolveOutput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNoBodyKinds = ("null", "objectref")
 
@@ -21,6 +23,7 @@ KNoBodyKinds = ("null", "objectref")
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def LoadTraces(SegmentsDir: str) -> ListInfo[dict]:
     Traces = []
+    SegmentsDir = str(ResolveFolder(SegmentsDir))
     for PathInfoData in sorted(
         GlobInfo.glob(OsLayer.path.join(SegmentsDir, "segments_*.json"))
     ):
@@ -263,7 +266,7 @@ def MainRun() -> int:
         "free": Result["free"],
         "residual_failures": Failures,
     }
-    with open(ArgValues.out, "w", encoding="utf-8") as Handle:
+    with ResolveOutput(ArgValues.out).open("w", encoding="utf-8") as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)
         Handle.write("\n")
     print(

@@ -14,6 +14,8 @@ import json as JsonData
 import os as OsLayer
 from typing import Dict as DictInfo, List as ListInfo, Optional, Sequence, Tuple
 
+from convert.Security.PathBoundary import ResolveFolder, ResolveOutput
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def GetLegacyAttr(SelfRef, NameText):
@@ -36,6 +38,7 @@ KNoBodyKinds = ("null", "objectref")
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def LoadTraces(SegmentsDir: str, Labels: str) -> ListInfo[dict]:
     Traces = []
+    SegmentsDir = str(ResolveFolder(SegmentsDir))
     for PathInfoData in sorted(
         GlobInfo.glob(OsLayer.path.join(SegmentsDir, "segments_*.json"))
     ):
@@ -403,7 +406,7 @@ def MainRun() -> int:
         },
         "classes": Summarise(Bodies, SolverInfo),
     }
-    with open(ArgValues.out, "w", encoding="utf-8") as Handle:
+    with ResolveOutput(ArgValues.out).open("w", encoding="utf-8") as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)
         Handle.write("\n")
     Total = sum((len(ValueData) for ValueData in Bodies.values()))

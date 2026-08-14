@@ -12,6 +12,8 @@ import json as JsonData
 import re as Regex
 from typing import Dict as DictInfo, Iterable, List as ListInfo, Optional, Tuple
 
+from convert.Security.PathBoundary import ResolveInput, ResolveOutput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KFuncRe = Regex.compile("^=== FUNCTION (.+)$")
 
@@ -23,17 +25,17 @@ KMangledRe = Regex.compile("\\?([A-Za-z0-9_]+)@([A-Za-z0-9_]+)@@")
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KGetReInfo = Regex.compile(
-    "return\\s+\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\(this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*;"
+    "return\\s+\\*\\(([A-Za-z0-9_ ]++)\\s*\\*+\\)\\s*\\(this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*;"
 )
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KGetRe = Regex.compile(
-    "return\\s+\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\(\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*this\\s*\\+\\s*(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*;"
+    "return\\s+\\*\\(([A-Za-z0-9_ ]++)\\s*\\*+\\)\\s*\\(\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*this\\s*\\+\\s*(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*;"
 )
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KSetRe = Regex.compile(
-    "\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\(this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*=\\s*param_\\d+\\s*;"
+    "\\*\\(([A-Za-z0-9_ ]++)\\s*\\*+\\)\\s*\\(this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*=\\s*param_\\d+\\s*;"
 )
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -41,7 +43,7 @@ KAddrOfRe = Regex.compile("return\\s+this\\s*\\+\\s*(0x[0-9a-fA-F]+|\\d+)\\s*;")
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KDerefRe = Regex.compile(
-    "\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\((?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)"
+    "\\*\\(([A-Za-z0-9_ ]++)\\s*\\*+\\)\\s*\\((?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)"
 )
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -174,13 +176,27 @@ def Classify(BodyInfo: str) -> Optional[dict]:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def StripComments(BodyInfo: str) -> str:
-    return Regex.sub("/\\*.*?\\*/", " ", BodyInfo, flags=Regex.S)
+    OutputDataInfo: ListInfo[str] = []
+    CursorIndex = 0
+    while CursorIndex < len(BodyInfo):
+        StartIndex = BodyInfo.find("/*", CursorIndex)
+        if StartIndex < 0:
+            OutputDataInfo.append(BodyInfo[CursorIndex:])
+            break
+        OutputDataInfo.append(BodyInfo[CursorIndex:StartIndex])
+        EndIndex = BodyInfo.find("*/", StartIndex + 2)
+        if EndIndex < 0:
+            OutputDataInfo.append(" ")
+            break
+        OutputDataInfo.append(" ")
+        CursorIndex = EndIndex + 2
+    return "".join(OutputDataInfo)
 
 
 # class selection stays isolated so dump mining receives one normalized ownership set
 def LoadWanted(ClassPath: str) -> set[str]:
     Wanted = set()
-    with open(ClassPath, encoding="utf-8") as ClassHandle:
+    with ResolveInput(ClassPath).open(encoding="utf-8") as ClassHandle:
         for LineText in ClassHandle:
             TextValueData = LineText.strip()
             if not TextValueData:
@@ -200,7 +216,9 @@ def ScanDumpMut(
 ) -> tuple[int, int]:
     Scanned = 0
     Matched = 0
-    with open(PathInfoData, encoding="utf-8", errors="replace") as DumpHandle:
+    with ResolveInput(PathInfoData).open(
+        encoding="utf-8", errors="replace"
+    ) as DumpHandle:
         TextValueData = DumpHandle.read()
     for NameTextInfo, Address, BodyInfo in IterBlocks(TextValueData):
         Scanned += 1
@@ -247,7 +265,7 @@ def MainRun() -> int:
         ClassRef: dict(sorted(Members.items()))
         for ClassRef, Members in sorted(Result.items())
     }
-    with open(ArgValues.out, "w", encoding="utf-8") as Handle:
+    with ResolveOutput(ArgValues.out).open("w", encoding="utf-8") as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)
         Handle.write("\n")
     Total = sum((len(ValueData) for ValueData in PayloadInfo.values()))
