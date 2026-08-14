@@ -16,15 +16,16 @@ import pathlib as Pathlib
 import subprocess as Subprocess
 import sys as System
 
+from SpdxHeaderRemediation import CanRepairMut
+from SpdxHeaderRemediation import GetNewline
+from SpdxHeaderRemediation import WriteMissingMut
+
 
 # repository root stays canonical because every path check needs one trusted boundary
 KRepoRoot = Pathlib.Path(__file__).resolve().parents[2]
 
 # canonical notice location stays explicit because rendered headers must share exact source text
 KHeaderNoticePath = KRepoRoot / "HEADER_NOTICE"
-
-# skill root stays explicit because agent skill frontmatter follows a distinct license contract
-KAgentSkillsDir = KRepoRoot / ".agents" / "skills"
 
 # required skill license stays immutable because frontmatter cannot carry the normal leading block
 KSkillLicenseField = "license: LicenseRef-PolyForm-Strict-1.0.0"
@@ -197,9 +198,10 @@ def GetLeadOffset(SourceLines: list[str]) -> int:
     return int(bool(SourceLines and SourceLines[0].startswith("#!")))
 
 
-# skill detection remains explicit because only canonical agent skill leaves use license frontmatter
-def IsAgentSkill(SourcePath: Pathlib.Path) -> bool:
-    return SourcePath.name == "SKILL.md" and SourcePath.parent.parent == KAgentSkillsDir
+# skill detection remains worktree relative because detached pull request trees need the same contract
+def IsAgentSkill(SourcePath: Pathlib.Path, WorktreeRoot: Pathlib.Path) -> bool:
+    SkillRoot = WorktreeRoot / ".agents" / "skills"
+    return SourcePath.name == "SKILL.md" and SourcePath.parent.parent == SkillRoot
 
 
 # skill checking stays separate because frontmatter licensing differs from normal comment headers
@@ -261,8 +263,12 @@ def MatchHeader(
 
 
 # file checking composes focused policies because skill binary and text artifacts need distinct handling
-def CheckFile(SourcePath: Pathlib.Path, CanonLines: list[str]) -> tuple[bool, str]:
-    if IsAgentSkill(SourcePath):
+def CheckFile(
+    SourcePath: Pathlib.Path,
+    CanonLines: list[str],
+    WorktreeRoot: Pathlib.Path = KRepoRoot,
+) -> tuple[bool, str]:
+    if IsAgentSkill(SourcePath, WorktreeRoot):
         return CheckSkill(SourcePath)
     StyleText = GetStyle(SourcePath)
     if StyleText is None:
@@ -272,6 +278,129 @@ def CheckFile(SourcePath: Pathlib.Path, CanonLines: list[str]) -> tuple[bool, st
         return True, "exempt (not readable as UTF-8 text; treated as binary)"
     CandidateSets = GetCandidates(StyleText, CanonLines)
     return MatchHeader(SourceLines, GetLeadOffset(SourceLines), CandidateSets)
+
+
+# containment validation prevents a crafted changed path or symlink from escaping its materialized worktree
+def ResolvePath(
+    WorktreeRoot: Pathlib.Path, RelPath: str
+) -> Pathlib.Path | None:
+    CandidatePath = (WorktreeRoot / RelPath).resolve()
+    try:
+        CandidatePath.relative_to(WorktreeRoot)
+    except ValueError:
+        return None
+    return CandidatePath
+
+
+# invalid skill licenses can be normalized without disturbing any other frontmatter or body bytes
+def CanFixSkillMut(SourcePath: Pathlib.Path) -> bool:
+    SourceBytes = SourcePath.read_bytes()
+    Newline = GetNewline(SourceBytes)
+    SourceLines = SourceBytes.splitlines(keepends=True)
+    if not SourceLines or SourceLines[0].strip() != b"---":
+        return False
+    try:
+        FrontEnd = next(
+            LineIndex
+            for LineIndex, LineBytes in enumerate(SourceLines[1:], 1)
+            if LineBytes.strip() == b"---"
+        )
+    except StopIteration:
+        return False
+    LicenseBytes = KSkillLicenseField.encode("utf-8") + Newline
+    UpdatedLines = SourceLines[:1] + [LicenseBytes]
+    UpdatedLines.extend(
+        LineBytes
+        for LineBytes in SourceLines[1:FrontEnd]
+        if not LineBytes.lstrip().startswith(b"license:")
+    )
+    UpdatedLines.extend(SourceLines[FrontEnd:])
+    SourcePath.write_bytes(b"".join(UpdatedLines))
+    return True
+
+
+# unknown text formats need their existing leading marker retained during a safe replacement
+def GetRepairStyle(SourceLines: list[str], StyleText: str) -> str:
+    if StyleText != "unknown":
+        return StyleText
+    LeadOffset = GetLeadOffset(SourceLines)
+    for LineText in SourceLines[LeadOffset:]:
+        StrippedLine = LineText.strip()
+        if not StrippedLine:
+            continue
+        if StrippedLine.startswith("$$"):
+            return "$$"
+        if StrippedLine.startswith("<!--"):
+            return "block"
+        return "#"
+    return "#"
+
+
+# repair dispatch keeps skill licensing and ordinary header mutation behind one verified contract
+def RepairHeadMut(
+    SourcePath: Pathlib.Path,
+    CanonLines: list[str],
+    WorktreeRoot: Pathlib.Path,
+) -> tuple[bool, str]:
+    SourceLines = ReadLines(SourcePath)
+    if SourceLines is None:
+        return False, "file is not readable as UTF-8 text"
+    if IsAgentSkill(SourcePath, WorktreeRoot):
+        if CanFixSkillMut(SourcePath):
+            return True, "added Agent Skills license field"
+        return False, "Agent Skills frontmatter cannot be safely repaired"
+    StyleText = GetStyle(SourcePath)
+    if StyleText is None:
+        return False, "file has no comment syntax"
+    HeaderLines = GetCandidates(StyleText, CanonLines)[0]
+    if not any("SPDX-" in LineText for LineText in SourceLines):
+        WriteMissingMut(SourcePath, HeaderLines)
+        return True, "added missing SPDX header"
+    RepairStyle = GetRepairStyle(SourceLines, StyleText)
+    if CanRepairMut(SourcePath, HeaderLines, RepairStyle):
+        return True, "replaced safely bounded mangled SPDX header"
+    return False, "mangled SPDX header cannot be safely repaired"
+
+
+# batch remediation rechecks every write so automation never publishes an unverified transformation
+def RepairFilesMut(
+    ChangedPaths: list[str], CanonLines: list[str], WorktreeRoot: Pathlib.Path
+) -> int:
+    FailureList: list[tuple[str, str]] = []
+    RepairedCount = 0
+    for RelPath in ChangedPaths:
+        if IsPathExempt(RelPath):
+            continue
+        SourcePath = ResolvePath(WorktreeRoot, RelPath)
+        if SourcePath is None:
+            FailureList.append((RelPath, "path escapes the selected worktree"))
+            print(f"FAIL {RelPath}: path escapes the selected worktree")
+            continue
+        if not SourcePath.is_file():
+            continue
+        IsValid, ReasonText = CheckFile(SourcePath, CanonLines, WorktreeRoot)
+        if IsValid:
+            print(f"OK   {RelPath}: {ReasonText}")
+            continue
+        IsFixed, RepairReason = RepairHeadMut(
+            SourcePath, CanonLines, WorktreeRoot
+        )
+        if IsFixed:
+            IsVerified, VerifyReason = CheckFile(
+                SourcePath, CanonLines, WorktreeRoot
+            )
+            if IsVerified:
+                RepairedCount += 1
+                print(f"FIXED {RelPath}: {RepairReason}")
+                continue
+            RepairReason = VerifyReason
+        FailureList.append((RelPath, RepairReason))
+        print(f"FAIL {RelPath}: {RepairReason}")
+    print(
+        f"\nRepaired {RepairedCount} in-scope file(s); "
+        f"{len(FailureList)} failure(s)."
+    )
+    return int(bool(FailureList))
 
 
 # git diff parsing stays isolated because rename destinations are the only paths requiring validation
@@ -307,6 +436,19 @@ def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
     ParserInfo.add_argument(
         "--head", dest="HeadRef", required=True, help="head git reference to diff to"
     )
+    ParserInfo.add_argument(
+        "--worktree",
+        dest="WorktreeRoot",
+        type=Pathlib.Path,
+        default=KRepoRoot,
+        help="filesystem tree whose changed files are checked or repaired",
+    )
+    ParserInfo.add_argument(
+        "--fix-missing",
+        dest="FixMissing",
+        action="store_true",
+        help="repair only absent or safely bounded top level SPDX metadata",
+    )
     return ParserInfo.parse_args(ArgValues)
 
 
@@ -315,16 +457,26 @@ def MainRun(ArgValues: list[str] | None = None) -> int:
     ArgsInfo = ParseArgs(ArgValues)
     CanonLines = LoadCanon()
     ChangedPaths = GetDiffFiles(ArgsInfo.BaseRef, ArgsInfo.HeadRef)
+    WorktreeRoot = ArgsInfo.WorktreeRoot.resolve()
+    if not WorktreeRoot.is_dir():
+        print(f"Selected worktree is not a directory: {WorktreeRoot}", file=System.stderr)
+        return 1
+    if ArgsInfo.FixMissing:
+        return RepairFilesMut(ChangedPaths, CanonLines, WorktreeRoot)
     FailureList: list[tuple[str, str]] = []
     CheckedCount = 0
     for RelPath in ChangedPaths:
         if IsPathExempt(RelPath):
             continue
-        SourcePath = KRepoRoot / RelPath
+        SourcePath = ResolvePath(WorktreeRoot, RelPath)
+        if SourcePath is None:
+            FailureList.append((RelPath, "path escapes the selected worktree"))
+            print(f"FAIL {RelPath}: path escapes the selected worktree")
+            continue
         if not SourcePath.is_file():
             continue
         CheckedCount += 1
-        IsValid, ReasonText = CheckFile(SourcePath, CanonLines)
+        IsValid, ReasonText = CheckFile(SourcePath, CanonLines, WorktreeRoot)
         if not IsValid:
             FailureList.append((RelPath, ReasonText))
         StatusText = "OK " if IsValid else "FAIL"
