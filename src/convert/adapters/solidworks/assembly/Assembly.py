@@ -1086,27 +1086,22 @@ def NativeMateClass(MateValue: MateConstraint) -> tuple[str, str]:
         return ('', '')
     return (Candidates[0].kind, Candidates[0].class_names[0])
 
-# this definition exists because focused behavior needs one stable owner
-def MateEntityA(Entity: MateEntity, AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition]) -> tuple[tuple[str, ...] | None, tuple[str, ...]]:
-    if Entity.selection_id:
-        return (None, (KMateLossEntitySelection,))
-    Reasons: list[str] = []
-    if Entity.frame is not None and (not IsIdentity(Entity.frame)):
-        Reasons.append(KMateLossEntityFrame)
-    if Entity.radius is not None:
-        Reasons.append(KMateLossEntityRadius)
+# reference extraction stays separate because persistent tokens have an independent validity contract
+def GetEntityRefs(Entity: MateEntity) -> tuple[str, ...] | None:
     Persistent = Entity.attributes.get('persistent_references')
     if isinstance(Persistent, tuple) and all((isinstance(Value, str) for Value in Persistent)):
         References = Persistent
     elif Entity.source_entity_id:
         References = (Entity.source_entity_id,)
     else:
-        return (None, (KMateLossEntityRef,))
+        return None
     if not References or References[-1] != Entity.source_entity_id:
-        return (None, (KMateLossEntityRef,))
-    ComponentPath = NativeComponent(Entity.instance_path, AsmValue, Definitions, Entity.owner_definition_id)
-    if ComponentPath is None:
-        return (None, (KMateLossEntityComponent,))
+        return None
+    return References
+
+
+# component qualification owns vendor ordering because local and nested references use opposite layouts
+def BuildEntityVals(Entity: MateEntity, References: tuple[str, ...], ComponentPath: str) -> tuple[str, ...] | None:
     Values: list[str] = []
     if ComponentPath:
         if all((Value.casefold().startswith('mo') for Value in References)):
@@ -1116,15 +1111,36 @@ def MateEntityA(Entity: MateEntity, AsmValue: AssemblyData, Definitions: Mapping
             Values.append(ComponentPath)
             Values.extend(References)
         else:
-            return (None, (KMateLossEntityRef,))
-    else:
-        if not all((Value.casefold().startswith('mo') or ('^' in Value and '@' in Value) for Value in References)):
-            return (None, (KMateLossEntityRef,))
+            return None
+    elif all((Value.casefold().startswith('mo') or ('^' in Value and '@' in Value) for Value in References)):
         Values.extend(References)
+    else:
+        return None
     SourcePath = Entity.attributes.get('source_path')
     if isinstance(SourcePath, str) and SourcePath:
         Values.append(SourcePath)
-    return (tuple(Values), tuple(dict.fromkeys(Reasons)))
+    return tuple(Values)
+
+
+# mate entity encoding composes semantic loss tracking reference validation and component qualification
+def MateEntityA(Entity: MateEntity, AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition]) -> tuple[tuple[str, ...] | None, tuple[str, ...]]:
+    if Entity.selection_id:
+        return (None, (KMateLossEntitySelection,))
+    Reasons: list[str] = []
+    if Entity.frame is not None and (not IsIdentity(Entity.frame)):
+        Reasons.append(KMateLossEntityFrame)
+    if Entity.radius is not None:
+        Reasons.append(KMateLossEntityRadius)
+    References = GetEntityRefs(Entity)
+    if References is None:
+        return (None, (KMateLossEntityRef,))
+    ComponentPath = NativeComponent(Entity.instance_path, AsmValue, Definitions, Entity.owner_definition_id)
+    if ComponentPath is None:
+        return (None, (KMateLossEntityComponent,))
+    Values = BuildEntityVals(Entity, References, ComponentPath)
+    if Values is None:
+        return (None, (KMateLossEntityRef,))
+    return (Values, tuple(dict.fromkeys(Reasons)))
 
 # this definition exists because focused behavior needs one stable owner
 def IsIdentity(Matrix: Matrix4) -> bool:
