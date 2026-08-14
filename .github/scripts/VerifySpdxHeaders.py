@@ -22,7 +22,6 @@ from SpdxHeaderRemediation import CanRepairMut
 from SpdxHeaderRemediation import GetNewline
 from SpdxHeaderRemediation import WriteMissingMut
 
-
 # repository root stays canonical because every path check needs one trusted boundary
 KRepoRoot = Pathlib.Path(__file__).resolve().parents[2]
 
@@ -391,9 +390,7 @@ def CheckWorktree(
 
 
 # containment validation rejects missing symlinked and nonregular candidates before content inspection
-def ResolvePath(
-    WorktreeRoot: Pathlib.Path, RelPath: str
-) -> Pathlib.Path | None:
+def ResolvePath(WorktreeRoot: Pathlib.Path, RelPath: str) -> Pathlib.Path | None:
     PosixPath = Pathlib.PurePosixPath(RelPath)
     CandidatePath = WorktreeRoot.joinpath(*PosixPath.parts)
     CurrentPath = WorktreeRoot
@@ -515,13 +512,9 @@ def RepairFilesMut(
         if IsValid:
             print(f"OK   {RelPath}: {ReasonText}")
             continue
-        IsFixed, RepairReason = RepairHeadMut(
-            SourcePath, CanonLines, WorktreeRoot
-        )
+        IsFixed, RepairReason = RepairHeadMut(SourcePath, CanonLines, WorktreeRoot)
         if IsFixed:
-            IsVerified, VerifyReason = CheckFile(
-                SourcePath, CanonLines, WorktreeRoot
-            )
+            IsVerified, VerifyReason = CheckFile(SourcePath, CanonLines, WorktreeRoot)
             if IsVerified:
                 RepairedCount += 1
                 print(f"FIXED {RelPath}: {RepairReason}")
@@ -590,7 +583,9 @@ def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
 def MainRun(ArgValues: list[str] | None = None) -> int:
     ArgsInfo = ParseArgs(ArgValues)
     if not IsCommit(ArgsInfo.BaseRef) or not IsCommit(ArgsInfo.HeadRef):
-        print("Base and head must be full commit object identifiers", file=System.stderr)
+        print(
+            "Base and head must be full commit object identifiers", file=System.stderr
+        )
         return 1
     WorktreeRoot, WorktreeReason = CheckWorktree(
         ArgsInfo.WorktreeRoot, ArgsInfo.HeadRef

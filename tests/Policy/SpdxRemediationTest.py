@@ -71,9 +71,7 @@ class TestSpdxRepair(UnitTest.TestCase):
             RepairValues["WriteMissingMut"](ScriptPath, HeaderLines)
             CaseSelf.assertEqual(
                 ScriptPath.read_bytes(),
-                ShebangBytes
-                + b"\n"
-                + RepairValues["MakeHeader"](HeaderLines, b"\n"),
+                ShebangBytes + b"\n" + RepairValues["MakeHeader"](HeaderLines, b"\n"),
             )
 
     # recognizable fragments may be replaced but adjacent documentation must make repair fail closed
@@ -178,9 +176,7 @@ class TestSpdxRepair(UnitTest.TestCase):
             CaseSelf.assertEqual(
                 GuardValues["ResolvePath"](RootPath, "Source.py"), SourcePath
             )
-            CaseSelf.assertIsNone(
-                GuardValues["ResolvePath"](RootPath, "Missing.py")
-            )
+            CaseSelf.assertIsNone(GuardValues["ResolvePath"](RootPath, "Missing.py"))
             FolderPath = RootPath / "Folder"
             FolderPath.mkdir()
             CaseSelf.assertIsNone(GuardValues["ResolvePath"](RootPath, "Folder"))
@@ -229,11 +225,7 @@ class TestSpdxRepair(UnitTest.TestCase):
             CaseSelf.assertEqual(
                 GuardValues["GetDiffFiles"](BaseRef, HeadRef), ["Target.py"]
             )
-            WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](
-                RootPath, HeadRef
-            )
+            WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](RootPath, HeadRef)
             CaseSelf.assertEqual(WorktreeRoot, RootPath.resolve(), ReasonText)
-            WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](
-                RootPath, "0" * 40
-            )
+            WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](RootPath, "0" * 40)
             CaseSelf.assertIsNone(WorktreeRoot, ReasonText)

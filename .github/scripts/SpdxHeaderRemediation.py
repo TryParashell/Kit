@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pathlib as Pathlib
 
-
 # recognizable fragments keep automatic replacement limited to the repository notice itself
 KHeaderStarts = (
     b"SPDX-License-Identifier:",
@@ -123,9 +122,7 @@ def CanRepairMut(
     if StyleText == "block":
         EndIndex = GetBlockEnd(SourceLines, len(HeaderLines))
     else:
-        EndIndex = GetLineEnd(
-            SourceLines, StyleText.encode("utf-8"), len(HeaderLines)
-        )
+        EndIndex = GetLineEnd(SourceLines, StyleText.encode("utf-8"), len(HeaderLines))
     if EndIndex is None:
         return False
     BodyBytes = b"".join(SourceLines[EndIndex:])
