@@ -244,7 +244,7 @@ def TestRSSDCFNER() -> None:
     assert ReadSldprt(Output.getvalue()).feature_timeline[0].name == 'Forged metadata cannot certify native semantics'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckNeutralPack(Archive) -> None:
+def CheckNeutral(Archive) -> None:
     assert Archive.format_version == 4
     assert Archive.require('Kit/Interchange')
     assert StreamK not in Archive.streams
@@ -289,7 +289,7 @@ def TestFDWSSC(TmpPath) -> None:
         WriteSldprt(Restored, Output, allow_non_native=False)
     ResultInfo = WriteSldprt(Restored, Output)
     Archive = SldprtArchive.open(Output)
-    CheckNeutralPack(Archive)
+    CheckNeutral(Archive)
     Native = DecodeNativeModel(Archive.require(StreamE), Archive.require(StreamH), resolved_stream=StreamH)
     assert Native.diagnostics == ()
     assert [(ItemValue.name, ItemValue.configuration_id) for ItemValue in Native.configurations] == [('Default', 0)]
@@ -349,7 +349,7 @@ def CheckPartXml(Archive) -> None:
     assert ModelStamps == (int(KeywordRoot.attrib['id']), int(NativeElements['swModel'].attrib['swLastModifiedStamp']), 101)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckPartDefaults(Archive) -> None:
+def CheckDefaults(Archive) -> None:
     assert Archive.require('Contents/CnfgObjs') == bytes.fromhex('00000000fffeff00fffeff00')
     assert Archive.require('Contents/OleItems') == b'\x00' * 4
     assert Archive.require('Contents/eModelLic') == b'\x00' * 4
@@ -363,7 +363,7 @@ def TestSLNPSAD() -> None:
     Archive = BuildStablePart()
     CheckPartRels(Archive)
     CheckPartXml(Archive)
-    CheckPartDefaults(Archive)
+    CheckDefaults(Archive)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSLBPWNBP() -> None:
@@ -749,7 +749,7 @@ def TestFPTPWFENF() -> None:
         assert TransferData[CapabilityValue] == 'native'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckRevolveCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
+def CheckRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
     assert ResultData.vendor_loadable is True
     assert ResultData.application_usable is True
     assert ResultData.metadata['native_brep'] == 'feature-rebuilt'
@@ -766,7 +766,7 @@ def CheckRevolveCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
     assert NativeAxisBindings(NativeData) == frozenset({(31, 26, 'V_Axis')})
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckRevolveHead(ArchiveData, NativeData) -> None:
+def CheckRevHead(ArchiveData, NativeData) -> None:
     HeaderData = ArchiveData.require('Contents/Config-0-ModelHeader')
     assert DecodeNativeModelHeader(HeaderData).objects[-2:] == ((26, 'Sketch1'), (31, 'Revolve1'))
     ResolvedData = ArchiveData.require(StreamK)
@@ -798,8 +798,8 @@ def TestFFRWENRB() -> None:
     ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
     FeatureData = LocateFeatures(ArchiveData.require(StreamK))
     NativeData = DecodeNativeModel(ArchiveData.require(StreamE), ArchiveData.require(StreamK), ArchiveData.require(StreamB), resolved_stream=StreamK)
-    CheckRevolveCore(ResultData, ArchiveData, FeatureData, NativeData)
-    CheckRevolveHead(ArchiveData, NativeData)
+    CheckRevCore(ResultData, ArchiveData, FeatureData, NativeData)
+    CheckRevHead(ArchiveData, NativeData)
     CheckRevolveCfg(ArchiveData, ResultData)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
