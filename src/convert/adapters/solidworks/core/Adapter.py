@@ -1908,16 +1908,24 @@ def Replay(DataValue: bytes) -> str:
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def GeneratedB(
-    DocValue: CadDocument,
-    Template: bytes | None = None,
-    BundleNames: Mapping[str, str] | None = None,
-    BundleComplete: bool | None = None,
-    BundleCapabilities: frozenset[Capability] = frozenset(),
-    BundleStamps: Mapping[str, int] | None = None,
-    ModelName: str = "",
-) -> Generated:
+# this state exists because native generation has format specific branches
+@DataClass(slots=True)
+class GeneratedState:
+    Streams: dict[str, bytes]
+    Encoding: NativeAsmEncoding | None = None
+    PartCapabilities: frozenset[Capability] = frozenset()
+    MixedCapabilities: frozenset[Capability] = frozenset()
+    PartPartition: bytes | None = None
+    PartObjectIds: Mapping[str, int] = FrozenMapping()
+    PartAppUsable: bool = False
+    PartVendorLoadable: bool = False
+    PartDonorNotes: tuple[str, ...] = ()
+    AsmEnvelopeComplete: bool = False
+    AsmNotes: tuple[str, ...] = ()
+
+
+# this definition exists because source envelopes must not duplicate embedded payloads
+def PortableDoc(DocValue: CadDocument) -> CadDocument:
     Portable = DocWithout(DocValue)
     if isinstance(DocValue.source.attributes.get("embedded_source_format_id"), str):
         EnvelopeIndexes = SourcePayloadIndexes(DocValue)
@@ -1931,107 +1939,120 @@ def GeneratedB(
                 )
             ),
         )
-    Embedded = Portable.to_json(indent=None).encode("utf-8")
-    if Template is not None:
-        Streams = SldprtArchive.from_bytes(Template).streams
-        Streams[KitDocStream] = Embedded
-        return PatchNativeMut(DocValue, Streams, BundleNames or {})
-    Config = next(
-        (ItemValue.name for ItemValue in Portable.configurations if ItemValue.active),
-        Portable.configurations[0].name if Portable.configurations else "Default",
+    return Portable
+
+
+# this definition exists because native part streams have one cohesive encoder
+def BuildPartMut(
+    Portable: CadDocument, ModelName: str, StateMut: GeneratedState
+) -> None:
+    PartValue = EncodeNativePart(Portable, ModelName)
+    StateMut.Streams.update(PartValue.envelope_streams)
+    StateMut.Streams[KeywordsStream] = PartValue.keywords
+    StateMut.Streams[FeaturesStream] = PartValue.features
+    StateMut.Streams.update(
+        {
+            f"Contents/Config-{Index}-ResolvedFeatures": LaneValue
+            for Index, LaneValue in PartValue.configuration_lanes
+        }
     )
-    ModelNameA = ModelName or PureWindowsPath(Portable.source.path).stem
-    Streams = {
-        **Solidworks(),
-        SolidworksStream: SolidworksXml(ModelNameA, Config),
-        KitDocStream: Embedded,
-    }
-    Encoding: NativeAsmEncoding | None = None
-    PartCapabilities: frozenset[Capability] = frozenset()
-    MixedCapabilities: frozenset[Capability] = frozenset()
-    PartPartition: bytes | None = None
-    PartObjectIds: Mapping[str, int] = {}
-    PartAppUsable = False
-    PartVendorLoadable = False
-    PartDonorNotes: tuple[str, ...] = ()
-    AsmEnvelopeComplete = False
-    AsmNotes: tuple[str, ...] = ()
-    if Portable.assembly is None:
-        PartValue = EncodeNativePart(Portable, ModelNameA)
-        Streams.update(PartValue.envelope_streams)
-        Streams[KeywordsStream] = PartValue.keywords
-        Streams[FeaturesStream] = PartValue.features
-        Streams.update(
-            {
-                f"Contents/Config-{Index}-ResolvedFeatures": LaneValue
-                for Index, LaneValue in PartValue.configuration_lanes
-            }
+    if PartValue.kit_resolved_features is not None:
+        StateMut.Streams[KitResolvedStream] = PartValue.kit_resolved_features
+    StateMut.PartCapabilities = PartValue.native_capabilities
+    StateMut.MixedCapabilities = PartValue.mixed_capabilities
+    StateMut.PartPartition = PartValue.partition
+    StateMut.PartObjectIds = PartValue.object_ids
+    StateMut.PartAppUsable = PartValue.application_usable
+    StateMut.PartVendorLoadable = PartValue.vendor_loadable
+    StateMut.PartDonorNotes = PartValue.donor_notes
+
+
+# this definition exists because native assembly streams require coordinated records
+def BuildAsmMut(
+    Portable: CadDocument,
+    ModelName: str,
+    BundleNames: Mapping[str, str] | None,
+    BundleStamps: Mapping[str, int] | None,
+    StateMut: GeneratedState,
+) -> None:
+    AsmValue = Portable.assembly
+    if AsmValue is None:
+        return
+    RootName = AsmValue.definition(AsmValue.root_definition_id).name
+    AsmName = RootName or ModelName or "Assembly"
+    Encoding = EncodeNativeAsm(
+        AsmValue, Portable.configurations, AsmName, BundleNames
+    )
+    SavedMates, MatesComplete = SavedGenerated(Portable, Encoding)
+    if MatesComplete:
+        Encoding = Replace(
+            Encoding,
+            mate_streams=SavedMates,
+            mates_complete=True,
+            unsupported_mate_ids=(),
+            generated_mate_ids=(),
         )
-        if PartValue.kit_resolved_features is not None:
-            Streams[KitResolvedStream] = PartValue.kit_resolved_features
-        PartCapabilities = PartValue.native_capabilities
-        MixedCapabilities = PartValue.mixed_capabilities
-        PartPartition = PartValue.partition
-        PartObjectIds = PartValue.object_ids
-        PartAppUsable = PartValue.application_usable
-        PartVendorLoadable = PartValue.vendor_loadable
-        PartDonorNotes = PartValue.donor_notes
-    else:
-        RootName = Portable.assembly.definition(
-            Portable.assembly.root_definition_id
-        ).name
-        AsmName = RootName or ModelNameA or "Assembly"
-        Encoding = EncodeNativeAsm(
-            Portable.assembly, Portable.configurations, AsmName, BundleNames
+    Envelope = EncodeNativeAsmEnvelope(
+        Portable,
+        AsmName,
+        GeneratedItem(AsmValue),
+        tuple((MateValue.name for MateValue in AsmValue.mates)),
+    )
+    StateMut.Streams.update(Envelope.streams)
+    StateMut.Streams[ComponentTreeStream] = Encoding.component_tree
+    try:
+        StateMut.Streams.update(
+            AsmCoreStreams(AsmValue, Encoding, AsmName, BundleStamps)
         )
-        SavedMates, MatesComplete = SavedGenerated(Portable, Encoding)
-        if MatesComplete:
-            Encoding = Replace(
-                Encoding,
-                mate_streams=SavedMates,
-                mates_complete=True,
-                unsupported_mate_ids=(),
-                generated_mate_ids=(),
-            )
-        Envelope = EncodeNativeAsmEnvelope(
-            Portable,
-            AsmName,
-            GeneratedItem(Portable.assembly),
-            tuple((MateValue.name for MateValue in Portable.assembly.mates)),
-        )
-        Streams.update(Envelope.streams)
-        Streams[ComponentTreeStream] = Encoding.component_tree
-        try:
-            Streams.update(
-                AsmCoreStreams(Portable.assembly, Encoding, AsmName, BundleStamps)
-            )
-            CoreError = ""
-        except SldprtFormatError as ErrorData:
-            CoreError = str(ErrorData)
-        Streams.update(Encoding.mate_streams)
-        AsmEnvelopeComplete = Envelope.envelope_complete
-        AsmNotes = (
-            *GeneratedAsmA(Encoding, Envelope, Streams),
-            *((f"native_assembly_core_declined:{CoreError}",) if CoreError else ()),
-        )
-    if PartPartition is not None:
-        Payload = PartPartition
+        CoreError = ""
+    except SldprtFormatError as ErrorData:
+        CoreError = str(ErrorData)
+    StateMut.Streams.update(Encoding.mate_streams)
+    StateMut.Encoding = Encoding
+    StateMut.AsmEnvelopeComplete = Envelope.envelope_complete
+    StateMut.AsmNotes = (
+        *GeneratedAsmA(Encoding, Envelope, StateMut.Streams),
+        *((f"native_assembly_core_declined:{CoreError}",) if CoreError else ()),
+    )
+
+
+# this definition exists because geometry selection bridges part and neutral encoders
+def GeneratedGeomMut(
+    Portable: CadDocument, StateMut: GeneratedState
+) -> tuple[bytes | None, str]:
+    if StateMut.PartPartition is not None:
+        Payload = StateMut.PartPartition
         NativeBrep = "generated"
     else:
-        Payload, NativeBrep = Parasolid(Portable, PartObjectIds)
+        Payload, NativeBrep = Parasolid(Portable, StateMut.PartObjectIds)
         if (
             Portable.assembly is None
-            and PartVendorLoadable
-            and (Capability.BREP in PartCapabilities)
+            and StateMut.PartVendorLoadable
+            and (Capability.BREP in StateMut.PartCapabilities)
         ):
             Payload = None
             NativeBrep = "feature-rebuilt"
     if Payload is not None:
-        Streams[PartitionStream] = Payload
+        StateMut.Streams[PartitionStream] = Payload
+    return (Payload, NativeBrep)
+
+
+# this definition exists because generated capability proof has multiple carriers
+def GeneratedCaps(
+    Portable: CadDocument,
+    State: GeneratedState,
+    Payload: bytes | None,
+    NativeBrep: str,
+    BundleNames: Mapping[str, str] | None,
+    BundleComplete: bool | None,
+    BundleCapabilities: frozenset[Capability],
+) -> frozenset[Capability]:
     NativeCaps = set(
-        GeneratedAsm(Portable.assembly, Encoding, Streams, Portable.configurations)
-        if Portable.assembly is not None and Encoding is not None
-        else PartCapabilities
+        GeneratedAsm(
+            Portable.assembly, State.Encoding, State.Streams, Portable.configurations
+        )
+        if Portable.assembly is not None and State.Encoding is not None
+        else State.PartCapabilities
     )
     if (
         Portable.assembly is not None
@@ -2053,22 +2074,31 @@ def GeneratedB(
         and (NativeBrep in {"generated", "preserved"})
     ):
         NativeCaps.update({Capability.BREP, Capability.NATIVE_PAYLOADS})
-    NativeCapabilities = frozenset(NativeCaps)
+    return frozenset(NativeCaps)
+
+
+# this definition exists because final usability depends on attested native records
+def GeneratedProof(
+    Portable: CadDocument,
+    State: GeneratedState,
+    NativeBrep: str,
+    NativeCapabilities: frozenset[Capability],
+) -> Generated:
     ProofTransfers = SolidworksA(
-        Required(Portable), NativeCapabilities, MixedCapabilities
+        Required(Portable), NativeCapabilities, State.MixedCapabilities
     )
     NativeAsmRecords = (
         Portable.assembly is not None
-        and AsmEnvelopeComplete
-        and (Encoding is not None)
-        and Encoding.structure_complete
+        and State.AsmEnvelopeComplete
+        and (State.Encoding is not None)
+        and State.Encoding.structure_complete
         and (Capability.ASSEMBLIES in NativeCapabilities)
     )
     if Portable.assembly is None:
-        VendorLoadable = PartVendorLoadable
-        NativeRecordsUsable = PartAppUsable
+        VendorLoadable = State.PartVendorLoadable
+        NativeRecordsUsable = State.PartAppUsable
     else:
-        VendorLoadable = NativeAsmRecords and (not AsmReaderGaps(Streams))
+        VendorLoadable = NativeAsmRecords and (not AsmReaderGaps(State.Streams))
         NativeRecordsUsable = VendorLoadable and (
             not Portable.assembly.mates
             or Capability.ASSEMBLY_MATES in NativeCapabilities
@@ -2081,7 +2111,7 @@ def GeneratedB(
         )
     )
     return Generated(
-        Streams,
+        State.Streams,
         NativeBrep,
         NativeCapabilities,
         (
@@ -2099,11 +2129,55 @@ def GeneratedB(
         ),
         AppUsable,
         VendorLoadable,
-        MixedCapabilities,
-        AsmNotes,
-        PartDonorNotes,
-        AsmReaderGaps(Streams) if Portable.assembly is not None else (),
+        State.MixedCapabilities,
+        State.AsmNotes,
+        State.PartDonorNotes,
+        AsmReaderGaps(State.Streams) if Portable.assembly is not None else (),
     )
+
+
+# this definition exists because focused behavior needs one stable owner
+def GeneratedB(
+    DocValue: CadDocument,
+    Template: bytes | None = None,
+    BundleNames: Mapping[str, str] | None = None,
+    BundleComplete: bool | None = None,
+    BundleCapabilities: frozenset[Capability] = frozenset(),
+    BundleStamps: Mapping[str, int] | None = None,
+    ModelName: str = "",
+) -> Generated:
+    Portable = PortableDoc(DocValue)
+    Embedded = Portable.to_json(indent=None).encode("utf-8")
+    if Template is not None:
+        Streams = SldprtArchive.from_bytes(Template).streams
+        Streams[KitDocStream] = Embedded
+        return PatchNativeMut(DocValue, Streams, BundleNames or {})
+    Config = next(
+        (ItemValue.name for ItemValue in Portable.configurations if ItemValue.active),
+        Portable.configurations[0].name if Portable.configurations else "Default",
+    )
+    ModelNameA = ModelName or PureWindowsPath(Portable.source.path).stem
+    Streams = {
+        **Solidworks(),
+        SolidworksStream: SolidworksXml(ModelNameA, Config),
+        KitDocStream: Embedded,
+    }
+    StateMut = GeneratedState(Streams)
+    if Portable.assembly is None:
+        BuildPartMut(Portable, ModelNameA, StateMut)
+    else:
+        BuildAsmMut(Portable, ModelNameA, BundleNames, BundleStamps, StateMut)
+    Payload, NativeBrep = GeneratedGeomMut(Portable, StateMut)
+    NativeCapabilities = GeneratedCaps(
+        Portable,
+        StateMut,
+        Payload,
+        NativeBrep,
+        BundleNames,
+        BundleComplete,
+        BundleCapabilities,
+    )
+    return GeneratedProof(Portable, StateMut, NativeBrep, NativeCapabilities)
 
 
 # this definition exists because focused behavior needs one stable owner
