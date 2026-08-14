@@ -287,12 +287,12 @@ def CheckFile(
 
 
 # commit predicates prevent revision syntax from selecting anything other than an exact commit object
-def IsCommit(ShaText: str) -> bool:
+def IsCommit(ShaText: str, RepoRoot: Pathlib.Path = KRepoRoot) -> bool:
     if KFullShaPattern.fullmatch(ShaText) is None:
         return False
     ResultInfo = Subprocess.run(
         ["git", "cat-file", "-t", ShaText],
-        cwd=KRepoRoot,
+        cwd=RepoRoot,
         capture_output=True,
         text=True,
         check=False,
@@ -530,8 +530,10 @@ def RepairFilesMut(
 
 
 # git diff parsing stays isolated because rename destinations are the only paths requiring validation
-def GetDiffFiles(BaseRef: str, HeadRef: str) -> list[str]:
-    if not IsCommit(BaseRef) or not IsCommit(HeadRef):
+def GetDiffFiles(
+    BaseRef: str, HeadRef: str, RepoRoot: Pathlib.Path = KRepoRoot
+) -> list[str]:
+    if not IsCommit(BaseRef, RepoRoot) or not IsCommit(HeadRef, RepoRoot):
         raise ValueError("base and head must be full commit object identifiers")
     ResultInfo = Subprocess.run(
         [
@@ -547,7 +549,7 @@ def GetDiffFiles(BaseRef: str, HeadRef: str) -> list[str]:
             HeadRef,
             "--",
         ],
-        cwd=KRepoRoot,
+        cwd=RepoRoot,
         capture_output=True,
         check=True,
     )

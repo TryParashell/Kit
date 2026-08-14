@@ -219,11 +219,10 @@ class TestSpdxRepair(UnitTest.TestCase):
             BaseRef = FixtureInfo.CommitAll("base")
             FixtureInfo.MoveFile("Source.py", "Target.py")
             HeadRef = FixtureInfo.CommitAll("head")
-            GuardValues["KRepoRoot"] = RootPath
-            CaseSelf.assertTrue(GuardValues["IsCommit"](HeadRef))
-            CaseSelf.assertFalse(GuardValues["IsCommit"]("HEAD"))
+            CaseSelf.assertTrue(GuardValues["IsCommit"](HeadRef, RootPath))
+            CaseSelf.assertFalse(GuardValues["IsCommit"]("HEAD", RootPath))
             CaseSelf.assertEqual(
-                GuardValues["GetDiffFiles"](BaseRef, HeadRef), ["Target.py"]
+                GuardValues["GetDiffFiles"](BaseRef, HeadRef, RootPath), ["Target.py"]
             )
             WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](RootPath, HeadRef)
             CaseSelf.assertEqual(WorktreeRoot, RootPath.resolve(), ReasonText)
