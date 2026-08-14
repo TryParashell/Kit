@@ -3499,7 +3499,11 @@ def FeatureDef(
     Selections: Sequence[Selection],
 ) -> FeatureDefinition:
     if KindValue == FeatureKind.EXTRUSION:
-        return PartExtrusion(ObjValue) if ObjValue.type_id == "Part::Extrusion" else Extrusion(ObjValue)
+        return (
+            PartExtrusion(ObjValue)
+            if ObjValue.type_id == "Part::Extrusion"
+            else Extrusion(ObjValue)
+        )
     if KindValue == FeatureKind.FILLET:
         Radius = Float(ObjValue, "Radius", Float(ObjValue, "DrivingRadius"))
         return FilletFeature(ParamValue(abs(Radius), ValueKind.LENGTH, "mm"))
@@ -3684,7 +3688,10 @@ def NativeDiags(
                 "freecad.unparsed_mesh_data",
                 "FreeCAD mesh data was preserved but could not be normalized",
                 Severity.WARNING,
-                attributes={"property_count": MeshPropCount, "normalized_count": len(Meshes)},
+                attributes={
+                    "property_count": MeshPropCount,
+                    "normalized_count": len(Meshes),
+                },
             )
         )
     if UnresolvedOuter:
@@ -3793,17 +3800,15 @@ def ReadNativeFcstd(
 ) -> CadDoc:
     Native = LoadNative(DataValue)
     SourceFile = ResolvedSource(SourcePath)
-    OuterStateA = StateValue
-    if OuterStateA is None and SourceFile is not None:
-        OuterStateA = OuterState(SourceFile.parent, {}, {SourceFile}, 1, len(DataValue))
+    ActiveState = StateValue
+    if ActiveState is None and SourceFile is not None:
+        ActiveState = OuterState(SourceFile.parent, {}, {SourceFile}, 1, len(DataValue))
     ResolvedOuter, UnresolvedOuter = OuterDocsMut(
-        Native, SourcePath, OuterStateA, OuterDepth
+        Native, SourcePath, ActiveState, OuterDepth
     )
     Parameters: list[Param] = []
-    ConsumedExpressions: set[tuple[str, str]] = set()
-    SupportPlanes, Sketches = ParseSketchMut(
-        Native.objects, Parameters, ConsumedExpressions
-    )
+    Consumed: set[tuple[str, str]] = set()
+    SupportPlanes, Sketches = ParseSketchMut(Native.objects, Parameters, Consumed)
     SketchIds = {
         ObjValue.name: f"freecad:sketch:{ObjValue.name}"
         for ObjValue in Native.objects
@@ -3819,193 +3824,18 @@ def ReadNativeFcstd(
         if IsBodyContainer(ObjValue)
     }
     BrepPayloads, OwnerPayloads = BuildBrep(Native, FeatureIds, BodyIds)
-    NativeDigestText = Hashlib.sha256(DataValue).hexdigest()
-    BrepPayloads = tuple(
-        (
-            Replace(
-                Payload,
-                attributes={
-                    **Payload.attributes,
-                    KNativeDocHashAttr: NativeDigestText,
-                },
-            )
-            for Payload in BrepPayloads
-        )
-    )
+    BrepPayloads = HashPayloads(BrepPayloads, DataValue)
     Meshes = ParseMeshes(Native)
-    Features: list[FeatureStep] = []
-    Selections: list[Selection] = list(Explicit(Native.objects))
-    for Order, ObjValue in enumerate(FeatureObjects):
-        FeatureId = FeatureIds[ObjValue.name]
-        KindValue = FeatureKindA(ObjValue)
-        FeatureSelections = FeatureA(ObjValue)
-        Selections.extend(FeatureSelections)
-        ParamIds = FeatureMut(ObjValue, FeatureId, Parameters, ConsumedExpressions)
-        Dependencies = tuple(
-            (
-                FeatureIds[Value]
-                for Value in dict.fromkeys(ObjValue.dependencies)
-                if Value in FeatureIds
-                and FeatureObjects.index(
-                    next(
-                        (
-                            ItemValue
-                            for ItemValue in FeatureObjects
-                            if ItemValue.name == Value
-                        )
-                    )
-                )
-                < Order
-            )
-        )
-        Profile = LinkAction(ObjValue, "Profile") or LinkAction(ObjValue, "Base")
-        SketchId = SketchIds.get(Profile)
-        Operation: BoolOperation | str | None = None
-        DeclaredOperation = String(ObjValue, "Operation").casefold()
-        if DeclaredOperation:
-            try:
-                Operation = BoolOperation(DeclaredOperation)
-            except ValueError:
-                Operation = DeclaredOperation
-        Definition: FeatureDefinition | None = None
-        if KindValue in KSubtractiveCapableKinds:
-            if ObjValue.type_id in KSubtractiveTypeIds:
-                Operation = BoolOperation.CUT
-            elif Dependencies:
-                Operation = BoolOperation.JOIN
-            else:
-                Operation = BoolOperation.CREATE
-        if KindValue == FeatureKind.EXTRUSION:
-            Definition = (
-                PartExtrusion(ObjValue)
-                if ObjValue.type_id == "Part::Extrusion"
-                else Extrusion(ObjValue)
-            )
-        elif KindValue == FeatureKind.FILLET:
-            Radius = Float(ObjValue, "Radius", Float(ObjValue, "DrivingRadius"))
-            Definition = FilletFeature(ParamValue(abs(Radius), ValueKind.LENGTH, "mm"))
-        elif KindValue == FeatureKind.CHAMFER:
-            ChamferType = EnumAction(ObjValue, "ChamferType")
-            ChamferMode = {
-                0: "equal_distance",
-                1: "two_distances",
-                2: "distance_angle",
-            }.get(ChamferType, f"native:{ChamferType}")
-            Definition = ChamferFeature(
-                distance=ParamValue(
-                    abs(Float(ObjValue, "Size")), ValueKind.LENGTH, "mm"
-                ),
-                mode=ChamferMode,
-                second_distance=(
-                    ParamValue(abs(Float(ObjValue, "Size2")), ValueKind.LENGTH, "mm")
-                    if ChamferType == 1
-                    else None
-                ),
-                angle=(
-                    ParamValue(abs(Float(ObjValue, "Angle")), ValueKind.ANGLE, "deg")
-                    if ChamferType == 2
-                    else None
-                ),
-            )
-        elif KindValue == FeatureKind.SHELL:
-            Definition = ShellFeature(
-                thickness=ParamValue(
-                    abs(Float(ObjValue, "Value")), ValueKind.LENGTH, "mm"
-                ),
-                outward=not IsBoolValue(ObjValue, "Reversed"),
-            )
-        elif ObjValue.type_id == "PartDesign::LinearPattern":
-            ItemCount = EnumAction(ObjValue, "Occurrences", 1)
-            LengthValue = abs(Float(ObjValue, "Length"))
-            OffsetValue = abs(Float(ObjValue, "Offset"))
-            SpacingValue = (
-                LengthValue / (ItemCount - 1)
-                if EnumAction(ObjValue, "Mode") == 0 and ItemCount > 1
-                else OffsetValue
-            )
-            Definition = LinearPatternFeature(
-                spacing=ParamValue(SpacingValue, ValueKind.LENGTH, "mm"),
-                instance_count=ItemCount,
-                direction_selection_id=(
-                    FeatureSelections[0].id if FeatureSelections else ""
-                ),
-                reversed=IsBoolValue(ObjValue, "Reversed"),
-            )
-        elif ObjValue.type_id == "PartDesign::PolarPattern":
-            Definition = CircularPatternFeature(
-                angle=ParamValue(abs(Float(ObjValue, "Angle")), ValueKind.ANGLE, "deg"),
-                instance_count=EnumAction(ObjValue, "Occurrences", 1),
-                axis_selection_id=FeatureSelections[0].id if FeatureSelections else "",
-                reversed=IsBoolValue(ObjValue, "Reversed"),
-            )
-        else:
-            Definition = NativeFeatureDefinition(
-                FormatId, ObjValue.type_id, NativeObjectA(ObjValue)
-            )
-        Features.append(
-            FeatureStep(
-                FeatureId,
-                String(ObjValue, "Label", ObjValue.name),
-                KindValue,
-                Order,
-                input_feature_ids=Dependencies,
-                sketch_id=SketchId,
-                parameter_ids=ParamIds,
-                operation=Operation,
-                definition=Definition,
-                selection_ids=tuple(
-                    (SelectionValue.id for SelectionValue in FeatureSelections)
-                ),
-                suppressed=IsBoolValue(ObjValue, "Suppressed"),
-                provenance=Provenance(FormatId, ObjValue.name),
-                attributes={
-                    "freecad": NativeObjectA(ObjValue),
-                    "brep_payload_ids": OwnerPayloads.get(ObjValue.name, []),
-                },
-            )
-        )
-    Bodies: list[BodyValue] = []
-    for ObjValue in Native.objects:
-        if not IsBodyContainer(ObjValue):
-            continue
-        FinalName = LinkAction(ObjValue, "Tip")
-        if FinalName not in FeatureIds:
-            FinalName = next(
-                (
-                    Value
-                    for Value in reversed(LinkList(ObjValue, "Group"))
-                    if Value in FeatureIds
-                ),
-                "",
-            )
-        if not FinalName:
-            continue
-        Bodies.append(
-            BodyValue(
-                BodyIds[ObjValue.name],
-                String(ObjValue, "Label", ObjValue.name),
-                FeatureIds[FinalName],
-                TopologySummary(),
-                material_id=String(ObjValue, "MaterialId") or None,
-                provenance=Provenance(FormatId, ObjValue.name),
-                attributes={
-                    "freecad": NativeObjectA(ObjValue),
-                    "tip": FinalName,
-                    "brep_payload_ids": OwnerPayloads.get(ObjValue.name, []),
-                },
-            )
-        )
-    HasAsm = AsmRootObject(Native.objects) is not None
-    if not Bodies and Features and (not HasAsm):
-        Final = Features[-1]
-        Bodies.append(
-            BodyValue(
-                "freecad:body:default",
-                "Body",
-                Final.id,
-                attributes={"freecad_generated": True},
-            )
-        )
+    Features, Selections = AddFeaturesMut(
+        Native,
+        FeatureObjects,
+        FeatureIds,
+        SketchIds,
+        OwnerPayloads,
+        Parameters,
+        Consumed,
+    )
+    Bodies = BuildBodies(Native, FeatureIds, BodyIds, OwnerPayloads, Features)
     DecodedBrep = DecodedDocBrep(BrepPayloads, tuple(Bodies))
     AsmValue = ParseAsm(
         Native,
@@ -4014,111 +3844,31 @@ def ReadNativeFcstd(
         ResolvedOuter,
         UnresolvedOuter,
         Parameters,
-        ConsumedExpressions,
+        Consumed,
     )
     NativeDoc, NativeBinding = NativePayloads(Native, DataValue, SourcePath)
     BrepPayloads = (*BrepPayloads, NativeDoc, NativeBinding)
-    RemainingMut(Native.objects, Parameters, ConsumedExpressions)
-    NativeFeatureTypes = sorted(
-        {
-            ObjValue.type_id
-            for ObjValue in FeatureObjects
-            if FeatureKindA(ObjValue) == FeatureKind.NATIVE
-        }
-    )
-    Diagnostics: tuple[DiagValue, ...] = (
-        (
-            DiagValue(
-                "freecad.native_features_preserved",
-                "FreeCAD feature types were preserved as native operations",
-                Severity.INFO,
-                attributes={"type_ids": NativeFeatureTypes},
-            ),
-        )
-        if NativeFeatureTypes
-        else ()
-    )
-    MeshPropCount = sum(
-        (
-            1
-            for ObjValue in Native.objects
-            for NodeValue in ObjValue.properties.values()
-            if NodeValue.find("./Mesh") is not None
-        )
-    )
-    if MeshPropCount > len(Meshes):
-        Diagnostics += (
-            DiagValue(
-                "freecad.unparsed_mesh_data",
-                "FreeCAD mesh data was preserved but could not be normalized",
-                Severity.WARNING,
-                attributes={
-                    "property_count": MeshPropCount,
-                    "normalized_count": len(Meshes),
-                },
-            ),
-        )
-    if UnresolvedOuter:
-        Diagnostics += (
-            DiagValue(
-                "freecad.unresolved_external_documents",
-                "FreeCAD external component documents could not be resolved",
-                Severity.WARNING,
-                attributes={"references": UnresolvedOuter},
-            ),
-        )
-    Source = CadSource(
-        FormatId,
-        SourcePath,
-        Hashlib.sha256(DataValue).hexdigest(),
-        container_version=Native.root.get("FileVersion", ""),
-        application_version=Native.root.get("ProgramVersion", ""),
-        attributes={"freecad_schema_version": Native.root.get("SchemaVersion", "")},
-    )
-    FreecadMeta: dict[str, AnyValue] = {
-        "schema_version": Native.root.get("SchemaVersion", ""),
-        "file_version": Native.root.get("FileVersion", ""),
-        "program_version": Native.root.get("ProgramVersion", ""),
-        "entry_order": list(Native.entry_order),
-        "objects": [NativeObjectA(ObjValue) for ObjValue in Native.objects],
-    }
-    DocProperties = Native.root.find("./Properties")
-    if DocProperties is not None:
-        FreecadMeta["document_properties"] = ElemData(DocProperties)
-    StringHasher = ReadStringHash(Native)
-    if StringHasher is not None:
-        FreecadMeta["string_hasher"] = StringHasher
-    OtherEntries = OtherEntryData(Native)
-    if OtherEntries:
-        FreecadMeta["entries"] = OtherEntries
-    if AsmValue is None and ResolvedOuter:
-        FreecadMeta["external_documents"] = [
-            {"file": FileName, "identity": Identity, "document": LinkedDoc}
-            for FileName, (Identity, LinkedDoc) in ResolvedOuter.items()
-        ]
+    RemainingMut(Native.objects, Parameters, Consumed)
+    Diagnostics = NativeDiags(Native, FeatureObjects, Meshes, UnresolvedOuter)
+    MetaValue = NativeMeta(Native, AsmValue, ResolvedOuter)
     Configurations = BuildConfigs(Native.objects, FeatureIds)
-    DocValue = CadDoc(
-        Source,
+    return MakeNativeDoc(
+        NativeSource(DataValue, SourcePath, Native),
         Configurations,
-        tuple(Parameters),
+        Parameters,
         SupportPlanes,
         Sketches,
-        tuple(Selections),
-        tuple(Features),
-        tuple(Bodies),
-        meshes=Meshes,
-        brep=DecodedBrep,
-        brep_payloads=BrepPayloads,
-        diagnostics=Diagnostics,
-        metadata={"freecad": FreecadMeta},
-        assembly=AsmValue,
+        Selections,
+        Features,
+        Bodies,
+        Meshes,
+        DecodedBrep,
+        BrepPayloads,
+        Diagnostics,
+        MetaValue,
+        AsmValue,
+        bool(ResolvedOuter or UnresolvedOuter),
     )
-    Capabilities = InferCapabilities(DocValue, roundtrip_metadata=True)
-    if ResolvedOuter or UnresolvedOuter:
-        Capabilities |= {Capability.EXTERNAL_REFERENCES}
-    DocValue = Replace(DocValue, capabilities=Capabilities)
-    DocValue.assert_valid()
-    return DocValue
 
 
 # this binding exists because shared behavior needs one stable value

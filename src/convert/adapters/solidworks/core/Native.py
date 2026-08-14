@@ -346,6 +346,273 @@ KMarkerLocalIdOffsetBy = MappingProxyType(
 )
 
 
+# decode state exists because ordered features share evolving native context
+@Dataclass(slots=True)
+class DecodeState:
+    Resolved: bytes
+    StreamName: str
+    Classes: AnyValue
+    RecordById: AnyValue
+    NativeFeatures: list[NativeFeature]
+    NativeIndexById: dict[int, int]
+    PlaneById: AnyValue
+    UnframedPlaneIds: frozenset[int]
+    Revolutions: AnyValue
+    Sketches: list[NativeSketch]
+    Operations: list[NativeOperation]
+    LatestSketch: NativeSketch | None
+    LatestOperation: NativeOperation | None
+    LatestPlaneId: int
+    LatestUnframed: int | None
+
+
+# plane state handling preserves the latest framed support context
+def ApplyPlaneMut(StateData, Feature):
+    if Feature.object_id in StateData.PlaneById:
+        StateData.LatestPlaneId = Feature.object_id
+        StateData.LatestUnframed = None
+    else:
+        StateData.LatestUnframed = Feature.object_id
+
+
+# sketch state handling owns support decoding and feature dimension rebinding
+def ApplySketchMut(StateData, Feature):
+    SketchStart = Feature.native_offset or 0
+    SketchEnd = Feature.native_end or len(StateData.Resolved)
+    RefValue = SketchPlaneRef(StateData.Resolved, StateData.Classes, SketchStart, SketchEnd)
+    Support, SupportSource, UnframedSupport = SupportPlaneRef(
+        StateData.Resolved,
+        SketchStart,
+        SketchEnd,
+        RefValue,
+        StateData.LatestPlaneId,
+        StateData.LatestUnframed,
+        StateData.PlaneById,
+        StateData.UnframedPlaneIds,
+    )
+    StateData.LatestSketch = DecodeSketch(
+        StateData.Resolved,
+        Feature,
+        Support,
+        NativeStream=StateData.StreamName,
+        SupportKind=SketchSupport(StateData.Classes, RefValue, SketchStart, SketchEnd),
+        SupportPlane=RefValue,
+        SupportSource=SupportSource,
+        UnframedSupportPlaneId=UnframedSupport,
+    )
+    NativeIndex = StateData.NativeIndexById[Feature.object_id]
+    StateData.NativeFeatures[NativeIndex] = Replace(
+        StateData.NativeFeatures[NativeIndex],
+        dimensions=StateData.LatestSketch.dimensions,
+    )
+    StateData.Sketches.append(StateData.LatestSketch)
+
+
+# focused operation decoder preserves one native feature family
+def DecodeExtrude(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Record = StateData.RecordById.get(Feature.object_id)
+    if Record is None:
+        return None
+    Child = IntegerProp(Feature.properties.get('DissectableChildren'))
+    ProfileId = Child or (StateData.LatestSketch.object_id if StateData.LatestSketch else None)
+    Dependencies = tuple((Value for Value in (StateData.LatestOperation.object_id if StateData.LatestOperation else None, ProfileId) if Value is not None))
+    Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
+    OperationStart = Feature.native_offset or 0
+    OperationEnd = Feature.native_end or len(StateData.Resolved)
+    EndData = EndSpec(StateData.Resolved, OperationStart, OperationEnd, StateData.Classes)
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(StateData.Resolved, StateData.Classes, OperationStart) or OperationEnd, length_mm=DimensionValue(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), native_stream=StateData.StreamName, depth_copies=DepthCopies(StateData.Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndData.mirrored_direction_offset if EndData else None, mirrored_direction_code=EndData.mirrored_direction_code if EndData else None)
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeLinear(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Record = StateData.RecordById.get(Feature.object_id)
+    CountValue = DimensionValue(Feature.dimensions, 'instance_count')
+    SpacingValue = DimensionValue(Feature.dimensions, 'spacing')
+    if Record is None or StateData.LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (SpacingValue is None):
+        return None
+    SelectionData = OperationA(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures)
+    FamilyValue, OperationValue, SchemaValue = OperationFields(StateData.Resolved, Record)
+    DirectionOffset = Feature.native_offset + KLinearPatternDirection if Feature.native_offset is not None else -1
+    DirectionCode = StateData.Resolved[DirectionOffset] if 0 <= DirectionOffset < (Feature.native_end or 0) and StateData.Resolved[DirectionOffset] in {0, 1} else None
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='linear_pattern', profile_id=None, dependencies=(StateData.LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=FamilyValue, operation_code=OperationValue, schema_code=SchemaValue, direction_code=DirectionCode, termination_code=None, selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)), selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)), selection_kind='edge', mode='linear', native_stream=StateData.StreamName, selection_references=tuple(((ItemData[1], ItemData[2]) for ItemData in SelectionData)), instance_count=int(CountValue), spacing_mm=SpacingValue)
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeCircular(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Record = StateData.RecordById.get(Feature.object_id)
+    CountValue = DimensionValue(Feature.dimensions, 'instance_count')
+    AngleValue = DimensionValue(Feature.dimensions, 'angle')
+    if Record is None or StateData.LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (AngleValue is None):
+        return None
+    SelectionData = OperationA(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures)
+    FamilyValue, OperationValue, SchemaValue = OperationFields(StateData.Resolved, Record)
+    DirectionOffset = Feature.native_offset + KCircularPatternDirection if Feature.native_offset is not None else -1
+    DirectionCode = StateData.Resolved[DirectionOffset] if 0 <= DirectionOffset < (Feature.native_end or 0) and StateData.Resolved[DirectionOffset] in {0, 1} else None
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='circular_pattern', profile_id=None, dependencies=(StateData.LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=FamilyValue, operation_code=OperationValue, schema_code=SchemaValue, direction_code=DirectionCode, termination_code=None, selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)), selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)), angle_degrees=AngleValue, selection_kind='edge', mode='circular', native_stream=StateData.StreamName, selection_references=tuple(((ItemData[1], ItemData[2]) for ItemData in SelectionData)), instance_count=int(CountValue))
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeRevolve(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Record = StateData.RecordById.get(Feature.object_id)
+    if Record is None:
+        return None
+    ProfileId = StateData.LatestSketch.object_id if StateData.LatestSketch else None
+    Dependencies = tuple((Value for Value in (StateData.LatestOperation.object_id if StateData.LatestOperation else None, ProfileId) if Value is not None))
+    Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
+    Layout = StateData.Revolutions.get(Feature.object_id)
+    AxisSketch = StateData.LatestSketch
+    if Layout is not None and Layout.axis_kind == RevolutionAxisSketch:
+        AxisSketch = next((ItemValue for ItemValue in StateData.Sketches if ItemValue.object_id == Layout.axis_feature_id), None)
+    elif Layout is not None:
+        AxisSketch = None
+    AxisMarker = RevolutionAxis(AxisSketch)
+    RevolutionStart = Feature.native_offset or 0
+    AngleOffset = OperationOffset(Feature.dimensions, 'angle')
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='revolve_cut' if FeatureType in {'cut-revolve', 'revcut'} else 'revolve_join', profile_id=ProfileId, dependencies=Dependencies, native_offset=RevolutionStart, native_end=ClassRecordEnd(StateData.Resolved, StateData.Classes, RevolutionStart) or Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), angle_degrees=DimensionValue(Feature.dimensions, 'angle'), axis_marker_offset=AxisMarker.offset if AxisMarker else None, native_stream=StateData.StreamName, axis_source_kind=None if Layout is None else Layout.axis_kind, axis_source_id=None if Layout is None else Layout.axis_feature_id, axis_source_offset=None if Layout is None else Layout.axis_offset, end_spec_offset=None if Layout is None else Layout.end_spec_offset, angle_offset=AngleOffset, angle_copies=AngleCopies(StateData.Resolved, AngleOffset))
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeHole(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Record = StateData.RecordById.get(Feature.object_id)
+    if Record is None:
+        return None
+    Child = IntegerProp(Feature.properties.get('DissectableChildren'))
+    Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
+    Dependencies = tuple((Value for Value in (StateData.LatestOperation.object_id if StateData.LatestOperation else None, Child) if Value is not None))
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='hole', profile_id=Child, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=DimensionValue(Feature.dimensions, 'depth'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=0, selection_offsets=(), selected_local_ids=(), selection_kind='face', native_stream=StateData.StreamName)
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeDome(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Selections = OperationAfter(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures, 'moCompFace_c')
+    Height = DimensionValue(Feature.dimensions, 'height')
+    if Height is None or not Selections:
+        return None
+    ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='dome', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=Height, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='face', native_stream=StateData.StreamName, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)))
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeMoveBody(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Selections = OperationAfter(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures, 'moCompSolidBody_c')
+    Translation = Native(Feature.dimensions)
+    if Translation is None or not Selections:
+        return None
+    ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='move_body', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='body', native_stream=StateData.StreamName, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)), translation_mm=Translation)
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeCombine(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Selections = OperationAfter(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures, 'moSolidRef_w')
+    if len(Selections) < 2:
+        return None
+    ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='combine_join', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=0, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='body', mode='join', native_stream=StateData.StreamName, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)))
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeScale(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Factors = NativeScale(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved))
+    if Factors is None or StateData.LatestOperation is None:
+        return None
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='scale', profile_id=None, dependencies=(StateData.LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), native_stream=StateData.StreamName, scale_factors=Factors)
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeFinish(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Selections = OperationA(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures)
+    ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
+    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
+    Record = StateData.RecordById.get(Feature.object_id)
+    Fields = OperationFields(StateData.Resolved, Record) if Record is not None else (None, None, None)
+    DimensionKind = {'fillet': 'radius', 'chamfer': 'distance', 'shell': 'thickness'}[FeatureType]
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind=FeatureType, profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=DimensionValue(Feature.dimensions, DimensionKind) if FeatureType != 'fillet' else None, radius_mm=DimensionValue(Feature.dimensions, DimensionKind) if FeatureType == 'fillet' else None, family_code=Fields[0], operation_code=Fields[1], schema_code=Fields[2], direction_code=None, termination_code=None, selection_offsets=tuple((Selection[0] for Selection in Selections)), selected_local_ids=tuple((Selection[2] for Selection in Selections)), selection_kind='face' if FeatureType == 'shell' else 'edge', mode='equal_distance' if FeatureType == 'chamfer' and Fields[0] == 1 else None, native_stream=StateData.StreamName, selection_references=tuple(((Selection[1], Selection[2]) for Selection in Selections)))
+    return Operation
+
+
+# focused operation decoder preserves one native feature family
+def DecodeSurface(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    Record = StateData.RecordById.get(Feature.object_id)
+    if Record is None:
+        return None
+    ProfileId = StateData.LatestSketch.object_id if StateData.LatestSketch else None
+    Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
+    EndData = EndSpec(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), StateData.Classes)
+    Lengths = tuple((Dimension.value_mm for Dimension in Feature.dimensions if Dimension.kind in {'length', 'second_length'}))
+    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='surface', profile_id=ProfileId, dependencies=(ProfileId,) if ProfileId is not None else (), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=Lengths[0] if Lengths else None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), second_length_mm=Lengths[1] if len(Lengths) > 1 else None, native_stream=StateData.StreamName)
+    return Operation
+
+
+# operation dispatch keeps native feature family routing explicit
+def DecodeOperation(StateData, Feature):
+    FeatureType = Feature.kind.casefold()
+    if FeatureType == "extrusion":
+        return DecodeExtrude(StateData, Feature)
+    if FeatureType in {"lpattern", "linearpattern"}:
+        return DecodeLinear(StateData, Feature)
+    if FeatureType in {"cirpattern", "circularpattern"}:
+        return DecodeCircular(StateData, Feature)
+    if FeatureType in KRevolutionFeatureTypes:
+        return DecodeRevolve(StateData, Feature)
+    if Feature.class_name in KHoleClassNames:
+        return DecodeHole(StateData, Feature)
+    if FeatureType == "dome":
+        return DecodeDome(StateData, Feature)
+    if FeatureType in KMoveBodyFeatureTypes:
+        return DecodeMoveBody(StateData, Feature)
+    if FeatureType in KCombineFeatureTypes:
+        return DecodeCombine(StateData, Feature)
+    if FeatureType == "scale":
+        return DecodeScale(StateData, Feature)
+    if FeatureType in {"fillet", "chamfer", "shell"}:
+        return DecodeFinish(StateData, Feature)
+    if FeatureType in KSurfaceExtrusionFeature:
+        return DecodeSurface(StateData, Feature)
+    return None
+
+
+# ordered tree decoding owns evolving plane sketch and operation state
+def DecodeTreeMut(StateData, Author):
+    for Feature in Author:
+        if IsPlaneFeature(Feature):
+            ApplyPlaneMut(StateData, Feature)
+            continue
+        FeatureType = Feature.kind.casefold()
+        if FeatureType == "sketch":
+            ApplySketchMut(StateData, Feature)
+            continue
+        Operation = DecodeOperation(StateData, Feature)
+        if Operation is None:
+            continue
+        StateData.Operations.append(Operation)
+        if FeatureType not in KSurfaceExtrusionFeature:
+            StateData.LatestOperation = Operation
+
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeOperand:

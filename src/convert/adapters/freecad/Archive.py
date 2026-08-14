@@ -202,24 +202,30 @@ def Validated(DataValue: bytes) -> tuple[Zipfile.ZipFile, dict[str, Zipfile.ZipI
     return (Archive, Members)
 
 
-# this definition exists because focused behavior needs one stable owner
-def ValidatedDocXml(
-    Archive: zipfile.ZipFile, Members: Mapping[str, zipfile.ZipInfo]
-) -> tuple[XmlTree.Element, bytes]:
-    DocInfo = Members.get(KDocEntry)
-    if DocInfo is None or DocInfo.file_size > KMaxDocSize:
-        raise ValueError("FCStd archive has no safe Document.xml")
+# this definition exists because declared counts defend against malformed object graphs
+def StoredCount(
+    NodeValue: XmlTree.Element, Names: tuple[str, ...], Actual: int, Label: str
+) -> None:
+    Value = next(
+        (
+            NodeValue.get(NameValue)
+            for NameValue in Names
+            if NodeValue.get(NameValue) is not None
+        ),
+        None,
+    )
+    if Value is None:
+        return
     try:
-        DocXml = Archive.read(DocInfo)
-        RootValue = XmlTree.fromstring(DocXml)
-    except (
-        OSError,
-        RuntimeError,
-        NotImplementedError,
-        XmlTree.ParseError,
-        Zipfile.BadZipFile,
-    ) as ErrorInfo:
-        raise ValueError("FCStd archive has no readable Document.xml") from ErrorInfo
+        Expected = int(Value)
+    except ValueError as ErrorInfo:
+        raise ValueError(f"FreeCAD {Label} count is invalid") from ErrorInfo
+    if Expected != Actual:
+        raise ValueError(f"FreeCAD {Label} count does not match its data")
+
+
+# this definition exists because xml resource limits protect archive parsing
+def ValidateXml(RootValue: XmlTree.Element) -> int:
     if RootValue.tag != "Document":
         raise ValueError("FreeCAD Document.xml has an invalid root")
     Count = 0
@@ -240,69 +246,55 @@ def ValidatedDocXml(
         ) from ErrorInfo
     if SchemaVersion < KMinObjectGraphSchema:
         raise ValueError("FreeCAD Document.xml schema version is not supported")
+    return SchemaVersion
 
-    # this definition exists because focused behavior needs one stable owner
-    def StoredCount(
-        NodeValue: ET.Element, Names: tuple[str, ...], Actual: int, Label: str
-    ) -> None:
-        Value = next(
-            (
-                NodeValue.get(NameValue)
-                for NameValue in Names
-                if NodeValue.get(NameValue) is not None
-            ),
-            None,
-        )
-        if Value is None:
-            return
-        try:
-            Expected = int(Value)
-        except ValueError as ErrorInfo:
-            raise ValueError(f"FreeCAD {Label} count is invalid") from ErrorInfo
-        if Expected != Actual:
-            raise ValueError(f"FreeCAD {Label} count does not match its data")
 
-    if SchemaVersion == 2:
-        FeaturesNode = RootValue.find("./Features")
-        FeatureDataNode = RootValue.find("./FeatureData")
-        if FeaturesNode is None or FeatureDataNode is None:
-            raise ValueError("FreeCAD Document.xml has no object graph")
-        Features = FeaturesNode.findall("./Feature")
-        FeatureData = FeatureDataNode.findall("./Feature")
-        StoredCount(FeaturesNode, ("Count", "count"), len(Features), "feature")
-        StoredCount(
-            FeatureDataNode, ("Count", "count"), len(FeatureData), "feature data"
-        )
-        ObjectsNode = XmlTree.Element(
-            "Objects", {"Count": str(len(Features)), "Dependencies": "0"}
-        )
-        DataNode = XmlTree.Element("ObjectData", {"Count": str(len(FeatureData))})
-        for Index, Feature in enumerate(Features, start=1):
-            XmlTree.SubElement(
-                ObjectsNode,
-                "Object",
-                {
-                    "type": Feature.get("type", ""),
-                    "name": Feature.get("name", ""),
-                    "id": str(Index),
-                },
-            )
-        for Feature in FeatureData:
-            ItemValue = XmlTree.SubElement(
-                DataNode, "Object", {"name": Feature.get("name", "")}
-            )
-            ItemValue.extend(CopyValue.deepcopy(list(Feature)))
-        RootValue.append(ObjectsNode)
-        RootValue.append(DataNode)
-    else:
+# this definition exists because legacy documents need the modern graph shape
+def GraphNodesMut(
+    RootValue: XmlTree.Element, SchemaVersion: int
+) -> tuple[XmlTree.Element, XmlTree.Element]:
+    if SchemaVersion != 2:
         ObjectsNode = RootValue.find("./Objects")
         DataNode = RootValue.find("./ObjectData")
-    if ObjectsNode is None or DataNode is None:
+        if ObjectsNode is None or DataNode is None:
+            raise ValueError("FreeCAD Document.xml has no object graph")
+        return (ObjectsNode, DataNode)
+    FeaturesNode = RootValue.find("./Features")
+    FeatureDataNode = RootValue.find("./FeatureData")
+    if FeaturesNode is None or FeatureDataNode is None:
         raise ValueError("FreeCAD Document.xml has no object graph")
+    Features = FeaturesNode.findall("./Feature")
+    FeatureData = FeatureDataNode.findall("./Feature")
+    StoredCount(FeaturesNode, ("Count", "count"), len(Features), "feature")
+    StoredCount(FeatureDataNode, ("Count", "count"), len(FeatureData), "feature data")
+    ObjectsNode = XmlTree.Element(
+        "Objects", {"Count": str(len(Features)), "Dependencies": "0"}
+    )
+    DataNode = XmlTree.Element("ObjectData", {"Count": str(len(FeatureData))})
+    for Index, Feature in enumerate(Features, start=1):
+        XmlTree.SubElement(
+            ObjectsNode,
+            "Object",
+            {
+                "type": Feature.get("type", ""),
+                "name": Feature.get("name", ""),
+                "id": str(Index),
+            },
+        )
+    for Feature in FeatureData:
+        ItemValue = XmlTree.SubElement(
+            DataNode, "Object", {"name": Feature.get("name", "")}
+        )
+        ItemValue.extend(CopyValue.deepcopy(list(Feature)))
+    RootValue.append(ObjectsNode)
+    RootValue.append(DataNode)
+    return (ObjectsNode, DataNode)
+
+
+# this definition exists because object declarations establish graph identity
+def ReadDeclNames(ObjectsNode: XmlTree.Element) -> set[str]:
     Declarations = ObjectsNode.findall("./Object")
-    ObjectData = DataNode.findall("./Object")
     StoredCount(ObjectsNode, ("Count", "count"), len(Declarations), "object")
-    StoredCount(DataNode, ("Count", "count"), len(ObjectData), "object data")
     DeclaredNames: set[str] = set()
     ObjectIds: set[str] = set()
     for DeclValue in Declarations:
@@ -317,6 +309,13 @@ def ValidatedDocXml(
         DeclaredNames.add(NameValue)
         if ObjectId:
             ObjectIds.add(ObjectId)
+    return DeclaredNames
+
+
+# this definition exists because object data must match declared property counts
+def ReadDataNames(DataNode: XmlTree.Element) -> set[str]:
+    ObjectData = DataNode.findall("./Object")
+    StoredCount(DataNode, ("Count", "count"), len(ObjectData), "object data")
     DataNames: set[str] = set()
     for ObjectElem in ObjectData:
         NameValue = ObjectElem.get("name", "")
@@ -338,8 +337,11 @@ def ValidatedDocXml(
             len(Properties.findall("./_Property")),
             "transient property",
         )
-    if DeclaredNames != DataNames:
-        raise ValueError("FreeCAD object declarations and data do not match")
+    return DataNames
+
+
+# this definition exists because dependencies may only reference declared objects
+def ValidateDeps(ObjectsNode: XmlTree.Element, DeclaredNames: set[str]) -> None:
     DependencyNames: set[str] = set()
     for Dependency in ObjectsNode.findall("./ObjectDeps"):
         NameValue = Dependency.get("Name", "")
@@ -356,6 +358,12 @@ def ValidatedDocXml(
             raise ValueError("FreeCAD dependency graph has missing objects")
         StoredCount(Dependency, ("Count", "count"), len(Values), "dependency")
         DependencyNames.add(NameValue)
+
+
+# this definition exists because xml file links must resolve inside the archive
+def ValidateFiles(
+    RootValue: XmlTree.Element, Members: Mapping[str, Zipfile.ZipInfo]
+) -> None:
     Referenced: set[str] = set()
     for NodeValue in RootValue.findall(".//*[@file]"):
         if NodeValue.tag == "XLink":
@@ -368,6 +376,33 @@ def ValidatedDocXml(
         raise ValueError(
             "FCStd archive is missing referenced data: " + ", ".join(Missing)
         )
+
+
+# this definition exists because focused behavior needs one stable owner
+def ValidatedDocXml(
+    Archive: Zipfile.ZipFile, Members: Mapping[str, Zipfile.ZipInfo]
+) -> tuple[XmlTree.Element, bytes]:
+    DocInfo = Members.get(KDocEntry)
+    if DocInfo is None or DocInfo.file_size > KMaxDocSize:
+        raise ValueError("FCStd archive has no safe Document.xml")
+    try:
+        DocXml = Archive.read(DocInfo)
+        RootValue = XmlTree.fromstring(DocXml)
+    except (
+        OSError,
+        RuntimeError,
+        NotImplementedError,
+        XmlTree.ParseError,
+        Zipfile.BadZipFile,
+    ) as ErrorInfo:
+        raise ValueError("FCStd archive has no readable Document.xml") from ErrorInfo
+    SchemaVersion = ValidateXml(RootValue)
+    ObjectsNode, DataNode = GraphNodesMut(RootValue, SchemaVersion)
+    DeclaredNames = ReadDeclNames(ObjectsNode)
+    if DeclaredNames != ReadDataNames(DataNode):
+        raise ValueError("FreeCAD object declarations and data do not match")
+    ValidateDeps(ObjectsNode, DeclaredNames)
+    ValidateFiles(RootValue, Members)
     return (RootValue, DocXml)
 
 
@@ -522,16 +557,23 @@ def Normalize(Value: tuple[float, float, float]) -> tuple[float, float, float]:
     return tuple((Component / Length for Component in Value))
 
 
-# this definition exists because focused behavior needs one stable owner
-def Quaternion(Transform: Mapping[str, Any]) -> tuple[float, float, float, float]:
+# this definition exists because axis frames need one normalized rotation matrix
+def RotationMatrix(
+    Transform: Mapping[str, Any],
+) -> tuple[tuple[float, float, float], ...]:
     XAxis = Normalize(Vector(Transform.get("x_axis"), (1.0, 0.0, 0.0)))
     YAxis = Normalize(Vector(Transform.get("y_axis"), (0.0, 1.0, 0.0)))
     ZAxis = Normalize(Vector(Transform.get("z_axis"), (0.0, 0.0, 1.0)))
-    Matrix = (
+    return (
         (XAxis[0], YAxis[0], ZAxis[0]),
         (XAxis[1], YAxis[1], ZAxis[1]),
         (XAxis[2], YAxis[2], ZAxis[2]),
     )
+
+
+# this definition exists because focused behavior needs one stable owner
+def Quaternion(Transform: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    Matrix = RotationMatrix(Transform)
     Trace = Matrix[0][0] + Matrix[1][1] + Matrix[2][2]
     if Trace > 0.0:
         Scale = MathValue.sqrt(Trace + 1.0) * 2.0
@@ -839,18 +881,18 @@ class ObjectGraph:
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance) -> None:
-        Instance.objects: list[Object] = []
-        Instance.names: set[str] = set()
+        Instance.Objects: list[Object] = []
+        Instance.Names: set[str] = set()
 
     # this definition exists because focused behavior needs one stable owner
     def Unique(Instance, Requested: Any, Prefix: str = "Object") -> str:
         BaseValue = SafeAction(Requested, Prefix)
         Value = BaseValue
         Suffix = 2
-        while Value in Instance.names:
+        while Value in Instance.Names:
             Value = f"{BaseValue}_{Suffix}"
             Suffix += 1
-        Instance.names.add(Value)
+        Instance.Names.add(Value)
         return Value
 
     # this definition exists because focused behavior needs one stable owner
@@ -869,7 +911,7 @@ class ObjectGraph:
             touched=Touched,
             extensions=Extensions,
         )
-        Instance.objects.append(Result)
+        Instance.Objects.append(Result)
         return Result
 
     locals()["__init__"] = InitAction
@@ -882,11 +924,11 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance, Parameters: list[dict[str, Any]]) -> None:
-        Instance.parameters = Parameters
-        Instance.by_id = {
+        Instance.Parameters = Parameters
+        Instance.ById = {
             TextAction(ItemValue.get("id")): ItemValue for ItemValue in Parameters
         }
-        Instance.aliases: dict[str, str] = {}
+        Instance.Aliases: dict[str, str] = {}
         UsedValue: set[str] = set()
         for Index, ItemValue in enumerate(Parameters, start=1):
             ParamId = TextAction(ItemValue.get("id"), f"parameter_{Index}")
@@ -899,11 +941,11 @@ class ParamCatalog:
                 Alias = f"{BaseValue}_{Suffix}"
                 Suffix += 1
             UsedValue.add(Alias)
-            Instance.aliases[ParamId] = Alias
+            Instance.Aliases[ParamId] = Alias
 
     # this definition exists because focused behavior needs one stable owner
     def Expression(Instance, ParamId: str, Divisor: float | None = None) -> str | None:
-        Alias = Instance.aliases.get(ParamId)
+        Alias = Instance.Aliases.get(ParamId)
         if not Alias:
             return None
         Result = f"Parameters.{Alias}"
@@ -913,7 +955,7 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def HasSource(Instance, ParamId: str) -> bool:
-        Param = Instance.by_id.get(ParamId, {})
+        Param = Instance.ById.get(ParamId, {})
         Expression = Param.get("expression", {}) if isinstance(Param, Mapping) else {}
         return isinstance(Expression, Mapping) and bool(
             TextAction(Expression.get("source"))
@@ -921,7 +963,7 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def SourcePath(Instance, ParamId: str) -> str:
-        Param = Instance.by_id.get(ParamId, {})
+        Param = Instance.ById.get(ParamId, {})
         Attributes = Param.get("attributes", {}) if isinstance(Param, Mapping) else {}
         return (
             TextAction(Attributes.get("freecad_path"))
@@ -931,7 +973,7 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def Value(Instance, ParamId: str, Default: float = 0.0) -> float:
-        Param = Instance.by_id.get(ParamId)
+        Param = Instance.ById.get(ParamId)
         if not Param:
             return Default
         Value = Param.get("value", {})
@@ -941,7 +983,7 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def KindAction(Instance, ParamId: str) -> str:
-        Param = Instance.by_id.get(ParamId, {})
+        Param = Instance.ById.get(ParamId, {})
         Value = Param.get("value", {}) if isinstance(Param, Mapping) else {}
         return TextAction(
             EnumAction(Value.get("kind")) if isinstance(Value, Mapping) else "number",
@@ -990,10 +1032,10 @@ class ParamCatalog:
             "true",
         }
         for ParamId in References:
-            Alias = Instance.aliases.get(ParamId)
+            Alias = Instance.Aliases.get(ParamId)
             if not Alias:
                 return None
-            Param = Instance.by_id.get(ParamId, {})
+            Param = Instance.ById.get(ParamId, {})
             NameValue = (
                 TextAction(Param.get("name")) if isinstance(Param, Mapping) else ""
             )
@@ -1017,7 +1059,7 @@ class ParamCatalog:
     def ExpressionParts(Instance) -> tuple[int, int]:
         Native = 0
         Carrier = 0
-        for ItemValue in Instance.parameters:
+        for ItemValue in Instance.Parameters:
             if not isinstance(ItemValue.get("expression"), Mapping):
                 continue
             if Instance.native_expression(ItemValue) is None:
@@ -1035,10 +1077,10 @@ class ParamCatalog:
         ]
         Sheet = PropAction("cells", "Spreadsheet::PropertySheet", Status="67108864")
         Cells = XmlTree.SubElement(
-            Sheet, "Cells", {"Count": str(len(Instance.parameters) * 2), "xlink": "1"}
+            Sheet, "Cells", {"Count": str(len(Instance.Parameters) * 2), "xlink": "1"}
         )
         XmlTree.SubElement(Cells, "XLinks", {"count": "0"})
-        for RowValue, ItemValue in enumerate(Instance.parameters, start=1):
+        for RowValue, ItemValue in enumerate(Instance.Parameters, start=1):
             ParamId = TextAction(ItemValue.get("id"), f"parameter_{RowValue}")
             NameValue = TextAction(ItemValue.get("name"), ParamId)
             ValueData = ItemValue.get("value", {})
@@ -1077,7 +1119,7 @@ class ParamCatalog:
                 {
                     "address": f"B{RowValue}",
                     "content": Content,
-                    "alias": Instance.aliases[ParamId],
+                    "alias": Instance.Aliases[ParamId],
                 },
             )
         Result.append(Sheet)
@@ -2655,7 +2697,7 @@ def FeatureParam(
     if not IdsValue:
         IdsValue = [
             ParamId
-            for ParamId, ItemValue in Parameters.by_id.items()
+            for ParamId, ItemValue in Parameters.ById.items()
             if TextAction(ItemValue.get("owner_id")) == TextAction(Feature.get("id"))
         ]
     LengthIds = [
@@ -3381,7 +3423,7 @@ def ImportCompMut(
             touched=NodeValue.get("Touched") == "1",
             extensions=Extensions,
         )
-        Graph.objects.append(ImportedObject)
+        Graph.Objects.append(ImportedObject)
         Imported.append(ImportedObject.name)
     Target = Names.get(OuterOld, "") or Names.get(FinalOld, "")
     if not Target:
@@ -3794,7 +3836,7 @@ def AddAsmMut(
                 TargetObject = next(
                     (
                         ItemValue
-                        for ItemValue in Graph.objects
+                        for ItemValue in Graph.Objects
                         if ItemValue.name == ImportedTarget
                     ),
                     None,
@@ -4823,7 +4865,7 @@ def AddMeshesMut(
         Target = next(
             (
                 ItemValue
-                for ItemValue in Graph.objects
+                for ItemValue in Graph.Objects
                 if ItemValue.name == ParametricTarget
             ),
             None,
@@ -5054,8 +5096,8 @@ def BuildDocXml(
                     f"duplicate native FreeCAD object metadata: {ObjValue.name}"
                 )
             NativeGraph[ObjValue.name] = ObjValue
-            Graph.names.add(ObjValue.name)
-            Graph.objects.append(ObjValue)
+            Graph.Names.add(ObjValue.name)
+            Graph.Objects.append(ObjValue)
     NativeObjectTargets = {
         NameValue: ObjValue.name for NameValue, ObjValue in NativeGraph.items()
     }
@@ -5073,7 +5115,7 @@ def BuildDocXml(
             StringProp(
                 "SchemaVersion", Manifest.get("schema_version", "1.0"), Dynamic=True
             ),
-            JsonProp("ParameterAliasesJSON", Parameters.aliases),
+            JsonProp("ParameterAliasesJSON", Parameters.Aliases),
             BoolProp("Visibility", False),
         ]
     )
@@ -5860,7 +5902,7 @@ def BuildDocXml(
         BodyShapeTargets[BodyId] = FinalFeature or ObjValue.name
         BodyObjects.append(ObjValue.name)
     TargetById = {**PlaneNames, **SketchNames, **FeatureNames, **BodyNames}
-    TargetById.update({NameValue: NameValue for NameValue in Graph.names})
+    TargetById.update({NameValue: NameValue for NameValue in Graph.Names})
     SelectionNames: dict[str, str] = {}
     SelectionObjects: list[str] = []
     for Selection in SelectionItems.values():
@@ -5902,7 +5944,7 @@ def BuildDocXml(
         Target = next(
             (
                 ItemValue
-                for ItemValue in Graph.objects
+                for ItemValue in Graph.Objects
                 if ItemValue.name == FeatureNames.get(TextAction(Feature.get("id")), "")
             ),
             None,
@@ -5925,7 +5967,7 @@ def BuildDocXml(
         Target = next(
             (
                 ItemValue
-                for ItemValue in Graph.objects
+                for ItemValue in Graph.Objects
                 if ItemValue.name == PlaneNames.get(TextAction(Plane.get("id")), "")
             ),
             None,
@@ -5948,7 +5990,7 @@ def BuildDocXml(
         ConfigObjects.append(ObjValue.name)
     for Config, ObjectName in zip(ConfigItems, ConfigObjects, strict=True):
         ObjValue = next(
-            (ItemValue for ItemValue in Graph.objects if ItemValue.name == ObjectName)
+            (ItemValue for ItemValue in Graph.Objects if ItemValue.name == ObjectName)
         )
         ConfigId = TextAction(Config.get("id"))
         ParentName = ConfigNames.get(TextAction(Config.get("parent_id")), "")
@@ -6014,7 +6056,7 @@ def BuildDocXml(
             Target = next(
                 (
                     ItemValue
-                    for ItemValue in Graph.objects
+                    for ItemValue in Graph.Objects
                     if ItemValue.name == TargetName
                 ),
                 None,
@@ -6156,7 +6198,7 @@ def BuildDocXml(
         )
     )
     TargetObject = next(
-        (ItemValue for ItemValue in Graph.objects if ItemValue.name == OuterTarget),
+        (ItemValue for ItemValue in Graph.Objects if ItemValue.name == OuterTarget),
         None,
     )
     if TargetObject is not None and (not NativeReplay):
@@ -6233,7 +6275,7 @@ def BuildDocXml(
                 and (".." not in PathValue.parts)
             ):
                 PayloadEntries[SourceStream] = DataValue
-    SanitizePayload(Graph.objects, PayloadEntries)
+    SanitizePayload(Graph.Objects, PayloadEntries)
     NativeDocProperties = (
         ElemFromData(FreecadMeta.get("document_properties"))
         if NativeReplay and isinstance(FreecadMeta, Mapping)
@@ -6245,9 +6287,9 @@ def BuildDocXml(
         else DocProperties(Label, DocId, DocTimestamp)
     )
     Objects = XmlTree.SubElement(
-        RootValue, "Objects", {"Count": str(len(Graph.objects)), "Dependencies": "1"}
+        RootValue, "Objects", {"Count": str(len(Graph.Objects)), "Dependencies": "1"}
     )
-    for ObjValue in Graph.objects:
+    for ObjValue in Graph.Objects:
         Dependencies = [
             Value for Value in dict.fromkeys(ObjValue.dependencies) if Value
         ]
@@ -6258,10 +6300,10 @@ def BuildDocXml(
         )
         for Target in Dependencies:
             XmlTree.SubElement(Dependency, "Dep", {"Name": Target})
-    ObjectIds = {ObjValue.object_id for ObjValue in Graph.objects if ObjValue.object_id}
+    ObjectIds = {ObjValue.object_id for ObjValue in Graph.Objects if ObjValue.object_id}
     NumericIds = [int(Value) for Value in ObjectIds if Value.isdigit()]
     NextObjectId = max(NumericIds, default=0) + 1
-    for ObjValue in Graph.objects:
+    for ObjValue in Graph.Objects:
         ObjectId = ObjValue.object_id
         if not ObjectId:
             while str(NextObjectId) in ObjectIds:
@@ -6274,9 +6316,9 @@ def BuildDocXml(
             Attributes["Touched"] = "1"
         XmlTree.SubElement(Objects, "Object", Attributes)
     ObjectData = XmlTree.SubElement(
-        RootValue, "ObjectData", {"Count": str(len(Graph.objects))}
+        RootValue, "ObjectData", {"Count": str(len(Graph.Objects))}
     )
-    for ObjValue in Graph.objects:
+    for ObjValue in Graph.Objects:
         SerializeObject(ObjectData, ObjValue)
     XmlTree.indent(RootValue, space="  ")
     XmlValue = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
