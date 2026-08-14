@@ -12241,6 +12241,130 @@ def MarkerSemantic(
     return "native"
 
 
+# rectangle shape parsing owns marker layout and corner validation
+def RectangleShape(Records, UsedValue):
+    if len(Records) != 9 or any(Marker.offset in UsedValue for Marker in Records):
+        return None
+    Points = Records[:4]
+    Header = Records[4]
+    Lines = Records[5:]
+    Prefix = Points[0].prefix
+    Locus = Points[0].locus
+    InvalidPoint = any(
+        Marker.prefix != Prefix
+        or Marker.locus != Locus
+        or Marker.profile_role != 1
+        or Marker.native_kind != 0
+        or Marker.coordinates_mm is None
+        for Marker in Points
+    )
+    InvalidLine = any(
+        Marker.prefix != Prefix
+        or Marker.locus != Locus
+        or Marker.profile_role != 1
+        or Marker.native_kind not in {1, 2}
+        or Marker.coordinates_mm is not None
+        or Marker.endpoint_indices is None
+        for Marker in Lines
+    )
+    if (
+        Locus != KCircleLocus.hex()
+        or InvalidPoint
+        or Header.prefix != Prefix
+        or Header.locus != Locus
+        or Header.profile_role != 1
+        or Header.native_kind != 0
+        or Header.coordinates_mm is not None
+        or Header.endpoint_indices is None
+        or Header.length != 92
+        or InvalidLine
+        or any(Marker.length != 92 for Marker in Lines[:-1])
+        or Lines[-1].length < 92
+    ):
+        return None
+    Resolved = tuple(Marker.coordinates_mm for Marker in Points)
+    if any(Coordinate is None for Coordinate in Resolved):
+        return None
+    XsValue = sorted({Coordinate[0] for Coordinate in Resolved})
+    YsValue = sorted({Coordinate[1] for Coordinate in Resolved})
+    Corners = {(First, Second) for First in XsValue for Second in YsValue}
+    HeaderStart, HeaderEnd = Header.endpoint_indices
+    if (
+        len(XsValue) != 2
+        or len(YsValue) != 2
+        or len(set(Resolved)) != 4
+        or set(Resolved) != Corners
+        or HeaderStart >= len(Resolved)
+        or HeaderEnd >= len(Resolved)
+        or HeaderStart == HeaderEnd
+    ):
+        return None
+    return (Points, Header, Lines, Resolved, XsValue, YsValue)
+
+
+# rectangle edge parsing owns side classification and uniqueness validation
+def RectangleEdges(Lines, Resolved, XsValue, YsValue):
+    EdgeMarkers: dict[str, NativeMarker] = {}
+    for Marker in Lines:
+        EndpointStart, EndpointEnd = Marker.endpoint_indices or (-1, -1)
+        if (
+            EndpointStart < 0
+            or EndpointEnd < 0
+            or EndpointStart >= len(Resolved)
+            or EndpointEnd >= len(Resolved)
+            or EndpointStart == EndpointEnd
+        ):
+            return None
+        PointStart = Resolved[EndpointStart]
+        PointEnd = Resolved[EndpointEnd]
+        if MathValue.isclose(PointStart[1], PointEnd[1], abs_tol=1e-09):
+            SideValue = (
+                "bottom"
+                if MathValue.isclose(PointStart[1], YsValue[0], abs_tol=1e-09)
+                else "top"
+            )
+        elif MathValue.isclose(PointStart[0], PointEnd[0], abs_tol=1e-09):
+            SideValue = (
+                "left"
+                if MathValue.isclose(PointStart[0], XsValue[0], abs_tol=1e-09)
+                else "right"
+            )
+        else:
+            return None
+        if SideValue in EdgeMarkers:
+            return None
+        EdgeMarkers[SideValue] = Marker
+    if set(EdgeMarkers) != {"bottom", "right", "top", "left"}:
+        return None
+    return tuple(
+        EdgeMarkers[SideValue].offset
+        for SideValue in ("bottom", "right", "top", "left")
+    )
+
+
+# rectangle window parsing composes validated shape and edge metadata
+def RectangleWindow(Markers, Start, UsedValue):
+    Records = Markers[Start : Start + 9]
+    ShapeData = RectangleShape(Records, UsedValue)
+    if ShapeData is None:
+        return None
+    Points, Header, Lines, Resolved, XsValue, YsValue = ShapeData
+    EdgeOffsets = RectangleEdges(Lines, Resolved, XsValue, YsValue)
+    if EdgeOffsets is None:
+        return None
+    MetaOffsets = tuple(
+        Marker.offset
+        for Marker in (*Points, Header)
+        if Marker.offset not in EdgeOffsets
+    )
+    Profile = NativeProfile(
+        "rectangle",
+        (XsValue[0], YsValue[0], XsValue[1], YsValue[1]),
+        (*EdgeOffsets, *MetaOffsets),
+    )
+    return (Profile, {Marker.offset for Marker in Records})
+
+
 # this definition exists because focused behavior needs one stable owner
 def LinkedRectangle(
     Markers: list[NativeMarker],
@@ -12248,130 +12372,11 @@ def LinkedRectangle(
     Profiles: list[NativeProfile] = []
     UsedValue: set[int] = set()
     for Start in range(max(0, len(Markers) - 8)):
-        Records = Markers[Start : Start + 9]
-        if len(Records) != 9 or any((Marker.offset in UsedValue for Marker in Records)):
-            continue
-        Points = Records[:4]
-        Header = Records[4]
-        Lines = Records[5:]
-        Prefix = Points[0].prefix
-        Locus = Points[0].locus
-        if (
-            Locus != KCircleLocus.hex()
-            or any(
-                (
-                    Marker.prefix != Prefix
-                    or Marker.locus != Locus
-                    or Marker.profile_role != 1
-                    or (Marker.native_kind != 0)
-                    or (Marker.coordinates_mm is None)
-                    for Marker in Points
-                )
-            )
-            or Header.prefix != Prefix
-            or (Header.locus != Locus)
-            or (Header.profile_role != 1)
-            or (Header.native_kind != 0)
-            or (Header.coordinates_mm is not None)
-            or (Header.endpoint_indices is None)
-            or (Header.length != 92)
-            or any(
-                (
-                    Marker.prefix != Prefix
-                    or Marker.locus != Locus
-                    or Marker.profile_role != 1
-                    or (Marker.native_kind not in {1, 2})
-                    or (Marker.coordinates_mm is not None)
-                    or (Marker.endpoint_indices is None)
-                    for Marker in Lines
-                )
-            )
-            or any((Marker.length != 92 for Marker in Lines[:-1]))
-            or (Lines[-1].length < 92)
-        ):
-            continue
-        Coordinates = tuple((Marker.coordinates_mm for Marker in Points))
-        if any((Coordinate is None for Coordinate in Coordinates)):
-            continue
-        Resolved = tuple(
-            (Coordinate for Coordinate in Coordinates if Coordinate is not None)
-        )
-        XsValue = sorted({Coordinate[0] for Coordinate in Resolved})
-        YsValue = sorted({Coordinate[1] for Coordinate in Resolved})
-        if len(XsValue) != 2 or len(YsValue) != 2 or len(set(Resolved)) != 4:
-            continue
-        Corners = {
-            (FirstCoord, SecondCoord)
-            for FirstCoord in XsValue
-            for SecondCoord in YsValue
-        }
-        if set(Resolved) != Corners:
-            continue
-        HeaderStart, HeaderEnd = Header.endpoint_indices
-        if (
-            HeaderStart >= len(Resolved)
-            or HeaderEnd >= len(Resolved)
-            or HeaderStart == HeaderEnd
-        ):
-            continue
-        EdgeMarkers: dict[str, NativeMarker] = {}
-        Valid = True
-        for Marker in Lines:
-            EndpointStart, EndpointEnd = Marker.endpoint_indices or (-1, -1)
-            if (
-                EndpointStart < 0
-                or EndpointEnd < 0
-                or EndpointStart >= len(Resolved)
-                or (EndpointEnd >= len(Resolved))
-                or (EndpointStart == EndpointEnd)
-            ):
-                Valid = False
-                break
-            PointStart = Resolved[EndpointStart]
-            PointEnd = Resolved[EndpointEnd]
-            if MathValue.isclose(PointStart[1], PointEnd[1], abs_tol=1e-09):
-                SideValue = (
-                    "bottom"
-                    if MathValue.isclose(PointStart[1], YsValue[0], abs_tol=1e-09)
-                    else "top"
-                )
-            elif MathValue.isclose(PointStart[0], PointEnd[0], abs_tol=1e-09):
-                SideValue = (
-                    "left"
-                    if MathValue.isclose(PointStart[0], XsValue[0], abs_tol=1e-09)
-                    else "right"
-                )
-            else:
-                Valid = False
-                break
-            if SideValue in EdgeMarkers:
-                Valid = False
-                break
-            EdgeMarkers[SideValue] = Marker
-        if not Valid or set(EdgeMarkers) != {"bottom", "right", "top", "left"}:
-            continue
-        EdgeOffsets = tuple(
-            (
-                EdgeMarkers[SideValue].offset
-                for SideValue in ("bottom", "right", "top", "left")
-            )
-        )
-        MetaOffsets = tuple(
-            (
-                Marker.offset
-                for Marker in (*Points, Header)
-                if Marker.offset not in EdgeOffsets
-            )
-        )
-        Consumed = {Marker.offset for Marker in Records}
-        Profiles.append(
-            NativeProfile(
-                "rectangle",
-                (XsValue[0], YsValue[0], XsValue[1], YsValue[1]),
-                (*EdgeOffsets, *MetaOffsets),
-            )
-        )
-        UsedValue.update(Consumed)
+        Candidate = RectangleWindow(Markers, Start, UsedValue)
+        if Candidate is not None:
+            Profile, Consumed = Candidate
+            Profiles.append(Profile)
+            UsedValue.update(Consumed)
     return (tuple(Profiles), UsedValue)
 
 
