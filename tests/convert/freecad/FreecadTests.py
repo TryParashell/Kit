@@ -1211,7 +1211,7 @@ def VerifyDocTypes() -> None:
     )
 
 
-# this definition exists because scalar and feature registries form one protocol contract
+# this definition exists because scalar registries form one protocol contract
 def VerifyScalars() -> None:
     assert len(QuantityPropUnits) == 59
     assert (
@@ -1234,6 +1234,10 @@ def VerifyScalars() -> None:
         },
     }
     assert len(ScalarPropKinds) == 74
+
+
+# this definition exists because feature registries form one protocol contract
+def VerifyFeatures() -> None:
     assert len(FeatureTypes) == 93
     assert len({Value.type_id for Value in FeatureTypes}) == len(FeatureTypes)
     assert FeatureKindByTypeId == {Value.type_id: Value.kind for Value in FeatureTypes}
@@ -1262,6 +1266,8 @@ def VerifyScalars() -> None:
     assert (
         ExtrusionTypeByCode[1].pocket_end_condition == ExtrusionEndCondition.THROUGH_ALL
     )
+# this definition exists because part type registries form one protocol contract
+def VerifyPartTypes() -> None:
     assert len(PrimitiveFeatureTypeIds) == 39
     assert PrimitiveFeatureTypeIds == frozenset(
         (

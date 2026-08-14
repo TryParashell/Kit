@@ -749,9 +749,7 @@ def VerifyNestMate(
 
 
 # this definition exists because generated metadata groups must stay outside the assembly root
-def VerifyRootGroup(
-    DataValue: dict[str, ET.Element], AsmLinkName: str
-) -> None:
+def VerifyRootGroup(DataValue: dict[str, ET.Element], AsmLinkName: str) -> None:
     AsmRoot = next(
         ItemValue
         for ItemValue in DataValue.values()
@@ -780,8 +778,8 @@ def TestFcstdNested(TmpPath) -> None:
     ComponentTypes, SourceChildren = VerifyNestedDoc(ComponentRoot)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    Objects, DataValue, AsmLinkName, AsmLink, Origin, Children, Proxy = (
-        NestedContext(RootValue, ComponentTypes, SourceChildren)
+    Objects, DataValue, AsmLinkName, AsmLink, Origin, Children, Proxy = NestedContext(
+        RootValue, ComponentTypes, SourceChildren
     )
     VerifyProxyIds(
         RootValue,

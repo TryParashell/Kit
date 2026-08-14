@@ -7944,8 +7944,8 @@ def EncodeNativeAsm(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def DecodeNativeA(DataValue: bytes) -> NativeModelA:
+# root parsing isolates native header identity and log count validation
+def ReadHeaderRoot(DataValue: bytes):
     ClassName, Offset = ReadClass(DataValue, 0)
     if ClassName != "moHeader_c":
         raise SldprtFormatError("native SOLIDWORKS header class is not moHeader_c")
@@ -7964,6 +7964,11 @@ def DecodeNativeA(DataValue: bytes) -> NativeModelA:
         raise SldprtFormatError("native SOLIDWORKS header log list is missing")
     (LogCount,) = Struct.unpack_from("<H", DataValue, Offset)
     Offset += 2
+    return (UserName, LogCount, Offset)
+
+
+# object parsing isolates native header action and reference extraction
+def ReadHeaderObjs(DataValue: bytes, Offset: int, LogCount: int):
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "moLogs_c":
         raise SldprtFormatError("native SOLIDWORKS header log record is missing")
@@ -7988,6 +7993,11 @@ def DecodeNativeA(DataValue: bytes) -> NativeModelA:
         Offset += 4
         ObjectName, Offset = ReadSerialized(DataValue, Offset)
         Objects.append((ObjectId, ObjectName))
+    return (RefName, tuple(Objects), Offset)
+
+
+# tail parsing isolates native document path and configuration extraction
+def ReadHeaderTail(DataValue: bytes, Offset: int):
     Offset += 14
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "moExtObject_c":
@@ -8005,7 +8015,15 @@ def DecodeNativeA(DataValue: bytes) -> NativeModelA:
     Offset = ExpectBytes(DataValue, Offset, bytes.fromhex("0008"))
     Offset += 16
     ConfigName, Offset = ReadSerialized(DataValue, Offset)
-    return NativeModelA(UserName, RefName, ConfigName, DocPath, tuple(Objects))
+    return (ConfigName, DocPath)
+
+
+# this definition exists because focused behavior needs one stable owner
+def DecodeNativeA(DataValue: bytes) -> NativeModelA:
+    UserName, LogCount, Offset = ReadHeaderRoot(DataValue)
+    RefName, Objects, Offset = ReadHeaderObjs(DataValue, Offset, LogCount)
+    ConfigName, DocPath = ReadHeaderTail(DataValue, Offset)
+    return NativeModelA(UserName, RefName, ConfigName, DocPath, Objects)
 
 
 # this definition exists because focused behavior needs one stable owner
