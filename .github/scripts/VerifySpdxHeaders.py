@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse as Argparse
 import hashlib as Hashlib
 import pathlib as Pathlib
+import re as Regex
+import stat as StatLib
 import subprocess as Subprocess
 import sys as System
 
@@ -29,6 +31,9 @@ KHeaderNoticePath = KRepoRoot / "HEADER_NOTICE"
 
 # required skill license stays immutable because frontmatter cannot carry the normal leading block
 KSkillLicenseField = "license: LicenseRef-PolyForm-Strict-1.0.0"
+
+# complete commit identifiers keep diff and worktree selection free from revision expression ambiguity
+KFullShaPattern = Regex.compile(r"\A[0-9a-f]{40}\Z")
 
 # exempt prefixes stay narrow because only steering sources and vendor examples omit normal headers
 KExemptPrefixes = (".kiro/", "examples/")
@@ -275,7 +280,9 @@ def CheckFile(
         return True, "exempt (no comment syntax available)"
     SourceLines = ReadLines(SourcePath)
     if SourceLines is None:
-        return True, "exempt (not readable as UTF-8 text; treated as binary)"
+        if StyleText == "unknown":
+            return True, "exempt (unknown format is not readable as UTF-8 text)"
+        return False, "known text format is not readable as UTF-8"
     CandidateSets = GetCandidates(StyleText, CanonLines)
     return MatchHeader(SourceLines, GetLeadOffset(SourceLines), CandidateSets)
 
