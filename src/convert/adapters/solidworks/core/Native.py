@@ -12057,6 +12057,78 @@ def DecodeSketch(
     )
 
 
+# marker geometry parsing owns state coordinates and endpoint extraction
+def MarkerGeometry(DataValue: bytes, Offset: int, EndValue: int):
+    StateOffset = Offset + 48
+    State = (
+        Struct.unpack_from("<d", DataValue, StateOffset)[0]
+        if StateOffset + 8 <= EndValue
+        else None
+    )
+    if State is not None and not MathValue.isfinite(State):
+        State = None
+    CoordinatesMetres = MarkerMetres(DataValue, Offset, EndValue)
+    Coordinates = (
+        None
+        if CoordinatesMetres is None
+        else (
+            Clean(round(CoordinatesMetres[0] * KMillimetres, 12)),
+            Clean(round(CoordinatesMetres[1] * KMillimetres, 12)),
+        )
+    )
+    Endpoints = None
+    PairOffset = Offset + 64
+    if Coordinates is None and PairOffset + 4 <= EndValue:
+        PairValue = Struct.unpack_from("<HH", DataValue, PairOffset)
+        if PairValue != (0, 0):
+            Endpoints = PairValue
+    return (State, CoordinatesMetres, Coordinates, Endpoints)
+
+
+# single marker parsing owns native metadata normalization
+def ParseOneMarker(DataValue: bytes, Offsets, Index: int, EndValue: int):
+    Offset = Offsets[Index]
+    PrefixBytes = next(
+        Prefix for Prefix in KMarkers if DataValue.startswith(Prefix, Offset)
+    )
+    if Offset + 21 > EndValue:
+        return None
+    NativeKind = Struct.unpack_from("<I", DataValue, Offset + 17)[0]
+    Locus = DataValue[Offset + 23 : Offset + 27]
+    ProfileRole = Struct.unpack_from("<H", DataValue, Offset + 27)[0]
+    NextOffset = Offsets[Index + 1] if Index + 1 < len(Offsets) else EndValue
+    Length = NextOffset - Offset
+    State, CoordinatesMetres, Coordinates, Endpoints = MarkerGeometry(
+        DataValue, Offset, EndValue
+    )
+    ObjectIndex = (
+        Struct.unpack_from("<I", DataValue, Offset - 4)[0]
+        if Offset >= 4
+        else 4294967295
+    )
+    ObjectIndex = None if ObjectIndex == 4294967295 else ObjectIndex
+    Semantic = MarkerSemantic(
+        NativeKind, Locus, Coordinates, Endpoints, ProfileRole
+    )
+    return NativeMarker(
+        offset=Offset,
+        length=Length,
+        prefix=PrefixBytes.hex(),
+        native_kind=NativeKind,
+        locus=Locus.hex(),
+        profile_role=ProfileRole,
+        state=State,
+        object_index=ObjectIndex,
+        local_id=MarkerLocalId(DataValue, Offset, Length),
+        coordinates_mm=Coordinates,
+        endpoint_indices=Endpoints,
+        construction=ProfileRole == 2,
+        semantic=Semantic,
+        data=bytes(DataValue[Offset:NextOffset]),
+        coordinates_metres=CoordinatesMetres,
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def ParseMarkers(
     DataValue: bytes, Start: int, EndValue: int
@@ -12069,76 +12141,11 @@ def ParseMarkers(
             if Offset + 56 <= EndValue
         }
     )
-    Markers: list[NativeMarker] = []
-    for Index, Offset in enumerate(Offsets):
-        PrefixBytes = next(
-            (Prefix for Prefix in KMarkers if DataValue.startswith(Prefix, Offset))
-        )
-        NativeOffset = 17
-        LocusOffset = 23
-        RoleOffset = 27
-        if Offset + NativeOffset + 4 > EndValue:
-            continue
-        NativeKind = Struct.unpack_from("<I", DataValue, Offset + NativeOffset)[0]
-        Locus = DataValue[Offset + LocusOffset : Offset + LocusOffset + 4]
-        ProfileRole = Struct.unpack_from("<H", DataValue, Offset + RoleOffset)[0]
-        NextOffset = Offsets[Index + 1] if Index + 1 < len(Offsets) else EndValue
-        Length = NextOffset - Offset
-        StateOffset = Offset + 48
-        State = (
-            Struct.unpack_from("<d", DataValue, StateOffset)[0]
-            if StateOffset + 8 <= EndValue
-            else None
-        )
-        if State is not None and (not MathValue.isfinite(State)):
-            State = None
-        CoordinatesMetres = MarkerMetres(DataValue, Offset, EndValue)
-        Coordinates = (
-            None
-            if CoordinatesMetres is None
-            else (
-                Clean(round(CoordinatesMetres[0] * KMillimetres, 12)),
-                Clean(round(CoordinatesMetres[1] * KMillimetres, 12)),
-            )
-        )
-        Endpoints = None
-        if Coordinates is None:
-            PairOffset = Offset + 64
-            if PairOffset + 4 <= EndValue:
-                PairValue = Struct.unpack_from("<HH", DataValue, PairOffset)
-                if PairValue != (0, 0):
-                    Endpoints = PairValue
-        ObjectIndex = (
-            Struct.unpack_from("<I", DataValue, Offset - 4)[0]
-            if Offset >= 4
-            else 4294967295
-        )
-        if ObjectIndex == 4294967295:
-            ObjectIndex = None
-        LocalId = MarkerLocalId(DataValue, Offset, Length)
-        Semantic = MarkerSemantic(
-            NativeKind, Locus, Coordinates, Endpoints, ProfileRole
-        )
-        Markers.append(
-            NativeMarker(
-                offset=Offset,
-                length=Length,
-                prefix=PrefixBytes.hex(),
-                native_kind=NativeKind,
-                locus=Locus.hex(),
-                profile_role=ProfileRole,
-                state=State,
-                object_index=ObjectIndex,
-                local_id=LocalId,
-                coordinates_mm=Coordinates,
-                endpoint_indices=Endpoints,
-                construction=ProfileRole == 2,
-                semantic=Semantic,
-                data=bytes(DataValue[Offset:NextOffset]),
-                coordinates_metres=CoordinatesMetres,
-            )
-        )
-    return tuple(Markers)
+    Markers = tuple(
+        ParseOneMarker(DataValue, Offsets, Index, EndValue)
+        for Index in range(len(Offsets))
+    )
+    return tuple(MarkerValue for MarkerValue in Markers if MarkerValue is not None)
 
 
 # this definition exists because focused behavior needs one stable owner
