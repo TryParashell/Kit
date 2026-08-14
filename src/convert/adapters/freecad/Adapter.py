@@ -1372,7 +1372,7 @@ globals()['_component_stem'] = ComponentStem
 globals()['_configuration_parts'] = ConfigParts
 
 # this binding exists because shared behavior needs one stable value
-globals()['_definition_sources'] = Definition
+globals()['_definition_sources'] = SourceKeys
 
 # this binding exists because shared behavior needs one stable value
 globals()['_destination_path'] = ResolveTarget
@@ -1384,7 +1384,7 @@ globals()['_document_tree'] = DocTree
 globals()['_enum_text'] = EnumText
 
 # this binding exists because shared behavior needs one stable value
-globals()['_existing_timestamps'] = Existing
+globals()['_existing_timestamps'] = FileTimestamps
 
 # this binding exists because shared behavior needs one stable value
 globals()['_external_link_details'] = OuterLink
@@ -1429,7 +1429,7 @@ globals()['_manifest_native_brep_key'] = ManifestNativeBrepKey
 globals()['_mapped_external_documents'] = MappedOuter
 
 # this binding exists because shared behavior needs one stable value
-globals()['_matching_component_link'] = MatchingLink
+globals()['_matching_component_link'] = MatchLink
 
 # this binding exists because shared behavior needs one stable value
 globals()['_mate_parts'] = MateParts
@@ -1453,7 +1453,7 @@ globals()['_native_external_documents'] = NativeOuter
 globals()['_native_geometry_is_usable'] = NativeGeomIs
 
 # this binding exists because shared behavior needs one stable value
-globals()['_nested_external_links'] = NestedOuter
+globals()['_nested_external_links'] = OuterLinkMap
 
 # this binding exists because shared behavior needs one stable value
 globals()['_neutral_brep_is_native'] = NeutralBrepIs

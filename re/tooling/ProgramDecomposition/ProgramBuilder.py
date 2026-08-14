@@ -31,10 +31,14 @@ def CollectCatalogs(
 ]:
     CatalogMaps: dict[str, dict[object, str]] = {}
     GroupBases: dict[str, set[str]] = {}
-    VariantMaps: dict[str, dict[str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]]] = {}
+    VariantMaps: dict[
+        str, dict[str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]]
+    ] = {}
     FoldPaths = {GroupPath for SpareValue, GroupPath in KFoldRules}
     for ProgramItem in Programs:
-        GroupStreams: dict[str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]] = {}
+        GroupStreams: dict[
+            str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]
+        ] = {}
         for StreamName, Operations in ProgramItem.Streams:
             for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in Operations:
                 GroupPath = GetGroupPath(OwnerText)
@@ -42,14 +46,20 @@ def CollectCatalogs(
                 OwnerBase = GetOwnerBase(OwnerText)
                 GroupBases.setdefault(GroupPath, set()).add(OwnerBase)
                 if len(GroupBases[GroupPath]) > 1 and GroupPath not in FoldPaths:
-                    raise ValueError(f'owner path collision at {GroupPath}: {sorted(GroupBases[GroupPath])}')
+                    raise ValueError(
+                        f"owner path collision at {GroupPath}: {sorted(GroupBases[GroupPath])}"
+                    )
                 OwnerMap = CatalogMaps.setdefault(GroupPath, {})
                 PriorOwner = OwnerMap.get(OwnerKey)
                 if PriorOwner is not None and PriorOwner != OwnerText:
-                    raise ValueError(f'owner site collision at {GroupPath} key {OwnerKey!r}')
+                    raise ValueError(
+                        f"owner site collision at {GroupPath} key {OwnerKey!r}"
+                    )
                 OwnerMap[OwnerKey] = OwnerText
                 StreamMap = GroupStreams.setdefault(GroupPath, {})
-                StreamMap.setdefault(StreamName, []).append((StartPos, FieldWidth, OwnerKey, KindName, DefaultValue))
+                StreamMap.setdefault(StreamName, []).append(
+                    (StartPos, FieldWidth, OwnerKey, KindName, DefaultValue)
+                )
         VariantMaps[ProgramItem.VariantPath] = GroupStreams
     return CatalogMaps, VariantMaps
 
@@ -65,14 +75,32 @@ def BuildVariants(
     for VariantPath, GroupStreams in sorted(VariantMaps.items()):
         MethodItems: list[MethodData] = []
         for GroupPath, StreamMap in sorted(GroupStreams.items()):
-            StreamOps = tuple(((StreamName, tuple(Operations)) for StreamName, Operations in sorted(StreamMap.items())))
-            MethodItems.append(MethodData(GroupPath=GroupPath, OwnerSites=Catalogs[GroupPath], StreamOps=StreamOps))
+            StreamOps = tuple(
+                (
+                    (StreamName, tuple(Operations))
+                    for StreamName, Operations in sorted(StreamMap.items())
+                )
+            )
+            MethodItems.append(
+                MethodData(
+                    GroupPath=GroupPath,
+                    OwnerSites=Catalogs[GroupPath],
+                    StreamOps=StreamOps,
+                )
+            )
         VariantMethods[VariantPath] = tuple(MethodItems)
     return VariantMethods
 
 
 # public assembly remains small so collection and variant construction evolve independently
-def BuildMethods(Programs: tuple[ProgramData, ...]) -> tuple[dict[str, tuple[tuple[object, str], ...]], dict[str, tuple[MethodData, ...]]]:
+def BuildMethods(
+    Programs: tuple[ProgramData, ...],
+) -> tuple[
+    dict[str, tuple[tuple[object, str], ...]], dict[str, tuple[MethodData, ...]]
+]:
     CatalogMaps, VariantMaps = CollectCatalogs(Programs)
-    Catalogs = {GroupPath: tuple(sorted(OwnerMap.items(), key=SortOwnerItem)) for GroupPath, OwnerMap in sorted(CatalogMaps.items())}
+    Catalogs = {
+        GroupPath: tuple(sorted(OwnerMap.items(), key=SortOwnerItem))
+        for GroupPath, OwnerMap in sorted(CatalogMaps.items())
+    }
     return (Catalogs, BuildVariants(Catalogs, VariantMaps))
