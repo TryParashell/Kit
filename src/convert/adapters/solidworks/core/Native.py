@@ -7174,124 +7174,140 @@ def LineLoopPoints(
     return StartData
 
 
+# rectangle encoding owns the ordered corner and edge marker emission
+def EncodeRectMut(Selected, Profile, Payload, Consumed, LocalId):
+    if len(Selected) != 4 or not all(
+        Entity is not None and isinstance(Entity.geometry, LineGeom)
+        for Entity in Selected
+    ):
+        return None
+    BoundsValue = Rectangle(
+        tuple(Entity.geometry for Entity in Selected if Entity is not None)
+    )
+    if BoundsValue is None:
+        return None
+    Points = (
+        (BoundsValue[0], BoundsValue[1]),
+        (BoundsValue[2], BoundsValue[1]),
+        (BoundsValue[2], BoundsValue[3]),
+        (BoundsValue[0], BoundsValue[3]),
+    )
+    for Point in Points:
+        Payload.extend(Coordinate(Point, LocalId, KPointLocus))
+        LocalId += 1
+    for Start, EndValue in ((0, 1), (1, 2), (2, 3), (3, 0)):
+        Payload.extend(LineMarker(Start, EndValue, LocalId))
+        LocalId += 1
+    Consumed.update(Profile)
+    return LocalId
+
+
+# polyline encoding owns the ordered vertex and edge marker emission
+def EncodePolyMut(Selected, Profile, Payload, Consumed, LocalId):
+    if len(Selected) != 6 or not all(
+        Entity is not None and isinstance(Entity.geometry, LineGeom)
+        for Entity in Selected
+    ):
+        return None
+    LineData = tuple(Entity.geometry for Entity in Selected if Entity is not None)
+    PointData = LineLoopPoints(LineData)
+    if PointData is None:
+        return None
+    for PointValue in PointData:
+        Payload.extend(Coordinate(PointValue, LocalId, KPointLocus))
+        LocalId += 1
+    for PointIndex in range(len(PointData)):
+        Payload.extend(
+            LineMarker(PointIndex, (PointIndex + 1) % len(PointData), LocalId)
+        )
+        LocalId += 1
+    Consumed.update(Profile)
+    return LocalId
+
+
+# circle encoding owns radial markers and their generated driving dimension
+def EncodeCircleMut(Selected, Payload, Generated, Consumed, LocalId):
+    if not (
+        len(Selected) == 1
+        and Selected[0] is not None
+        and isinstance(Selected[0].geometry, CircleGeom)
+    ):
+        return None
+    Circle = Selected[0].geometry
+    Center = (Circle.center.x, Circle.center.y)
+    Radial = (Circle.center.x + Circle.radius, Circle.center.y)
+    Payload.extend(Coordinate(Center, LocalId, KCircleLocus))
+    Payload.extend(Coordinate(Radial, LocalId + 1, KPointLocus))
+    Generated.append(
+        WriteDimension(
+            f"D{len(Generated) + 1}",
+            Circle.radius,
+            "R" + format(Circle.radius, ".15g"),
+            ParamRole.DRIVING,
+        )
+    )
+    Consumed.add(Selected[0].id)
+    return LocalId + 2
+
+
+# entity encoding owns unconsumed line and circle marker emission
+def EncodeEntityMut(Entity, Payload, Generated, LocalId):
+    if isinstance(Entity.geometry, LineGeom):
+        Payload.extend(
+            Coordinate(
+                (Entity.geometry.start.x, Entity.geometry.start.y),
+                LocalId,
+                KPointLocus,
+            )
+        )
+        Payload.extend(
+            Coordinate(
+                (Entity.geometry.end.x, Entity.geometry.end.y),
+                LocalId + 1,
+                KPointLocus,
+            )
+        )
+        Payload.extend(LineMarker(LocalId - 1, LocalId, LocalId + 2))
+        return LocalId + 3
+    if isinstance(Entity.geometry, CircleGeom):
+        Center = (Entity.geometry.center.x, Entity.geometry.center.y)
+        Radial = (Center[0] + Entity.geometry.radius, Center[1])
+        Payload.extend(Coordinate(Center, LocalId, KCircleLocus))
+        Payload.extend(Coordinate(Radial, LocalId + 1, KPointLocus))
+        Generated.append(
+            WriteDimension(
+                f"D{len(Generated) + 1}",
+                Entity.geometry.radius,
+                "R" + format(Entity.geometry.radius, ".15g"),
+                ParamRole.DRIVING,
+            )
+        )
+        return LocalId + 2
+    return LocalId
+
+
 # this definition exists because focused behavior needs one stable owner
 def EncodeSketch(
     Sketch: Sketch, ObjectId: int, ObjectIds: dict[str, int]
 ) -> tuple[bytes, tuple[WriteDimension, ...]]:
-    Payload = bytearray()
-    PlaneId = ObjectIds.get(f"plane:{Sketch.support_plane_id}", 2)
-    Payload.extend(PlaneRef(PlaneId))
+    Payload = bytearray(PlaneRef(ObjectIds.get(f"plane:{Sketch.support_plane_id}", 2)))
     Generated: list[WriteDimension] = []
     Consumed: set[str] = set()
     LocalId = 1
     Entities = {Entity.id: Entity for Entity in Sketch.entities}
     for Profile in Sketch.closed_profile_entity_ids:
-        Selected = tuple((Entities.get(EntityId) for EntityId in Profile))
-        if len(Selected) == 4 and all(
-            (
-                Entity is not None and isinstance(Entity.geometry, LineGeom)
-                for Entity in Selected
+        Selected = tuple(Entities.get(EntityId) for EntityId in Profile)
+        UpdatedId = EncodeRectMut(Selected, Profile, Payload, Consumed, LocalId)
+        if UpdatedId is None:
+            UpdatedId = EncodePolyMut(Selected, Profile, Payload, Consumed, LocalId)
+        if UpdatedId is None:
+            UpdatedId = EncodeCircleMut(
+                Selected, Payload, Generated, Consumed, LocalId
             )
-        ):
-            BoundsValue = Rectangle(
-                tuple((Entity.geometry for Entity in Selected if Entity is not None))
-            )
-            if BoundsValue is not None:
-                Points = (
-                    (BoundsValue[0], BoundsValue[1]),
-                    (BoundsValue[2], BoundsValue[1]),
-                    (BoundsValue[2], BoundsValue[3]),
-                    (BoundsValue[0], BoundsValue[3]),
-                )
-                for Point in Points:
-                    Payload.extend(Coordinate(Point, LocalId, KPointLocus))
-                    LocalId += 1
-                for Start, EndValue in ((0, 1), (1, 2), (2, 3), (3, 0)):
-                    Payload.extend(LineMarker(Start, EndValue, LocalId))
-                    LocalId += 1
-                Consumed.update(Profile)
-                continue
-        if len(Selected) == 6 and all(
-            (
-                Entity is not None and isinstance(Entity.geometry, LineGeom)
-                for Entity in Selected
-            )
-        ):
-            LineData = tuple(
-                (Entity.geometry for Entity in Selected if Entity is not None)
-            )
-            PointData = LineLoopPoints(LineData)
-            if PointData is not None:
-                for PointValue in PointData:
-                    Payload.extend(Coordinate(PointValue, LocalId, KPointLocus))
-                    LocalId += 1
-                for PointIndex in range(len(PointData)):
-                    Payload.extend(
-                        LineMarker(
-                            PointIndex, (PointIndex + 1) % len(PointData), LocalId
-                        )
-                    )
-                    LocalId += 1
-                Consumed.update(Profile)
-                continue
-        if (
-            len(Selected) == 1
-            and Selected[0] is not None
-            and isinstance(Selected[0].geometry, CircleGeom)
-        ):
-            Circle = Selected[0].geometry
-            Center = (Circle.center.x, Circle.center.y)
-            Radial = (Circle.center.x + Circle.radius, Circle.center.y)
-            Payload.extend(Coordinate(Center, LocalId, KCircleLocus))
-            LocalId += 1
-            Payload.extend(Coordinate(Radial, LocalId, KPointLocus))
-            LocalId += 1
-            Generated.append(
-                WriteDimension(
-                    f"D{len(Generated) + 1}",
-                    Circle.radius,
-                    "R" + format(Circle.radius, ".15g"),
-                    ParamRole.DRIVING,
-                )
-            )
-            Consumed.add(Selected[0].id)
+        LocalId = LocalId if UpdatedId is None else UpdatedId
     for Entity in Sketch.entities:
-        if Entity.id in Consumed:
-            continue
-        if isinstance(Entity.geometry, LineGeom):
-            StartIndex = LocalId
-            Payload.extend(
-                Coordinate(
-                    (Entity.geometry.start.x, Entity.geometry.start.y),
-                    LocalId,
-                    KPointLocus,
-                )
-            )
-            LocalId += 1
-            Payload.extend(
-                Coordinate(
-                    (Entity.geometry.end.x, Entity.geometry.end.y), LocalId, KPointLocus
-                )
-            )
-            LocalId += 1
-            RosterStart = StartIndex - 1
-            Payload.extend(LineMarker(RosterStart, RosterStart + 1, LocalId))
-            LocalId += 1
-        elif isinstance(Entity.geometry, CircleGeom):
-            Center = (Entity.geometry.center.x, Entity.geometry.center.y)
-            Radial = (Center[0] + Entity.geometry.radius, Center[1])
-            Payload.extend(Coordinate(Center, LocalId, KCircleLocus))
-            LocalId += 1
-            Payload.extend(Coordinate(Radial, LocalId, KPointLocus))
-            LocalId += 1
-            Generated.append(
-                WriteDimension(
-                    f"D{len(Generated) + 1}",
-                    Entity.geometry.radius,
-                    "R" + format(Entity.geometry.radius, ".15g"),
-                    ParamRole.DRIVING,
-                )
-            )
+        if Entity.id not in Consumed:
+            LocalId = EncodeEntityMut(Entity, Payload, Generated, LocalId)
     return (bytes(Payload), tuple(Generated))
 
 

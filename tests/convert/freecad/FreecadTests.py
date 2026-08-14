@@ -615,7 +615,7 @@ def NativeXlink(
 
 
 # this definition exists because native object declarations have a separate archive responsibility
-def AppendNativeDeclarations(
+def NativeDeclsMut(
     RootValue: ET.Element,
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
     ObjectOptions: dict[str, dict[str, object]],
@@ -644,7 +644,7 @@ def AppendNativeDeclarations(
 
 
 # this definition exists because native property payloads have a separate archive responsibility
-def AppendNativeObjectData(
+def NativeDataMut(
     RootValue: ET.Element,
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
     ObjectOptions: dict[str, dict[str, object]],
@@ -694,8 +694,8 @@ def AppendNativeObjectData(
         PropNode.extend(Properties)
 
 
-# this definition exists because deterministic ZIP emission is independent of XML construction
-def EmitNativeArchive(RootValue: ET.Element, Entries: dict[str, bytes]) -> bytes:
+# this definition exists because deterministic archive emission is independent of xml construction
+def EmitArchive(RootValue: ET.Element, Entries: dict[str, bytes]) -> bytes:
     Stream = IoStream.BytesIO()
     with Zipfile.ZipFile(Stream, "w", Zipfile.ZIP_DEFLATED) as Archive:
         Archive.writestr(
@@ -717,9 +717,9 @@ def NativeArchive(
     RootValue = XmlTree.Element(
         "Document", {"SchemaVersion": "4", "ProgramVersion": "1.0", "FileVersion": "1"}
     )
-    AppendNativeDeclarations(RootValue, Objects, Options)
-    AppendNativeObjectData(RootValue, Objects, Options)
-    return EmitNativeArchive(RootValue, Entries)
+    NativeDeclsMut(RootValue, Objects, Options)
+    NativeDataMut(RootValue, Objects, Options)
+    return EmitArchive(RootValue, Entries)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -794,7 +794,7 @@ def NativeMesh(Endian: str = "<", Inline: bool = False) -> bytes:
 
 
 # this definition exists because the native sketch fixture needs one coherent geometry payload
-def NativeSketchProperties() -> tuple[ET.Element, ...]:
+def NativeSketch() -> tuple[ET.Element, ...]:
     Attachment = NativeProp(
         "AttachmentSupport", "App::PropertyLinkSubList", "LinkSubList", {"count": "1"}
     )
@@ -925,7 +925,7 @@ def NativePart(BrepData: bytes | None = None) -> bytes:
         NativeProp("Label", "App::PropertyString", "String", {"value": "XY"}),
         NativePlacement(),
     )
-    SketchProperties = NativeSketchProperties()
+    SketchProperties = NativeSketch()
     Profile = NativeProp(
         "Profile", "App::PropertyLinkSub", "LinkSub", {"value": "Sketch", "count": "0"}
     )
@@ -1178,7 +1178,7 @@ def TestFormatHas() -> None:
 
 
 # this definition exists because document and object protocol constants form one contract
-def VerifyProtocolDocumentTypes() -> None:
+def VerifyDocTypes() -> None:
     assert FreecadArchiveModule.DOCUMENT_ENTRY == "Document.xml"
     assert AsmObjectTypePrefix == "Assembly::"
     assert AsmRootTypeId == "Assembly::AssemblyObject"
@@ -1212,7 +1212,7 @@ def VerifyProtocolDocumentTypes() -> None:
 
 
 # this definition exists because scalar and feature registries form one protocol contract
-def VerifyProtocolScalarFeatures() -> None:
+def VerifyScalars() -> None:
     assert len(QuantityPropUnits) == 59
     assert (
         Hashlib.sha256(
@@ -1302,7 +1302,7 @@ def VerifyProtocolScalarFeatures() -> None:
 
 
 # this definition exists because constraint registries must remain internally bijective
-def VerifyProtocolConstraints() -> None:
+def VerifyRules() -> None:
     assert RulePointByIndex == {Value.index: Value.name for Value in RulePoints}
     assert RulePointIndexByName == {
         NameValue: Value.index
@@ -1365,7 +1365,7 @@ def VerifyProtocolConstraints() -> None:
 
 
 # this definition exists because geometry registries must partition native and carrier support
-def VerifyProtocolGeometry() -> None:
+def VerifyGeometry() -> None:
     assert len({Value.type_id for Value in GeomTypes}) == len(GeomTypes)
     assert set(GeomKindByTypeId.values()) == set(GeomKind) - {GeomKind.NATIVE}
     assert set(GeomTypeIdsByKind) == {
@@ -1391,7 +1391,7 @@ def VerifyProtocolGeometry() -> None:
 
 
 # this definition exists because assembly mate registries must preserve support partitions
-def VerifyProtocolMates() -> None:
+def VerifyMates() -> None:
     assert len({Value.name for Value in JointTypeDefinitions}) == len(
         JointTypeDefinitions
     )
@@ -1441,11 +1441,13 @@ def VerifyProtocolMates() -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def TestProtocolAre() -> None:
-    VerifyProtocolDocumentTypes()
-    VerifyProtocolScalarFeatures()
-    VerifyProtocolConstraints()
-    VerifyProtocolGeometry()
-    VerifyProtocolMates()
+    VerifyDocTypes()
+    VerifyScalars()
+    VerifyFeatures()
+    VerifyPartTypes()
+    VerifyRules()
+    VerifyGeometry()
+    VerifyMates()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1696,8 +1698,8 @@ def TestFollow() -> None:
     )
 
 
-# this definition exists because all synthetic PartDesign features share one XML graph mutation
-def AppendPartDesignFeatureMut(
+# this definition exists because all synthetic part design features share one xml graph mutation
+def AddFeatureMut(
     DocRoot: ET.Element,
     NameValue: str,
     TypeId: str,
@@ -1740,7 +1742,7 @@ def AppendPartDesignFeatureMut(
     FeatureProperties.extend(PropertiesData)
 
 
-# this definition exists because the chamfer fixture needs one reusable XML mutation
+# this definition exists because the chamfer fixture needs one reusable xml mutation
 def AddChamferMut(RootData: ET.Element) -> None:
     BaseData = NativeProp(
         "Base", "App::PropertyLinkSub", "LinkSub", {"value": "Pad", "count": "1"}
@@ -1759,12 +1761,12 @@ def AddChamferMut(RootData: ET.Element) -> None:
         NativeProp("FlipDirection", "App::PropertyBool", "Bool", {"value": "false"}),
         NativeProp("UseAllEdges", "App::PropertyBool", "Bool", {"value": "false"}),
     )
-    AppendPartDesignFeatureMut(
+    AddFeatureMut(
         RootData, "Chamfer", "PartDesign::Chamfer", ("Pad", "Body"), PropertiesData
     )
 
 
-# this definition exists because the thickness fixture needs one reusable XML mutation
+# this definition exists because the thickness fixture needs one reusable xml mutation
 def AddThicknessMut(RootData: ET.Element) -> None:
     BaseData = NativeProp(
         "Base", "App::PropertyLinkSub", "LinkSub", {"value": "Pad", "count": "1"}
@@ -1777,13 +1779,13 @@ def AddThicknessMut(RootData: ET.Element) -> None:
         NativeProp("Value", "App::PropertyQuantityConstraint", "Float", {"value": "2"}),
         NativeProp("Reversed", "App::PropertyBool", "Bool", {"value": "true"}),
     )
-    AppendPartDesignFeatureMut(
+    AddFeatureMut(
         RootData, "Thickness", "PartDesign::Thickness", ("Pad", "Body"), PropertiesData
     )
 
 
 # this definition exists because pattern fixtures share stable original and axis references
-def PatternReferences(NameValue: str) -> tuple[ET.Element, ET.Element]:
+def PatternRefs(NameValue: str) -> tuple[ET.Element, ET.Element]:
     OriginalsData = NativeProp(
         "Originals", "App::PropertyLinkList", "LinkList", {"count": "1"}
     )
@@ -1795,9 +1797,9 @@ def PatternReferences(NameValue: str) -> tuple[ET.Element, ET.Element]:
     return OriginalsData, DirectionData
 
 
-# this definition exists because the linear-pattern fixture needs one reusable XML mutation
-def AddLinearPatternMut(DocRoot: ET.Element) -> None:
-    OriginalsData, DirectionData = PatternReferences("Direction")
+# this definition exists because the linear pattern fixture needs one reusable xml mutation
+def AddLinearMut(DocRoot: ET.Element) -> None:
+    OriginalsData, DirectionData = PatternRefs("Direction")
     PropertiesData = (
         NativeProp(
             "Label", "App::PropertyString", "String", {"value": "LinearPattern"}
@@ -1810,7 +1812,7 @@ def AddLinearPatternMut(DocRoot: ET.Element) -> None:
         NativeProp("Mode", "App::PropertyEnumeration", "Integer", {"value": "0"}),
         NativeProp("Reversed", "App::PropertyBool", "Bool", {"value": "false"}),
     )
-    AppendPartDesignFeatureMut(
+    AddFeatureMut(
         DocRoot,
         "LinearPattern",
         "PartDesign::LinearPattern",
@@ -1819,9 +1821,9 @@ def AddLinearPatternMut(DocRoot: ET.Element) -> None:
     )
 
 
-# this definition exists because the polar-pattern fixture needs one reusable XML mutation
-def AddPolarPatternMut(DocRoot: ET.Element) -> None:
-    OriginalsData, AxisData = PatternReferences("Axis")
+# this definition exists because the polar pattern fixture needs one reusable xml mutation
+def AddPolarMut(DocRoot: ET.Element) -> None:
+    OriginalsData, AxisData = PatternRefs("Axis")
     PropertiesData = (
         NativeProp("Label", "App::PropertyString", "String", {"value": "PolarPattern"}),
         OriginalsData,
@@ -1830,7 +1832,7 @@ def AddPolarPatternMut(DocRoot: ET.Element) -> None:
         NativeProp("Occurrences", "App::PropertyInteger", "Integer", {"value": "4"}),
         NativeProp("Reversed", "App::PropertyBool", "Bool", {"value": "false"}),
     )
-    AppendPartDesignFeatureMut(
+    AddFeatureMut(
         DocRoot,
         "PolarPattern",
         "PartDesign::PolarPattern",
@@ -1908,7 +1910,7 @@ def TestPartdesignA() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def AddLinear(DocRoot: ET.Element) -> None:
-        AddLinearPatternMut(DocRoot)
+        AddLinearMut(DocRoot)
 
     DocData = FreeCadAdapter().read(RewriteDocXml(NativePart(), AddLinear))
     PatternData = next(
@@ -1942,7 +1944,7 @@ def TestPartdesignB() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def AddPolarPattern(DocRoot: ET.Element) -> None:
-        AddPolarPatternMut(DocRoot)
+        AddPolarMut(DocRoot)
 
     DocData = FreeCadAdapter().read(RewriteDocXml(NativePart(), AddPolarPattern))
     PatternData = next(
@@ -1972,7 +1974,7 @@ def TestPartdesignB() -> None:
 
 
 # this definition exists because native transfer modes form one independent write contract
-def VerifyNeutralTransferModes(Result) -> None:
+def VerifyTransfers(Result) -> None:
     Transfers = {ItemValue.capability: ItemValue.mode for ItemValue in Result.transfers}
     assert Transfers[Capability.SUPPORT_PLANES] is TransferMode.NATIVE
     assert Transfers[Capability.BODY_STRUCTURE] is TransferMode.NATIVE
@@ -1984,8 +1986,8 @@ def VerifyNeutralTransferModes(Result) -> None:
     assert Transfers[Capability.PARAMETRIC_HISTORY] is TransferMode.MIXED
 
 
-# this definition exists because neutral XML objects must retain every native relationship
-def VerifyNeutralArchive(PayloadData: bytes) -> None:
+# this definition exists because neutral xml objects must retain every native relationship
+def VerifyWriteXml(PayloadData: bytes) -> None:
     with Zipfile.ZipFile(IoStream.BytesIO(PayloadData)) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
         Declarations = {
@@ -2030,7 +2032,7 @@ def VerifyNeutralArchive(PayloadData: bytes) -> None:
 
 
 # this definition exists because neutral readback must preserve interchange and native projections
-def VerifyNeutralReadback(PayloadData: bytes, DocValue, SelectionId: str) -> None:
+def VerifyReadback(PayloadData: bytes, DocValue, SelectionId: str) -> None:
     assert FreeCadAdapter().read(PayloadData) == DocValue
     Native = FreecadNativeModule.read_native_fcstd(PayloadData)
     assert len(Native.support_planes) == 1
@@ -2076,9 +2078,9 @@ def TestNeutralAre() -> None:
     Output = IoStream.BytesIO()
     Result = FreeCadAdapter().write(DocValue, Output)
     PayloadData = Output.getvalue()
-    VerifyNeutralTransferModes(Result)
-    VerifyNeutralArchive(PayloadData)
-    VerifyNeutralReadback(PayloadData, DocValue, Selection.id)
+    VerifyTransfers(Result)
+    VerifyWriteXml(PayloadData)
+    VerifyReadback(PayloadData, DocValue, Selection.id)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2406,8 +2408,8 @@ def TestAllCurrent() -> None:
     assert Sketch.entities[0].fixed
 
 
-# this definition exists because unavailable geometry diagnostics have one focused XML contract
-def VerifyUnavailableGeometry(
+# this definition exists because unavailable geometry diagnostics have one focused xml contract
+def VerifyCarriers(
     RootValue: ET.Element, Kinds: tuple[GeomKind, ...]
 ) -> None:
     SketchObject = next(
@@ -2480,7 +2482,7 @@ def TestUnavailable() -> None:
     )
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    VerifyUnavailableGeometry(RootValue, Kinds)
+    VerifyCarriers(RootValue, Kinds)
     assert Adapter.read(Output.getvalue()) == DocValue
 
 
@@ -2681,7 +2683,7 @@ def TestGeomPayload() -> None:
 
 
 # this definition exists because carrier and composed constraints share one diagnostic contract
-def VerifyRuleCarrierXml(RootValue: ET.Element, Midpoint: SketchRule) -> None:
+def VerifyRuleXml(RootValue: ET.Element, Midpoint: SketchRule) -> None:
     SketchObject = next(
         (
             ItemValue
@@ -2761,7 +2763,7 @@ def TestRuleCarrier() -> None:
     assert Transfers[Capability.EDITABLE_SKETCHES] == TransferMode.MIXED
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    VerifyRuleCarrierXml(RootValue, Midpoint)
+    VerifyRuleXml(RootValue, Midpoint)
     assert Adapter.read(Output.getvalue()) == DocValue
 
 
@@ -3170,7 +3172,7 @@ def TestCurrentAsm(JointIndex: int, Expected: str) -> None:
     assert str(DocValue.assembly.mates[0].kind) == Expected
 
 
-# this definition exists because gear-joint fixtures need one reusable XML mutation
+# this definition exists because gear joint fixtures need one reusable xml mutation
 def GearActionMut(RootValue: ET.Element) -> None:
     Properties = RootValue.find("./ObjectData/Object[@name='Revolute']/Properties")
     assert Properties is not None
@@ -3427,8 +3429,8 @@ def TestGenericIsAs() -> None:
     assert FreeCadAdapter().probe(Stream.getvalue()).confidence == 0.0
 
 
-# this definition exists because opaque-only reads must retain their exact native payload
-def VerifyOpaqueRead(DocValue, Source: bytes) -> None:
+# this definition exists because opaque reads must retain their exact native payload
+def CheckOpaqueRead(DocValue, Source: bytes) -> None:
     assert DocValue.validate() == ()
     assert DocValue.feature_timeline == ()
     assert len(DocValue.brep_payloads) == 2
@@ -3448,8 +3450,8 @@ def VerifyOpaqueRead(DocValue, Source: bytes) -> None:
     assert Capability.BREP not in DocValue.capabilities
 
 
-# this definition exists because opaque-only writes must retain XML declarations exactly
-def VerifyOpaqueArchive(PayloadData: bytes) -> None:
+# this definition exists because opaque writes must retain xml declarations exactly
+def CheckOpaqueXml(PayloadData: bytes) -> None:
     with Zipfile.ZipFile(IoStream.BytesIO(PayloadData)) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
         Opaque = RootValue.find("./ObjectData/Object[@name='Opaque']")
@@ -3492,12 +3494,12 @@ def TestOpaqueOnly() -> None:
     Adapter = FreeCadAdapter()
     assert Adapter.probe(Source).confidence == 0.95
     DocValue = Adapter.read(Source)
-    VerifyOpaqueRead(DocValue, Source)
+    CheckOpaqueRead(DocValue, Source)
     WithoutBrep = Adapter.read(Source, ReadOptions(include_brep=False))
     assert WithoutBrep.brep_payloads == DocValue.brep_payloads
     Output = IoStream.BytesIO()
     Adapter.write(DocValue, Output)
-    VerifyOpaqueArchive(Output.getvalue())
+    CheckOpaqueXml(Output.getvalue())
     assert Output.getvalue() == Source
     assert Adapter.read(Output.getvalue()) == DocValue
 
@@ -3572,7 +3574,7 @@ def TestUnknownData(CarrierSuffix: str, TmpPath: Path) -> None:
 
 
 # this definition exists because native part reads have a focused interchange contract
-def VerifyNativePartRead(DocValue) -> None:
+def CheckPartRead(DocValue) -> None:
     assert DocValue.validate() == ()
     assert len(DocValue.sketches) == 1
     assert [str(Entity.kind) for Entity in DocValue.sketches[0].entities] == [
@@ -3612,7 +3614,7 @@ def VerifyNativePartRead(DocValue) -> None:
 
 
 # this definition exists because circle edits should alter only the intended sketch entity
-def EditNativeCircle(DocValue):
+def EditCircle(DocValue):
     SketchModel = DocValue.sketches[0]
     CircleEntity = SketchModel.entities[0]
     EditedCircle = Replace(
@@ -3624,8 +3626,8 @@ def EditNativeCircle(DocValue):
     return Replace(DocValue, sketches=(EditedSketch,))
 
 
-# this definition exists because native part XML must retain geometry and constraint structure
-def VerifyNativePartXml(RootValue: ET.Element) -> None:
+# this definition exists because native part xml must retain geometry and constraint structure
+def CheckPartXml(RootValue: ET.Element) -> None:
     Sketch = RootValue.find("./ObjectData/Object[@name='Sketch']")
     assert Sketch is not None
     assert [
@@ -3661,13 +3663,13 @@ def TestSelfPart() -> None:
     Adapter = FreeCadAdapter()
     assert Adapter.probe(DataValue).confidence == 0.95
     DocValue = Adapter.read(DataValue)
-    VerifyNativePartRead(DocValue)
-    DocValue = EditNativeCircle(DocValue)
+    CheckPartRead(DocValue)
+    DocValue = EditCircle(DocValue)
     Output = IoStream.BytesIO()
     Adapter.write(DocValue, Output)
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    VerifyNativePartXml(RootValue)
+    CheckPartXml(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3710,7 +3712,7 @@ def TestReplayProp() -> None:
 
 
 # this definition exists because mapped shape fixtures share one sidecar structure
-def FixtureShapeProp(Owner: str, ElemMap: str) -> ET.Element:
+def ShapeFixture(Owner: str, ElemMap: str) -> ET.Element:
     NodeValue = NativeProp(
         "Shape",
         "Part::PropertyPartShape",
@@ -3730,7 +3732,7 @@ def TestSketchShape() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def ShapeProp(Owner: str, ElemMap: str) -> XmlTree.Element:
-        return FixtureShapeProp(Owner, ElemMap)
+        return ShapeFixture(Owner, ElemMap)
 
     SketchBrep = b"\nCASCADE Topology V1, (c) Matra-Datavision\nsketch\n"
     FinalBrep = b"\nCASCADE Topology V1, (c) Matra-Datavision\nfinal\n"
@@ -3821,8 +3823,8 @@ def TestSketchShape() -> None:
     assert FinalShape.find("./ElementMap2").attrib == {"file": "Final.Shape.Map.txt"}
 
 
-# this definition exists because StringHasher fixtures require deterministic archive ordering
-def StringHasherSource(Table: bytes) -> bytes:
+# this definition exists because string hasher fixtures require deterministic archive ordering
+def HasherSource(Table: bytes) -> bytes:
     with Zipfile.ZipFile(IoStream.BytesIO(NativePart())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
         Entries = [
@@ -3856,7 +3858,7 @@ def StringHasherSource(Table: bytes) -> bytes:
 def TestStringRoot() -> None:
     Table = b"StringTableStart v1 0\n"
     Adapter = FreeCadAdapter()
-    DocValue = Adapter.read(StringHasherSource(Table))
+    DocValue = Adapter.read(HasherSource(Table))
     StringHasher = DocValue.metadata["freecad"]["string_hasher"]
     assert StringHasher["attribute"] == "1"
     assert StringHasher["entries"] == [
@@ -3881,8 +3883,8 @@ def TestStringRoot() -> None:
     assert HasherTable.attrib == {"file": "StringHasher.Table.txt"}
 
 
-# this definition exists because part-graph shape properties share one sidecar encoding
-def PartGraphShapeProp(NameValue: str, Source: str, Mapped: bool = False) -> ET.Element:
+# this definition exists because part graph shape properties share one sidecar encoding
+def GraphShapeProp(NameValue: str, Source: str, Mapped: bool = False) -> ET.Element:
     NodeValue = NativeProp(
         NameValue,
         "Part::PropertyPartShape",
@@ -3895,8 +3897,8 @@ def PartGraphShapeProp(NameValue: str, Source: str, Mapped: bool = False) -> ET.
     return NodeValue
 
 
-# this definition exists because the part-graph fixture has one coherent native object graph
-def PartGraphFixture() -> tuple[bytes, dict[str, bytes]]:
+# this definition exists because the part graph fixture has one coherent native object graph
+def GraphFixture() -> tuple[bytes, dict[str, bytes]]:
     Attachment = NativeProp(
         "AttachmentSupport", "App::PropertyLinkSubList", "LinkSubList", {"count": "1"}
     )
@@ -3907,7 +3909,7 @@ def PartGraphFixture() -> tuple[bytes, dict[str, bytes]]:
     BodyProperties = (
         NativeProp("Label", "App::PropertyString", "String", {"value": "Body"}),
         NativeLinkList("Group", ("Sketch", "Pad")),
-        PartGraphShapeProp("Shape", "Body.Shape.brp", True),
+        GraphShapeProp("Shape", "Body.Shape.brp", True),
         NativeProp("Tip", "App::PropertyLink", "Link", {"value": "Pad"}),
         NativeProp("Visibility", "App::PropertyBool", "Bool", {"value": "true"}),
     )
@@ -3935,21 +3937,21 @@ def PartGraphFixture() -> tuple[bytes, dict[str, bytes]]:
             "ConstraintList",
             {"count": "0"},
         ),
-        PartGraphShapeProp("InternalShape", "Sketch.InternalShape.brp"),
+        GraphShapeProp("InternalShape", "Sketch.InternalShape.brp"),
         NativePlacement(),
-        PartGraphShapeProp("Shape", "Sketch.Shape.brp", True),
+        GraphShapeProp("Shape", "Sketch.Shape.brp", True),
         NativeProp("Visibility", "App::PropertyBool", "Bool", {"value": "false"}),
     )
     PadProperties = (
         NativeProp("Label", "App::PropertyString", "String", {"value": "Pad"}),
-        PartGraphShapeProp("AddSubShape", "Pad.AddSubShape.brp", True),
+        GraphShapeProp("AddSubShape", "Pad.AddSubShape.brp", True),
         Profile,
         NativeProp("Length", "App::PropertyLength", "Float", {"value": "25"}),
         NativeProp("Type", "App::PropertyEnumeration", "Integer", {"value": "0"}),
         NativeProp("Reversed", "App::PropertyBool", "Bool", {"value": "false"}),
         NativeProp("Midplane", "App::PropertyBool", "Bool", {"value": "false"}),
-        PartGraphShapeProp("Shape", "Pad.Shape.brp", True),
-        PartGraphShapeProp("SuppressedShape", "Pad.SuppressedShape.brp"),
+        GraphShapeProp("Shape", "Pad.Shape.brp", True),
+        GraphShapeProp("SuppressedShape", "Pad.SuppressedShape.brp"),
         NativeProp("Suppressed", "App::PropertyBool", "Bool", {"value": "false"}),
         NativeProp("Visibility", "App::PropertyBool", "Bool", {"value": "true"}),
     )
@@ -4037,8 +4039,8 @@ def PartGraphFixture() -> tuple[bytes, dict[str, bytes]]:
     return Source, Entries
 
 
-# this definition exists because part-graph declarations and transient properties must round-trip together
-def VerifyPartGraphXml(RootValue: ET.Element) -> None:
+# this definition exists because part graph declarations and transient properties must round trip together
+def CheckGraphXml(RootValue: ET.Element) -> None:
     Declarations = RootValue.findall("./Objects/Object")
     assert [ItemValue.get("name") for ItemValue in Declarations[:5]] == [
         "Body",
@@ -4092,7 +4094,7 @@ def VerifyPartGraphXml(RootValue: ET.Element) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def TestPartGraph() -> None:
-    Source, Entries = PartGraphFixture()
+    Source, Entries = GraphFixture()
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(Source)
     assert [
@@ -4113,7 +4115,7 @@ def TestPartGraph() -> None:
         assert Archive.read("Sketch.InternalShape.brp") == b""
         assert Archive.read("Pad.SuppressedShape.brp") == b""
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    VerifyPartGraphXml(RootValue)
+    CheckGraphXml(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4239,8 +4241,8 @@ def TestAsmObjects() -> None:
     assert References <= Names
 
 
-# this definition exists because assembly link and grounded-object fields form one XML contract
-def VerifyAsmLinkAndGrounded(RootValue: ET.Element) -> None:
+# this definition exists because assembly link and grounded object fields form one xml contract
+def CheckAsmLinks(RootValue: ET.Element) -> None:
     Types = {
         ItemValue.get("name", ""): ItemValue.get("type", "")
         for ItemValue in RootValue.findall("./Objects/Object")
@@ -4281,8 +4283,8 @@ def VerifyAsmLinkAndGrounded(RootValue: ET.Element) -> None:
     }
 
 
-# this definition exists because assembly joint references and grouping form one XML contract
-def VerifyAsmJointAndGroup(RootValue: ET.Element) -> None:
+# this definition exists because assembly joint references and grouping form one xml contract
+def CheckAsmJoints(RootValue: ET.Element) -> None:
     Types = {
         ItemValue.get("name", ""): ItemValue.get("type", "")
         for ItemValue in RootValue.findall("./Objects/Object")
@@ -4356,8 +4358,8 @@ def TestAsmWritesA() -> None:
     Adapter.write(DocValue, Output)
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    VerifyAsmLinkAndGrounded(RootValue)
-    VerifyAsmJointAndGroup(RootValue)
+    CheckAsmLinks(RootValue)
+    CheckAsmJoints(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4474,8 +4476,8 @@ def TestAsmGrouped(TmpPath) -> None:
     assert len(Restored.assembly.documents) == 2
 
 
-# this definition exists because portable external links must survive manifest-free replay
-def VerifyPortableExternalReplay(Adapter: FreeCadAdapter, Target: FilePath) -> None:
+# this definition exists because portable external links must survive manifest free replay
+def CheckPortable(Adapter: FreeCadAdapter, Target: FilePath) -> None:
     NativeOnly = Target.parent / "NativeOnly.FCStd"
     with Zipfile.ZipFile(Target) as Archive:
         RootXml = XmlTree.fromstring(Archive.read("Document.xml"))
@@ -4500,7 +4502,7 @@ def VerifyPortableExternalReplay(Adapter: FreeCadAdapter, Target: FilePath) -> N
 
 
 # this definition exists because stream targets must diagnose embedded external references
-def VerifyEmbeddedExternalReplay(Adapter: FreeCadAdapter, DocValue) -> None:
+def CheckEmbedMut(Adapter: FreeCadAdapter, DocValue) -> None:
     PortableStream = IoStream.BytesIO()
     PortableResult = Adapter.write(DocValue, PortableStream)
     assert PortableResult.application_usable is False
@@ -4519,7 +4521,7 @@ def VerifyEmbeddedExternalReplay(Adapter: FreeCadAdapter, DocValue) -> None:
 
 
 # this definition exists because nonportable writes must retain their original relative reference
-def VerifyNonportableExternalLink(Adapter: FreeCadAdapter, DocValue) -> None:
+def CheckRelinkMut(Adapter: FreeCadAdapter, DocValue) -> None:
     Nonportable = IoStream.BytesIO()
     Adapter.write(DocValue, Nonportable, WriteOptions(values={"portable": False}))
     with Zipfile.ZipFile(IoStream.BytesIO(Nonportable.getvalue())) as Archive:
@@ -4565,9 +4567,9 @@ def TestLinkOnlyDoc(TmpPath) -> None:
     assert Bundled.is_file()
     assert Result.metadata["external_document_file_count"] == 1
     assert Result.metadata["external_document_bytes_written"] == Bundled.stat().st_size
-    VerifyPortableExternalReplay(Adapter, Target)
-    VerifyEmbeddedExternalReplay(Adapter, DocValue)
-    VerifyNonportableExternalLink(Adapter, DocValue)
+    CheckPortable(Adapter, Target)
+    CheckEmbedMut(Adapter, DocValue)
+    CheckRelinkMut(Adapter, DocValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -5268,8 +5270,8 @@ def TestExample(NameValue: str) -> None:
     assert DocValue.validate() == ()
 
 
-# this definition exists because the bundled assembly has one stable native-read contract
-def VerifyBundledAssemblyRead(DocValue) -> tuple[bytes, ...]:
+# this definition exists because the bundled assembly has one stable native read contract
+def CheckBundledAsm(DocValue) -> tuple[bytes, ...]:
     assert DocValue.validate() == ()
     assert DocValue.assembly is not None
     assert len(DocValue.assembly.definitions) == 14
@@ -5309,7 +5311,7 @@ def VerifyBundledAssemblyRead(DocValue) -> tuple[bytes, ...]:
 
 
 # this definition exists because each emitted component must contain loadable native shape data
-def EmittedAssemblyShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
+def EmittedShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
     EmittedShapes = []
     for ComponentFile in ComponentFiles:
         with Zipfile.ZipFile(ComponentFile) as Archive:
@@ -5339,7 +5341,7 @@ def TestAsmFcstdAnd(TmpPath) -> None:
     if not Source.is_file():
         Pytest.skip("bundled FreeCAD assembly example is unavailable")
     DocValue = FreeCadAdapter().read(Source)
-    SourceShapes = VerifyBundledAssemblyRead(DocValue)
+    SourceShapes = CheckBundledAsm(DocValue)
     Output = TmpPath / "Assembly.FCStd"
     Result = Convert(Source, Output)
     assert Result.near_lossless
@@ -5348,7 +5350,7 @@ def TestAsmFcstdAnd(TmpPath) -> None:
     assert Transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.NATIVE
     ComponentFiles = sorted((TmpPath / "Assembly").glob("*.FCStd"))
     assert len(ComponentFiles) == 13
-    EmittedShapes = EmittedAssemblyShapes(ComponentFiles)
+    EmittedShapes = EmittedShapes(ComponentFiles)
     assert sorted(
         (Hashlib.sha256(DataValue).digest() for DataValue in EmittedShapes)
     ) == sorted((Hashlib.sha256(DataValue).digest() for DataValue in SourceShapes))
