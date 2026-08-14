@@ -36,22 +36,22 @@ def SetLegacyMut(SelfRef, NameText, ValueData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KRootInfo = KHereInfo.parents[2]
+KRootInfo = KHereInfo.parents[3]
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KDefaultValue = KRootInfo / "re" / "data" / "segments"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefaultInfo = KRootInfo / "re" / "data" / "ClassLayoutsDecompiled.json"
+KDefaultInfo = KRootInfo / "re" / "data" / "Layouts" / "ClassLayoutsDecompiled.json"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefaultExtern = KRootInfo / "re" / "data" / "ExternalClasses.json"
+KDefaultExtern = KRootInfo / "re" / "data" / "Layouts" / "ExternalClasses.json"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefaultEntry = KRootInfo / "re" / "data" / "ClassLayoutsVersioned.json"
+KDefaultEntry = KRootInfo / "re" / "data" / "Layouts" / "ClassLayoutsVersioned.json"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefaultOut = KRootInfo / "re" / "data" / "ClassLayouts.json"
+KDefaultOut = KRootInfo / "re" / "data" / "Layouts" / "ClassLayouts.json"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KExternSource = "re/data/Layouts/ExternalClasses.json"

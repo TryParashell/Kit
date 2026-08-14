@@ -11,6 +11,10 @@ import json as JsonData
 import pathlib as Pathlib
 import struct as Struct
 import sys as System
+
+# ghidra tooling root exposes the shared layout reader to standalone validators
+KToolRoot = Pathlib.Path(__file__).resolve().parent.parent
+System.path.insert(0, str(KToolRoot))
 import Layout as Layout
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
