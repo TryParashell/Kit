@@ -357,8 +357,8 @@ def TestFormatHas() -> None:
         assert '".FCStd"' not in Source
         assert '".fcstd"' not in Source
 
-# this definition exists because focused behavior needs one stable owner
-def TestProtocolAre() -> None:
+# this definition exists because document and object protocol constants form one contract
+def VerifyProtocolDocumentTypes() -> None:
     assert FreecadArchiveModule.DOCUMENT_ENTRY == 'Document.xml'
     assert AsmObjectTypePrefix == 'Assembly::'
     assert AsmRootTypeId == 'Assembly::AssemblyObject'
@@ -383,6 +383,10 @@ def TestProtocolAre() -> None:
     assert SplineControlTags == frozenset({'Pole', 'Knot'})
     assert SubElemKindByPrefix == {KindValue.value.title(): KindValue for KindValue in SubElemMateEntityKinds}
     assert SupportPlaneTypeIds == frozenset({'App::Plane', 'Part::DatumPlane', 'PartDesign::Plane'})
+
+
+# this definition exists because scalar and feature registries form one protocol contract
+def VerifyProtocolScalarFeatures() -> None:
     assert len(QuantityPropUnits) == 59
     assert Hashlib.sha256(JsonValue.dumps(sorted(QuantityPropUnits.items()), separators=(',', ':')).encode()).hexdigest() == 'e9cb0cb88f8f8cc431a538b891c20635bc685f8800d7118b53881be35839c8b8'
     assert len({Value.type_id for Value in ScalarPropTypes}) == len(ScalarPropTypes)
@@ -415,6 +419,10 @@ def TestProtocolAre() -> None:
     assert RegisteredPartObjectType == PartObjectTypeIds - AdditionalPartObjectType
     assert len(RegisteredPartObjectType) == 136
     assert Hashlib.sha256(JsonValue.dumps(sorted(RegisteredPartObjectType), separators=(',', ':')).encode()).hexdigest() == '5d46a78532f802c86552b56704f5238758e098dd1afb4ce9802b4ffc78649993'
+
+
+# this definition exists because constraint registries must remain internally bijective
+def VerifyProtocolConstraints() -> None:
     assert RulePointByIndex == {Value.index: Value.name for Value in RulePoints}
     assert RulePointIndexByName == {NameValue: Value.index for Value in RulePoints for NameValue in (Value.name, *Value.aliases)}
     assert MidpointRefPointNames == frozenset({'', 'mid', *(NameValue for Value in RulePoints if Value.index == 3 for NameValue in (Value.name, *Value.aliases))})
@@ -432,6 +440,10 @@ def TestProtocolAre() -> None:
     assert RuleCarrierKinds == frozenset(RuleKind) - (RuleDirectKinds | RuleComposedKinds)
     assert RuleWriteKinds | RuleCarrierKinds == set(RuleKind)
     assert RuleWriteKinds.isdisjoint(RuleCarrierKinds)
+
+
+# this definition exists because geometry registries must partition native and carrier support
+def VerifyProtocolGeometry() -> None:
     assert len({Value.type_id for Value in GeomTypes}) == len(GeomTypes)
     assert set(GeomKindByTypeId.values()) == set(GeomKind) - {GeomKind.NATIVE}
     assert set(GeomTypeIdsByKind) == {Value.value for Value in GeomKind if Value != GeomKind.NATIVE}
@@ -446,6 +458,10 @@ def TestProtocolAre() -> None:
     assert CircularGeomKinds == frozenset({GeomKind.CIRCLE.value, GeomKind.ARC.value})
     assert SplineGeomKinds == frozenset({GeomKind.BEZIER.value, GeomKind.SPLINE.value})
     assert SplineGeomTypeIds == frozenset((Value.type_id for Value in GeomTypes if Value.kind.value in SplineGeomKinds))
+
+
+# this definition exists because assembly mate registries must preserve support partitions
+def VerifyProtocolMates() -> None:
     assert len({Value.name for Value in JointTypeDefinitions}) == len(JointTypeDefinitions)
     assert set(MateKindByJointType) == set(JointTypes)
     assert set(MateKindByJointType.values()) == {Value.kind for Value in JointTypeDefinitions}
@@ -463,6 +479,15 @@ def TestProtocolAre() -> None:
     assert JointTypesUsingSecond == frozenset((Value.name for Value in JointTypeDefinitions if Value.uses_second_distance))
     assert MateKindsUsingDistance == frozenset((Value.kind for Value in JointTypeDefinitions if Value.uses_distance))
     assert MateKindsUsingSecond == frozenset((Value.kind for Value in JointTypeDefinitions if Value.uses_second_distance))
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestProtocolAre() -> None:
+    VerifyProtocolDocumentTypes()
+    VerifyProtocolScalarFeatures()
+    VerifyProtocolConstraints()
+    VerifyProtocolGeometry()
+    VerifyProtocolMates()
 
 # this definition exists because focused behavior needs one stable owner
 def TestBrepFilter() -> None:

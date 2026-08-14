@@ -195,9 +195,7 @@ def SourcePath(Source: Source) -> str:
 
 
 # this definition recursively filters linked documents while preserving invalid metadata
-def FilterOuters(
-    Outer: AnyValue, Settings: ReadOptions
-) -> tuple[list[AnyValue], bool]:
+def FilterOuters(Outer: AnyValue, Settings: ReadOptions) -> tuple[list[AnyValue], bool]:
     if not isinstance(Outer, Sequence) or isinstance(Outer, (str, bytes, bytearray)):
         return ([], False)
     StrippedOuter: list[AnyValue] = []
@@ -883,9 +881,7 @@ def ArchiveMember(
 
 
 # this definition locates the exact native property represented by a payload
-def FindPayloadProp(
-    Payload: BrepPayload, RootValue: ET.Element
-) -> ET.Element | None:
+def FindPayloadProp(Payload: BrepPayload, RootValue: ET.Element) -> ET.Element | None:
     Attributes = Payload.attributes
     ObjectName = str(Attributes["freecad_object"])
     ObjectType = str(Attributes["freecad_object_type"])
@@ -1361,9 +1357,7 @@ def AddPayloadMut(
 
 
 # this definition records provenance values that require carrier preservation
-def AddProvMut(
-    ItemValue: CadDocument, Parts: dict[Capability, list[bool]]
-) -> None:
+def AddProvMut(ItemValue: CadDocument, Parts: dict[Capability, list[bool]]) -> None:
     Values = (
         *ItemValue.parameters,
         *ItemValue.support_planes,
@@ -2008,26 +2002,20 @@ def OuterLinkMap(
     return Result
 
 
-# this definition exists because focused behavior needs one stable owner
-def WriteComponents(
-    DocValue: CadDocument,
-    Target: Path,
-    Overwrite: bool,
-    Validate: bool,
-    DocTimestamp: str,
-    TimestampEpoch: float,
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
-) -> tuple[dict[str, dict[str, AnyValue]], int]:
+# this definition orders part documents before dependent assembly documents
+def ComponentPlanKey(
+    ItemValue: tuple[str, FilePath, ComponentDefinition, CadDoc],
+) -> bool:
+    return ItemValue[2].kind == ComponentKind.ASSEMBLY
+
+
+# this definition resolves writable component documents and their target paths
+def ComponentPlans(
+    DocValue: CadDocument, Paths: Mapping[str, FilePath]
+) -> list[tuple[str, FilePath, ComponentDefinition, CadDoc]]:
     AsmValue = DocValue.assembly
     if AsmValue is None:
-        return ({}, 0)
-    Paths = ComponentPaths(DocValue, Target)
-    if not Overwrite:
-        Existing = next(
-            (PathValue for PathValue in Paths.values() if PathValue.exists()), None
-        )
-        if Existing is not None:
-            raise FileExistsError(Existing)
+        return []
     Documents = {
         ItemValue.id: ItemValue.document
         for ItemValue in AsmValue.documents
@@ -2040,9 +2028,42 @@ def WriteComponents(
         Component = ComponentDoc(DocValue, Definition, Documents)
         if Component is not None:
             Plans.append((DefinitionId, PathValue, Definition, Component))
+    Plans.sort(key=ComponentPlanKey)
+    return Plans
 
-    # this callback exists because local behavior needs one focused transformation
-    Plans.sort(key=lambda ItemValue: ItemValue[2].kind == ComponentKind.ASSEMBLY)
+
+# this definition writes component documents and returns their native link manifest
+def WriteComponents(
+    DocValue: CadDocument,
+    Target: FilePath,
+    Overwrite: bool,
+    Validate: bool,
+    DocTimestamp: str,
+    TimestampEpoch: float,
+    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+) -> tuple[dict[str, dict[str, AnyValue]], int]:
+    Paths = ComponentPaths(DocValue, Target)
+    if not Overwrite:
+        Existing = next(
+            (PathValue for PathValue in Paths.values() if PathValue.exists()), None
+        )
+        if Existing is not None:
+            raise FileExistsError(Existing)
+    Plans = ComponentPlans(DocValue, Paths)
+    Definitions = (
+        {ItemValue.id: ItemValue for ItemValue in DocValue.assembly.definitions}
+        if DocValue.assembly is not None
+        else {}
+    )
+    Documents = (
+        {
+            ItemValue.id: ItemValue.document
+            for ItemValue in DocValue.assembly.documents
+            if isinstance(ItemValue.document, CadDoc)
+        }
+        if DocValue.assembly is not None
+        else {}
+    )
     ComponentLinks: dict[str, dict[str, AnyValue]] = {}
     OuterLinks: dict[str, dict[str, AnyValue]] = {}
     BytesWritten = 0
