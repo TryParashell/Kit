@@ -31,11 +31,10 @@ import pathlib
 import subprocess
 import sys
 
-from spdx_header_remediation import write_missing_header
+from spdx_header_remediation import write_mangled_header, write_missing_header
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 HEADER_NOTICE_PATH = REPO_ROOT / "HEADER_NOTICE"
-AGENT_SKILLS_DIRECTORY = REPO_ROOT / ".agents" / "skills"
 AGENT_SKILL_LICENSE_FIELD = "license: LicenseRef-PolyForm-Strict-1.0.0"
 
 # Paths under these prefixes are entirely out of scope for the header
@@ -179,8 +178,11 @@ def leading_offset(lines: list[str]) -> int:
     return 0
 
 
-def is_agent_skill(path: pathlib.Path) -> bool:
-    return path.name == "SKILL.md" and path.parent.parent == AGENT_SKILLS_DIRECTORY
+def is_agent_skill(path: pathlib.Path, worktree_root: pathlib.Path) -> bool:
+    return (
+        path.name == "SKILL.md"
+        and path.parent.parent == worktree_root / ".agents" / "skills"
+    )
 
 
 def check_agent_skill_license(path: pathlib.Path) -> tuple[bool, str]:
@@ -201,9 +203,11 @@ def check_agent_skill_license(path: pathlib.Path) -> tuple[bool, str]:
     return True, "Agent Skills license field OK"
 
 
-def check_file(path: pathlib.Path, canonical: list[str]) -> tuple[bool, str]:
+def check_file(
+    path: pathlib.Path, canonical: list[str], worktree_root: pathlib.Path
+) -> tuple[bool, str]:
     """Return (ok, reason)."""
-    if is_agent_skill(path):
+    if is_agent_skill(path, worktree_root):
         return check_agent_skill_license(path)
     style = style_for(path)
     if style is None:
@@ -276,58 +280,73 @@ def diff_files(base: str, head: str) -> list[str]:
     return paths
 
 
-def repair_agent_skill(path: pathlib.Path, lines: list[str]) -> bool:
-    if not lines or lines[0] != "---":
+def repair_agent_skill(path: pathlib.Path) -> bool:
+    source = path.read_bytes()
+    newline = b"\r\n" if b"\r\n" in source else b"\n"
+    lines = source.splitlines(keepends=True)
+    if not lines or lines[0].strip() != b"---":
         return False
     try:
-        frontmatter_end = lines.index("---", 1)
-    except ValueError:
+        frontmatter_end = next(
+            index for index, line in enumerate(lines[1:], 1) if line.strip() == b"---"
+        )
+    except StopIteration:
         return False
-    if any(line.startswith("license:") for line in lines[1:frontmatter_end]):
-        return False
-    updated = lines[:1] + [AGENT_SKILL_LICENSE_FIELD] + lines[1:]
-    path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+    updated = lines[:1] + [AGENT_SKILL_LICENSE_FIELD.encode() + newline]
+    updated.extend(
+        line
+        for line in lines[1:frontmatter_end]
+        if not line.lstrip().startswith(b"license:")
+    )
+    updated.extend(lines[frontmatter_end:])
+    path.write_bytes(b"".join(updated))
     return True
 
 
-def repair_missing_header(path: pathlib.Path, canonical: list[str]) -> tuple[bool, str]:
+def repair_missing_header(
+    path: pathlib.Path, canonical: list[str], worktree_root: pathlib.Path
+) -> tuple[bool, str]:
     lines = read_lines(path)
     if lines is None:
         return False, "file is not readable as UTF-8 text"
-    if is_agent_skill(path):
-        if repair_agent_skill(path, lines):
+    if is_agent_skill(path, worktree_root):
+        if repair_agent_skill(path):
             return True, "added Agent Skills license field"
         return False, "Agent Skills frontmatter cannot be safely repaired"
     style = style_for(path)
     if style is None:
         return False, "file has no comment syntax"
-    if any("SPDX-" in line for line in lines):
-        return False, "existing SPDX text is not an absent header"
     header = (
         render_block_style(canonical)
         if style == "block"
         else render_line_style(canonical, "#" if style == "unknown" else style)
     )
-    write_missing_header(path, lines, header)
+    if any("SPDX-" in line for line in lines):
+        if write_mangled_header(path, header, "#" if style == "unknown" else style):
+            return True, "replaced mangled top-of-file SPDX header"
+        return False, "mangled SPDX header cannot be safely repaired"
+    write_missing_header(path, header)
     return True, "added missing SPDX header"
 
 
-def repair_missing_headers(changed: list[str], canonical: list[str]) -> int:
+def repair_missing_headers(
+    changed: list[str], canonical: list[str], worktree_root: pathlib.Path
+) -> int:
     failures: list[tuple[str, str]] = []
     repaired = 0
     for rel_path in changed:
         if is_exempt_path(rel_path):
             continue
-        path = REPO_ROOT / rel_path
+        path = worktree_root / rel_path
         if not path.is_file():
             continue
-        ok, reason = check_file(path, canonical)
+        ok, reason = check_file(path, canonical, worktree_root)
         if ok:
             print(f"OK   {rel_path}: {reason}")
             continue
-        fixed, repair_reason = repair_missing_header(path, canonical)
+        fixed, repair_reason = repair_missing_header(path, canonical, worktree_root)
         if fixed:
-            verified, verification_reason = check_file(path, canonical)
+            verified, verification_reason = check_file(path, canonical, worktree_root)
             if verified:
                 repaired += 1
                 print(f"FIXED {rel_path}: {repair_reason}")
@@ -346,6 +365,12 @@ def main() -> int:
     parser.add_argument("--base", required=True, help="Base git ref/sha to diff from")
     parser.add_argument("--head", required=True, help="Head git ref/sha to diff to")
     parser.add_argument(
+        "--worktree",
+        type=pathlib.Path,
+        default=REPO_ROOT,
+        help="Filesystem tree whose changed files are checked or repaired",
+    )
+    parser.add_argument(
         "--fix-missing",
         action="store_true",
         help="Add only completely absent SPDX headers; never alter existing SPDX text",
@@ -354,19 +379,20 @@ def main() -> int:
 
     canonical = load_canonical_lines()
     changed = diff_files(args.base, args.head)
+    worktree_root = args.worktree.resolve()
     if args.fix_missing:
-        return repair_missing_headers(changed, canonical)
+        return repair_missing_headers(changed, canonical, worktree_root)
 
     failures: list[tuple[str, str]] = []
     checked = 0
     for rel_path in changed:
         if is_exempt_path(rel_path):
             continue
-        path = REPO_ROOT / rel_path
+        path = worktree_root / rel_path
         if not path.is_file():
             continue
         checked += 1
-        ok, reason = check_file(path, canonical)
+        ok, reason = check_file(path, canonical, worktree_root)
         if not ok:
             failures.append((rel_path, reason))
         print(f"{'OK ' if ok else 'FAIL'} {rel_path}: {reason}")
