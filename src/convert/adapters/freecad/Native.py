@@ -1516,7 +1516,7 @@ def BlockedFrames(
             continue
         SupportName = SupportTarget(ObjValue)
         Frame = OriginFrames.get(SupportName)
-        SourceTransform = SourcePlaneTransforms.get(SupportName)
+        SourceTransform = SourceTransforms.get(SupportName)
         if (
             Frame is None
             or SourceTransform is None
