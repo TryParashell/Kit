@@ -4147,6 +4147,54 @@ def IsonicalBosDMut(
     )
 
 
+# focused continuation isolates the remaining native serialization phase
+def FinishSingleMut(DocValue, SourceSketch, SourceFeature, Sketch, Extrusion, Objects, Circle, ObjectIds):
+    FreecadDimension = FreecadSingle(DocValue, SourceSketch, SourceFeature)
+    if FreecadDimension is None:
+        if (
+            Sketch.object_id != 26
+            or Sketch.name != "Sketch1"
+            or Extrusion.name != "Boss-Extrude1"
+            or (len(Extrusion.dimensions) != 1)
+            or (Extrusion.dimensions[0].name != "D1")
+            or (not MathValue.isfinite(Extrusion.dimensions[0].value_mm))
+            or (Extrusion.dimensions[0].value_mm <= 0.0)
+        ):
+            return Objects
+        SourceDimension = Extrusion.dimensions[0]
+    else:
+        SourceDimension = FreecadDimension
+    Dimension = Replace(
+        SourceDimension, name="D1", text=format(SourceDimension.value_mm, ".15g")
+    )
+    if Circle is not None:
+        CircleDimension = Sketch.dimensions[0]
+        DiameterValue = Circle[2] * 2.0
+        Sketch = Replace(
+            Sketch,
+            dimensions=(
+                Replace(
+                    CircleDimension,
+                    name="D1",
+                    value_mm=DiameterValue,
+                    text="<MOD-DIAM>" + format(DiameterValue, ".15g"),
+                ),
+            ),
+        )
+    FeatureObjectId = 33 if Circle is not None else 32
+    ObjectIds[f"sketch:{Sketch.source_id}"] = 26
+    ObjectIds[f"feature:{Extrusion.source_id}"] = FeatureObjectId
+    return (
+        Replace(Sketch, object_id=26, name="Sketch1"),
+        Replace(
+            Extrusion,
+            object_id=FeatureObjectId,
+            name="Boss-Extrude1",
+            dimensions=(Dimension,),
+        ),
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def IsonicalSinAMut(
     Objects: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocValue: CadDocument
@@ -4226,50 +4274,72 @@ def IsonicalSinAMut(
         or SourceFeature.configuration_states
     ):
         return Objects
-    FreecadDimension = FreecadSingle(DocValue, SourceSketch, SourceFeature)
-    if FreecadDimension is None:
-        if (
-            Sketch.object_id != 26
-            or Sketch.name != "Sketch1"
-            or Extrusion.name != "Boss-Extrude1"
-            or (len(Extrusion.dimensions) != 1)
-            or (Extrusion.dimensions[0].name != "D1")
-            or (not MathValue.isfinite(Extrusion.dimensions[0].value_mm))
-            or (Extrusion.dimensions[0].value_mm <= 0.0)
-        ):
-            return Objects
-        SourceDimension = Extrusion.dimensions[0]
-    else:
-        SourceDimension = FreecadDimension
-    Dimension = Replace(
-        SourceDimension, name="D1", text=format(SourceDimension.value_mm, ".15g")
+    return FinishSingleMut(DocValue, SourceSketch, SourceFeature, Sketch, Extrusion, Objects, Circle, ObjectIds)
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishPairMut(SecondIsBoss, SketchOne, FeatureOne, SketchTwo, FeatureTwo, ObjectIds, DimensionData):
+    TargetIds = (26, 32, 33, 40)
+    TargetNames = (
+        "Sketch1",
+        "Boss-Extrude1",
+        "Sketch2",
+        "Boss-Extrude2" if SecondIsBoss else "Cut-Extrude1",
     )
-    if Circle is not None:
-        CircleDimension = Sketch.dimensions[0]
-        DiameterValue = Circle[2] * 2.0
-        Sketch = Replace(
-            Sketch,
-            dimensions=(
-                Replace(
-                    CircleDimension,
-                    name="D1",
-                    value_mm=DiameterValue,
-                    text="<MOD-DIAM>" + format(DiameterValue, ".15g"),
-                ),
-            ),
+    for SourceObject, TargetId in zip(
+        (SketchOne, FeatureOne, SketchTwo, FeatureTwo), TargetIds, strict=True
+    ):
+        PrefixValue = "sketch" if SourceObject.kind == "Sketch" else "feature"
+        ObjectIds[f"{PrefixValue}:{SourceObject.source_id}"] = TargetId
+    CanonicalObjects: list[WriteObject] = []
+    for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(
+        zip(
+            (SketchOne, FeatureOne, SketchTwo, FeatureTwo),
+            TargetIds,
+            TargetNames,
+            strict=True,
         )
-    FeatureObjectId = 33 if Circle is not None else 32
-    ObjectIds[f"sketch:{Sketch.source_id}"] = 26
-    ObjectIds[f"feature:{Extrusion.source_id}"] = FeatureObjectId
-    return (
-        Replace(Sketch, object_id=26, name="Sketch1"),
-        Replace(
-            Extrusion,
-            object_id=FeatureObjectId,
-            name="Boss-Extrude1",
-            dimensions=(Dimension,),
-        ),
-    )
+    ):
+        if ItemData.kind == "Extrusion":
+            DimensionValue = DimensionData[ObjectIndex // 2]
+            DimensionValues = (
+                ()
+                if DimensionValue is None
+                else (
+                    Replace(
+                        DimensionValue,
+                        name="D1",
+                        text=format(DimensionValue.value_mm, ".15g"),
+                    ),
+                )
+            )
+            ChildObjectId = TargetIds[ObjectIndex - 1]
+            PropValues = tuple(
+                (
+                    (
+                        PropName,
+                        (
+                            str(ChildObjectId)
+                            if PropName == "DissectableChildren"
+                            else PropValue
+                        ),
+                    )
+                    for PropName, PropValue in ItemData.properties
+                )
+            )
+        else:
+            DimensionValues = ItemData.dimensions
+            PropValues = ItemData.properties
+        CanonicalObjects.append(
+            Replace(
+                ItemData,
+                object_id=TargetId,
+                name=TargetName,
+                properties=PropValues,
+                dimensions=DimensionValues,
+            )
+        )
+    return tuple(CanonicalObjects)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4395,39 +4465,83 @@ def IsonicalTwoMut(
         )
     ):
         return ObjectsData
-    TargetIds = (26, 32, 33, 40)
-    TargetNames = (
-        "Sketch1",
-        "Boss-Extrude1",
-        "Sketch2",
-        "Boss-Extrude2" if SecondIsBoss else "Cut-Extrude1",
+    return FinishPairMut(SecondIsBoss, SketchOne, FeatureOne, SketchTwo, FeatureTwo, ObjectIds, DimensionData)
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishCutMut(NormalizedObjects, FeatureCount, DocData, ResolvedSketches, ResolvedFeatures, ObjectsData, ObjectIds):
+    SketchObjects = tuple(NormalizedObjects[0::2])
+    FeatureObjects = tuple(NormalizedObjects[1::2])
+    BoundsData = tuple((WriteRectangle(ItemData) for ItemData in SketchObjects))
+    CircleData = tuple((WriteCircle(ItemData) for ItemData in SketchObjects))
+    HasCircleData = IsCircleChain(BoundsData, CircleData)
+    DimensionData = (
+        FreeCadThree(DocData, ResolvedSketches, ResolvedFeatures)
+        if FeatureCount == 3
+        else FreeCadFour(DocData, ResolvedSketches, ResolvedFeatures)
     )
-    for SourceObject, TargetId in zip(
-        (SketchOne, FeatureOne, SketchTwo, FeatureTwo), TargetIds, strict=True
+    if (
+        tuple((ItemData.class_name for ItemData in FeatureObjects))
+        != ("moExtrusion_c", *("moCut_c",) * (FeatureCount - 1))
+        or (not HasCircleData and any((ItemData is None for ItemData in BoundsData)))
+        or any((ExtrusionEdit(ItemData.payload) is None for ItemData in FeatureObjects))
+        or (DimensionData is None)
+        or any(
+            (
+                len(SketchObject.payload) < 4
+                or Struct.unpack_from("<I", SketchObject.payload)[0] != 2
+                or SketchObject.class_name != "moProfileFeature_c"
+                or (
+                    not (
+                        HasRectDims(SketchObject, BoundsValue)
+                        if BoundsValue is not None
+                        else HasCircleDims(SketchObject, CircleValue)
+                    )
+                )
+                or SketchData.suppressed
+                or (not HasCanonical(SketchData, BoundsValue, CircleValue))
+                or (len(SketchData.closed_profile_entity_ids) != 1)
+                or (
+                    set(SketchData.closed_profile_entity_ids[0])
+                    != {ItemData.id for ItemData in SketchData.entities}
+                )
+                for SketchObject, SketchData, BoundsValue, CircleValue in zip(
+                    SketchObjects, ResolvedSketches, BoundsData, CircleData, strict=True
+                )
+            )
+        )
     ):
+        return ObjectsData
+    TargetIds = (
+        (26, 32, 33, 40, 41, 47)
+        if FeatureCount == 3
+        else (26, 32, 33, 40, 41, 47, 48, 54)
+    )
+    TargetNames = tuple(
+        (
+            NameValue
+            for FeatureIndex in range(FeatureCount)
+            for NameValue in (
+                f"Sketch{FeatureIndex + 1}",
+                "Boss-Extrude1" if FeatureIndex == 0 else f"Cut-Extrude{FeatureIndex}",
+            )
+        )
+    )
+    for SourceObject, TargetId in zip(NormalizedObjects, TargetIds, strict=True):
         PrefixValue = "sketch" if SourceObject.kind == "Sketch" else "feature"
         ObjectIds[f"{PrefixValue}:{SourceObject.source_id}"] = TargetId
     CanonicalObjects: list[WriteObject] = []
     for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(
-        zip(
-            (SketchOne, FeatureOne, SketchTwo, FeatureTwo),
-            TargetIds,
-            TargetNames,
-            strict=True,
-        )
+        zip(NormalizedObjects, TargetIds, TargetNames, strict=True)
     ):
         if ItemData.kind == "Extrusion":
             DimensionValue = DimensionData[ObjectIndex // 2]
             DimensionValues = (
-                ()
-                if DimensionValue is None
-                else (
-                    Replace(
-                        DimensionValue,
-                        name="D1",
-                        text=format(DimensionValue.value_mm, ".15g"),
-                    ),
-                )
+                Replace(
+                    DimensionValue,
+                    name="D1",
+                    text=format(DimensionValue.value_mm, ".15g"),
+                ),
             )
             ChildObjectId = TargetIds[ObjectIndex - 1]
             PropValues = tuple(
@@ -4536,106 +4650,7 @@ def IsonicalCutMut(
                 Replace(FeatureObject, payload=EncodeExtrude(FeatureData)),
             )
         )
-    SketchObjects = tuple(NormalizedObjects[0::2])
-    FeatureObjects = tuple(NormalizedObjects[1::2])
-    BoundsData = tuple((WriteRectangle(ItemData) for ItemData in SketchObjects))
-    CircleData = tuple((WriteCircle(ItemData) for ItemData in SketchObjects))
-    HasCircleData = IsCircleChain(BoundsData, CircleData)
-    DimensionData = (
-        FreeCadThree(DocData, ResolvedSketches, ResolvedFeatures)
-        if FeatureCount == 3
-        else FreeCadFour(DocData, ResolvedSketches, ResolvedFeatures)
-    )
-    if (
-        tuple((ItemData.class_name for ItemData in FeatureObjects))
-        != ("moExtrusion_c", *("moCut_c",) * (FeatureCount - 1))
-        or (not HasCircleData and any((ItemData is None for ItemData in BoundsData)))
-        or any((ExtrusionEdit(ItemData.payload) is None for ItemData in FeatureObjects))
-        or (DimensionData is None)
-        or any(
-            (
-                len(SketchObject.payload) < 4
-                or Struct.unpack_from("<I", SketchObject.payload)[0] != 2
-                or SketchObject.class_name != "moProfileFeature_c"
-                or (
-                    not (
-                        HasRectDims(SketchObject, BoundsValue)
-                        if BoundsValue is not None
-                        else HasCircleDims(SketchObject, CircleValue)
-                    )
-                )
-                or SketchData.suppressed
-                or (not HasCanonical(SketchData, BoundsValue, CircleValue))
-                or (len(SketchData.closed_profile_entity_ids) != 1)
-                or (
-                    set(SketchData.closed_profile_entity_ids[0])
-                    != {ItemData.id for ItemData in SketchData.entities}
-                )
-                for SketchObject, SketchData, BoundsValue, CircleValue in zip(
-                    SketchObjects, ResolvedSketches, BoundsData, CircleData, strict=True
-                )
-            )
-        )
-    ):
-        return ObjectsData
-    TargetIds = (
-        (26, 32, 33, 40, 41, 47)
-        if FeatureCount == 3
-        else (26, 32, 33, 40, 41, 47, 48, 54)
-    )
-    TargetNames = tuple(
-        (
-            NameValue
-            for FeatureIndex in range(FeatureCount)
-            for NameValue in (
-                f"Sketch{FeatureIndex + 1}",
-                "Boss-Extrude1" if FeatureIndex == 0 else f"Cut-Extrude{FeatureIndex}",
-            )
-        )
-    )
-    for SourceObject, TargetId in zip(NormalizedObjects, TargetIds, strict=True):
-        PrefixValue = "sketch" if SourceObject.kind == "Sketch" else "feature"
-        ObjectIds[f"{PrefixValue}:{SourceObject.source_id}"] = TargetId
-    CanonicalObjects: list[WriteObject] = []
-    for ObjectIndex, (ItemData, TargetId, TargetName) in enumerate(
-        zip(NormalizedObjects, TargetIds, TargetNames, strict=True)
-    ):
-        if ItemData.kind == "Extrusion":
-            DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
-                Replace(
-                    DimensionValue,
-                    name="D1",
-                    text=format(DimensionValue.value_mm, ".15g"),
-                ),
-            )
-            ChildObjectId = TargetIds[ObjectIndex - 1]
-            PropValues = tuple(
-                (
-                    (
-                        PropName,
-                        (
-                            str(ChildObjectId)
-                            if PropName == "DissectableChildren"
-                            else PropValue
-                        ),
-                    )
-                    for PropName, PropValue in ItemData.properties
-                )
-            )
-        else:
-            DimensionValues = ItemData.dimensions
-            PropValues = ItemData.properties
-        CanonicalObjects.append(
-            Replace(
-                ItemData,
-                object_id=TargetId,
-                name=TargetName,
-                properties=PropValues,
-                dimensions=DimensionValues,
-            )
-        )
-    return tuple(CanonicalObjects)
+    return FinishCutMut(NormalizedObjects, FeatureCount, DocData, ResolvedSketches, ResolvedFeatures, ObjectsData, ObjectIds)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -5242,6 +5257,67 @@ def FreeCadPad(
     return (PadDimension, WriteDimension("D1", 360.0, "360°", AngleParam.role))
 
 
+# focused continuation isolates the remaining native serialization phase
+def FinishBossB(SelectionData, FilletFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, RadiusNumber):
+    if (
+        SelectionData.attributes.get("freecad_object")
+        != FilletFeatureData.provenance.native_id
+        or SelectionData.attributes.get("freecad_property") != "Base"
+        or SelectionData.attributes.get("freecad_target") != PadNativeName
+        or (len(SelectionData.path) != 1)
+        or (SelectionData.path[0].entity_kind != "edge")
+        or (SelectionData.path[0].entity_id != PadNativeName)
+        or (
+            not HasFreeCadMax(
+                DocData,
+                PadNativeName,
+                SelectionData.path[0].subelement,
+                BoundsValue,
+                PadDimension.value_mm,
+            )
+        )
+    ):
+        return None
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != FilletFeatureData.id:
+            continue
+        PathValue = ParamValueData.attributes.get("freecad_path")
+        if (
+            not isinstance(PathValue, str)
+            or not PathValue
+            or PathValue in ParamData
+            or (ParamValueData.expression is not None)
+        ):
+            return None
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {
+        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
+        "Label": (ValueKind.STRING, FilletFeatureData.name),
+        "Label2": (ValueKind.STRING, ""),
+        "Radius": (ValueKind.QUANTITY, RadiusNumber),
+        "Refine": (ValueKind.BOOLEAN, True),
+        "SupportTransform": (ValueKind.BOOLEAN, False),
+        "Suppressed": (ValueKind.BOOLEAN, False),
+        "UseAllEdges": (ValueKind.BOOLEAN, False),
+        "Visibility": (ValueKind.BOOLEAN, True),
+    }
+    if set(ParamData) != set(ExpectedData) or any(
+        (
+            not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue)
+            for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
+        )
+    ):
+        return None
+    RadiusParam = ParamData["Radius"]
+    return (
+        PadDimension,
+        WriteDimension(
+            "D1", RadiusNumber, "R" + format(RadiusNumber, ".15g"), RadiusParam.role
+        ),
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def FreeCadBossB(
     DocData: CadDocument,
@@ -5337,63 +5413,7 @@ def FreeCadBossB(
         if PadFeature.provenance is not None
         else PadFeature.name
     )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != FilletFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Base"
-        or SelectionData.attributes.get("freecad_target") != PadNativeName
-        or (len(SelectionData.path) != 1)
-        or (SelectionData.path[0].entity_kind != "edge")
-        or (SelectionData.path[0].entity_id != PadNativeName)
-        or (
-            not HasFreeCadMax(
-                DocData,
-                PadNativeName,
-                SelectionData.path[0].subelement,
-                BoundsValue,
-                PadDimension.value_mm,
-            )
-        )
-    ):
-        return None
-    ParamData: dict[str, Param] = {}
-    for ParamValueData in DocData.parameters:
-        if ParamValueData.owner_id != FilletFeatureData.id:
-            continue
-        PathValue = ParamValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParamData
-            or (ParamValueData.expression is not None)
-        ):
-            return None
-        ParamData[PathValue] = ParamValueData
-    ExpectedData = {
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, FilletFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Radius": (ValueKind.QUANTITY, RadiusNumber),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "SupportTransform": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "UseAllEdges": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParamData) != set(ExpectedData) or any(
-        (
-            not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue)
-            for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-        )
-    ):
-        return None
-    RadiusParam = ParamData["Radius"]
-    return (
-        PadDimension,
-        WriteDimension(
-            "D1", RadiusNumber, "R" + format(RadiusNumber, ".15g"), RadiusParam.role
-        ),
-    )
+    return FinishBossB(SelectionData, FilletFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, RadiusNumber)
 
 
 # this definition exists because focused behavior needs one stable owner

@@ -1688,9 +1688,8 @@ def TestSketchShape() -> None:
     assert FinalShape.find('./Part').attrib == {'ElementMap': '1.15.70200.5', 'file': 'Final.Shape.brp'}
     assert FinalShape.find('./ElementMap2').attrib == {'file': 'Final.Shape.Map.txt'}
 
-# this definition exists because focused behavior needs one stable owner
-def TestStringRoot() -> None:
-    Table = b'StringTableStart v1 0\n'
+# this definition exists because StringHasher fixtures require deterministic archive ordering
+def StringHasherSource(Table: bytes) -> bytes:
     with Zipfile.ZipFile(IoStream.BytesIO(NativePart())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
         Entries = [(NameValue, Archive.read(NameValue)) for NameValue in Archive.namelist() if NameValue != 'Document.xml']
@@ -1703,8 +1702,14 @@ def TestStringRoot() -> None:
         Archive.writestr('StringHasher.Table.txt', Table)
         for NameValue, DataValue in Entries:
             Archive.writestr(NameValue, DataValue)
+    return Source.getvalue()
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestStringRoot() -> None:
+    Table = b'StringTableStart v1 0\n'
     Adapter = FreeCadAdapter()
-    DocValue = Adapter.read(Source.getvalue())
+    DocValue = Adapter.read(StringHasherSource(Table))
     StringHasher = DocValue.metadata['freecad']['string_hasher']
     assert StringHasher['attribute'] == '1'
     assert StringHasher['entries'] == [{'source_stream': 'StringHasher.Table.txt', 'data': Table}]
