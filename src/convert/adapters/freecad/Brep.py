@@ -47,6 +47,13 @@ from interchange import (
     Vector2 as VectorTwo,
     Vector3 as VectorThree,
 )
+from convert.adapters.freecad.BrepGraph import (
+    BindOnceMut,
+    FreeCadBrep,
+    ModelGraph,
+    RequireOwned,
+    Unsupported,
+)
 
 # this binding exists because shared behavior needs one stable value
 KPoint = tuple[float, float, float]
@@ -58,13 +65,6 @@ KTriangle = tuple[int, int, int]
 KGeomValue = tuple[
     tuple[KPoint, KPoint, KPoint], tuple[float, float, float], KPoint, KPoint, KPoint
 ]
-
-
-# this definition exists because focused behavior needs one stable owner
-class FreeCadBrep(ValueError):
-    KSlots = ()
-    KReason = "writer_unimplemented"
-    locals()["reason"] = KReason
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -114,159 +114,6 @@ class SeamBand:
     __annotations__["length"] = "float"
     __annotations__["first_pcurve_index"] = "int"
     __annotations__["second_pcurve_index"] = "int"
-
-
-# this definition exists because focused behavior needs one stable owner
-class ModelGraph:
-    KSlots = (
-        "bodies",
-        "coedge_owner",
-        "coedges",
-        "curves",
-        "edge_uses",
-        "edges",
-        "face_uses",
-        "faces",
-        "loop_face",
-        "loops",
-        "pcurves",
-        "region_body",
-        "regions",
-        "shell_owners",
-        "shell_uses",
-        "shells",
-        "surfaces",
-        "vertices",
-        "wire_body",
-        "wires",
-    )
-
-    # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance, Model: BrepModel) -> None:
-        Instance.vertices = {Value.id: Value for Value in Model.vertices}
-        Instance.curves = {Value.id: Value for Value in Model.curves}
-        Instance.edges = {Value.id: Value for Value in Model.edges}
-        Instance.coedges = {Value.id: Value for Value in Model.coedges}
-        Instance.loops = {Value.id: Value for Value in Model.loops}
-        Instance.wires = {Value.id: Value for Value in Model.wires}
-        Instance.faces = {Value.id: Value for Value in Model.faces}
-        Instance.face_uses = {Value.id: Value for Value in Model.face_uses}
-        Instance.shells = {Value.id: Value for Value in Model.shells}
-        Instance.shell_uses = {Value.id: Value for Value in Model.shell_uses}
-        Instance.regions = {Value.id: Value for Value in Model.regions}
-        Instance.bodies = {Value.id: Value for Value in Model.bodies}
-        Instance.pcurves = {Value.id: Value for Value in Model.pcurves}
-        Instance.surfaces = {Value.id: Value for Value in Model.surfaces}
-        Instance.coedge_owner: dict[str, tuple[str, str]] = {}
-        Instance.loop_face: dict[str, str] = {}
-        Instance.shell_owners: dict[str, list[tuple[str, str]]] = {
-            Value.id: [] for Value in Model.shells
-        }
-        Instance.region_body: dict[str, str] = {}
-        Instance.wire_body: dict[str, str] = {}
-        Instance.edge_uses: dict[str, list[str]] = {
-            Value.id: [] for Value in Model.edges
-        }
-        for LoopValue in Model.loops:
-            for CoedgeId in LoopValue.coedge_ids:
-                Instance._bind_coedge(CoedgeId, "loop", LoopValue.id)
-        for WireValue in Model.wires:
-            for CoedgeId in WireValue.coedge_ids:
-                Instance._bind_coedge(CoedgeId, "wire", WireValue.id)
-        for FaceValue in Model.faces:
-            for LoopId in FaceValue.loop_ids:
-                BindOnceMut(Instance.loop_face, LoopId, FaceValue.id, "loop", "face")
-        FaceUseOwner: dict[str, str] = {}
-        for Shell in Model.shells:
-            for FaceUseId in Shell.face_use_ids:
-                BindOnceMut(FaceUseOwner, FaceUseId, Shell.id, "face use", "shell")
-                FaceUse = Instance.face_uses[FaceUseId]
-                Instance.shell_owners.setdefault(Shell.id, []).append(
-                    (FaceUse.id, FaceUse.face_id)
-                )
-        ShellUseOwner: dict[str, str] = {}
-        for Region in Model.regions:
-            for ShellUseId in Region.shell_use_ids:
-                BindOnceMut(ShellUseOwner, ShellUseId, Region.id, "shell use", "region")
-        for BodyValue in Model.bodies:
-            for RegionId in BodyValue.region_ids:
-                BindOnceMut(
-                    Instance.region_body, RegionId, BodyValue.id, "region", "body"
-                )
-            for WireId in BodyValue.wire_ids:
-                BindOnceMut(Instance.wire_body, WireId, BodyValue.id, "wire", "body")
-        RequireOwned(Instance.coedge_owner, Instance.coedges, "coedge", "loop or wire")
-        RequireOwned(Instance.loop_face, Instance.loops, "loop", "face")
-        RequireOwned(FaceUseOwner, Instance.face_uses, "face use", "shell")
-        RequireOwned(ShellUseOwner, Instance.shell_uses, "shell use", "region")
-        RequireOwned(Instance.region_body, Instance.regions, "region", "body")
-        RequireOwned(Instance.wire_body, Instance.wires, "wire", "body")
-        UsedFaces = {FaceUse.face_id for FaceUse in Model.face_uses}
-        UnusedFace = next(
-            (FaceId for FaceId in Instance.faces if FaceId not in UsedFaces), None
-        )
-        if UnusedFace is not None:
-            Unsupported(f"B-rep face {UnusedFace} has no face use")
-        UsedShells = {ShellUse.shell_id for ShellUse in Model.shell_uses}
-        UnusedShell = next(
-            (ShellId for ShellId in Instance.shells if ShellId not in UsedShells), None
-        )
-        if UnusedShell is not None:
-            Unsupported(f"B-rep shell {UnusedShell} has no shell use")
-        for Coedge in Model.coedges:
-            Instance.edge_uses[Coedge.edge_id].append(Coedge.id)
-        for EdgeId, UsesValue in Instance.edge_uses.items():
-            if not UsesValue:
-                Unsupported(f"B-rep edge {EdgeId} has no coedge use")
-            if len(UsesValue) > 2:
-                Unsupported(f"B-rep edge {EdgeId} is non-manifold")
-
-    # this definition exists because focused behavior needs one stable owner
-    def BindCoedge(Instance, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
-        if CoedgeId in Instance.coedge_owner:
-            Unsupported(
-                f"B-rep coedge {CoedgeId} belongs to multiple loop or wire values"
-            )
-        Instance.coedge_owner[CoedgeId] = (KindValue, OwnerId)
-
-    # this definition exists because focused behavior needs one stable owner
-    def FaceForCoedge(Instance, CoedgeId: str) -> BrepFace | None:
-        KindValue, OwnerId = Instance.coedge_owner[CoedgeId]
-        if KindValue == "wire":
-            return None
-        return Instance.faces[Instance.loop_face[OwnerId]]
-
-    locals()["__init__"] = InitAction
-    locals()["_bind_coedge"] = BindCoedge
-    locals()["face_for_coedge"] = FaceForCoedge
-
-
-# this definition exists because focused behavior needs one stable owner
-def Unsupported(Message: str) -> None:
-    raise FreeCadBrep(f"writer_unimplemented: {Message}")
-
-
-# this definition exists because focused behavior needs one stable owner
-def BindOnceMut(
-    Owners: dict[str, str], ValueId: str, OwnerId: str, ValueName: str, OwnerName: str
-) -> None:
-    if ValueId in Owners:
-        Unsupported(
-            f"B-rep {ValueName} {ValueId} belongs to multiple {OwnerName} values"
-        )
-    Owners[ValueId] = OwnerId
-
-
-# this definition exists because focused behavior needs one stable owner
-def RequireOwned(
-    Owners: Mapping[str, object],
-    Values: Mapping[str, object],
-    ValueName: str,
-    OwnerName: str,
-) -> None:
-    Missing = next((ValueId for ValueId in Values if ValueId not in Owners), None)
-    if Missing is not None:
-        Unsupported(f"B-rep {ValueName} {Missing} has no {OwnerName}")
 
 
 # this definition exists because focused behavior needs one stable owner
