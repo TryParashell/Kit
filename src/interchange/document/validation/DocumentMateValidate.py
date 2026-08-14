@@ -9,6 +9,8 @@
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.document.models.DocumentRoot import DocumentRoot
+
 
 # mate checks protect entity ownership and parameter references across component documents
 def GetMateErrors(
@@ -41,7 +43,7 @@ def GetMateErrors(
         TargetDocument = DocumentValue
         if OwnerDef is not None and OwnerDef.DocumentId:
             TargetDocument = DocumentValues.get(OwnerDef.DocumentId)
-        if isinstance(TargetDocument, type(DocumentValue)):
+        if isinstance(TargetDocument, DocumentRoot):
             TargetParamIds = (
                 IdentitySets["Parameters"]
                 if TargetDocument is DocumentValue

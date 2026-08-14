@@ -10,6 +10,8 @@ from math import isfinite as IsFiniteNum
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.document.models.DocumentRoot import DocumentRoot
+
 
 # mate entity checks protect occurrence paths frames radii and selection ownership
 def GetMateEntErrs(
@@ -95,7 +97,7 @@ def GetSelectErrors(
         }
     )
     if (
-        isinstance(TargetDocument, type(DocumentValue))
+        isinstance(TargetDocument, DocumentRoot)
         and EntityValue.SelectionId not in TargetSelectIds
     ):
         return (f"mate entity {EntityValue.EntityId} references missing selection",)

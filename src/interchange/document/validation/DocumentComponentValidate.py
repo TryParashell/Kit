@@ -9,12 +9,14 @@
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.document.models.DocumentRoot import DocumentRoot
+
 
 # embedded document checks prevent invalid recursive ownership and surface child failures
 def GetDocLinkErrs(DocumentValue: AnyValue, AssemblyValue: AnyValue) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for ItemValue in AssemblyValue.Documents:
-        if not isinstance(ItemValue.Document, type(DocumentValue)):
+        if not isinstance(ItemValue.Document, DocumentRoot):
             ErrorValues.append(
                 f"component document {ItemValue.EntityId} does not contain a CadDocument"
             )
@@ -53,7 +55,7 @@ def GetDefLinkErrs(
             )
             continue
         TargetDocument = DocumentValues.get(DefinitionValue.DocumentId, DocumentValue)
-        if isinstance(TargetDocument, type(DocumentValue)):
+        if isinstance(TargetDocument, DocumentRoot):
             TargetBodyIds = {BodyValue.EntityId for BodyValue in TargetDocument.Bodies}
             for BodyId in DefinitionValue.BodyIds:
                 if BodyId not in TargetBodyIds:

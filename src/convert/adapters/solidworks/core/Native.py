@@ -2443,6 +2443,132 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
     )
 
 
+# pin extent validation has one owner shared by both supported revolution angles
+def PinAxes(
+    PointsMm: Sequence[tuple[float, float]] = KPinPointsMm,
+) -> tuple[float, float, float]:
+    if len(PointsMm) < 3:
+        raise SldprtFormatError("pin revolution needs at least three profile points")
+    if not all(
+        MathValue.isfinite(CoordValue)
+        for PointData in PointsMm
+        for CoordValue in PointData
+    ):
+        raise SldprtFormatError("pin revolution profile points must be finite")
+    RadiusValues = tuple(PointData[0] for PointData in PointsMm)
+    if min(RadiusValues) < 0.0 or 0.0 not in RadiusValues:
+        raise SldprtFormatError(
+            "pin revolution profile must close on its vertical axis"
+        )
+    RadiusMetres = max(RadiusValues) / 1000.0
+    AxisValues = tuple(-PointData[1] / 1000.0 for PointData in PointsMm)
+    AxisMinimum = min(AxisValues)
+    AxisMaximum = max(AxisValues)
+    if AxisMinimum == 0.0:
+        AxisMinimum = 0.0
+    if RadiusMetres <= 0.0 or AxisMaximum <= AxisMinimum:
+        raise SldprtFormatError("pin revolution profile must enclose positive volume")
+    return (RadiusMetres, AxisMinimum, AxisMaximum)
+
+
+# full-revolution bounds preserve the recovered model-header coordinate frame
+def PinBounds(
+    PointsMm: Sequence[tuple[float, float]] = KPinPointsMm,
+) -> tuple[float, ...]:
+    RadiusMetres, AxisMinimum, AxisMaximum = PinAxes(PointsMm)
+    AxisCentre = (AxisMinimum + AxisMaximum) * 0.5
+    SphereRadius = MathValue.sqrt(
+        (AxisMaximum - AxisMinimum) ** 2 * 0.25 + RadiusMetres**2 * 2.0
+    )
+    return (
+        0.0,
+        0.0,
+        AxisCentre,
+        RadiusMetres,
+        RadiusMetres,
+        AxisMaximum,
+        -RadiusMetres,
+        -RadiusMetres,
+        AxisMinimum,
+        SphereRadius,
+    )
+
+
+# right-angle bounds preserve the recovered quarter-revolution coordinate frame
+def PinRightBounds(
+    PointsMm: Sequence[tuple[float, float]] = KPinPointsMm,
+) -> tuple[float, ...]:
+    RadiusMetres, AxisMinimum, AxisMaximum = PinAxes(PointsMm)
+    RadiusCentre = RadiusMetres * 0.5
+    AxisCentre = (AxisMinimum + AxisMaximum) * 0.5
+    SphereRadius = MathValue.sqrt(
+        RadiusCentre**2 * 2.0 + (AxisMaximum - AxisMinimum) ** 2 * 0.25
+    )
+    return (
+        RadiusCentre,
+        RadiusCentre,
+        AxisCentre,
+        RadiusMetres,
+        RadiusMetres,
+        AxisMaximum,
+        0.0,
+        0.0,
+        AxisMinimum,
+        SphereRadius,
+    )
+
+
+# pin header assembly keeps native identity and feature stamps angle-specific
+def PinHeader(
+    IdentityData: tuple[int, int, int, int],
+    HeaderStamps: tuple[tuple[int, ...], ...],
+    HeaderBounds: tuple[float, ...],
+) -> bytes:
+    CreatedStamp, ModifiedStamp, BaselineStamp, HeaderStamp = IdentityData
+    Identity = NativeIdentity(
+        CreatedStamp,
+        ModifiedStamp,
+        BaselineStamp,
+        HeaderStamp,
+        KSolidworksConfigFlags,
+        "Part1",
+    )
+    return HeaderPayload(
+        Identity,
+        "Default",
+        (*KHeaderObjects, (26, "Sketch1", True), (31, "Revolve1", False)),
+        "",
+        KPinHeaderUser,
+        32,
+        {26: HeaderStamps[0], 31: HeaderStamps[1]},
+        HeaderBounds,
+    )
+
+
+# the full-angle builder preserves the legacy envelope contract without a cycle
+def BuildPinEnvelope() -> PinEnvelope:
+    HeaderBounds = PinBounds()
+    return PinEnvelope(
+        Config0Payload=EncodePinConfig(),
+        HeaderPayload=PinHeader(KPinFullIdent, KPinFullStamps, HeaderBounds),
+        HeaderStamps=KPinFullStamps,
+        HeaderBounds=HeaderBounds,
+        HeaderCreation=KPinFullIdent[0],
+    )
+
+
+# the right-angle builder preserves the legacy envelope contract without a cycle
+def BuildPinNineZeroEnvelope() -> PinEnvelope:
+    HeaderBounds = PinRightBounds()
+    return PinEnvelope(
+        Config0Payload=EncodePinRight(),
+        HeaderPayload=PinHeader(KPinRightIdent, KPinRightStamps, HeaderBounds),
+        HeaderStamps=KPinRightStamps,
+        HeaderBounds=HeaderBounds,
+        HeaderCreation=KPinRightIdent[0],
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def BuildSingleTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 2:

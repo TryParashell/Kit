@@ -15,6 +15,7 @@ from interchange.assembly.AssemblyData import AssemblyData
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.core.Common import FreezeMapping
 from interchange.document.behavior.DocumentBehavior import DocumentApi
+from interchange.document.models.DocumentRoot import DocumentRoot
 from interchange.enums.EnumDocument import Capability
 from interchange.enums.EnumUnits import UnitSystem
 from interchange.features.FeatureBody import DesignBody
@@ -45,7 +46,7 @@ from interchange.records.RecordParameter import Parameter
     },
     FactoryMap={"Metadata": FreezeMapping},
 )
-class CadDocument(DocumentApi, ModelBase):
+class CadDocument(DocumentRoot, DocumentApi, ModelBase):
     Source: CadSource
     Configurations: tuple[Configuration, ...]
     Parameters: tuple[Parameter, ...]
