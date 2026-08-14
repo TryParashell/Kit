@@ -187,7 +187,7 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
     for RootValue in (FirstRoot, FirstComponent):
         assert DocTimestamp(RootValue, "CreationDate") == FirstStamp
         assert DocTimestamp(RootValue, "LastModifiedDate") == FirstStamp
-    WriteFreecad(Source, Output, overwrite=True)
+    WriteFreecad(Source, Output, Overwrite=True)
     SecondRoot = XmlAction(Output)
     SecondComponent = XmlAction(Component)
     SecondStamp = "2026-08-01T18:00:01Z"
