@@ -485,7 +485,9 @@ def MainRun() -> int:
     ParserInfo.add_argument("--segments", default=str(KRootInfo / "re/data/segments"))
     ParserInfo.add_argument("--out", default="")
     ArgValues = ParserInfo.parse_args()
-    Layouts = JsonData.loads(ResolveInput(ArgValues.layouts).read_text(encoding="utf-8"))
+    Layouts = JsonData.loads(
+        ResolveInput(ArgValues.layouts).read_text(encoding="utf-8")
+    )
     Report = Verify(Layouts, ResolveFolder(ArgValues.segments))
     Failures = 0
     print(

@@ -30,6 +30,19 @@ def TestBlocksEscape(TmpPath: PathInfo) -> None:
         ResolveWithin(OutsidePath, TmpPath)
 
 
+# resolved containment must reject links whose targets leave the trusted root
+def TestLinkEscape(TmpPath: PathInfo) -> None:
+    OutsidePath = TmpPath.parent / f"{TmpPath.name}Outside.bin"
+    OutsidePath.write_bytes(b"outside")
+    LinkedPath = TmpPath / "Linked.bin"
+    try:
+        LinkedPath.symlink_to(OutsidePath)
+    except OSError as ErrorInfo:
+        Pytest.skip(f"symlinks unavailable on this Windows host: {ErrorInfo}")
+    with Pytest.raises(UnsafePath):
+        ResolveWithin(LinkedPath, TmpPath, True)
+
+
 # executable validation proves modeled command sanitization has a concrete allowlist
 def TestFreecadPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     ProgramPath = TmpPath / "FreeCADCmd.exe"
