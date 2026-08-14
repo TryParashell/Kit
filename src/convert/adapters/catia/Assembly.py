@@ -1006,6 +1006,7 @@ def Component(
     Active = {Value.casefold() for Value in Stack}
     if Source is not None:
         Active.add(str(Source).casefold())
+    Options = NestedOptions(Settings, Stack, Source)
     Documents: list[ComponentDoc] = []
     DocIdsByPath: dict[FilePath, str] = {}
     DocIdsByName: dict[str, str] = {}
@@ -1030,51 +1031,72 @@ def Component(
         if Existing is not None:
             DocIdsByName[NameValue] = Existing
             continue
-        Values = dict(Settings.values)
-        Values["catia_path_stack"] = (
-            *Stack,
-            *((str(Source),) if Source is not None else ()),
-        )
-        Options = ReadOptions(
-            configuration=Settings.configuration,
-            include_brep=Settings.include_brep,
-            include_tessellation=Settings.include_tessellation,
-            strict=Settings.strict,
-            values=FrozenMapping(Values),
-        )
-        try:
-            DocValue = Reader(RefValue.path, Options)
-        except (CfvTwoFormatError, OSError, TypeError, ValueError) as ErrorInfo:
-            Diagnostics.append(
-                DiagValue(
-                    "catia.product.component_decode_failed",
-                    f"CATIA component could not be decoded: {RefValue.path}: {ErrorInfo}",
-                    Severity.WARNING,
-                    attributes=FrozenMapping({"definition_name": NameValue}),
-                )
-            )
-            continue
-        if DocValue.source.sha256.casefold() != RefValue.sha256.casefold():
-            Diagnostics.append(
-                DiagValue(
-                    "catia.product.component_source_changed",
-                    f"CATIA component changed after discovery and was not linked: {RefValue.path}",
-                    Severity.WARNING,
-                    attributes=FrozenMapping(
-                        {
-                            "definition_name": NameValue,
-                            "indexed_sha256": RefValue.sha256,
-                            "decoded_sha256": DocValue.source.sha256,
-                        }
-                    ),
-                )
-            )
+        DocValue, Diagnostic = LoadComponent(NameValue, RefValue, Options, Reader)
+        if Diagnostic is not None:
+            Diagnostics.append(Diagnostic)
+        if DocValue is None:
             continue
         DocId = f"catia:document:{DocValue.source.sha256[:20]}"
         Documents.append(ComponentDoc(DocId, DocValue))
         DocIdsByPath[RefValue.path] = DocId
         DocIdsByName[NameValue] = DocId
     return (tuple(Documents), DocIdsByName, tuple(Diagnostics))
+
+
+# this definition exists because focused behavior needs one stable owner
+def NestedOptions(
+    Settings: ReadOptions, Stack: tuple[str, ...], Source: FilePath | None
+) -> ReadOptions:
+    Values = dict(Settings.values)
+    Values["catia_path_stack"] = (
+        *Stack,
+        *((str(Source),) if Source is not None else ()),
+    )
+    return ReadOptions(
+        configuration=Settings.configuration,
+        include_brep=Settings.include_brep,
+        include_tessellation=Settings.include_tessellation,
+        strict=Settings.strict,
+        values=FrozenMapping(Values),
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def LoadComponent(
+    NameValue: str,
+    Reference: NativeProductReference,
+    Options: ReadOptions,
+    Reader: ComponentReader,
+) -> tuple[CadDocument | None, DiagValue | None]:
+    try:
+        DocValue = Reader(Reference.path, Options)
+    except (CfvTwoFormatError, OSError, TypeError, ValueError) as ErrorInfo:
+        return (
+            None,
+            DiagValue(
+                "catia.product.component_decode_failed",
+                f"CATIA component could not be decoded: {Reference.path}: {ErrorInfo}",
+                Severity.WARNING,
+                attributes=FrozenMapping({"definition_name": NameValue}),
+            ),
+        )
+    if DocValue.source.sha256.casefold() == Reference.sha256.casefold():
+        return (DocValue, None)
+    return (
+        None,
+        DiagValue(
+            "catia.product.component_source_changed",
+            f"CATIA component changed after discovery and was not linked: {Reference.path}",
+            Severity.WARNING,
+            attributes=FrozenMapping(
+                {
+                    "definition_name": NameValue,
+                    "indexed_sha256": Reference.sha256,
+                    "decoded_sha256": DocValue.source.sha256,
+                }
+            ),
+        ),
+    )
 
 
 # this definition exists because focused behavior needs one stable owner

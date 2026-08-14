@@ -182,7 +182,7 @@ def ResolvedBase(
     ByteBlob: bytes, Layouts: LayoutTable, SeedInfo: int, MoVersion: int | None
 ) -> BaseResolution:
     return ResolveBase(
-        ByteBlob, SeedInfo, Layouts, header_size=KStreamHeaderSize, MoVersion=MoVersion
+        ByteBlob, SeedInfo, Layouts, HeaderSize=KStreamHeaderSize, MoVersion=MoVersion
     )
 
 
@@ -205,7 +205,7 @@ def BuildDonorMut(
     Resolve = ResolvedBase(ByteBlob, Layouts, SeedInfo, MoVersion)
     BaseInfo = Resolve.base
     Report = Verify(
-        ByteBlob, BaseInfo, Layouts, header_size=KStreamHeaderSize, MoVersion=MoVersion
+        ByteBlob, BaseInfo, Layouts, HeaderSize=KStreamHeaderSize, MoVersion=MoVersion
     )
     Scanned = ScannedNames(ByteBlob)
     Outstanding = sorted(
