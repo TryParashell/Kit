@@ -780,13 +780,13 @@ def VerifyNeutralArchive(PayloadData: bytes) -> None:
 
 
 # this definition exists because neutral readback must preserve interchange and native projections
-def VerifyNeutralReadback(PayloadData: bytes, DocValue) -> None:
+def VerifyNeutralReadback(PayloadData: bytes, DocValue, SelectionId: str) -> None:
     assert FreeCadAdapter().read(PayloadData) == DocValue
     Native = FreecadNativeModule.read_native_fcstd(PayloadData)
     assert len(Native.support_planes) == 1
     assert Native.bodies[0].material_id == 'material:steel'
     assert Native.configurations[0].id == 'config:default'
-    assert any((ItemValue.id == Selection.id for ItemValue in Native.selections))
+    assert any((ItemValue.id == SelectionId for ItemValue in Native.selections))
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -802,7 +802,7 @@ def TestNeutralAre() -> None:
     PayloadData = Output.getvalue()
     VerifyNeutralTransferModes(Result)
     VerifyNeutralArchive(PayloadData)
-    VerifyNeutralReadback(PayloadData, DocValue)
+    VerifyNeutralReadback(PayloadData, DocValue, Selection.id)
 
 # this definition exists because focused behavior needs one stable owner
 def TestNeutralAnd() -> None:
