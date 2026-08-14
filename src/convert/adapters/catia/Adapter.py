@@ -587,8 +587,8 @@ def NativePartData(Archive: Cfv2Archive, DocType: str) -> tuple[dict[str, object
     NativeSymbols = tuple(dict.fromkeys((Symbol.value for Symbol in PartGraph.symbols if Symbol.value)))
     Planes = PartPlanes(Archive.outer, PartStream, PartGraph)
     FeatureId = 'catia:feature:graph'
-    Feature = FeatureStep(id=FeatureId, name='CATIA native feature graph', kind=FeatureKind.NATIVE, order=0, definition=NativeFeatureDefinition(format_id='catia.v5.osmx', type_id=PartDecl.class_name, object_data=FrozenMapping({'native_payload_id': 'catia:native-feature-graph', 'symbols': PartGraph.values, 'version': PartGraph.version, 'symbol_table_offset': PartGraph.symbol_table_offset, 'symbol_data_offset': PartGraph.symbol_data_offset})), provenance=Stream(Archive.outer, PartStream, f'{PartDecl.class_name}:{PartDecl.ordinal}', 'native-feature-graph'), attributes=FrozenMapping({'native_symbols': NativeSymbols, 'native_payload_id': 'catia:native-feature-graph', 'symbol_count': len(PartGraph.symbols)}))
-    BodyValue = BodyRecord(id='catia:body:1', name=BodyName, final_feature_id=FeatureId, provenance=Symbol(Archive.outer, PartStream, BodySymbol, 'body-alias') if BodySymbol is not None else Feature.provenance, attributes=FrozenMapping({'native_class': 'MMAlias', 'native_part_name': InternalPartName}))
+    Feature = FeatureStep(id=FeatureId, name='CATIA native feature graph', kind=FeatureKind.NATIVE, order=0, definition=NativeFeatureDefinition(format_id='catia.v5.osmx', type_id=PartDecl.class_name, object_data=FrozenMapping({'native_payload_id': 'catia:native-feature-graph', 'symbols': PartGraph.values, 'version': PartGraph.version, 'symbol_table_offset': PartGraph.symbol_table_offset, 'symbol_data_offset': PartGraph.symbol_data_offset})), provenance=StreamProvenance(Archive.outer, PartStream, f'{PartDecl.class_name}:{PartDecl.ordinal}', 'native-feature-graph'), attributes=FrozenMapping({'native_symbols': NativeSymbols, 'native_payload_id': 'catia:native-feature-graph', 'symbol_count': len(PartGraph.symbols)}))
+    BodyValue = BodyRecord(id='catia:body:1', name=BodyName, final_feature_id=FeatureId, provenance=SymbolProvenance(Archive.outer, PartStream, BodySymbol, 'body-alias') if BodySymbol is not None else Feature.provenance, attributes=FrozenMapping({'native_class': 'MMAlias', 'native_part_name': InternalPartName}))
     MetaValue: dict[str, object] = {'catia.product_name': ProductName, 'catia.internal_part_name': InternalPartName, 'catia.body_name': BodyName, 'catia.native_symbols': NativeSymbols, 'catia.product_symbols': ProductGraph.values, 'catia.part_symbols': PartGraph.values, 'catia.osmx_streams': (OsmxMeta(ProductStream, ProductGraph, ProductDecl.class_name), OsmxMeta(PartStream, PartGraph, PartDecl.class_name))}
     DiagValue = DiagnosticInfo('catia.part.native_graph_retained', 'The exact native feature graph, symbol table, bodies, and reference planes are retained; proprietary object records remain native.', Severity.INFO, entity_id=FeatureId, provenance=Feature.provenance, attributes=FrozenMapping({'native_symbols': NativeSymbols, 'symbol_count': len(PartGraph.symbols)}))
     return (MetaValue, Planes, (Feature,), (BodyValue,), (DiagValue,))
@@ -627,14 +627,14 @@ def PartPlanes(Folder: Cfv2Directory, Stream: Cfv2Stream, Graph: OsmxArchive) ->
     Symbols = tuple((Graph.symbols[Index] for Index in Indices))
     if len({Symbol.value for Symbol in Symbols if Symbol.value}) != len(Transforms):
         return ()
-    return tuple((SupportPlane(id=f'catia:plane:{Index}', name=Symbol.value, transform=Transform, provenance=Symbol(Folder, Stream, Symbol, 'reference-plane'), attributes=FrozenMapping({'native_class': 'GSMPlane', 'principal_index': Index - 1})) for Index, (Symbol, Transform) in enumerate(zip(Symbols, Transforms, strict=True), start=1)))
+    return tuple((SupportPlane(id=f'catia:plane:{Index}', name=Symbol.value, transform=Transform, provenance=SymbolProvenance(Folder, Stream, Symbol, 'reference-plane'), attributes=FrozenMapping({'native_class': 'GSMPlane', 'principal_index': Index - 1})) for Index, (Symbol, Transform) in enumerate(zip(Symbols, Transforms, strict=True), start=1)))
 
 # this definition exists because focused behavior needs one stable owner
-def Symbol(Folder: Cfv2Directory, Stream: Cfv2Stream, Symbol: OsmxSymbol, RecordKind: str) -> Provenance:
+def SymbolProvenance(Folder: Cfv2Directory, Stream: Cfv2Stream, Symbol: OsmxSymbol, RecordKind: str) -> Provenance:
     return Provenance(adapter=KFormatId, native_id=f'{Stream.name}:{Symbol.offset}', spans=LogicalSpans(Folder, Stream, Symbol.offset, len(Symbol.value), RecordKind))
 
 # this definition exists because focused behavior needs one stable owner
-def Stream(Folder: Cfv2Directory, Stream: Cfv2Stream, NativeId: str, RecordKind: str) -> Provenance:
+def StreamProvenance(Folder: Cfv2Directory, Stream: Cfv2Stream, NativeId: str, RecordKind: str) -> Provenance:
     return Provenance(adapter=KFormatId, native_id=NativeId, spans=tuple((ProvenanceSpan(Stream.name, Folder.physical_base + Extent.physical_offset, Extent.physical_length, RecordKind) for Extent in Stream.extents)))
 
 # this definition exists because focused behavior needs one stable owner
@@ -667,7 +667,7 @@ def NativePayloads(Archive: Cfv2Archive, DataValue: bytes, DocType: str, Setting
             PayloadId = f'{PayloadId}:{DeclValue.ordinal}'
         PayloadIds.add(PayloadId)
         DataIncluded = NativeContainer(RoleValue, Settings)
-        Payloads.append(BrepPayload(PayloadId, FormatId, KindValue, DeclValue.class_name, Hashlib.sha256(Payload).hexdigest(), Payload if DataIncluded else None, source_stream=Stream.name, provenance=Stream(Archive.outer, Stream, f'{DeclValue.class_name}:{DeclValue.ordinal}', KindValue), attributes=FrozenMapping({'declaration_ordinal': DeclValue.ordinal, 'base_class': DeclValue.base_class, 'logical_length': Stream.logical_length, 'extent_count': len(Stream.extents)}), role=RoleValue, file_extension=FileExtension))
+        Payloads.append(BrepPayload(PayloadId, FormatId, KindValue, DeclValue.class_name, Hashlib.sha256(Payload).hexdigest(), Payload if DataIncluded else None, source_stream=Stream.name, provenance=StreamProvenance(Archive.outer, Stream, f'{DeclValue.class_name}:{DeclValue.ordinal}', KindValue), attributes=FrozenMapping({'declaration_ordinal': DeclValue.ordinal, 'base_class': DeclValue.base_class, 'logical_length': Stream.logical_length, 'extent_count': len(Stream.extents)}), role=RoleValue, file_extension=FileExtension))
     return tuple(Payloads)
 
 # this definition exists because focused behavior needs one stable owner
@@ -1232,13 +1232,13 @@ globals()['_semantic_digest'] = SemanticDigest
 globals()['_source_bytes'] = SourceBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()['_stream_provenance'] = Stream
+globals()['_stream_provenance'] = StreamProvenance
 
 # this binding exists because shared behavior needs one stable value
 globals()['_summary_stream'] = SummaryStream
 
 # this binding exists because shared behavior needs one stable value
-globals()['_symbol_provenance'] = Symbol
+globals()['_symbol_provenance'] = SymbolProvenance
 
 # this binding exists because shared behavior needs one stable value
 globals()['_typed_brep'] = TypedBrep
