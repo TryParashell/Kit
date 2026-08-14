@@ -861,39 +861,7 @@ def WriteBodySuffix(Output: bytearray, BaseValue: int, BodyData: int, FaceDataDa
 
 # this declaration exists because focused behavior needs one stable owner
 def OrderTriRecords(DataValue: bytes) -> bytes:
-    FixedSizes = {1: 4, 12: 61, 13: 24, 14: 39, 15: 16, 16: 32, 17: 23, 18: 28, 19: 19, 29: 40, 70: 39}
-    GeomValues = {30: 6, 31: 10, 32: 11, 50: 9, 51: 10, 52: 12, 53: 10, 54: 11}
-
-    # this callback exists because local behavior needs one focused transformation
-    VarSizes = {74: lambda Count: 14 + 2 * Count, 79: lambda Count: 8 + Count, 80: lambda Count: 38 + Count, 81: lambda Count: 24 + 2 * Count, 82: lambda Count: 8 + 4 * Count, 83: lambda Count: 8 + 8 * Count}
-    Records: list[tuple[tuple[int, int], bytes]] = []
-    OffsetData = 0
-    while OffsetData < len(DataValue):
-        if OffsetData + 4 > len(DataValue) or DataValue[OffsetData] != 0:
-            raise ParaWriteError('SOLIDWORKS Parasolid record framing is invalid')
-        KindValueData = DataValue[OffsetData + 1]
-        if KindValueData in FixedSizes:
-            SizeValue = FixedSizes[KindValueData]
-            IndexOffset = OffsetData + 2
-        elif KindValueData in GeomValues:
-            SizeValue = 19 + 8 * GeomValues[KindValueData]
-            IndexOffset = OffsetData + 2
-        elif KindValueData in VarSizes:
-            if OffsetData + 8 > len(DataValue):
-                raise ParaWriteError('SOLIDWORKS Parasolid record is truncated')
-            Count = Struct.unpack_from('>I', DataValue, OffsetData + 2)[0]
-            SizeValue = VarSizes[KindValueData](Count)
-            IndexOffset = OffsetData + 6
-        else:
-            raise ParaWriteError(f'SOLIDWORKS Parasolid record kind {KindValueData} is unsupported')
-        EndValue = OffsetData + SizeValue
-        if EndValue > len(DataValue):
-            raise ParaWriteError('SOLIDWORKS Parasolid record is truncated')
-        EncodedIndex = Struct.unpack_from('>h', DataValue, IndexOffset)[0]
-        if EncodedIndex <= 0:
-            raise ParaWriteError('SOLIDWORKS Parasolid record index is invalid')
-        Records.append(((KindValueData, EncodedIndex - 1), DataValue[OffsetData:EndValue]))
-        OffsetData = EndValue
+    Records = SplitTriRecords(DataValue)
     Order = ((12, 1), (81, 2), (70, 3), (13, 5), (50, 6), (30, 7), (29, 8), (19, 9), (16, 10), (18, 11), (17, 19), (18, 21), (17, 25), (18, 27), (29, 18), (29, 29), (17, 28), (17, 23), (16, 20), (17, 24), (15, 22), (17, 26), (16, 30), (30, 31), (30, 17), (14, 16))
     Ranks = {KeyValue: Position for Position, KeyValue in enumerate(Order)}
     if not set(Order).issubset((KeyValue for KeyValue, Ignored in Records)):
@@ -902,6 +870,45 @@ def OrderTriRecords(DataValue: bytes) -> bytes:
     # this callback exists because local behavior needs one focused transformation
     OrderData = sorted(enumerate(Records), key=lambda ItemData: Ranks.get(ItemData[1][0], len(Ranks) + ItemData[0]))
     return b''.join((Record for Ignored, (Ignored, Record) in OrderData))
+
+
+# triangle record splitting validates framing while retaining every original byte
+def SplitTriRecords(DataValue: bytes) -> list[tuple[tuple[int, int], bytes]]:
+    Records: list[tuple[tuple[int, int], bytes]] = []
+    OffsetData = 0
+    while OffsetData < len(DataValue):
+        if OffsetData + 4 > len(DataValue) or DataValue[OffsetData] != 0:
+            raise ParaWriteError('SOLIDWORKS Parasolid record framing is invalid')
+        KindValueData = DataValue[OffsetData + 1]
+        SizeValue, IndexOffset = TriRecordSize(DataValue, OffsetData, KindValueData)
+        EndValue = OffsetData + SizeValue
+        if EndValue > len(DataValue):
+            raise ParaWriteError('SOLIDWORKS Parasolid record is truncated')
+        EncodedIndex = Struct.unpack_from('>h', DataValue, IndexOffset)[0]
+        if EncodedIndex <= 0:
+            raise ParaWriteError('SOLIDWORKS Parasolid record index is invalid')
+        Records.append(((KindValueData, EncodedIndex - 1), DataValue[OffsetData:EndValue]))
+        OffsetData = EndValue
+    return Records
+
+
+# triangle record sizing centralizes fixed analytic and counted framing rules
+def TriRecordSize(DataValue: bytes, OffsetData: int, KindValueData: int) -> tuple[int, int]:
+    FixedSizes = {1: 4, 12: 61, 13: 24, 14: 39, 15: 16, 16: 32, 17: 23, 18: 28, 19: 19, 29: 40, 70: 39}
+    GeomValues = {30: 6, 31: 10, 32: 11, 50: 9, 51: 10, 52: 12, 53: 10, 54: 11}
+
+    # this callback exists because local behavior needs one focused transformation
+    VarSizes = {74: lambda Count: 14 + 2 * Count, 79: lambda Count: 8 + Count, 80: lambda Count: 38 + Count, 81: lambda Count: 24 + 2 * Count, 82: lambda Count: 8 + 4 * Count, 83: lambda Count: 8 + 8 * Count}
+    if KindValueData in FixedSizes:
+        return FixedSizes[KindValueData], OffsetData + 2
+    if KindValueData in GeomValues:
+        return 19 + 8 * GeomValues[KindValueData], OffsetData + 2
+    if KindValueData not in VarSizes:
+        raise ParaWriteError(f'SOLIDWORKS Parasolid record kind {KindValueData} is unsupported')
+    if OffsetData + 8 > len(DataValue):
+        raise ParaWriteError('SOLIDWORKS Parasolid record is truncated')
+    Count = Struct.unpack_from('>I', DataValue, OffsetData + 2)[0]
+    return VarSizes[KindValueData](Count), OffsetData + 6
 
 # this declaration exists because focused behavior needs one stable owner
 def VTwelveVarNode(Output: bytearray, KindValueData: int, Index: int, Count: int) -> None:
