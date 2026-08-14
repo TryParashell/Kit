@@ -1298,92 +1298,123 @@ def PlaneReframe(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition applies an affine reframe to one sketch point
+def ReframePoint(
+    Value: Vector2, Reframe: tuple[float, float, float, float, float, float]
+) -> VectorTwo:
+    XxValue, XyValue, TxValue, YxValue, YyValue, TyValue = Reframe
+    return VectorTwo(
+        XxValue * Value.x + XyValue * Value.y + TxValue,
+        YxValue * Value.x + YyValue * Value.y + TyValue,
+    )
+
+
+# this definition applies the linear portion of a reframe to one direction
+def ReframeDir(
+    Value: Vector2, Reframe: tuple[float, float, float, float, float, float]
+) -> VectorTwo:
+    XxValue, XyValue, Ignored, YxValue, YyValue, Ignored = Reframe
+    return VectorTwo(
+        XxValue * Value.x + XyValue * Value.y,
+        YxValue * Value.x + YyValue * Value.y,
+    )
+
+
+# this definition adjusts circular arc angles for affine reflection and rotation
+def CircleAngles(
+    Reframe: tuple[float, float, float, float, float, float],
+    Start: float,
+    EndValue: float,
+) -> tuple[float, float]:
+    XxValue, XyValue, Ignored, YxValue, YyValue, Ignored = Reframe
+    Determinant = XxValue * YyValue - XyValue * YxValue
+    Rotation = MathValue.atan2(YxValue, XxValue)
+    if Determinant < 0.0:
+        return (Rotation - EndValue, Rotation - Start)
+    return (Start + Rotation, EndValue + Rotation)
+
+
+# this definition adjusts conic arc angles for affine reflection
+def ConicAngles(
+    Reframe: tuple[float, float, float, float, float, float],
+    Start: float,
+    EndValue: float,
+) -> tuple[float, float]:
+    XxValue, XyValue, Ignored, YxValue, YyValue, Ignored = Reframe
+    Determinant = XxValue * YyValue - XyValue * YxValue
+    return (-EndValue, -Start) if Determinant < 0.0 else (Start, EndValue)
+
+
+# this definition applies an affine frame change to supported sketch geometry
 def ReframeGeom(
     GeomValue: Any, Reframe: tuple[float, float, float, float, float, float]
 ) -> AnyValue:
-    XxValue, XyValue, TxValue, YxValue, YyValue, TyValue = Reframe
-
-    # this definition exists because focused behavior needs one stable owner
-    def Point(Value: Vector2) -> VectorTwo:
-        return VectorTwo(
-            XxValue * Value.x + XyValue * Value.y + TxValue,
-            YxValue * Value.x + YyValue * Value.y + TyValue,
-        )
-
-    # this definition exists because focused behavior needs one stable owner
-    def Direction(Value: Vector2) -> VectorTwo:
-        return VectorTwo(
-            XxValue * Value.x + XyValue * Value.y, YxValue * Value.x + YyValue * Value.y
-        )
-
-    Determinant = XxValue * YyValue - XyValue * YxValue
-    Rotation = MathValue.atan2(YxValue, XxValue)
-
-    # this definition exists because focused behavior needs one stable owner
-    def CircularAngles(Start: float, EndValue: float) -> tuple[float, float]:
-        if Determinant < 0.0:
-            return (Rotation - EndValue, Rotation - Start)
-        return (Start + Rotation, EndValue + Rotation)
-
-    # this definition exists because focused behavior needs one stable owner
-    def ConicAngles(Start: float, EndValue: float) -> tuple[float, float]:
-        return (-EndValue, -Start) if Determinant < 0.0 else (Start, EndValue)
-
     if isinstance(GeomValue, PointGeom):
-        return Replace(GeomValue, point=Point(GeomValue.point))
+        return Replace(GeomValue, point=ReframePoint(GeomValue.point, Reframe))
     if isinstance(GeomValue, LineGeom):
         return Replace(
-            GeomValue, start=Point(GeomValue.start), end=Point(GeomValue.end)
+            GeomValue,
+            start=ReframePoint(GeomValue.start, Reframe),
+            end=ReframePoint(GeomValue.end, Reframe),
         )
     if isinstance(GeomValue, CircleGeom):
-        return Replace(GeomValue, center=Point(GeomValue.center))
+        return Replace(GeomValue, center=ReframePoint(GeomValue.center, Reframe))
     if isinstance(GeomValue, ArcGeom):
-        Start, EndValue = CircularAngles(GeomValue.start_angle, GeomValue.end_angle)
+        Start, EndValue = CircleAngles(
+            Reframe, GeomValue.start_angle, GeomValue.end_angle
+        )
         return Replace(
             GeomValue,
-            center=Point(GeomValue.center),
+            center=ReframePoint(GeomValue.center, Reframe),
             start_angle=Start,
             end_angle=EndValue,
         )
     if isinstance(GeomValue, EllipseGeom):
         return Replace(
             GeomValue,
-            center=Point(GeomValue.center),
-            major_axis=Direction(GeomValue.major_axis),
+            center=ReframePoint(GeomValue.center, Reframe),
+            major_axis=ReframeDir(GeomValue.major_axis, Reframe),
         )
     if isinstance(GeomValue, (ArcEllipseGeom, ArcHyperbolaGeom)):
-        Start, EndValue = ConicAngles(GeomValue.start_angle, GeomValue.end_angle)
+        Start, EndValue = ConicAngles(
+            Reframe, GeomValue.start_angle, GeomValue.end_angle
+        )
         return Replace(
             GeomValue,
-            center=Point(GeomValue.center),
-            major_axis=Direction(GeomValue.major_axis),
+            center=ReframePoint(GeomValue.center, Reframe),
+            major_axis=ReframeDir(GeomValue.major_axis, Reframe),
             start_angle=Start,
             end_angle=EndValue,
         )
     if isinstance(GeomValue, HyperbolaGeom):
         return Replace(
             GeomValue,
-            center=Point(GeomValue.center),
-            major_axis=Direction(GeomValue.major_axis),
+            center=ReframePoint(GeomValue.center, Reframe),
+            major_axis=ReframeDir(GeomValue.major_axis, Reframe),
         )
     if isinstance(GeomValue, ParabolaGeom):
         return Replace(
-            GeomValue, center=Point(GeomValue.center), axis=Direction(GeomValue.axis)
+            GeomValue,
+            center=ReframePoint(GeomValue.center, Reframe),
+            axis=ReframeDir(GeomValue.axis, Reframe),
         )
     if isinstance(GeomValue, ArcParabolaGeom):
-        Start, EndValue = ConicAngles(GeomValue.start_angle, GeomValue.end_angle)
+        Start, EndValue = ConicAngles(
+            Reframe, GeomValue.start_angle, GeomValue.end_angle
+        )
         return Replace(
             GeomValue,
-            center=Point(GeomValue.center),
-            axis=Direction(GeomValue.axis),
+            center=ReframePoint(GeomValue.center, Reframe),
+            axis=ReframeDir(GeomValue.axis, Reframe),
             start_angle=Start,
             end_angle=EndValue,
         )
     if isinstance(GeomValue, SplineGeom):
         return Replace(
             GeomValue,
-            control_points=tuple((Point(Value) for Value in GeomValue.control_points)),
+            control_points=tuple(
+                ReframePoint(Value, Reframe) for Value in GeomValue.control_points
+            ),
         )
     return GeomValue
 
