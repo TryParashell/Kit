@@ -13,6 +13,10 @@ from pathlib import Path as PathInfo
 import tempfile as Tempfile
 
 
+# command argument paths permit only inert characters after fixed-root resolution
+KCommandPathCharacters = frozenset(" ._-/\\:")
+
+
 # unsafe filesystem selections need a distinct failure contract at trust boundaries
 class UnsafePath(ValueError):
     __slots__ = ()
@@ -49,6 +53,17 @@ def ResolveLocal(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
 # tool inputs stay inside the operator selected working directory
 def ResolveInput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
     return ResolveWithin(PathValue, PathInfo.cwd(), True)
+
+
+# subprocess file arguments need containment plus a command-inert absolute spelling
+def ResolveCommandInput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+    ResultPath = ResolveInput(PathValue)
+    if any(
+        not CharText.isalnum() and CharText not in KCommandPathCharacters
+        for CharText in str(ResultPath)
+    ):
+        raise UnsafePath("command argument path contains unsafe characters")
+    return ResultPath
 
 
 # tool output paths stay inside the operator selected working directory

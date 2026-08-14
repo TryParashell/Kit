@@ -65,7 +65,7 @@ KCommandBarriers = frozenset(
         ),
         (
             "convert",
-            "Member[Security].Member[ProgramBoundary].Member[GetArgPath].ReturnValue",
+            "Member[Security].Member[PathBoundary].Member[ResolveCommandInput].ReturnValue",
         ),
         (
             "convert",
@@ -88,8 +88,9 @@ def QueryIds(SourceText: str) -> frozenset[str]:
 # model extraction verifies every sanitizer row without accepting broader predicates
 def ModelRows(SourceText: str) -> frozenset[tuple[str, str, str]]:
     Matches = Regex.findall(
-        r'-\s+\[\s*"([^"]+)",\s*"([^"]+\.ReturnValue)",\s*"([^"]+)",?\s*\]',
+        r'^\s+- - "([^"]+)"\n\s+- "([^"]+\.ReturnValue)"\n\s+- "([^"]+)"$',
         SourceText,
+        Regex.M,
     )
     return frozenset(Matches)
 

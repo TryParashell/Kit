@@ -20,6 +20,7 @@ KToolPathSet = frozenset(
     {
         ".gitattributes",
         ".github/CODE_OF_CONDUCT.md",
+        ".github/CodeQL/extensions/KitPython/codeql-pack.yml",
         ".github/ISSUE_TEMPLATE/config.yml",
         ".github/PULL_REQUEST_TEMPLATE.md",
         ".github/dependabot.yml",

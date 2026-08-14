@@ -19,8 +19,11 @@ import time as TimeInfo
 # source discovery keeps the debugger utility executable directly from the worktree
 KRootInfo = PathInfo(__file__).resolve().parents[2]
 System.path.insert(0, str(KRootInfo / "src"))
-from convert.Security.PathBoundary import ResolveInput, ResolveOutput
-from convert.Security.ProgramBoundary import GetArgPath
+from convert.Security.PathBoundary import (
+    ResolveCommandInput,
+    ResolveInput,
+    ResolveOutput,
+)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -216,8 +219,9 @@ def RunTask(
 ) -> RunResult:
     Script = ResolveInput(Script)
     LogInfo = ResolveOutput(LogInfo)
+    PartArgInfo: PathInfo | None = None
     if PartInfoInfo is not None:
-        PartInfoInfo = GetArgPath(PartInfoInfo)
+        PartArgInfo = ResolveCommandInput(PartInfoInfo)
     Sweep()
     LogInfo.parent.mkdir(parents=True, exist_ok=True)
     if LogInfo.exists():
@@ -230,8 +234,8 @@ def RunTask(
         f"$$<{Script.name}",
         str(KSldworks),
     ]
-    if PartInfoInfo is not None:
-        Command.append(str(PartInfoInfo))
+    if PartArgInfo is not None:
+        Command.append(str(PartArgInfo))
     StopInfo = Threading.Event()
     WatcherMut = Threading.Thread(target=WatchDialogs, args=(StopInfo,), daemon=True)
     WatcherMut.start()

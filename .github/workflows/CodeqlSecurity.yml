@@ -6,9 +6,10 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+---
 name: CodeQL security and quality
 
-on:
+"on":
   pull_request:
   merge_group:
   push:
@@ -38,6 +39,7 @@ jobs:
           - python
     steps:
       - name: Checkout repository
+        # yamllint disable-line rule:comments
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -49,6 +51,7 @@ jobs:
           cp -R .github/CodeQL/extensions .github/codeql/extensions
 
       - name: Initialize CodeQL
+        # yamllint disable-line rule:comments rule:line-length
         uses: github/codeql-action/init@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
         with:
           languages: ${{ matrix.language }}
@@ -57,6 +60,7 @@ jobs:
 
       - name: Analyze repository
         id: analysis
+        # yamllint disable-line rule:comments rule:line-length
         uses: github/codeql-action/analyze@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
         with:
           category: /language:${{ matrix.language }}

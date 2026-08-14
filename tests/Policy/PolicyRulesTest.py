@@ -28,6 +28,7 @@ class TestPathRules(UnitTest.TestCase):
     def CheckStandards(CaseSelf) -> None:
         AllowedPaths = (
             ".gitattributes",
+            ".github/CodeQL/extensions/KitPython/codeql-pack.yml",
             ".github/dependabot.yml",
             "Source/__init__.py",
             "tests/Feature/conftest.py",
@@ -38,6 +39,12 @@ class TestPathRules(UnitTest.TestCase):
                 CaseSelf.assertTrue(IsNameExempt(RepoPath))
         CaseSelf.assertFalse(IsNameExempt("Source/settings.json"))
         CaseSelf.assertFalse(IsNameExempt("Source/SKILL.md"))
+        CaseSelf.assertFalse(
+            IsNameExempt(".github/CodeQL/extensions/OtherPython/codeql-pack.yml")
+        )
+        CaseSelf.assertFalse(
+            IsNameExempt(".github/CodeQL/extensions/KitPython/codeql-config.yml")
+        )
 
     # bundled skills and native identities stay loadable without exempting adjacent project metadata
     def CheckBundles(CaseSelf) -> None:

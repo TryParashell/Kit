@@ -16,7 +16,7 @@ Keep the repository easy to extend by making paths predictable responsibilities 
 - Preserve lowercase package directories only when an existing public import identity requires them
 - Keep those compatibility packages as minimal facades with an explicit public surface and PascalCase implementation modules below them
 
-The only filename exceptions are exact names required by a language package manager operating system repository host or Agent Skills specification such as `__init__.py` `conftest.py` `pyproject.toml` `uv.lock` hidden configuration files and `SKILL.md`
+The only filename exceptions are exact names required by a language package manager operating system repository host or Agent Skills specification such as `__init__.py` `conftest.py` `pyproject.toml` `uv.lock` hidden configuration files and `SKILL.md` Keep the CodeQL model pack manifest exception limited to the exact ecosystem required path `.github/CodeQL/extensions/KitPython/codeql-pack.yml` and do not exempt neighboring manifests or directories
 
 Standard repository governance names and copied third party assets may retain externally required spelling Do not invent a new exception when a project owned PascalCase name works Vendor and CAD fixture leaf names under `examples/` may retain their original identity but project authored files there still follow this rule
 

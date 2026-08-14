@@ -13,7 +13,12 @@ from pathlib import Path as PathInfo
 import pytest as Pytest
 
 import convert.Security.ProgramBoundary as ProgramBoundary
-from convert.Security.PathBoundary import ResolveWithin, UnsafePath, ValidateLabel
+from convert.Security.PathBoundary import (
+    ResolveCommandInput,
+    ResolveWithin,
+    UnsafePath,
+    ValidateLabel,
+)
 
 
 # valid nested files prove normalization preserves intended local access
@@ -70,6 +75,17 @@ def TestArgPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     ResultPath = ProgramBoundary.GetArgPath(ProgramPath.name)
     assert ResultPath == ProgramPath.resolve()
     assert not str(ResultPath).startswith("-")
+
+
+# command argument paths reject metacharacters even when the contained file exists
+def TestBlocksArgMetacharacters(
+    TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch
+) -> None:
+    ProgramPath = TmpPath / "Bad&Part.sldprt"
+    ProgramPath.write_bytes(b"part")
+    MonkeyPatch.chdir(TmpPath)
+    with Pytest.raises(UnsafePath):
+        ResolveCommandInput(ProgramPath.name)
 
 
 # debugger labels reject metacharacters before they enter generated command scripts

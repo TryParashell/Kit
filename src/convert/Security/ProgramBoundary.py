@@ -11,7 +11,7 @@ from __future__ import annotations as Annotations
 import os as OsLayer
 from pathlib import Path as PathInfo
 
-from convert.Security.PathBoundary import ResolveInput, ResolveWithin, UnsafePath
+from convert.Security.PathBoundary import ResolveCommandInput, ResolveWithin, UnsafePath
 
 
 # exact executable names prevent the oracle setting from selecting another program
@@ -30,7 +30,7 @@ KFreecadRoots = (
 
 # subprocess file arguments need a contained absolute path before list-based execution
 def GetArgPath(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
-    return ResolveInput(PathValue)
+    return ResolveCommandInput(PathValue)
 
 
 # oracle execution is optional but any configured program must cross a strict allowlist
