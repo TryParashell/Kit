@@ -1536,6 +1536,43 @@ class VendorResolved:
     locals()["HeaderPayload"] = None
 
 
+# this binding exists because pin recognition and native encoding share one profile
+KPinPointsMm = (
+    (0.0, -50.0),
+    (0.0, 0.0),
+    (2.5, 0.0),
+    (2.5, -30.0),
+    (1.5, -29.99),
+    (1.5, -50.0),
+)
+
+# this binding exists because full pin headers require stable recovered action stamps
+KPinFullStamps = ((1785928014, 1785928014), (1785928014,))
+
+# this binding exists because right-angle pin headers require their own action stamps
+KPinRightStamps = ((1786479985, 1786479985), (1786479985,))
+
+# this binding exists because full pin headers require one stable native identity
+KPinFullIdent = (1785928009, 106, 103, 1785928014)
+
+# this binding exists because right-angle pin headers require one stable native identity
+KPinRightIdent = (1786479979, 106, 103, 1786479985)
+
+# this binding exists because recovered pin headers preserve their recorded author
+KPinHeaderUser = "odin"
+
+
+# this definition exists because cycle-free pin builders retain the legacy result shape
+@Dataclass(frozen=True, slots=True)
+class PinEnvelope:
+    locals().setdefault("__annotations__", {})
+    __annotations__["Config0Payload"] = "bytes"
+    __annotations__["HeaderPayload"] = "bytes"
+    __annotations__["HeaderStamps"] = "tuple[tuple[int, ...], ...]"
+    __annotations__["HeaderBounds"] = "tuple[float, ...]"
+    __annotations__["HeaderCreation"] = "int"
+
+
 # this binding exists because shared behavior needs one stable value
 KBaseObjects = (
     (8, "Comments", "Comments", "moCommentsFolder_c"),
