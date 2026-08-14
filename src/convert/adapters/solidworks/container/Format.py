@@ -170,11 +170,12 @@ def LegacyScalar(
     **CompatArgs: int,
 ) -> int | None:
     LegacyKey = "trailing_bytes"
-    if LegacyKey in CompatArgs:
-        TrailingBytes = CompatArgs.pop(LegacyKey)
-    if CompatArgs:
-        UnknownKey = next(iter(CompatArgs))
+    UnknownKeys = CompatArgs.keys() - {LegacyKey}
+    if UnknownKeys:
+        UnknownKey = next(iter(UnknownKeys))
         raise TypeError(f"unexpected keyword argument {UnknownKey!r}")
+    if LegacyKey in CompatArgs:
+        TrailingBytes = CompatArgs[LegacyKey]
     return DimensionScalar(DataValue, TextEnd, EndValue, TrailingBytes=TrailingBytes)
 
 
