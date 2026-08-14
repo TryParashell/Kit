@@ -619,6 +619,89 @@ def TestCatproduct() -> None:
     )
 
 
+# neutral component outputs need one shared proof that no false geometry escaped
+def CheckNeutral(RootValue: XmlTree.Element, Names: set[str]) -> None:
+    assert not any((NameValue.endswith(".Shape.brp") for NameValue in Names))
+    assert not any((NameValue.endswith(".MeshKernel.bms") for NameValue in Names))
+    assert not any(
+        (
+            Value.get("type") == "Mesh::Feature"
+            for Value in RootValue.findall("./Objects/Object")
+        )
+    )
+    assert not RootValue.findall(".//Part[@file]")
+    assert not RootValue.findall(".//Mesh[@file]")
+
+
+# optional native geometry needs one proof point shared across every component archive
+def HasCgmPayload(Archive, Names: set[str], CgmPayloads: tuple) -> bool:
+    if not CgmPayloads:
+        return False
+    assert len(CgmPayloads) == 1
+    CgmValue = CgmPayloads[0]
+    Entry = "interchange/native/catia_native_cgm.cgm"
+    assert Entry in Names
+    assert Archive.read(Entry) == CgmValue.data
+    assert "interchange/native/catia_native_cgm.brp" not in Names
+    return True
+
+
+# component roots must stay addressable so outer links can verify their targets
+def ReadCompRoot(Component: FilePath) -> tuple[FilePath, XmlTree.Element, bool]:
+    ComponentDoc = OpenDoc(Component)
+    CgmPayloads = tuple(
+        Payload
+        for Payload in ComponentDoc.brep_payloads
+        if Payload.format_id == "catia.cgm"
+    )
+    with Zipfile.ZipFile(Component) as Archive:
+        Names = set(Archive.namelist())
+        RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
+        TargetNode = RootValue.find(
+            "./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String"
+        )
+        assert TargetNode is not None
+        Target = TargetNode.get("value", "")
+        assert Target
+        assert RootValue.find(f"./Objects/Object[@name='{Target}']") is not None
+        CheckNeutral(RootValue, Names)
+        HasPayload = HasCgmPayload(Archive, Names, CgmPayloads)
+    return Component.resolve(), RootValue, HasPayload
+
+
+# component inspection stays centralized so count and link assertions share identical roots
+def LoadCompRoots(
+    ComponentFiles: tuple[FilePath, ...],
+) -> tuple[dict[FilePath, XmlTree.Element], int]:
+    ComponentRoots: dict[FilePath, XmlTree.Element] = {}
+    CgmCount = 0
+    for Component in ComponentFiles:
+        ComponentPath, RootValue, HasPayload = ReadCompRoot(Component)
+        ComponentRoots[ComponentPath] = RootValue
+        CgmCount += int(HasPayload)
+    return ComponentRoots, CgmCount
+
+
+# assembly links need cross file validation after every component has been inspected
+def CheckOuterLinks(
+    Output: FilePath, ComponentRoots: dict[FilePath, XmlTree.Element]
+) -> None:
+    with Zipfile.ZipFile(Output) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
+    OuterLinks = tuple(
+        LinkValue
+        for LinkValue in RootValue.findall(".//XLink")
+        if LinkValue.get("file")
+    )
+    assert OuterLinks
+    for LinkValue in OuterLinks:
+        Component = (Output.parent / LinkValue.get("file", "")).resolve()
+        ComponentRoot = ComponentRoots[Component]
+        Target = LinkValue.get("name", "")
+        assert Target
+        assert ComponentRoot.find(f"./Objects/Object[@name='{Target}']") is not None
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestCatproductO(TmpPath: Path) -> None:
     Source = KCatproducts / "Brake_Pedal_Assembly - Backup 1.CATProduct"
@@ -643,65 +726,9 @@ def TestCatproductO(TmpPath: Path) -> None:
     ComponentFolder = Output.parent / Output.stem
     ComponentFiles = tuple(sorted(ComponentFolder.glob("*.FCStd")))
     assert len(ComponentFiles) == 19
-    ComponentRoots: dict[FilePath, XmlTree.Element] = {}
-    CgmCount = 0
-    for Component in ComponentFiles:
-        ComponentDoc = OpenDoc(Component)
-        CgmPayloads = tuple(
-            (
-                Payload
-                for Payload in ComponentDoc.brep_payloads
-                if Payload.format_id == "catia.cgm"
-            )
-        )
-        with Zipfile.ZipFile(Component) as Archive:
-            Names = set(Archive.namelist())
-            RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-            ComponentRoots[Component.resolve()] = RootValue
-            TargetNode = RootValue.find(
-                "./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String"
-            )
-            assert TargetNode is not None
-            Target = TargetNode.get("value", "")
-            assert Target
-            assert RootValue.find(f"./Objects/Object[@name='{Target}']") is not None
-            assert not any((NameValue.endswith(".Shape.brp") for NameValue in Names))
-            assert not any(
-                (NameValue.endswith(".MeshKernel.bms") for NameValue in Names)
-            )
-            assert not any(
-                (
-                    Value.get("type") == "Mesh::Feature"
-                    for Value in RootValue.findall("./Objects/Object")
-                )
-            )
-            assert not RootValue.findall(".//Part[@file]")
-            assert not RootValue.findall(".//Mesh[@file]")
-            if CgmPayloads:
-                assert len(CgmPayloads) == 1
-                CgmValue = CgmPayloads[0]
-                Entry = "interchange/native/catia_native_cgm.cgm"
-                assert Entry in Names
-                assert Archive.read(Entry) == CgmValue.data
-                assert "interchange/native/catia_native_cgm.brp" not in Names
-                CgmCount += 1
+    ComponentRoots, CgmCount = LoadCompRoots(ComponentFiles)
     assert CgmCount == 18
-    with Zipfile.ZipFile(Output) as Archive:
-        RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    OuterLinks = tuple(
-        (
-            LinkValue
-            for LinkValue in RootValue.findall(".//XLink")
-            if LinkValue.get("file")
-        )
-    )
-    assert OuterLinks
-    for LinkValue in OuterLinks:
-        Component = (Output.parent / LinkValue.get("file", "")).resolve()
-        ComponentRoot = ComponentRoots[Component]
-        Target = LinkValue.get("name", "")
-        assert Target
-        assert ComponentRoot.find(f"./Objects/Object[@name='{Target}']") is not None
+    CheckOuterLinks(Output, ComponentRoots)
 
 
 # this definition exists because focused behavior needs one stable owner

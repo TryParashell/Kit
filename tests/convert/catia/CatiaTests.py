@@ -144,6 +144,86 @@ def TestPrePayload(TmpPath: Path) -> None:
     assert ByKind['native_document_binding'].file_extension == '.sha256'
     assert ByKind['native_document_binding'].data == Hashlib.sha256(Carrier).digest()
 
+# every corpus archive needs the same boundary proof before deeper semantic checks
+def CheckArchive(PathValue: FilePath) -> None:
+    Archive = CfvTwoArchive.from_bytes(PathValue.read_bytes())
+    assert Archive.outer.offset + Archive.outer.length == PathValue.stat().st_size
+    assert Archive.outer.streams
+    assert Archive.named_stream('Data')
+
+# physical stream relationships need isolation from document model assertions
+def LoadPartState(
+    PathValue: FilePath,
+    ExpectedClasses: tuple[str, ...],
+    FragmentedGeom: set[str],
+) -> tuple[bytes, CfvTwoArchive, tuple, object, object]:
+    Source = PathValue.read_bytes()
+    Archive = CfvTwoArchive.from_bytes(Source)
+    Declarations = Archive.declarations()
+    assert len(Archive.outer.streams) == 41
+    assert tuple((ItemValue.class_name for ItemValue in Declarations)) == ExpectedClasses
+    assert tuple((ItemValue.ordinal for ItemValue in Declarations)) == tuple(range(1, 9))
+    assert all((sum((Stream.name == ItemValue.stream_name for Stream in Archive.outer.streams)) == 2 for ItemValue in Declarations))
+    assert len(Archive.nested) == 1
+    CgrDecl = next((ItemValue for ItemValue in Declarations if ItemValue.class_name == 'CATCGRCont'))
+    CgrStream = Archive.outer.stream(CgrDecl.stream_name)
+    assert CgrStream is not None
+    assert len(CgrStream.extents) == 1
+    assert Archive.nested[0].physical_base == CgrStream.extents[0].physical_offset
+    assert Archive.nested[0].offset + Archive.nested[0].length == CgrStream.extents[0].physical_offset + CgrStream.logical_length
+    CgmDecl = next((ItemValue for ItemValue in Declarations if ItemValue.class_name == 'CGMGeom'))
+    CgmStream = Archive.outer.stream(CgmDecl.stream_name)
+    assert CgmStream is not None
+    assert len(CgmStream.extents) == (3 if PathValue.name in FragmentedGeom else 1)
+    assert len(Archive.stream_bytes(CgmStream)) == CgmStream.logical_length
+    PartDecl = next((ItemValue for ItemValue in Declarations if ItemValue.class_name == 'CATPrtCont'))
+    PartStream = Archive.outer.stream(PartDecl.stream_name)
+    assert PartStream is not None
+    Graph = OsmxArchive.from_bytes(Archive.stream_bytes(PartStream))
+    assert Graph.version == 'V5R28SP6HF0'
+    assert {'MechanicalPart', 'xy-plane', 'yz-plane', 'zx-plane'} <= set(Graph.values)
+    return Source, Archive, Declarations, CgmStream, PartStream
+
+# declaration payloads need byte level checks independent from document metadata checks
+def CheckDeclData(Archive, DocValue, Declarations: tuple) -> None:
+    DeclPayloads = DocValue.brep_payloads[2:]
+    assert len(DeclPayloads) == len(Declarations)
+    for DeclValue, Payload in zip(Declarations, DeclPayloads):
+        DeclaredStream = Archive.outer.stream(DeclValue.stream_name)
+        assert DeclaredStream is not None
+        DeclaredData = Archive.stream_bytes(DeclaredStream)
+        assert Payload.schema == DeclValue.class_name
+        assert Payload.source_stream == DeclValue.stream_name
+        assert Payload.sha256 == Hashlib.sha256(DeclaredData).hexdigest()
+        assert Payload.data == DeclaredData
+
+# native document semantics need one focused proof after physical stream validation
+def CheckPartDoc(
+    PathValue: FilePath,
+    Source: bytes,
+    Archive,
+    Declarations: tuple,
+    CgmStream,
+    PartStream,
+) -> None:
+    DocValue = OpenDoc(PathValue)
+    assert len(DocValue.support_planes) == 3
+    assert len(DocValue.feature_timeline) == 1
+    assert len(DocValue.bodies) == 1
+    assert DocValue.metadata['catia.product_name']
+    assert DocValue.metadata['catia.internal_part_name']
+    assert len(DocValue.metadata['catia.container_declarations']) == 8
+    CgmPayload = next((Payload for Payload in DocValue.brep_payloads if Payload.id == 'catia:native-cgm'))
+    assert CgmPayload.data == Archive.stream_bytes(CgmStream)
+    FeaturePayload = next((Payload for Payload in DocValue.brep_payloads if Payload.id == 'catia:native-feature-graph'))
+    assert FeaturePayload.data == Archive.stream_bytes(PartStream)
+    CheckDeclData(Archive, DocValue, Declarations)
+    assert DocValue.validate() == ()
+    Output = BytesIo()
+    Result = CatiaAdapter().write(DocValue, Output)
+    assert Result.metadata['mode'] == 'exact_native_roundtrip'
+    assert Output.getvalue() == Source
+
 # this definition exists because focused behavior needs one stable owner
 def TestRealCorpus() -> None:
     Parts = tuple(sorted(KCatparts.glob('*.CATPart')))
@@ -151,64 +231,12 @@ def TestRealCorpus() -> None:
     assert len(Parts) == 27
     assert len(Products) == 3
     for PathValue in Parts + Products:
-        Archive = CfvTwoArchive.from_bytes(PathValue.read_bytes())
-        assert Archive.outer.offset + Archive.outer.length == PathValue.stat().st_size
-        assert Archive.outer.streams
-        assert Archive.named_stream('Data')
+        CheckArchive(PathValue)
     ExpectedClasses = ('CATProdCont', 'CATPrtCont', 'CGMGeom', 'CATMFBRP', 'CATSeeBodyCont', 'CATBRepModeContainer', 'CATStdCont', 'CATCGRCont')
     FragmentedGeom = {'4784.CATPart', '4876.CATPart', '4876_1.CATPart', 'Pedal_Body.CATPart'}
     for PathValue in Parts:
-        Source = PathValue.read_bytes()
-        Archive = CfvTwoArchive.from_bytes(Source)
-        Declarations = Archive.declarations()
-        assert len(Archive.outer.streams) == 41
-        assert tuple((ItemValue.class_name for ItemValue in Declarations)) == ExpectedClasses
-        assert tuple((ItemValue.ordinal for ItemValue in Declarations)) == tuple(range(1, 9))
-        assert all((sum((Stream.name == ItemValue.stream_name for Stream in Archive.outer.streams)) == 2 for ItemValue in Declarations))
-        assert len(Archive.nested) == 1
-        CgrDecl = next((ItemValue for ItemValue in Declarations if ItemValue.class_name == 'CATCGRCont'))
-        CgrStream = Archive.outer.stream(CgrDecl.stream_name)
-        assert CgrStream is not None
-        assert len(CgrStream.extents) == 1
-        assert Archive.nested[0].physical_base == CgrStream.extents[0].physical_offset
-        assert Archive.nested[0].offset + Archive.nested[0].length == CgrStream.extents[0].physical_offset + CgrStream.logical_length
-        CgmDecl = next((ItemValue for ItemValue in Declarations if ItemValue.class_name == 'CGMGeom'))
-        CgmStream = Archive.outer.stream(CgmDecl.stream_name)
-        assert CgmStream is not None
-        assert len(CgmStream.extents) == (3 if PathValue.name in FragmentedGeom else 1)
-        assert len(Archive.stream_bytes(CgmStream)) == CgmStream.logical_length
-        PartDecl = next((ItemValue for ItemValue in Declarations if ItemValue.class_name == 'CATPrtCont'))
-        PartStream = Archive.outer.stream(PartDecl.stream_name)
-        assert PartStream is not None
-        Graph = OsmxArchive.from_bytes(Archive.stream_bytes(PartStream))
-        assert Graph.version == 'V5R28SP6HF0'
-        assert {'MechanicalPart', 'xy-plane', 'yz-plane', 'zx-plane'} <= set(Graph.values)
-        DocValue = OpenDoc(PathValue)
-        assert len(DocValue.support_planes) == 3
-        assert len(DocValue.feature_timeline) == 1
-        assert len(DocValue.bodies) == 1
-        assert DocValue.metadata['catia.product_name']
-        assert DocValue.metadata['catia.internal_part_name']
-        assert len(DocValue.metadata['catia.container_declarations']) == 8
-        CgmPayload = next((Payload for Payload in DocValue.brep_payloads if Payload.id == 'catia:native-cgm'))
-        assert CgmPayload.data == Archive.stream_bytes(CgmStream)
-        FeaturePayload = next((Payload for Payload in DocValue.brep_payloads if Payload.id == 'catia:native-feature-graph'))
-        assert FeaturePayload.data == Archive.stream_bytes(PartStream)
-        DeclPayloads = DocValue.brep_payloads[2:]
-        assert len(DeclPayloads) == len(Declarations)
-        for DeclValue, Payload in zip(Declarations, DeclPayloads):
-            DeclaredStream = Archive.outer.stream(DeclValue.stream_name)
-            assert DeclaredStream is not None
-            DeclaredData = Archive.stream_bytes(DeclaredStream)
-            assert Payload.schema == DeclValue.class_name
-            assert Payload.source_stream == DeclValue.stream_name
-            assert Payload.sha256 == Hashlib.sha256(DeclaredData).hexdigest()
-            assert Payload.data == DeclaredData
-        assert DocValue.validate() == ()
-        Output = BytesIo()
-        Result = CatiaAdapter().write(DocValue, Output)
-        assert Result.metadata['mode'] == 'exact_native_roundtrip'
-        assert Output.getvalue() == Source
+        Source, Archive, Declarations, CgmStream, PartStream = LoadPartState(PathValue, ExpectedClasses, FragmentedGeom)
+        CheckPartDoc(PathValue, Source, Archive, Declarations, CgmStream, PartStream)
 
 # this definition exists because focused behavior needs one stable owner
 def TestCfvTwoEvery() -> None:
