@@ -12,6 +12,7 @@ from typing import Any as AnyValue, Callable
 
 # mate type construction stays independent because classification data has one focused owner
 def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
+    return (
         MateType(
             0,
             "swMateCOINCIDENT",
@@ -185,6 +186,7 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
 
 # entity reference construction stays independent because geometry classification has one focused owner
 def BuildRefTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
+    return (
         MateType(
             0, "swMateEntity2ReferenceType_Point", "point", ("refpoint", "point")
         ),
