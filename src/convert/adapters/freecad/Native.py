@@ -2191,7 +2191,66 @@ def PartExtrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition collects auxiliary files referenced by one shape property
+def BrepSidecars(
+    NodeValue: ET.Element, FileName: str, Entries: Mapping[str, bytes]
+) -> list[dict[str, AnyValue]]:
+    Sidecars = []
+    for Child in NodeValue.findall(".//*[@file]"):
+        SidecarName = Child.get("file", "")
+        if not SidecarName or SidecarName == FileName:
+            continue
+        SidecarData = Entries.get(SidecarName)
+        if SidecarData is not None:
+            Sidecars.append({"source_stream": SidecarName, "data": SidecarData})
+    return Sidecars
+
+
+# this definition builds one native shape payload with exact provenance metadata
+def MakeBrepPayload(
+    ObjValue: NativeObject,
+    PropName: str,
+    NodeValue: ET.Element,
+    PartValue: ET.Element,
+    DataValue: bytes,
+    FileName: str,
+    Entries: Mapping[str, bytes],
+    FeatureIds: Mapping[str, str],
+    BodyIds: Mapping[str, str],
+) -> BrepPayload:
+    PayloadId = f"freecad:brep:{ObjValue.name}:{PropName}"
+    Header = DataValue[:256].decode("ascii", "ignore")
+    Match = RegexLib.search("CASCADE Topology V\\d+", Header)
+    Attributes: dict[str, AnyValue] = {
+        "freecad_object": ObjValue.name,
+        "freecad_object_type": ObjValue.type_id,
+        "freecad_property": PropName,
+        "freecad_property_data": ElemData(NodeValue),
+        "freecad_part_attributes": dict(PartValue.attrib),
+    }
+    Sidecars = BrepSidecars(NodeValue, FileName, Entries)
+    if Sidecars:
+        Attributes["freecad_sidecars"] = Sidecars
+    if PropName == "Shape" and ObjValue.name in FeatureIds:
+        Attributes["feature_id"] = FeatureIds[ObjValue.name]
+    if PropName == "Shape" and ObjValue.name in BodyIds:
+        Attributes["body_id"] = BodyIds[ObjValue.name]
+    return BrepPayload(
+        PayloadId,
+        "opencascade",
+        "shape",
+        Match.group(0) if Match else "FreeCAD PartShape",
+        Hashlib.sha256(DataValue).hexdigest(),
+        data=DataValue,
+        source_stream=FileName,
+        provenance=Provenance(FormatId, f"{ObjValue.name}.{PropName}"),
+        attributes=Attributes,
+        role=PayloadRole.BREP,
+        file_extension=".brep",
+    )
+
+
+# this definition collects every native shape payload and owner relationship
 def BuildBrep(
     Native: _NativeArchive, FeatureIds: dict[str, str], BodyIds: dict[str, str]
 ) -> tuple[tuple[BrepPayload, ...], dict[str, list[str]]]:
@@ -2200,56 +2259,23 @@ def BuildBrep(
     for ObjValue in Native.objects:
         for PropName, NodeValue in ObjValue.properties.items():
             PartValue = NodeValue.find("./Part")
-            if PartValue is None:
-                continue
             FileName = "" if PartValue is None else PartValue.get("file", "")
-            if not FileName:
-                continue
             DataValue = Native.entries.get(FileName)
-            if DataValue is None:
+            if PartValue is None or not FileName or DataValue is None:
                 continue
-            PayloadId = f"freecad:brep:{ObjValue.name}:{PropName}"
-            Header = DataValue[:256].decode("ascii", "ignore")
-            Match = RegexLib.search("CASCADE Topology V\\d+", Header)
-            Attributes: dict[str, AnyValue] = {
-                "freecad_object": ObjValue.name,
-                "freecad_object_type": ObjValue.type_id,
-                "freecad_property": PropName,
-                "freecad_property_data": ElemData(NodeValue),
-                "freecad_part_attributes": (
-                    dict(PartValue.attrib) if PartValue is not None else {}
-                ),
-            }
-            Sidecars = []
-            for Child in NodeValue.findall(".//*[@file]"):
-                SidecarName = Child.get("file", "")
-                if not SidecarName or SidecarName == FileName:
-                    continue
-                SidecarData = Native.entries.get(SidecarName)
-                if SidecarData is not None:
-                    Sidecars.append({"source_stream": SidecarName, "data": SidecarData})
-            if Sidecars:
-                Attributes["freecad_sidecars"] = Sidecars
-            if PropName == "Shape" and ObjValue.name in FeatureIds:
-                Attributes["feature_id"] = FeatureIds[ObjValue.name]
-            if PropName == "Shape" and ObjValue.name in BodyIds:
-                Attributes["body_id"] = BodyIds[ObjValue.name]
-            Payloads.append(
-                BrepPayload(
-                    PayloadId,
-                    "opencascade",
-                    "shape",
-                    Match.group(0) if Match else "FreeCAD PartShape",
-                    Hashlib.sha256(DataValue).hexdigest(),
-                    data=DataValue,
-                    source_stream=FileName,
-                    provenance=Provenance(FormatId, f"{ObjValue.name}.{PropName}"),
-                    attributes=Attributes,
-                    role=PayloadRole.BREP,
-                    file_extension=".brep",
-                )
+            Payload = MakeBrepPayload(
+                ObjValue,
+                PropName,
+                NodeValue,
+                PartValue,
+                DataValue,
+                FileName,
+                Native.entries,
+                FeatureIds,
+                BodyIds,
             )
-            OwnerPayloads.setdefault(ObjValue.name, []).append(PayloadId)
+            Payloads.append(Payload)
+            OwnerPayloads.setdefault(ObjValue.name, []).append(Payload.id)
     return (tuple(Payloads), OwnerPayloads)
 
 
