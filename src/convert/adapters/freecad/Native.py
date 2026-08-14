@@ -88,7 +88,7 @@ from interchange import (
 from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
 from convert.adapters.freecad.Archive import (
     DOCUMENT_ENTRY as DocEntry,
-    NATIVE_DOCUMENT_SHA256_ATTRIBUTE as NativeDocShaTwoFiveSix,
+    NATIVE_DOCUMENT_SHA256_ATTRIBUTE as KNativeDocHashAttr,
     _MAX_ENTRY_SIZE as MaxEntrySize,
     _MAX_EXTERNAL_FILES as MaxOuterFiles,
     _MAX_TOTAL_SIZE as MaxTotalSize,
@@ -3439,14 +3439,14 @@ def ReadNativeFcstd(
         if IsBodyContainer(ObjValue)
     }
     BrepPayloads, OwnerPayloads = BuildBrep(Native, FeatureIds, BodyIds)
-    NativeDocShaTwoFiveSix = Hashlib.sha256(DataValue).hexdigest()
+    NativeDigestText = Hashlib.sha256(DataValue).hexdigest()
     BrepPayloads = tuple(
         (
             Replace(
                 Payload,
                 attributes={
                     **Payload.attributes,
-                    NativeDocShaTwoFiveSix: NativeDocShaTwoFiveSix,
+                    KNativeDocHashAttr: NativeDigestText,
                 },
             )
             for Payload in BrepPayloads
@@ -3871,7 +3871,7 @@ globals()["Matrix4"] = MatrixFour
 globals()["Mesh"] = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = NativeDocShaTwoFiveSix
+globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = KNativeDocHashAttr
 
 # this binding exists because shared behavior needs one stable value
 globals()["NON_FEATURE_OBJECT_TYPE_IDS"] = NonFeatureObjectTypeIds

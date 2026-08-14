@@ -3436,7 +3436,7 @@ def TestGenericIsAs() -> None:
 
 
 # this definition exists because opaque reads must retain their exact native payload
-def CheckOpaqueRead(DocValue, Source: bytes) -> None:
+def VerifyOpaque(DocValue, Source: bytes) -> None:
     assert DocValue.validate() == ()
     assert DocValue.feature_timeline == ()
     assert len(DocValue.brep_payloads) == 2
@@ -3457,7 +3457,7 @@ def CheckOpaqueRead(DocValue, Source: bytes) -> None:
 
 
 # this definition exists because opaque writes must retain xml declarations exactly
-def CheckOpaqueXml(PayloadData: bytes) -> None:
+def VerifyOpaqueXml(PayloadData: bytes) -> None:
     with Zipfile.ZipFile(IoStream.BytesIO(PayloadData)) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
         Opaque = RootValue.find("./ObjectData/Object[@name='Opaque']")
@@ -3500,12 +3500,12 @@ def TestOpaqueOnly() -> None:
     Adapter = FreeCadAdapter()
     assert Adapter.probe(Source).confidence == 0.95
     DocValue = Adapter.read(Source)
-    CheckOpaqueRead(DocValue, Source)
+    VerifyOpaque(DocValue, Source)
     WithoutBrep = Adapter.read(Source, ReadOptions(include_brep=False))
     assert WithoutBrep.brep_payloads == DocValue.brep_payloads
     Output = IoStream.BytesIO()
     Adapter.write(DocValue, Output)
-    CheckOpaqueXml(Output.getvalue())
+    VerifyOpaqueXml(Output.getvalue())
     assert Output.getvalue() == Source
     assert Adapter.read(Output.getvalue()) == DocValue
 
@@ -3580,7 +3580,7 @@ def TestUnknownData(CarrierSuffix: str, TmpPath: Path) -> None:
 
 
 # this definition exists because native part reads have a focused interchange contract
-def CheckPartRead(DocValue) -> None:
+def VerifyPart(DocValue) -> None:
     assert DocValue.validate() == ()
     assert len(DocValue.sketches) == 1
     assert [str(Entity.kind) for Entity in DocValue.sketches[0].entities] == [
@@ -3633,7 +3633,7 @@ def EditCircle(DocValue):
 
 
 # this definition exists because native part xml must retain geometry and constraint structure
-def CheckPartXml(RootValue: ET.Element) -> None:
+def VerifyPartXml(RootValue: ET.Element) -> None:
     Sketch = RootValue.find("./ObjectData/Object[@name='Sketch']")
     assert Sketch is not None
     assert [
@@ -3669,13 +3669,13 @@ def TestSelfPart() -> None:
     Adapter = FreeCadAdapter()
     assert Adapter.probe(DataValue).confidence == 0.95
     DocValue = Adapter.read(DataValue)
-    CheckPartRead(DocValue)
+    VerifyPart(DocValue)
     DocValue = EditCircle(DocValue)
     Output = IoStream.BytesIO()
     Adapter.write(DocValue, Output)
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    CheckPartXml(RootValue)
+    VerifyPartXml(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4041,7 +4041,7 @@ def GraphFixture() -> tuple[bytes, dict[str, bytes]]:
 
 
 # this definition exists because part graph declarations and transient properties must round trip together
-def CheckGraphXml(RootValue: ET.Element) -> None:
+def VerifyGraphXml(RootValue: ET.Element) -> None:
     Declarations = RootValue.findall("./Objects/Object")
     assert [ItemValue.get("name") for ItemValue in Declarations[:5]] == [
         "Body",
@@ -4116,7 +4116,7 @@ def TestPartGraph() -> None:
         assert Archive.read("Sketch.InternalShape.brp") == b""
         assert Archive.read("Pad.SuppressedShape.brp") == b""
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    CheckGraphXml(RootValue)
+    VerifyGraphXml(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4243,7 +4243,7 @@ def TestAsmObjects() -> None:
 
 
 # this definition exists because assembly link and grounded object fields form one xml contract
-def CheckAsmLinks(RootValue: ET.Element) -> None:
+def VerifyAsmLinks(RootValue: ET.Element) -> None:
     Types = {
         ItemValue.get("name", ""): ItemValue.get("type", "")
         for ItemValue in RootValue.findall("./Objects/Object")
@@ -4285,7 +4285,7 @@ def CheckAsmLinks(RootValue: ET.Element) -> None:
 
 
 # this definition exists because assembly joint references and grouping form one xml contract
-def CheckAsmJoints(RootValue: ET.Element) -> None:
+def VerifyAsmMate(RootValue: ET.Element) -> None:
     Types = {
         ItemValue.get("name", ""): ItemValue.get("type", "")
         for ItemValue in RootValue.findall("./Objects/Object")
@@ -4359,8 +4359,8 @@ def TestAsmWritesA() -> None:
     Adapter.write(DocValue, Output)
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    CheckAsmLinks(RootValue)
-    CheckAsmJoints(RootValue)
+    VerifyAsmLinks(RootValue)
+    VerifyAsmMate(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4478,7 +4478,7 @@ def TestAsmGrouped(TmpPath) -> None:
 
 
 # this definition exists because portable external links must survive manifest free replay
-def CheckPortable(Adapter: FreeCadAdapter, Target: FilePath) -> None:
+def VerifyPortable(Adapter: FreeCadAdapter, Target: FilePath) -> None:
     NativeOnly = Target.parent / "NativeOnly.FCStd"
     with Zipfile.ZipFile(Target) as Archive:
         RootXml = XmlTree.fromstring(Archive.read("Document.xml"))
@@ -4503,7 +4503,7 @@ def CheckPortable(Adapter: FreeCadAdapter, Target: FilePath) -> None:
 
 
 # this definition exists because stream targets must diagnose embedded external references
-def CheckEmbedMut(Adapter: FreeCadAdapter, DocValue) -> None:
+def VerifyEmbedMut(Adapter: FreeCadAdapter, DocValue) -> None:
     PortableStream = IoStream.BytesIO()
     PortableResult = Adapter.write(DocValue, PortableStream)
     assert PortableResult.application_usable is False
@@ -4522,7 +4522,7 @@ def CheckEmbedMut(Adapter: FreeCadAdapter, DocValue) -> None:
 
 
 # this definition exists because nonportable writes must retain their original relative reference
-def CheckRelinkMut(Adapter: FreeCadAdapter, DocValue) -> None:
+def VerifyLinkMut(Adapter: FreeCadAdapter, DocValue) -> None:
     Nonportable = IoStream.BytesIO()
     Adapter.write(DocValue, Nonportable, WriteOptions(values={"portable": False}))
     with Zipfile.ZipFile(IoStream.BytesIO(Nonportable.getvalue())) as Archive:
@@ -4568,9 +4568,9 @@ def TestLinkOnlyDoc(TmpPath) -> None:
     assert Bundled.is_file()
     assert Result.metadata["external_document_file_count"] == 1
     assert Result.metadata["external_document_bytes_written"] == Bundled.stat().st_size
-    CheckPortable(Adapter, Target)
-    CheckEmbedMut(Adapter, DocValue)
-    CheckRelinkMut(Adapter, DocValue)
+    VerifyPortable(Adapter, Target)
+    VerifyEmbedMut(Adapter, DocValue)
+    VerifyLinkMut(Adapter, DocValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -5272,7 +5272,7 @@ def TestExample(NameValue: str) -> None:
 
 
 # this definition exists because the bundled assembly has one stable native read contract
-def CheckBundledAsm(DocValue) -> tuple[bytes, ...]:
+def VerifyBundled(DocValue) -> tuple[bytes, ...]:
     assert DocValue.validate() == ()
     assert DocValue.assembly is not None
     assert len(DocValue.assembly.definitions) == 14
@@ -5342,7 +5342,7 @@ def TestAsmFcstdAnd(TmpPath) -> None:
     if not Source.is_file():
         Pytest.skip("bundled FreeCAD assembly example is unavailable")
     DocValue = FreeCadAdapter().read(Source)
-    SourceShapes = CheckBundledAsm(DocValue)
+    SourceShapes = VerifyBundled(DocValue)
     Output = TmpPath / "Assembly.FCStd"
     Result = Convert(Source, Output)
     assert Result.near_lossless

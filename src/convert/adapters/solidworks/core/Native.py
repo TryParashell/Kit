@@ -12801,6 +12801,65 @@ def PolyProfiles(
     return (tuple(ProfileData), UsedOffsets)
 
 
+# circle closure parsing owns marker topology and radial geometry validation
+def CircleClosure(Markers, ClosureIndex, ExcludedOffsets):
+    Closure = Markers[ClosureIndex]
+    Endpoints = Closure.endpoint_indices
+    if (
+        Closure.offset in ExcludedOffsets
+        or Closure.coordinates_mm is not None
+        or Closure.locus != KCircleLocus.hex()
+        or Closure.profile_role != 1
+        or Closure.native_kind not in {0, 1}
+        or Endpoints is None
+        or Endpoints[0] != Endpoints[1]
+    ):
+        return None
+    RimIndex = Endpoints[0]
+    CenterIndex = RimIndex - 1
+    if not 0 <= CenterIndex < RimIndex < ClosureIndex or ClosureIndex - RimIndex > 2:
+        return None
+    Center = Markers[CenterIndex]
+    RimValue = Markers[RimIndex]
+    if (
+        Center.offset in ExcludedOffsets
+        or RimValue.offset in ExcludedOffsets
+        or Center.coordinates_mm is None
+        or RimValue.coordinates_mm is None
+        or RimValue.locus != KCircleLocus.hex()
+        or Center.profile_role != 1
+        or RimValue.profile_role != 1
+    ):
+        return None
+    Radius = MarkerRadiusMm(Center, RimValue)
+    if Radius is None:
+        return None
+    GeomValue = (Center.coordinates_mm[0], Center.coordinates_mm[1], Radius)
+    return (Center, RimValue, Closure, Radius, MarkerStart(Center, RimValue), GeomValue)
+
+
+# circle dimension matching owns unique radius and diameter normalization
+def MatchCircleMut(Dimensions, Radius, Normalized, GeomValue):
+    Matches: list[tuple[int, str, float]] = []
+    for Index, Dimension in enumerate(Dimensions):
+        if MathValue.isclose(
+            Dimension.value_mm, Radius, rel_tol=1e-07, abs_tol=1e-07
+        ):
+            Matches.append((Index, "radius", Dimension.value_mm))
+        elif MathValue.isclose(
+            Dimension.value_mm, Radius * 2.0, rel_tol=1e-07, abs_tol=1e-07
+        ):
+            Matches.append((Index, "diameter", Dimension.value_mm / 2.0))
+    ParamName = None
+    DimensionKind = None
+    if len(Matches) == 1 and Matches[0][0] not in Normalized:
+        DimensionIndex, DimensionKind, NormalizedRadius = Matches[0]
+        GeomValue = (GeomValue[0], GeomValue[1], NormalizedRadius)
+        ParamName = Dimensions[DimensionIndex].name
+        Normalized[DimensionIndex] = DimensionKind
+    return (GeomValue, ParamName, DimensionKind)
+
+
 # this definition exists because focused behavior needs one stable owner
 def Structural(
     Markers: list[NativeMarker],
@@ -12811,61 +12870,16 @@ def Structural(
     UsedValue: set[int] = set()
     Normalized: dict[int, str] = {}
     Geometries: set[tuple[float, float, float]] = set()
-    for ClosureIndex, Closure in enumerate(Markers):
-        Endpoints = Closure.endpoint_indices
-        if (
-            Closure.offset in ExcludedOffsets
-            or Closure.coordinates_mm is not None
-            or Closure.locus != KCircleLocus.hex()
-            or (Closure.profile_role != 1)
-            or (Closure.native_kind not in {0, 1})
-            or (Endpoints is None)
-            or (Endpoints[0] != Endpoints[1])
-        ):
+    for ClosureIndex in range(len(Markers)):
+        Candidate = CircleClosure(Markers, ClosureIndex, ExcludedOffsets)
+        if Candidate is None:
             continue
-        RimIndex = Endpoints[0]
-        CenterIndex = RimIndex - 1
-        if (
-            not 0 <= CenterIndex < RimIndex < ClosureIndex
-            or ClosureIndex - RimIndex > 2
-        ):
-            continue
-        Center = Markers[CenterIndex]
-        RimValue = Markers[RimIndex]
-        if (
-            Center.offset in ExcludedOffsets
-            or RimValue.offset in ExcludedOffsets
-            or Center.coordinates_mm is None
-            or (RimValue.coordinates_mm is None)
-            or (RimValue.locus != KCircleLocus.hex())
-            or (Center.profile_role != 1)
-            or (RimValue.profile_role != 1)
-        ):
-            continue
-        Radius = MarkerRadiusMm(Center, RimValue)
-        if Radius is None:
-            continue
-        StartAngle = MarkerStart(Center, RimValue)
-        GeomValue = (Center.coordinates_mm[0], Center.coordinates_mm[1], Radius)
+        Center, RimValue, Closure, Radius, StartAngle, GeomValue = Candidate
         if GeomValue in Geometries:
             continue
-        Matches: list[tuple[int, str, float]] = []
-        for Index, Dimension in enumerate(Dimensions):
-            if MathValue.isclose(
-                Dimension.value_mm, Radius, rel_tol=1e-07, abs_tol=1e-07
-            ):
-                Matches.append((Index, "radius", Dimension.value_mm))
-            elif MathValue.isclose(
-                Dimension.value_mm, Radius * 2.0, rel_tol=1e-07, abs_tol=1e-07
-            ):
-                Matches.append((Index, "diameter", Dimension.value_mm / 2.0))
-        ParamName = None
-        DimensionKind = None
-        if len(Matches) == 1 and Matches[0][0] not in Normalized:
-            DimensionIndex, DimensionKind, NormalizedRadius = Matches[0]
-            GeomValue = (GeomValue[0], GeomValue[1], NormalizedRadius)
-            ParamName = Dimensions[DimensionIndex].name
-            Normalized[DimensionIndex] = DimensionKind
+        GeomValue, ParamName, DimensionKind = MatchCircleMut(
+            Dimensions, Radius, Normalized, GeomValue
+        )
         Geometries.add(GeomValue)
         MarkerOffsets = (Center.offset, RimValue.offset, Closure.offset)
         UsedValue.update(MarkerOffsets)
