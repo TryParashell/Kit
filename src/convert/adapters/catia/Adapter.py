@@ -1936,31 +1936,10 @@ def IsNativePayload(
         if Manifest is not None:
             Embedded = ManifestDoc(Manifest)
             return CarrierSemantic(Embedded) == CarrierSemantic(DocValue)
-        if DocType == ProductDocType:
-            Table = DecodeProductTable(Archive)
-            AsmValue = DocValue.assembly
-            if AsmValue is None:
-                return False
-            Definitions = {
-                ItemValue.id: ItemValue for ItemValue in AsmValue.definitions
-            }
-            RootValue = Definitions.get(AsmValue.root_definition_id)
-            if RootValue is None or RootValue.name != Table.root_name:
-                return False
-            Expected = tuple(
-                (
-                    (Definitions[ItemValue.definition_id].name, ItemValue.name)
-                    for ItemValue in AsmValue.instances
-                )
-            )
-            Actual = tuple(
-                (
-                    (ItemValue.definition_name, ItemValue.instance_name)
-                    for ItemValue in Table.occurrences
-                )
-            )
-            if Expected != Actual:
-                return False
+        if DocType == ProductDocType and not IsProductMatch(
+            DocValue, DecodeProductTable(Archive)
+        ):
+            return False
         IncludeTessellation = any(
             (
                 Payload.role == PayloadRole.TESSELLATION and Payload.data is not None
@@ -1995,6 +1974,30 @@ def IsNativePayload(
         if Payload.id in ChoiceNative
     }
     return Expected == ChoiceNative
+
+
+# this definition exists because focused behavior needs one stable owner
+def IsProductMatch(DocValue: CadDocument, Table: NativeProductTable) -> bool:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
+        return False
+    Definitions = {ItemValue.id: ItemValue for ItemValue in AsmValue.definitions}
+    RootValue = Definitions.get(AsmValue.root_definition_id)
+    if RootValue is None or RootValue.name != Table.root_name:
+        return False
+    Expected = tuple(
+        (
+            (Definitions[ItemValue.definition_id].name, ItemValue.name)
+            for ItemValue in AsmValue.instances
+        )
+    )
+    Actual = tuple(
+        (
+            (ItemValue.definition_name, ItemValue.instance_name)
+            for ItemValue in Table.occurrences
+        )
+    )
+    return Expected == Actual
 
 
 # this definition exists because focused behavior needs one stable owner

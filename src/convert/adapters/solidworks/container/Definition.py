@@ -144,7 +144,7 @@ class LineFontBinding:
 
 
 # this binding exists because shared behavior needs one stable value
-KLineFontBindings = (
+KLineFontDims = (
     LineFontBinding("Sketch", "CONTINUOUS"),
     LineFontBinding("Auxilliary", "HIDDEN"),
     LineFontBinding("ChamferDim", "CONTINUOUS"),
@@ -165,6 +165,10 @@ KLineFontBindings = (
     LineFontBinding("OrdinateDimExt", "CONTINUOUS"),
     LineFontBinding("ChamferDimExt", "CONTINUOUS"),
     LineFontBinding("Crosshatch", "CONTINUOUS"),
+)
+
+# this binding exists because shared behavior needs one stable value
+KLineFontViews = (
     LineFontBinding("ViewArrow", "PHANTOM", 2),
     LineFontBinding("EmphasizedOutline", "CONTINUOUS", 2, KLineFontInheritedWidth, 2),
     LineFontBinding("AngleDimExt", "CONTINUOUS"),
@@ -186,6 +190,9 @@ KLineFontBindings = (
     LineFontBinding("SpeedpakVisible", "CONTINUOUS"),
     LineFontBinding("BendUp", "CONTINUOUS"),
 )
+
+# this binding exists because shared behavior needs one stable value
+KLineFontBindings = KLineFontDims + KLineFontViews
 
 # this binding exists because shared behavior needs one stable value
 KUserModelEnvClass = "uiUserModelEnv_c"
