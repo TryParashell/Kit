@@ -237,7 +237,9 @@ KVisualScene = (
 )
 
 # this binding exists because shared behavior needs one stable value
-KVisualProperties = KVisualMaterial + KVisualOptics + KVisualTexture + KVisualMatrix + KVisualScene
+KVisualProperties = (
+    KVisualMaterial + KVisualOptics + KVisualTexture + KVisualMatrix + KVisualScene
+)
 
 # this binding exists because shared behavior needs one stable value
 KAtomTableHead = (

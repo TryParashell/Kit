@@ -54,6 +54,7 @@ from interchange import (
     with_wrapper_metadata as WithWrapperMeta,
 )
 from convert.adapters.catia.Assembly import (
+    NativeProductTable as ProductTable,
     decode_product_table as DecodeProductTable,
     native_product_assembly as NativeProductAsm,
 )
@@ -1977,7 +1978,7 @@ def IsNativePayload(
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsProductMatch(DocValue: CadDocument, Table: NativeProductTable) -> bool:
+def IsProductMatch(DocValue: CadDocument, Table: ProductTable) -> bool:
     AsmValue = DocValue.assembly
     if AsmValue is None:
         return False
