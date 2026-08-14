@@ -16,6 +16,9 @@ def write_missing_header(FilePath: Path, HeaderLines: list[str]) -> None:
         Newline.join(Line.encode("utf-8") for Line in HeaderLines) + Newline * 2
     )
     Offset = SourceBytes.find(b"\n") + 1 if SourceBytes.startswith(b"#!") else 0
+    if SourceBytes.startswith(b"#!") and Offset == 0:
+        FilePath.write_bytes(SourceBytes + Newline + HeaderBytes)
+        return
     FilePath.write_bytes(SourceBytes[:Offset] + HeaderBytes + SourceBytes[Offset:])
 
 
