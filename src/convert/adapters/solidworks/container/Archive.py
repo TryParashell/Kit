@@ -1517,7 +1517,10 @@ def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSiz
 
 # this definition exists because archive interfaces preserve established snake case option names
 def ArchiveOptions(Options: Mapping[str, object], HeaderSize: int, MoVersion: int | None, Limit: int | None, Caller: str) -> tuple[int, int | None, int | None]:
-    Unknown = set(Options) - {'header_size', 'mo_version', 'limit'}
+    Allowed = {'header_size', 'mo_version'}
+    if Caller == 'ResolveBase':
+        Allowed.add('limit')
+    Unknown = set(Options) - Allowed
     if Unknown:
         NameValue = next(iter(Unknown))
         raise TypeError(f"{Caller}() got an unexpected keyword argument '{NameValue}'")

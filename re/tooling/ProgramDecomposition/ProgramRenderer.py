@@ -265,53 +265,27 @@ def BuildStat(ProgramItem: ProgramData, FacadeTexts: dict[str, str]) -> tuple:
     )
 
 
-# each generated variant separates public and stream evidence into reviewable declarations
-def AppendStatMut(
+# manifest assembly keeps the large focused evidence table isolated from source scaffolding
+def AppendStatsMut(
     SourceLines: list[str],
-    ProgramItem: ProgramData,
+    Programs: tuple[ProgramData, ...],
     FacadeTexts: dict[str, str],
-    ItemIndex: int,
-) -> str:
-    StatRecord = BuildStat(ProgramItem, FacadeTexts)
-    SuffixText = MakeAlias(ItemIndex)[len("KMethod") :]
-    StreamName = "KStreams" + SuffixText
-    PublicName = "KPublic" + SuffixText
-    VariantName = "KVariant" + SuffixText
+) -> None:
     SourceLines.extend(
         (
             "",
-            "# stream fingerprints preserve byte lengths and hashes for one generated variant",
-            f"{StreamName} = {RenderValue(StatRecord[7])}",
-            "",
-            "# public symbols preserve the exact callable surface for one generated variant",
-            f"{PublicName} = {RenderValue(StatRecord[6])}",
-            "",
-            "# variant evidence preserves public surfaces logical tables and encoded byte identities",
-            f"{VariantName} = ({', '.join((*map(RenderValue, StatRecord[:6]), PublicName, StreamName, RenderValue(StatRecord[8])))})",
+            "# focused program manifest data preserves all variant evidence in one dedicated module",
+            "KProgramManifest = (",
         )
     )
-    return VariantName
-
-
-# grouped manifest declarations keep aggregate evidence below structural size limits
-def AppendGroupsMut(SourceLines: list[str], VariantNames: tuple[str, ...]) -> None:
-    GroupNames = []
-    for GroupIndex, StartPos in enumerate(range(0, len(VariantNames), 20)):
-        SuffixText = MakeAlias(GroupIndex)[len("KMethod") :]
-        GroupName = "KStats" + SuffixText
-        GroupNames.append(GroupName)
-        SourceLines.extend(
-            (
-                "",
-                "# grouped variant evidence keeps generated manifest declarations within reviewable boundaries",
-                f"{GroupName} = ({', '.join(VariantNames[StartPos:StartPos + 20])})",
-            )
-        )
+    for ProgramItem in Programs:
+        SourceLines.append(f"    {RenderValue(BuildStat(ProgramItem, FacadeTexts))},")
     SourceLines.extend(
         (
+            ")",
             "",
-            "# complete variant evidence preserves the deterministic generated program order",
-            f"KProgramStats = {' + '.join(GroupNames)}",
+            "# verifier compatibility exposes the focused manifest through its stable public name",
+            "KProgramStats = KProgramManifest",
             "",
         )
     )
@@ -332,9 +306,5 @@ def RenderManifest(
         "# global counts catch missing variants streams owners methods or recovered operations",
         f"KGlobalStats = {RenderValue(GlobalStats)}",
     ]
-    VariantNames = tuple(
-        AppendStatMut(SourceLines, ProgramItem, FacadeTexts, ItemIndex)
-        for ItemIndex, ProgramItem in enumerate(Programs)
-    )
-    AppendGroupsMut(SourceLines, VariantNames)
+    AppendStatsMut(SourceLines, Programs, FacadeTexts)
     return FormatSource("\n".join(SourceLines))

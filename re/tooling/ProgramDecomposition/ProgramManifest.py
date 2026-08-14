@@ -11,8 +11,8 @@ from __future__ import annotations
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KGlobalStats = (43, 75, 212, 2078, 3857, 185090)
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KProgramStats = (
+# focused program manifest data preserves all variant evidence in one dedicated module
+KProgramManifest = (
     (
         "assembly/default",
         "FieldOwners",

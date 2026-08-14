@@ -93,7 +93,7 @@ from interchange import (
     SelectionPathElement as SelectionPathElem,
     Severity,
     ShellFeature,
-    Sketch,
+    Sketch as SketchData,
     SketchConstraint as SketchRule,
     SketchEntity,
     SplineGeometry as SplineGeom,
@@ -1274,7 +1274,7 @@ def EmbeddedDoc(
     if Settings.strict:
         DocValue.assert_valid()
     return RetainSource(
-        DocValue, DataValue, RetainCapabilities=True, ReadOptions=Settings
+        DocValue, DataValue, RetainCapabilities=True, OptionsValue=Settings
     )
 
 
@@ -1349,10 +1349,10 @@ def RetainSource(
     DataValue: bytes,
     *,
     RetainCapabilities: bool = False,
-    ReadOptions: ReadOptions | None = None,
+    OptionsValue: ReadOptions | None = None,
 ) -> CadDoc:
     Capabilities = DocValue.capabilities
-    SelectedOptions = ReadOptions or ReadOptions()
+    SelectedOptions = OptionsValue or ReadOptions()
     Portable = DocWithout(DocValue)
     Portable = Replace(
         Portable, metadata=WithWrapperMeta(Portable.metadata, KWrapperMetaKeys)
@@ -3387,7 +3387,7 @@ def GeomValues(GeomValue: Any) -> AnyValue:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SketchValues(Sketches: Sequence[Sketch]) -> tuple[AnyValue, ...]:
+def SketchValues(Sketches: Sequence[SketchData]) -> tuple[AnyValue, ...]:
     return tuple(
         (
             (
@@ -5952,7 +5952,7 @@ def Planes(Model: NativeModel, ParamIds: set[str]) -> tuple[SupportPlane, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[Sketch, ...]:
+def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[SketchData, ...]:
 
     # this callback exists because local behavior needs one focused transformation
     return tuple(
@@ -5966,7 +5966,7 @@ def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[Sketch, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> Sketch:
+def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
     Entities: list[SketchEntity] = []
     RefMap: dict[str, str] = {}
     ProfileEntities: dict[int, str] = {}
@@ -6130,7 +6130,7 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> Sketch:
             if ParamId in ParamIds
         )
     )
-    return Sketch(
+    return SketchData(
         id=SketchId(Sketch.object_id),
         name=Sketch.name,
         support_plane_id=PlaneId(Sketch.support_plane_id),

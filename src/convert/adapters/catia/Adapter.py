@@ -156,7 +156,7 @@ class CatiaAdapterA(RuntimeError):
 
 
 # this definition exists because focused behavior needs one stable owner
-class CatiaAdapter:
+class CatiaMetadata:
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -185,6 +185,13 @@ class CatiaAdapter:
             ZlibValue.error,
         ) as ErrorInfo:
             return ProbeResult(KFormatId, 0.0, str(ErrorInfo))
+
+    locals()["info"] = InfoAction
+    locals()["probe"] = Probe
+
+
+# this definition exists because focused behavior needs one stable owner
+class CatiaReader:
 
     # this definition exists because focused behavior needs one stable owner
     def ReadAction(
@@ -272,12 +279,24 @@ class CatiaAdapter:
             DocValue.assert_valid()
         return DocValue
 
+    locals()["read"] = ReadAction
+
+
+# this definition exists because focused behavior needs one stable owner
+class CatiaSupport:
+
     # this definition exists because focused behavior needs one stable owner
     def CanSupport(Instance, DocValue: CadDocument, Target: Destination) -> bool:
         if isinstance(Target, (str, FilePath)):
             Expected = KProductSuffix if DocValue.assembly is not None else KPartSuffix
             return FilePath(Target).suffix.casefold() == Expected
         return IsBinaryTarget(Target)
+
+    locals()["supports"] = CanSupport
+
+
+# this definition exists because focused behavior needs one stable owner
+class CatiaWriter:
 
     # this definition exists because focused behavior needs one stable owner
     def Write(
@@ -463,11 +482,14 @@ class CatiaAdapter:
             vendor_loadable=False,
         )
 
-    locals()["info"] = InfoAction
-    locals()["probe"] = Probe
-    locals()["read"] = ReadAction
-    locals()["supports"] = CanSupport
     locals()["write"] = Write
+
+
+# this definition exists because focused behavior needs one stable owner
+class CatiaAdapter(CatiaMetadata, CatiaReader, CatiaSupport, CatiaWriter):
+    KAdapterSlots = ()
+
+    locals()["__slots__"] = KAdapterSlots
 
 
 # this definition exists because focused behavior needs one stable owner
