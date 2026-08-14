@@ -78,35 +78,49 @@ KConfigOwnerCount = len(FieldOwners)
 # this binding exists because shared behavior needs one stable value
 KConfigOpaqueBytes = 0
 
-# this definition exists because focused behavior needs one stable owner
-def EncodeConfig(PartName: str=KRefPartName, Atoms: tuple[tuple[int, int], ...]=((KRefAtomId, KRefTreeId),), SessionStamp: int=KRefSessionStamp, Generation: int=KMoVersion, DualLengthUnits: bool=True, HighWater: tuple[int, int] | None=None, PartRecordBody: bytes | None=None, AnnotationViewCount: int=1, TerminalParentTreeId: int | None=None, AnnotationViewVariant: str='default') -> bytes:
-    if PartRecordBody is not None:
-        raise SldprtFormatError('custom raw Config-0 prologue bodies are forbidden by first-principles writing')
+# high water derivation stays separate because atom allocation has its own validation contract
+def GetHighWater(Atoms: tuple[tuple[int, int], ...], HighWater: tuple[int, int] | None) -> tuple[int, int]:
     if HighWater is None:
         if not Atoms:
             raise SldprtFormatError('Contents/Config-0 needs at least one atom record')
         HighestId = max((AtomId for AtomId, TreeId in Atoms))
-        HighWater = (HighestId, HighestId + 2 * len(Atoms))
-    StreamData = EncodeProgram(PartName=PartName, Atoms=tuple(Atoms), SessionStamp=SessionStamp, Generation=Generation, DualLengthUnits=DualLengthUnits, HighWater=HighWater)
-    if TerminalParentTreeId is not None:
-        if len(Atoms) != 1 or not 1 <= TerminalParentTreeId <= 4294967295 or TerminalParentTreeId == Atoms[0][1]:
-            raise SldprtFormatError('Config-0 terminal history requires one child atom and one distinct parent tree')
-        AtomTag = EncodeClassDefinition('moAtom_c', 1)
-        AtomStart = StreamData.find(AtomTag)
-        if AtomStart < 0:
-            raise SldprtFormatError('Config-0 terminal atom boundary changed')
-        PatchedData = bytearray(StreamData)
-        Struct.pack_into('<I', PatchedData, AtomStart + KFilletAtomParentRelative, TerminalParentTreeId)
-        for RelativeOffset in KFilletAtomLinkStampA:
-            Struct.pack_into('<I', PatchedData, AtomStart + RelativeOffset, KFilletAtomLinkStamp)
-        StreamData = bytes(PatchedData)
-    if AnnotationViewCount == 1:
-        if TerminalParentTreeId is not None:
-            raise SldprtFormatError('Config-0 terminal fillet history requires its two annotation views')
-        if AnnotationViewVariant != 'default':
-            raise SldprtFormatError('Config-0 annotation variants require two annotation views')
+        return (HighestId, HighestId + 2 * len(Atoms))
+    return HighWater
+
+
+# terminal atom patching owns its recovered offsets so ordinary configuration encoding stays declarative
+def PatchTerminal(StreamData: bytes, Atoms: tuple[tuple[int, int], ...], TerminalTreeId: int | None) -> bytes:
+    if TerminalTreeId is None:
         return StreamData
-    if AnnotationViewCount != 2:
+    if len(Atoms) != 1 or not 1 <= TerminalTreeId <= 4294967295 or TerminalTreeId == Atoms[0][1]:
+        raise SldprtFormatError('Config-0 terminal history requires one child atom and one distinct parent tree')
+    AtomTag = EncodeClassDefinition('moAtom_c', 1)
+    AtomStart = StreamData.find(AtomTag)
+    if AtomStart < 0:
+        raise SldprtFormatError('Config-0 terminal atom boundary changed')
+    PatchedData = bytearray(StreamData)
+    Struct.pack_into('<I', PatchedData, AtomStart + KFilletAtomParentRelative, TerminalTreeId)
+    for RelativeOffset in KFilletAtomLinkStampA:
+        Struct.pack_into('<I', PatchedData, AtomStart + RelativeOffset, KFilletAtomLinkStamp)
+    return bytes(PatchedData)
+
+
+# annotation variant selection remains explicit because each recovered manager has distinct bytes
+def GetAnnotManager(VariantName: str, TerminalTreeId: int | None) -> bytes:
+    if TerminalTreeId is not None:
+        if VariantName != 'default':
+            raise SldprtFormatError('terminal Config-0 history has a fixed annotation variant')
+        return EncodeFilletAnnotation()
+    if VariantName in {'linear_pattern', 'circular_pattern'}:
+        return EncodePatternAnnotation()
+    if VariantName == 'default':
+        return EncodeTwoViewAnnotation()
+    raise SldprtFormatError(f'unsupported Config-0 annotation variant {VariantName!r}')
+
+
+# two view insertion owns boundary validation so the main encoder cannot splice unchecked offsets
+def AddSecondView(StreamData: bytes, ViewCount: int, TerminalTreeId: int | None, VariantName: str) -> bytes:
+    if ViewCount != 2:
         raise SldprtFormatError('Contents/Config-0 supports one or two recovered annotation views')
     AnnotationTag = EncodeClassDefinition('moAnnotationView_c', 1)
     MarkTag = EncodeClassDefinition('moPMarkRecord_c', 1)
@@ -115,17 +129,24 @@ def EncodeConfig(PartName: str=KRefPartName, Atoms: tuple[tuple[int, int], ...]=
     CountOffset = AnnotationStart - 2
     if AnnotationStart < 2 or AnnotationEnd < 0 or Struct.unpack_from('<H', StreamData, CountOffset)[0] != 1:
         raise SldprtFormatError('Config-0 annotation manager boundaries changed')
-    if TerminalParentTreeId is not None:
+    ManagerData = GetAnnotManager(VariantName, TerminalTreeId)
+    return StreamData[:CountOffset] + Struct.pack('<H', ViewCount) + ManagerData + StreamData[AnnotationEnd:]
+
+
+# public configuration encoding composes allocation terminal history and annotation phases
+def EncodeConfig(PartName: str=KRefPartName, Atoms: tuple[tuple[int, int], ...]=((KRefAtomId, KRefTreeId),), SessionStamp: int=KRefSessionStamp, Generation: int=KMoVersion, DualLengthUnits: bool=True, HighWater: tuple[int, int] | None=None, PartRecordBody: bytes | None=None, AnnotationViewCount: int=1, TerminalParentTreeId: int | None=None, AnnotationViewVariant: str='default') -> bytes:
+    if PartRecordBody is not None:
+        raise SldprtFormatError('custom raw Config-0 prologue bodies are forbidden by first-principles writing')
+    ResolvedHighWater = GetHighWater(Atoms, HighWater)
+    StreamData = EncodeProgram(PartName=PartName, Atoms=tuple(Atoms), SessionStamp=SessionStamp, Generation=Generation, DualLengthUnits=DualLengthUnits, HighWater=ResolvedHighWater)
+    StreamData = PatchTerminal(StreamData, Atoms, TerminalParentTreeId)
+    if AnnotationViewCount == 1:
+        if TerminalParentTreeId is not None:
+            raise SldprtFormatError('Config-0 terminal fillet history requires its two annotation views')
         if AnnotationViewVariant != 'default':
-            raise SldprtFormatError('terminal Config-0 history has a fixed annotation variant')
-        AnnotationManager = EncodeFilletAnnotation()
-    elif AnnotationViewVariant in {'linear_pattern', 'circular_pattern'}:
-        AnnotationManager = EncodePatternAnnotation()
-    elif AnnotationViewVariant == 'default':
-        AnnotationManager = EncodeTwoViewAnnotation()
-    else:
-        raise SldprtFormatError(f'unsupported Config-0 annotation variant {AnnotationViewVariant!r}')
-    return StreamData[:CountOffset] + Struct.pack('<H', AnnotationViewCount) + AnnotationManager + StreamData[AnnotationEnd:]
+            raise SldprtFormatError('Config-0 annotation variants require two annotation views')
+        return StreamData
+    return AddSecondView(StreamData, AnnotationViewCount, TerminalParentTreeId, AnnotationViewVariant)
 
 # this definition exists because focused behavior needs one stable owner
 def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:

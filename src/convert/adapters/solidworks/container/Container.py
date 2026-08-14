@@ -144,7 +144,14 @@ def ParseArchive(ClassType, BlobValue: bytes | bytearray, SourcePath: str | File
     return ClassType(Source, FileId, FormatVersion, Records)
 
 # this definition exists because focused behavior needs one stable owner
-def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, FileId: int | None=None, FormatVersion: int=4, Template: bytes | bytearray | None=None, Signatures: tuple[bytes, bytes, bytes] | None=None) -> bytes:
+def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, FileId: int | None=None, FormatVersion: int=4, Template: bytes | bytearray | None=None, Signatures: tuple[bytes, bytes, bytes] | None=None, **Options: object) -> bytes:
+    FileId = Options.pop('file_id', FileId)
+    FormatVersion = Options.pop('format_version', FormatVersion)
+    Template = Options.pop('template', Template)
+    Signatures = Options.pop('signatures', Signatures)
+    if Options:
+        Unknown = next(iter(Options))
+        raise TypeError(f"BuildSldprt() got an unexpected keyword argument '{Unknown}'")
     FileId, SignatureSet, TypeIds = ResolveBuild(FileId, Template, Signatures)
     if not 0 <= FileId <= 4294967295:
         raise ValueError('SLDPRT file id must fit in 32 bits')
@@ -202,10 +209,10 @@ def EmitSldprt(Items: list[tuple[str, bytes]], FileId: int, FormatVersion: int, 
         Output.extend(LocalSignature)
         Output.extend(Record)
         Encoded.append((TypeId, NameValue, CrcThreeTwoValue, CompressedSize, len(DataValue), LocalOffset))
-    return FinishArchiveMut(Output, Encoded, CentralSignature, EndBytes)
+    return FinishArcMut(Output, Encoded, CentralSignature, EndBytes)
 
 # this definition exists because directory finalization enforces native offset bounds centrally
-def FinishArchiveMut(Output: bytearray, Encoded: list[tuple[int, str, int, int, int, int]], CentralSignature: bytes, EndBytes: bytes) -> bytes:
+def FinishArcMut(Output: bytearray, Encoded: list[tuple[int, str, int, int, int, int]], CentralSignature: bytes, EndBytes: bytes) -> bytes:
     CentralOffset = len(Output) - KArchiveOffset
     if CentralOffset > KMaxArchiveOffset:
         raise ValueError('SLDPRT local records exceed the native offset range')
@@ -239,10 +246,10 @@ def ScanRecords(BlobValue: bytes) -> tuple[StreamRecord, ...]:
             raise SldprtFormat('unreasonable number of streams')
     if not Candidates:
         raise SldprtFormat('no valid compressed SLDPRT streams were found')
-    return UniqueRecordsMut(Candidates)
+    return UniqueRecMut(Candidates)
 
 # this definition exists because duplicate stream arbitration is independent from record scanning
-def UniqueRecordsMut(Candidates: list[StreamRecord]) -> tuple[StreamRecord, ...]:
+def UniqueRecMut(Candidates: list[StreamRecord]) -> tuple[StreamRecord, ...]:
 
     # this callback exists because local behavior needs one focused transformation
     Candidates.sort(key=lambda Record: Record.offset)
