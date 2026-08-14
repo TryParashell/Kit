@@ -287,14 +287,132 @@ def CheckFile(
     return MatchHeader(SourceLines, GetLeadOffset(SourceLines), CandidateSets)
 
 
-# containment validation prevents a crafted changed path or symlink from escaping its materialized worktree
+# commit predicates prevent revision syntax from selecting anything other than an exact commit object
+def IsCommit(ShaText: str) -> bool:
+    if KFullShaPattern.fullmatch(ShaText) is None:
+        return False
+    ResultInfo = Subprocess.run(
+        ["git", "cat-file", "-t", ShaText],
+        cwd=KRepoRoot,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return ResultInfo.returncode == 0 and ResultInfo.stdout.strip() == "commit"
+
+
+# byte path decoding rejects ambiguous platform syntax before any filesystem access can occur
+def DecodePath(PathBytes: bytes) -> str:
+    try:
+        PathText = PathBytes.decode("utf-8")
+    except UnicodeDecodeError as ErrorInfo:
+        raise ValueError("git diff contains a non UTF-8 path") from ErrorInfo
+    PosixPath = Pathlib.PurePosixPath(PathText)
+    WinPath = Pathlib.PureWindowsPath(PathText)
+    IsControl = any(ord(CharText) < 32 for CharText in PathText)
+    IsInvalid = (
+        not PathText
+        or "\\" in PathText
+        or ":" in PathText
+        or "\x00" in PathText
+        or IsControl
+        or PosixPath.is_absolute()
+        or bool(WinPath.drive)
+        or ".." in PosixPath.parts
+        or PathText != PosixPath.as_posix()
+    )
+    if IsInvalid:
+        raise ValueError(f"git diff contains a noncanonical path: {PathText!r}")
+    return PathText
+
+
+# nul parsing preserves rename boundaries while rejecting malformed status records and duplicate destinations
+def ParseDiff(DiffBytes: bytes) -> list[str]:
+    DiffFields = DiffBytes.split(b"\0")
+    if not DiffFields or DiffFields[-1] != b"":
+        raise ValueError("git diff name status output is not NUL terminated")
+    DiffFields.pop()
+    ResultPaths: list[str] = []
+    SeenPaths: set[str] = set()
+    FieldIndex = 0
+    while FieldIndex < len(DiffFields):
+        try:
+            StatusText = DiffFields[FieldIndex].decode("ascii")
+        except UnicodeDecodeError as ErrorInfo:
+            raise ValueError("git diff contains a non ASCII status") from ErrorInfo
+        FieldIndex += 1
+        IsRename = Regex.fullmatch(r"[RC][0-9]{1,3}", StatusText) is not None
+        if not IsRename and StatusText not in {"A", "M"}:
+            raise ValueError(f"git diff contains an unexpected status: {StatusText!r}")
+        PathCount = 2 if IsRename else 1
+        if FieldIndex + PathCount > len(DiffFields):
+            raise ValueError("git diff contains a truncated status record")
+        PathFields = DiffFields[FieldIndex : FieldIndex + PathCount]
+        FieldIndex += PathCount
+        for PathBytes in PathFields:
+            DecodePath(PathBytes)
+        TargetPath = DecodePath(PathFields[-1])
+        if TargetPath in SeenPaths:
+            raise ValueError(f"git diff repeats a destination path: {TargetPath!r}")
+        SeenPaths.add(TargetPath)
+        ResultPaths.append(TargetPath)
+    return ResultPaths
+
+
+# exact worktree validation ensures untrusted pull request files remain detached data at the expected commit
+def CheckWorktree(
+    WorktreePath: Pathlib.Path, HeadRef: str
+) -> tuple[Pathlib.Path | None, str]:
+    LexicalRoot = WorktreePath.absolute()
+    try:
+        WorktreeRoot = WorktreePath.resolve(strict=True)
+    except OSError:
+        return None, "selected worktree does not exist"
+    if LexicalRoot != WorktreeRoot or not WorktreeRoot.is_dir():
+        return None, "selected worktree is symlinked or is not a directory"
+    ResultInfo = Subprocess.run(
+        ["git", "-C", str(WorktreeRoot), "rev-parse", "--show-toplevel", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    ResultLines = ResultInfo.stdout.splitlines()
+    if ResultInfo.returncode != 0 or len(ResultLines) != 2:
+        return None, "selected directory is not a valid git worktree"
+    try:
+        GitRoot = Pathlib.Path(ResultLines[0]).resolve(strict=True)
+    except OSError:
+        return None, "selected git worktree root cannot be resolved"
+    if GitRoot != WorktreeRoot:
+        return None, "selected path is not the exact git worktree root"
+    if ResultLines[1] != HeadRef:
+        return None, "selected worktree HEAD does not match the requested head commit"
+    return WorktreeRoot, "selected worktree matches the requested head commit"
+
+
+# containment validation rejects missing symlinked and nonregular candidates before content inspection
 def ResolvePath(
     WorktreeRoot: Pathlib.Path, RelPath: str
 ) -> Pathlib.Path | None:
-    CandidatePath = (WorktreeRoot / RelPath).resolve()
+    PosixPath = Pathlib.PurePosixPath(RelPath)
+    CandidatePath = WorktreeRoot.joinpath(*PosixPath.parts)
+    CurrentPath = WorktreeRoot
     try:
-        CandidatePath.relative_to(WorktreeRoot)
+        for PartText in PosixPath.parts:
+            CurrentPath = CurrentPath / PartText
+            PathInfo = CurrentPath.lstat()
+            if StatLib.S_ISLNK(PathInfo.st_mode):
+                return None
+        ResolvedPath = CandidatePath.resolve(strict=True)
+    except OSError:
+        return None
+    try:
+        ResolvedPath.relative_to(WorktreeRoot)
     except ValueError:
+        return None
+    if ResolvedPath != CandidatePath.absolute():
+        return None
+    if not StatLib.S_ISREG(CandidatePath.lstat().st_mode):
         return None
     return CandidatePath
 
@@ -326,21 +444,21 @@ def CanFixSkillMut(SourcePath: Pathlib.Path) -> bool:
     return True
 
 
-# unknown text formats need their existing leading marker retained during a safe replacement
-def GetRepairStyle(SourceLines: list[str], StyleText: str) -> str:
+# unknown text formats need a proven existing leading marker before any replacement is allowed
+def GetRepairStyle(SourceLines: list[str], StyleText: str) -> str | None:
     if StyleText != "unknown":
         return StyleText
     LeadOffset = GetLeadOffset(SourceLines)
-    for LineText in SourceLines[LeadOffset:]:
-        StrippedLine = LineText.strip()
-        if not StrippedLine:
-            continue
-        if StrippedLine.startswith("$$"):
-            return "$$"
-        if StrippedLine.startswith("<!--"):
-            return "block"
+    if LeadOffset >= len(SourceLines):
+        return None
+    StrippedLine = SourceLines[LeadOffset].strip()
+    if StrippedLine.startswith("$$"):
+        return "$$"
+    if StrippedLine == "<!--":
+        return "block"
+    if StrippedLine.startswith("#"):
         return "#"
-    return "#"
+    return None
 
 
 # repair dispatch keeps skill licensing and ordinary header mutation behind one verified contract
@@ -359,11 +477,20 @@ def RepairHeadMut(
     StyleText = GetStyle(SourcePath)
     if StyleText is None:
         return False, "file has no comment syntax"
-    HeaderLines = GetCandidates(StyleText, CanonLines)[0]
     if not any("SPDX-" in LineText for LineText in SourceLines):
+        if StyleText == "unknown":
+            return False, "unknown text style cannot receive a guessed header"
+        HeaderLines = GetCandidates(StyleText, CanonLines)[0]
         WriteMissingMut(SourcePath, HeaderLines)
         return True, "added missing SPDX header"
     RepairStyle = GetRepairStyle(SourceLines, StyleText)
+    if RepairStyle is None:
+        return False, "mangled SPDX header style cannot be proven"
+    HeaderLines = (
+        RenderBlock(CanonLines)
+        if RepairStyle == "block"
+        else RenderLines(CanonLines, RepairStyle)
+    )
     if CanRepairMut(SourcePath, HeaderLines, RepairStyle):
         return True, "replaced safely bounded mangled SPDX header"
     return False, "mangled SPDX header cannot be safely repaired"
@@ -380,10 +507,9 @@ def RepairFilesMut(
             continue
         SourcePath = ResolvePath(WorktreeRoot, RelPath)
         if SourcePath is None:
-            FailureList.append((RelPath, "path escapes the selected worktree"))
-            print(f"FAIL {RelPath}: path escapes the selected worktree")
-            continue
-        if not SourcePath.is_file():
+            RepairReason = "path is missing symlinked or nonregular"
+            FailureList.append((RelPath, RepairReason))
+            print(f"FAIL {RelPath!r}: {RepairReason}")
             continue
         IsValid, ReasonText = CheckFile(SourcePath, CanonLines, WorktreeRoot)
         if IsValid:
@@ -412,26 +538,27 @@ def RepairFilesMut(
 
 # git diff parsing stays isolated because rename destinations are the only paths requiring validation
 def GetDiffFiles(BaseRef: str, HeadRef: str) -> list[str]:
+    if not IsCommit(BaseRef) or not IsCommit(HeadRef):
+        raise ValueError("base and head must be full commit object identifiers")
     ResultInfo = Subprocess.run(
         [
             "git",
             "diff",
             "--name-status",
+            "-z",
+            "--no-ext-diff",
+            "--no-textconv",
             "-M",
             "--diff-filter=ACMR",
             BaseRef,
             HeadRef,
+            "--",
         ],
         cwd=KRepoRoot,
         capture_output=True,
-        text=True,
         check=True,
     )
-    ResultPaths: list[str] = []
-    for LineText in ResultInfo.stdout.splitlines():
-        FieldParts = LineText.split("\t")
-        ResultPaths.append(FieldParts[-1])
-    return ResultPaths
+    return ParseDiff(ResultInfo.stdout)
 
 
 # argument parsing stays focused because command validation and repository work change independently
@@ -462,12 +589,17 @@ def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
 # command orchestration stays small because policy helpers own classification and validation details
 def MainRun(ArgValues: list[str] | None = None) -> int:
     ArgsInfo = ParseArgs(ArgValues)
+    if not IsCommit(ArgsInfo.BaseRef) or not IsCommit(ArgsInfo.HeadRef):
+        print("Base and head must be full commit object identifiers", file=System.stderr)
+        return 1
+    WorktreeRoot, WorktreeReason = CheckWorktree(
+        ArgsInfo.WorktreeRoot, ArgsInfo.HeadRef
+    )
+    if WorktreeRoot is None:
+        print(WorktreeReason, file=System.stderr)
+        return 1
     CanonLines = LoadCanon()
     ChangedPaths = GetDiffFiles(ArgsInfo.BaseRef, ArgsInfo.HeadRef)
-    WorktreeRoot = ArgsInfo.WorktreeRoot.resolve()
-    if not WorktreeRoot.is_dir():
-        print(f"Selected worktree is not a directory: {WorktreeRoot}", file=System.stderr)
-        return 1
     if ArgsInfo.FixMissing:
         return RepairFilesMut(ChangedPaths, CanonLines, WorktreeRoot)
     FailureList: list[tuple[str, str]] = []
@@ -477,10 +609,8 @@ def MainRun(ArgValues: list[str] | None = None) -> int:
             continue
         SourcePath = ResolvePath(WorktreeRoot, RelPath)
         if SourcePath is None:
-            FailureList.append((RelPath, "path escapes the selected worktree"))
-            print(f"FAIL {RelPath}: path escapes the selected worktree")
-            continue
-        if not SourcePath.is_file():
+            FailureList.append((RelPath, "path is missing symlinked or nonregular"))
+            print(f"FAIL {RelPath!r}: path is missing symlinked or nonregular")
             continue
         CheckedCount += 1
         IsValid, ReasonText = CheckFile(SourcePath, CanonLines, WorktreeRoot)

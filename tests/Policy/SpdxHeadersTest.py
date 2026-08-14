@@ -10,6 +10,7 @@ from __future__ import annotations as Annotations
 
 from pathlib import Path as FilePath
 from runpy import run_path as RunPath
+import sys as System
 import unittest as UnitTest
 
 
@@ -18,7 +19,12 @@ def LoadGuard() -> dict[str, object]:
     GuardPath = (
         FilePath(__file__).parents[2] / ".github" / "scripts" / "VerifySpdxHeaders.py"
     )
-    return RunPath(str(GuardPath), run_name="SpdxGuardTest")
+    OriginalPaths = System.path.copy()
+    try:
+        System.path.insert(0, str(GuardPath.parent))
+        return RunPath(str(GuardPath), run_name="SpdxGuardTest")
+    finally:
+        System.path[:] = OriginalPaths
 
 
 # exemptions need regression coverage so consumer sensitive scope cannot expand silently
