@@ -1261,13 +1261,22 @@ def DecodeNativeAsm(Archive: SldprtArchive, *, IncludeTessellation: bool=False) 
         DisplayComponents = DecodeDisplayLists(Display)
     return NativeAsm(name=DefinitionById[RootDefinitionId].name, root_definition_id=RootDefinitionId, files=Files, definitions=Definitions, occurrences=Occurrences, configurations=Configurations, display_states=DisplayStates(RootValue), occurrence_paths=ItemPaths, mate_lists=MateLists, display_components=DisplayComponents, application_version=Integer(RootValue.attrib.get('swVersion')))
 
-# this definition exists because focused behavior needs one stable owner
-def DecodeMateList(DataValue: bytes, Stream: str='', OwnerDefinitionId: int=0) -> NativeMateList:
+# mate parsing needs one immutable boundary between binary discovery and semantic reconstruction
+@Dataclass(frozen=True, slots=True)
+class MateParsePlan:
+    NativeId: int
+    DeclaredCount: int
+    Candidates: tuple[tuple[int, str, int], ...]
+    Starts: tuple[int, ...]
+
+
+# header parsing owns all binary bounds so later phases consume complete record locations
+def ParseMatePlan(DataValue: bytes, Stream: str) -> MateParsePlan:
     if len(DataValue) < 6:
         raise SldprtFormatError(f'mate stream is truncated: {Stream}')
     NativeId, DeclaredCount = Struct.unpack_from('<IH', DataValue, 0)
     if DeclaredCount == 0 and len(DataValue) == 6:
-        return NativeMateList(native_id=NativeId, declared_count=0, owner_definition_id=OwnerDefinitionId, mates=(), stream=Stream)
+        return MateParsePlan(NativeId, DeclaredCount, (), ())
     ClassOffset = DataValue.find(ClassMarker, 6)
     if ClassOffset < 0 or ClassOffset + 6 > len(DataValue):
         raise SldprtFormatError(f'mate stream has no class table: {Stream}')
@@ -1282,13 +1291,23 @@ def DecodeMateList(DataValue: bytes, Stream: str='', OwnerDefinitionId: int=0) -
     Candidates = [ItemValue for ItemValue in Serialized if DimensionScalarValue(DataValue, ItemValue[2], len(DataValue)) is None and ClassRefToken(DataValue, ItemValue[0] - 2) not in ScalarTokens]
     if len(Candidates) != DeclaredCount:
         raise SldprtFormatError(f'mate count mismatch in {Stream}: expected {DeclaredCount}, decoded {len(Candidates)}')
-    Starts = [MateRecordStart(DataValue, Offset) for Offset, Ignored, Ignored in Candidates]
+    Starts = tuple((MateRecordStart(DataValue, Offset) for Offset, Ignored, Ignored in Candidates))
+    return MateParsePlan(NativeId, DeclaredCount, tuple(Candidates), Starts)
+
+
+# record decoding remains separate because byte boundaries and class inference change independently
+def BuildMateRecs(DataValue: bytes, PlanValue: MateParsePlan) -> tuple[MateRecord, ...]:
     Records: list[MateRecord] = []
-    for Order, ((Ignored, NameValue, NameEnd), Start) in enumerate(zip(Candidates, Starts)):
-        EndValue = Starts[Order + 1] if Order + 1 < len(Starts) else len(DataValue)
+    for Order, ((Ignored, NameValue, NameEnd), Start) in enumerate(zip(PlanValue.Candidates, PlanValue.Starts)):
+        EndValue = PlanValue.Starts[Order + 1] if Order + 1 < len(PlanValue.Starts) else len(DataValue)
         Strings = RecordStrings(DataValue, Start, EndValue)
         ClassName = InlineClassName(DataValue, Start)
         Records.append(MateRecord(name=NameValue, name_end=NameEnd, start=Start, end=EndValue, class_name=ClassName, class_token=None if ClassName else ClassRefToken(DataValue, Start), strings=Strings, alignment_code=MateAlignmentA(DataValue, EndValue, NameEnd), dimensions=MateDimensions(DataValue, Start, EndValue)))
+    return tuple(Records)
+
+
+# class inference stays focused because back references depend on all explicit records
+def GetMateClasses(Records: tuple[MateRecord, ...]) -> tuple[Mapping[int, str], Mapping[str, set[str]]]:
     TokenKinds = MateTokenKinds(Records)
     ClassesByKind: dict[str, set[str]] = {}
     for Record in Records:
@@ -1297,6 +1316,16 @@ def DecodeMateList(DataValue: bytes, Stream: str='', OwnerDefinitionId: int=0) -
         KindValue = MateKind(Record.name, Record.class_name)
         if KindValue != 'native':
             ClassesByKind.setdefault(KindValue, set()).add(Record.class_name)
+    return (TokenKinds, ClassesByKind)
+
+
+# native mate reconstruction consumes inferred classes without revisiting binary parsing state
+def MakeNativeMates(
+    Records: tuple[MateRecord, ...],
+    TokenKinds: Mapping[int, str],
+    ClassesByKind: Mapping[str, set[str]],
+    OwnerDefinitionId: int,
+) -> tuple[NativeMate, ...]:
     Mates: list[NativeMate] = []
     for Order, Record in enumerate(Records):
         if Record.class_name:
@@ -1307,7 +1336,16 @@ def DecodeMateList(DataValue: bytes, Stream: str='', OwnerDefinitionId: int=0) -
             InferredClasses = ClassesByKind.get(KindValue, set())
             ClassName = next(iter(InferredClasses)) if len(InferredClasses) == 1 else ''
         Mates.append(NativeMate(name=Record.name, kind=KindValue, owner_definition_id=OwnerDefinitionId, order=Order, entities=MateEntities(Record.strings), record_offset=Record.start, record_length=Record.end - Record.start, class_name=ClassName, class_token=Record.class_token, serialized_strings=Record.strings, alignment_code=Record.alignment_code, dimensions=Record.dimensions))
-    return NativeMateList(native_id=NativeId, declared_count=DeclaredCount, owner_definition_id=OwnerDefinitionId, mates=tuple(Mates), stream=Stream)
+    return tuple(Mates)
+
+
+# public mate decoding composes bounds records class inference and immutable output
+def DecodeMateList(DataValue: bytes, Stream: str='', OwnerDefinitionId: int=0) -> NativeMateList:
+    PlanValue = ParseMatePlan(DataValue, Stream)
+    Records = BuildMateRecs(DataValue, PlanValue)
+    TokenKinds, ClassesByKind = GetMateClasses(Records)
+    Mates = MakeNativeMates(Records, TokenKinds, ClassesByKind, OwnerDefinitionId)
+    return NativeMateList(native_id=PlanValue.NativeId, declared_count=PlanValue.DeclaredCount, owner_definition_id=OwnerDefinitionId, mates=Mates, stream=Stream)
 
 # this definition exists because focused behavior needs one stable owner
 def MateLists(Archive: SldprtArchive, OwnerDefinitionId: int) -> tuple[NativeMateList, ...]:

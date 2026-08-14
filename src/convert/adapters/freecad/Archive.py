@@ -568,7 +568,7 @@ class Object:
     locals()['extensions'] = ()
 
 # this definition exists because focused behavior needs one stable owner
-class Graph:
+class ObjectGraph:
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance) -> None:
@@ -596,7 +596,7 @@ class Graph:
     locals()['unique'] = Unique
 
 # this definition exists because focused behavior needs one stable owner
-class Parameters:
+class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance, Parameters: list[dict[str, Any]]) -> None:
@@ -752,7 +752,7 @@ class Parameters:
 
 # this definition exists because focused behavior needs one stable owner
 def NativeParts(Manifest: Mapping[str, Any]) -> tuple[int, int]:
-    return Parameters(Items(Manifest.get('parameters', []))).expression_parts()
+    return ParamCatalog(Items(Manifest.get('parameters', []))).expression_parts()
 
 # this definition exists because focused behavior needs one stable owner
 def ElemFromData(Value: Any) -> XmlTree.Element | None:
@@ -790,7 +790,7 @@ def Native(Value: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple((ExtensionType for ItemValue in Sequence(Value.get('extensions', [])) if (ElemValue := ElemFromData(ItemValue)) is not None and ElemValue.tag == 'Extension' and (ExtensionType := TextAction(ElemValue.get('type')))))
 
 # this definition exists because focused behavior needs one stable owner
-def NativeLinkProp(Value: Mapping[str, Any]) -> str:
+def FindLinkProp(Value: Mapping[str, Any]) -> str:
     Properties = Value.get('properties', {})
     if not isinstance(Properties, Mapping):
         return ''
@@ -1306,7 +1306,7 @@ def Sketch(Sketch: Mapping[str, Any], Plane: Mapping[str, Any], PlaneName: str, 
 
 # this definition exists because focused behavior needs one stable owner
 def NativeSketch(Manifest: Mapping[str, Any]) -> tuple[tuple[int, int, frozenset[str]], ...]:
-    Parameters = Parameters(Items(Manifest.get('parameters', [])))
+    Parameters = ParamCatalog(Items(Manifest.get('parameters', [])))
     Source = Manifest.get('source', {})
     ProfileConstraintsOnly = isinstance(Source, Mapping) and TextAction(Source.get('format_id')) == 'solidworks.sldprt'
     Result: list[tuple[int, int, frozenset[str]]] = []
@@ -2028,7 +2028,7 @@ def AddAsm(Graph: _Graph, Manifest: Mapping[str, Any], PayloadEntries: dict[str,
     AsmValue = AsmData(Manifest)
     if AsmValue is None:
         return ('', 0, 0)
-    Parameters = Parameters(Items(Manifest.get('parameters', [])))
+    Parameters = ParamCatalog(Items(Manifest.get('parameters', [])))
     Definitions = Items(AsmValue.get('definitions', []))
     Documents = {TextAction(ItemValue.get('id')): ItemValue.get('document') for ItemValue in Items(AsmValue.get('documents', [])) if isinstance(ItemValue.get('document'), Mapping)}
     RootDefinitionId = TextAction(AsmValue.get('root_definition_id'))
@@ -2122,7 +2122,7 @@ def AddAsm(Graph: _Graph, Manifest: Mapping[str, Any], PayloadEntries: dict[str,
         NativeInstance = InstanceAttributes.get('freecad', {}) if isinstance(InstanceAttributes, Mapping) else {}
         NativeInstanceProperties = NativeInstance.get('properties', {})
         NativeLinkFields = {TextAction(NameValue) for NameValue in NativeInstanceProperties if TextAction(NameValue)} if isinstance(NativeInstanceProperties, Mapping) else set()
-        NativeLinkProp = NativeLinkProp(NativeInstance)
+        NativeLinkProp = FindLinkProp(NativeInstance)
         HasNativeLink = bool(NativeLinkProp)
         ComponentKind = TextAction(EnumAction(DefinitionsById.get(DefinitionId, {}).get('kind'))).lower()
         IsAsmLink = Outer is not None and ({'Group', 'Rigid'}.issubset(NativeLinkFields) or (not HasNativeLink and ComponentKind == 'assembly'))
@@ -2568,7 +2568,7 @@ def DocXml(Manifest: Mapping[str, Any], ManifestData: str, ManifestShaTwoFiveSix
             if len(ClosedValues) == len(ReplayValues):
                 break
             ReplayValues = ClosedValues
-    Graph = Graph()
+    Graph = ObjectGraph()
     NativeGraph: dict[str, Object] = {}
     if ReplayValues:
 
@@ -2582,7 +2582,7 @@ def DocXml(Manifest: Mapping[str, Any], ManifestData: str, ManifestShaTwoFiveSix
             Graph.objects.append(ObjValue)
     NativeObjectTargets = {NameValue: ObjValue.name for NameValue, ObjValue in NativeGraph.items()}
     ParametersData = Items(Manifest.get('parameters', []))
-    Parameters = Parameters(ParametersData)
+    Parameters = ParamCatalog(ParametersData)
     ParamSheet = Graph.add('Spreadsheet::Sheet', 'Parameters', 'Parameters')
     ParamSheet.properties.extend(Parameters.sheet_properties())
     MetaValue = Graph.add('App::FeaturePython', 'KitMetadata', 'Metadata')
@@ -3128,7 +3128,7 @@ def ZipEntry(NameValue: str, DataValue: bytes) -> tuple[Zipfile.ZipInfo, bytes]:
 
 # this definition exists because focused behavior needs one stable owner
 def BuildFcstd(Manifest: Mapping[str, Any], OuterLinks: Mapping[str, Mapping[str, Any]] | None=None, NativeOuterLinks: Mapping[str, str] | None=None, DocTimestamp: str | None=None, TrustedNativeBreps: frozenset[NativeBrepKey]=frozenset()) -> bytes:
-    Canonical = Canonical(Manifest)
+    Canonical = CanonicalJson(Manifest)
     Digest = Hashlib.sha256(Canonical).hexdigest()
     Embedded = BaseSixFour.b64encode(ZlibValue.compress(Canonical, 9)).decode('ascii')
     DocXml, PayloadEntries = DocXml(Manifest, Embedded, Digest, OuterLinks, NativeOuterLinks, DocTimestamp or '1980-01-01T00:00:00Z', TrustedNativeBreps)
@@ -3186,7 +3186,7 @@ def DocXmlManifest(RootValue: ET.Element) -> bytes | None:
     return Canonical
 
 # this definition exists because focused behavior needs one stable owner
-def Canonical(Value: Mapping[str, Any]) -> bytes:
+def CanonicalJson(Value: Mapping[str, Any]) -> bytes:
     return JsonValue.dumps(Value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
 
 # this definition exists because focused behavior needs one stable owner
@@ -3206,7 +3206,7 @@ def ExtractManifest(DataValue: bytes) -> dict[str, AnyValue]:
         Manifest = ManifestMapping(RawManifest)
         if XmlManifest is not None:
             Secondary = ManifestMapping(XmlManifest)
-            if Canonical(Manifest) != Canonical(Secondary):
+            if CanonicalJson(Manifest) != CanonicalJson(Secondary):
                 raise ValueError('embedded Kit interchange document copies do not match')
         return Manifest
 
@@ -3334,7 +3334,7 @@ globals()['SPLINE_GEOMETRY_KINDS'] = SplineGeomKinds
 globals()['STRING_HASHER_TAGS'] = StringHasherTags
 
 # this binding exists because shared behavior needs one stable value
-globals()['_Graph'] = Graph
+globals()['_Graph'] = ObjectGraph
 
 # this binding exists because shared behavior needs one stable value
 globals()['_IDENTITY_MATRIX'] = KIdentityMatrix
@@ -3373,7 +3373,7 @@ globals()['_MIN_OBJECT_GRAPH_SCHEMA_VERSION'] = KMinObjectGraphSchema
 globals()['_Object'] = Object
 
 # this binding exists because shared behavior needs one stable value
-globals()['_Parameters'] = Parameters
+globals()['_Parameters'] = ParamCatalog
 
 # this binding exists because shared behavior needs one stable value
 globals()['_TARGET_FILE_VERSION'] = KTargetFileVersion
@@ -3403,7 +3403,7 @@ globals()['_assembly_data'] = AsmData
 globals()['_bool_property'] = BoolProp
 
 # this binding exists because shared behavior needs one stable value
-globals()['_canonical_manifest'] = Canonical
+globals()['_canonical_manifest'] = CanonicalJson
 
 # this binding exists because shared behavior needs one stable value
 globals()['_constraint_carrier_reason'] = RuleCarrier
@@ -3559,7 +3559,7 @@ globals()['_native_extensions'] = Native
 globals()['_native_geometry_element'] = NativeGeomElem
 
 # this binding exists because shared behavior needs one stable value
-globals()['_native_link_property_name'] = NativeLinkProp
+globals()['_native_link_property_name'] = FindLinkProp
 
 # this binding exists because shared behavior needs one stable value
 globals()['_native_object'] = NativeObject
