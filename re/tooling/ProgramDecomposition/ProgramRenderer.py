@@ -193,6 +193,13 @@ def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> st
         SourceLines.append("    KMethodPrograms,")
         SourceLines.append(f"    {StreamName!r},")
         SourceLines.append(")")
+    SourceLines.extend(
+        (
+            "",
+            "# generated registry exports remain explicit for facade composition and extension imports",
+            f"__all__ = [{OwnerConst!r}, {OpsConst!r}, 'KMethodPrograms']",
+        )
+    )
     AddAliasesMut(SourceLines, ProgramData, OwnerConst, OpsConst)
     SourceLines.append("")
     return FormatSource("\n".join(SourceLines))

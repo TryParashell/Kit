@@ -7146,7 +7146,9 @@ def BuildPartModel(
         SyntheticCurves,
         OwnerFaces,
     ) = TopoData
-    RankData = MakePartRanks(Tables, FaceLoops, UsedEdges, UsedVertices, UsedCurves)
+    OrderData, RankData = MakePartRanks(
+        Tables, FaceLoops, UsedEdges, UsedVertices, UsedCurves
+    )
     (
         FaceOrder,
         FaceSurfOrder,
@@ -7155,6 +7157,8 @@ def BuildPartModel(
         CurveEdgeOrder,
         VertexOrder,
         CurveOrder,
+    ) = OrderData
+    (
         FaceRanks,
         FaceSurfRanks,
         FaceFrontRanks,
@@ -7498,7 +7502,7 @@ def MakePartRanks(
     UsedEdges: set[int],
     UsedVertices: set[int],
     UsedCurves: set[int],
-) -> tuple[object, ...]:
+) -> tuple[tuple[Sequence[int], ...], tuple[dict[int, int], ...]]:
     FaceOrder = LinkedOrder(
         FaceLoops,
         {
@@ -7559,7 +7563,7 @@ def MakePartRanks(
             for OrderData in Orders
         )
     )
-    return (*Orders, *Ranks)
+    return (Orders, Ranks)
 
 
 # vertex point recovery resolves synthetic and native points with their tolerances

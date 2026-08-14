@@ -13,18 +13,14 @@ from dataclasses import dataclass as Dataclass
 import math as MathValue
 from typing import Any as AnyValue, Mapping
 from interchange import (
-    BrepBody,
     BrepCoedge,
     BrepEdge,
     BrepFace,
     BrepFaceUse,
     BrepLoop,
     BrepModel,
-    BrepRegion,
     BrepShell,
-    BrepShellUse,
     BrepVertex,
-    BrepWire,
     CircleCurve,
     CirclePcurve,
     ConeSurface,
