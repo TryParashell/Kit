@@ -593,18 +593,27 @@ def DecodedText(RawValue: bytes, Encoding: str) -> str | None:
 
 
 # this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class ProductState:
+    locals().setdefault("__annotations__", {})
+    __annotations__["Result"] = "list[NativeProduct]"
+    __annotations__["UsedValue"] = "set[int]"
+    __annotations__["CurrentDefinition"] = "int | None"
+    __annotations__["DefinitionsByInstanceKey"] = "dict[str, int]"
+    __annotations__["Pending"] = "int | None"
+
+
+# this definition exists because focused behavior needs one stable owner
 def Product(
     Tokens: tuple[NativeProductToken, ...],
 ) -> tuple[tuple[NativeProduct, ...], tuple[NativeProductD, ...]]:
-    Values = tuple((Token.value for Token in Tokens))
+    Values = tuple(Token.value for Token in Tokens)
     try:
         Start = Values.index("_Reps") + 1
     except ValueError as ErrorInfo:
         raise CfvTwoFormatError(
             "CATIA ASMPRODUCT table has no _Reps boundary"
         ) from ErrorInfo
-    Result: list[NativeProduct] = []
-    UsedValue: set[int] = set()
     Terminal = next(
         (
             Index
@@ -613,24 +622,49 @@ def Product(
         ),
         len(Tokens),
     )
+    State = ProductState([], set(), None, {}, None)
+    PoolStart = InitProductMut(Tokens, Start, Terminal, State)
+    ScanProductMut(Tokens, PoolStart, Terminal, State)
+    TailProductMut(Tokens, Start, Terminal, State)
+    Ambiguous = tuple(
+        Token
+        for Index, Token in enumerate(Tokens)
+        if Index >= Start and Index not in State.UsedValue
+    )
+    return (tuple(State.Result), Ambiguous)
 
-    # this definition exists because focused behavior needs one stable owner
-    def Append(DefinitionIndex: int, InstanceIndex: int, RefValue: str) -> None:
-        Definition = Tokens[DefinitionIndex]
-        Instance = Tokens[InstanceIndex]
-        Result.append(
-            NativeProduct(
-                Definition.value,
-                Instance.value,
-                Definition.offset,
-                Instance.offset,
-                Definition.length,
-                Instance.length,
-                RefValue,
-            )
+
+# this definition exists because focused behavior needs one stable owner
+def AddProductMut(
+    Tokens: tuple[NativeProductToken, ...],
+    DefinitionIndex: int,
+    InstanceIndex: int,
+    RefValue: str,
+    State: ProductState,
+) -> None:
+    Definition = Tokens[DefinitionIndex]
+    Instance = Tokens[InstanceIndex]
+    State.Result.append(
+        NativeProduct(
+            Definition.value,
+            Instance.value,
+            Definition.offset,
+            Instance.offset,
+            Definition.length,
+            Instance.length,
+            RefValue,
         )
-        UsedValue.update((DefinitionIndex, InstanceIndex))
+    )
+    State.UsedValue.update((DefinitionIndex, InstanceIndex))
 
+
+# this definition exists because focused behavior needs one stable owner
+def InitProductMut(
+    Tokens: tuple[NativeProductToken, ...],
+    Start: int,
+    Terminal: int,
+    State: ProductState,
+) -> int:
     Marker = next(
         (
             Index
@@ -639,76 +673,100 @@ def Product(
         ),
         None,
     )
-    CurrentDefinition: int | None = None
-    DefinitionsByInstanceKey: dict[str, int] = {}
-    PoolStart = Start
-    if Marker is not None and Marker + 1 < Terminal:
-        Identity = Numbered(Tokens[Marker + 1].value)
-        Append(Start, Marker + 1, Identity[1] if Identity is not None else "")
-        if Identity is not None:
-            DefinitionsByInstanceKey[Identity[0]] = Start
-        CurrentDefinition = Start
-        Shape = next(
-            (
-                Index
-                for Index in range(Marker + 2, Terminal)
-                if Tokens[Index].value == "Shape 1"
-            ),
-            Marker + 1,
-        )
-        PoolStart = Shape + 1
-    Pending: int | None = None
+    if Marker is None or Marker + 1 >= Terminal:
+        return Start
+    Identity = Numbered(Tokens[Marker + 1].value)
+    AddProductMut(Tokens, Start, Marker + 1, Identity[1] if Identity else "", State)
+    if Identity is not None:
+        State.DefinitionsByInstanceKey[Identity[0]] = Start
+    State.CurrentDefinition = Start
+    Shape = next(
+        (
+            Index
+            for Index in range(Marker + 2, Terminal)
+            if Tokens[Index].value == "Shape 1"
+        ),
+        Marker + 1,
+    )
+    return Shape + 1
+
+
+# this definition exists because focused behavior needs one stable owner
+def ScanProductMut(
+    Tokens: tuple[NativeProductToken, ...],
+    PoolStart: int,
+    Terminal: int,
+    State: ProductState,
+) -> None:
     for Index in range(PoolStart, Terminal):
-        if Index in UsedValue:
+        if Index in State.UsedValue:
             continue
         Identity = Numbered(Tokens[Index].value)
         if Identity is not None:
-            InstanceKey, RefValue = Identity
-            Established = DefinitionsByInstanceKey.get(InstanceKey)
-            if Pending is not None:
-                CurrentDefinition = Pending
-                DefinitionsByInstanceKey[InstanceKey] = Pending
-                Pending = None
-            elif Established is not None:
-                CurrentDefinition = Established
-            if CurrentDefinition is not None:
-                Append(CurrentDefinition, Index, RefValue)
+            AddNumberedMut(Tokens, Index, Identity, State)
             continue
-        if Tokens[Index].value == "_InstanceName" and Pending is not None:
-            InstanceIndex = Index + 1
-            if InstanceIndex < Terminal:
-                Append(
-                    Pending,
-                    InstanceIndex,
-                    (
-                        Identity[1]
-                        if (Identity := Numbered(Tokens[InstanceIndex].value))
-                        is not None
-                        else ""
-                    ),
-                )
-                if Identity is not None:
-                    DefinitionsByInstanceKey[Identity[0]] = Pending
-                CurrentDefinition = Pending
-                Pending = None
+        if Tokens[Index].value == "_InstanceName" and State.Pending is not None:
+            AddNamedMut(Tokens, Index, Terminal, State)
             continue
-        Pending = Index
-    if Terminal >= Start + 3:
-        Ordinal, Definition, Instance = range(Terminal - 3, Terminal)
-        if (
-            Tokens[Ordinal].value.isdecimal()
-            and Definition not in UsedValue
-            and (Instance not in UsedValue)
-        ):
-            Append(Definition, Instance, Tokens[Ordinal].value)
-    Ambiguous = tuple(
-        (
-            Token
-            for Index, Token in enumerate(Tokens)
-            if Index >= Start and Index not in UsedValue
-        )
+        State.Pending = Index
+
+
+# this definition exists because focused behavior needs one stable owner
+def AddNumberedMut(
+    Tokens: tuple[NativeProductToken, ...],
+    Index: int,
+    Identity: tuple[str, str],
+    State: ProductState,
+) -> None:
+    InstanceKey, RefValue = Identity
+    Established = State.DefinitionsByInstanceKey.get(InstanceKey)
+    if State.Pending is not None:
+        State.CurrentDefinition = State.Pending
+        State.DefinitionsByInstanceKey[InstanceKey] = State.Pending
+        State.Pending = None
+    elif Established is not None:
+        State.CurrentDefinition = Established
+    if State.CurrentDefinition is not None:
+        AddProductMut(Tokens, State.CurrentDefinition, Index, RefValue, State)
+
+
+# this definition exists because focused behavior needs one stable owner
+def AddNamedMut(
+    Tokens: tuple[NativeProductToken, ...],
+    Index: int,
+    Terminal: int,
+    State: ProductState,
+) -> None:
+    InstanceIndex = Index + 1
+    if InstanceIndex >= Terminal or State.Pending is None:
+        return
+    Identity = Numbered(Tokens[InstanceIndex].value)
+    AddProductMut(
+        Tokens,
+        State.Pending,
+        InstanceIndex,
+        Identity[1] if Identity is not None else "",
+        State,
     )
-    return (tuple(Result), Ambiguous)
+    if Identity is not None:
+        State.DefinitionsByInstanceKey[Identity[0]] = State.Pending
+    State.CurrentDefinition = State.Pending
+    State.Pending = None
+
+
+# this definition exists because focused behavior needs one stable owner
+def TailProductMut(
+    Tokens: tuple[NativeProductToken, ...],
+    Start: int,
+    Terminal: int,
+    State: ProductState,
+) -> None:
+    if Terminal < Start + 3:
+        return
+    Ordinal, Definition, Instance = range(Terminal - 3, Terminal)
+    if Tokens[Ordinal].value.isdecimal() and Definition not in State.UsedValue:
+        if Instance not in State.UsedValue:
+            AddProductMut(Tokens, Definition, Instance, Tokens[Ordinal].value, State)
 
 
 # this definition exists because focused behavior needs one stable owner

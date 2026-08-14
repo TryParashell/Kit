@@ -2636,6 +2636,22 @@ def NativeId(Value: str, Prefix: str) -> int | None:
         return None
 
 
+# native names merge feature plane and sketch identifiers before binary patching
+def NativeNames(DocValue: CadDocument) -> dict[int, str]:
+    Desired: dict[int, str] = {}
+    Sources = (
+        (DocValue.feature_timeline, "sldprt:feature:"),
+        (DocValue.support_planes, "sldprt:plane:"),
+        (DocValue.sketches, "sldprt:sketch:"),
+    )
+    for Items, Prefix in Sources:
+        for ItemValue in Items:
+            ObjectId = NativeId(ItemValue.id, Prefix)
+            if ObjectId is not None and ObjectId not in Desired:
+                Desired[ObjectId] = ItemValue.name
+    return Desired
+
+
 # this definition exists because focused behavior needs one stable owner
 def IsPatchFeatuMut(
     DocValue: CadDocument,
@@ -2643,19 +2659,7 @@ def IsPatchFeatuMut(
     RootValue: ET.Element,
     Resolved: bytearray,
 ) -> bool:
-    Desired: dict[int, str] = {}
-    for Feature in DocValue.feature_timeline:
-        ObjectId = NativeId(Feature.id, "sldprt:feature:")
-        if ObjectId is not None:
-            Desired[ObjectId] = Feature.name
-    for Plane in DocValue.support_planes:
-        ObjectId = NativeId(Plane.id, "sldprt:plane:")
-        if ObjectId is not None and ObjectId not in Desired:
-            Desired[ObjectId] = Plane.name
-    for Sketch in DocValue.sketches:
-        ObjectId = NativeId(Sketch.id, "sldprt:sketch:")
-        if ObjectId is not None and ObjectId not in Desired:
-            Desired[ObjectId] = Sketch.name
+    Desired = NativeNames(DocValue)
     Elements = XmlElementsById(RootValue)
     Features = {Feature.object_id: Feature for Feature in Model.features}
     Changed = False
