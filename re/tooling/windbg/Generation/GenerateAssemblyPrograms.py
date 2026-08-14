@@ -54,8 +54,8 @@ KStreamSpecs = (
     ("Contents/Config-0-ModelHeader", "header"),
 )
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KDirectInfo = {
+# configuration direct fields preserve manager and assembly payload measurements
+KDirectConfig = {
     "Contents/CMgr": (
         (0, "H", "configuration manager archive prefix"),
         (6, "5I", "configuration manager version preamble"),
@@ -72,6 +72,10 @@ KDirectInfo = {
         (17662, "3i", "moRelMgr_c detail scalar triplet"),
         (24076, "IHH8B", "moSketchBlockMgr_c persistent identifier"),
     ),
+}
+
+# document direct fields preserve resolved definition and header measurements
+KDirectDocument = {
     "Contents/Config-0-ResolvedFeatures": (
         (0, "I", "resolved feature continuation base"),
     ),
@@ -88,6 +92,9 @@ KDirectInfo = {
         (57, "3H", "model header log-list preamble"),
     ),
 }
+
+# ordered direct fields keep stream traversal stable across generated assembly programs
+KDirectInfo = {**KDirectConfig, **KDirectDocument}
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KStatusField = (

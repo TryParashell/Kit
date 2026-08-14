@@ -22,8 +22,8 @@ KOutInfo = KRootInfo / ".rescratch/ghidra/out"
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KGhInfo = KRootInfo / "re/tooling/ghidra"
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KPriority = [
+# feature priorities place foundational feature serializers before sketch entities
+KFeaturePriority = [
     "moExtrusion_c",
     "moICE_c",
     "moEndSpec_c",
@@ -48,6 +48,10 @@ KPriority = [
     "moDisplayDistanceDim_c",
     "moFeatureDimHandle_c",
     "moFavoriteHandle_c",
+]
+
+# sketch priorities retain the entity and history ordering used by existing specifications
+KSketchPriority = [
     "sgSketch",
     "sgArc",
     "sgLine",
@@ -64,6 +68,9 @@ KPriority = [
     "moSketchChain_c",
     "moSketchRegion_c",
 ]
+
+# combined priorities preserve the established specification generation order
+KPriority = KFeaturePriority + KSketchPriority
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

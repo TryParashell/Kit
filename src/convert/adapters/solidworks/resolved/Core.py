@@ -787,9 +787,9 @@ def LocateFeatures(DataValue: bytes | bytearray) -> tuple[FeatureLayout, ...]:
         Sketch = LastNodeInRange(Profiles, Start, Feature.offset)
         SketchScalars = SketchScalarsIn(Scalars, Sketch, Feature)
         Scalar = next((Choice for Choice in Scalars if Feature.offset < Choice.value_offset < Limit), None)
-        Revolution = Revolutions.get(Feature.offset)
-        if Revolution is not None:
-            Result.append(Revolution(BlobValue, Ordinal, Feature, Sketch, Scalar, Revolution, () if Sketch is None else PointsInRange(Points, Sketch, Feature), () if Sketch is None else ArcsInRange(ArcsValue, Sketch, Feature), SweptArcs=() if Sketch is None else SweptInRange(Swept, Sketch, Feature), SketchScalars=SketchScalars))
+        RevolutionData = Revolutions.get(Feature.offset)
+        if RevolutionData is not None:
+            Result.append(Revolution(BlobValue, Ordinal, Feature, Sketch, Scalar, RevolutionData, () if Sketch is None else PointsInRange(Points, Sketch, Feature), () if Sketch is None else ArcsInRange(ArcsValue, Sketch, Feature), SweptArcs=() if Sketch is None else SweptInRange(Swept, Sketch, Feature), SketchScalars=SketchScalars))
             continue
         Result.append(FeatureLayoutA(BlobValue, Ordinal, Extrusions, Feature, Sketch, () if Sketch is None else PointsInRange(Points, Sketch, Feature), () if Sketch is None else ArcsInRange(ArcsValue, Sketch, Feature), Scalar, FromReverse if Extrusions == 0 else None, SweptArcs=() if Sketch is None else SweptInRange(Swept, Sketch, Feature), SketchScalars=SketchScalars))
         Extrusions += 1

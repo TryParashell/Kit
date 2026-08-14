@@ -235,8 +235,8 @@ def CheckPmark(SegmentsInfo, ByteBlob, GetRows):
     return {"own_body_lengths": [4], "pmark_ids": sorted(set(IdsInfo))}
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KSlots = (
+# primary external slots cover node names and component ownership
+KPrimarySlots = (
     {
         "slot": "node_name",
         "class_name": "moNodeName_c",
@@ -253,6 +253,10 @@ KSlots = (
         "serialize": "moUnitComponent_c::Serialize @0x4c288670 -> moComponent_c::Serialize @0x4c279a90 reads one nested object and no scalar first",
         "caveat": "the decompiled reader names the base class moComponent_c, which is the declared type of the member it fills; the concrete class is pinned by two further measurements: moComponent_c is never defined by name in any stream of any part scanned, so it cannot be the referent, while moUnitComponent_c is defined in Contents/Config-0 and the replayed Contents/Config-0 map places it at exactly the observed index",
     },
+)
+
+# collection external slots cover object lists and persistent mark records
+KCollectionSlots = (
     {
         "slot": "object_list",
         "class_name": "suObList",
@@ -270,6 +274,9 @@ KSlots = (
         "caveat": "the class name is written literally at the call site and in the demangled symbol of the extraction operator, ??5@YAAEAVsu_CArchive@@AEAV0@AEAPEAVmoPMarkRecord_c@@@Z",
     },
 )
+
+# ordered external slots preserve the measured serializer traversal sequence
+KSlots = KPrimarySlots + KCollectionSlots
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
