@@ -147,7 +147,54 @@ def LoadCurrentInfo(ProgramRoot: PathInfo, ManifestPath: PathInfo) -> tuple[Prog
     return tuple(Programs)
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+# runtime validation stays separate so filesystem equivalence never depends on module loading
+def VerifyRuntime(
+    ProgramItem: ProgramData, StreamNames: tuple[str, ...]
+) -> None:
+    VariantPath = ProgramItem.VariantPath
+    ModuleName = 'convert.adapters.solidworks.programs.' + VariantPath.replace('/', '.') + '.Program'
+    ModuleData = Importlib.import_module(ModuleName)
+    MissingNames = tuple((NameText for NameText in ProgramItem.PublicNames if not hasattr(ModuleData, NameText)))
+    if MissingNames:
+        raise ValueError(f'public symbols are missing {VariantPath} {MissingNames}')
+    OwnerNames, LegacyOps = MakeLegacy(ProgramItem.Streams, ProgramItem.OpsName)
+    if getattr(ModuleData, ProgramItem.OwnerName) != OwnerNames:
+        raise ValueError(f'legacy owners drifted {VariantPath}')
+    if getattr(ModuleData, ProgramItem.OpsName) != LegacyOps:
+        raise ValueError(f'legacy operations drifted {VariantPath}')
+    if GetLiveStats(ModuleData, ProgramItem.OpsName, StreamNames) != ProgramItem.ByteStats:
+        raise ValueError(f'encoded bytes drifted {VariantPath}')
+
+
+# one variant verifier keeps logical byte public and registry checks together
+def VerifyVariant(
+    ProgramRoot: PathInfo,
+    Catalogs: dict[str, tuple[tuple[object, str], ...]],
+    StatRecord: tuple[AnyInfo, ...],
+    CheckRuntime: bool,
+) -> tuple[tuple[str, ...], int, int, int]:
+    VariantPath, OwnerName, OpsName, StreamNames, ExpectedOps, ExpectedHash, PublicNames, ByteStats, FacadeHash = StatRecord
+    MethodItems = ReadMethods(ProgramRoot, VariantPath, Catalogs)
+    Streams = ComposeStreams(MethodItems, StreamNames)
+    ProgramPath = ProgramRoot / VariantPath / 'Program.py'
+    SourceText = ProgramPath.read_text(encoding='utf-8')
+    ProgramItem = ProgramData(VariantPath=VariantPath, SourcePath=ProgramPath, SourceText=SourceText, OwnerName=OwnerName, OpsName=OpsName, Streams=Streams, PublicNames=PublicNames, ByteStats=ByteStats)
+    OperationCount = sum((len(Operations) for SpareValue, Operations in Streams))
+    if OperationCount != ExpectedOps or HashProgram(ProgramItem) != ExpectedHash:
+        raise ValueError(f'logical program drifted {VariantPath}')
+    if HashText(SourceText) != FacadeHash:
+        raise ValueError(f'compatibility facade drifted {VariantPath}')
+    if CheckRuntime:
+        VerifyRuntime(ProgramItem, StreamNames)
+    ModulePaths = tuple(('convert.adapters.solidworks.programs.' + VariantPath.replace('/', '.') + '.Methods.' + MethodItem.GroupPath.replace('/', '.') for MethodItem in MethodItems))
+    RegistryPath = ProgramRoot / VariantPath / 'Registry.py'
+    if RegistryPath.read_text(encoding='utf-8') != RenderRegistry(ProgramItem, ModulePaths):
+        raise ValueError(f'variant registry drifted {VariantPath}')
+    UsedGroups = tuple((MethodItem.GroupPath for MethodItem in MethodItems))
+    return UsedGroups, len(MethodItems), len(Streams), OperationCount
+
+
+# tree verification aggregates focused variant results so global evidence stays independently checkable
 def VerifyTree(ProgramRoot: PathInfo, ManifestPath: PathInfo, CheckRuntime: bool=True) -> dict[str, int]:
     ExpectedGlobal, ProgramStats = LoadManifest(ManifestPath)
     Catalogs = ReadOwners(ProgramRoot)
@@ -156,37 +203,10 @@ def VerifyTree(ProgramRoot: PathInfo, ManifestPath: PathInfo, CheckRuntime: bool
     OperationTotal = 0
     UsedGroups: set[str] = set()
     for StatRecord in ProgramStats:
-        VariantPath, OwnerName, OpsName, StreamNames, ExpectedOps, ExpectedHash, PublicNames, ByteStats, FacadeHash = StatRecord
-        MethodItems = ReadMethods(ProgramRoot, VariantPath, Catalogs)
-        UsedGroups.update((MethodItem.GroupPath for MethodItem in MethodItems))
-        Streams = ComposeStreams(MethodItems, StreamNames)
-        ProgramPath = ProgramRoot / VariantPath / 'Program.py'
-        SourceText = ProgramPath.read_text(encoding='utf-8')
-        ProgramItem = ProgramData(VariantPath=VariantPath, SourcePath=ProgramPath, SourceText=SourceText, OwnerName=OwnerName, OpsName=OpsName, Streams=Streams, PublicNames=PublicNames, ByteStats=ByteStats)
-        OperationCount = sum((len(Operations) for SpareValue, Operations in Streams))
-        if OperationCount != ExpectedOps or HashProgram(ProgramItem) != ExpectedHash:
-            raise ValueError(f'logical program drifted {VariantPath}')
-        if HashText(SourceText) != FacadeHash:
-            raise ValueError(f'compatibility facade drifted {VariantPath}')
-        if CheckRuntime:
-            ModuleName = 'convert.adapters.solidworks.programs.' + VariantPath.replace('/', '.') + '.Program'
-            ModuleData = Importlib.import_module(ModuleName)
-            MissingNames = tuple((NameText for NameText in PublicNames if not hasattr(ModuleData, NameText)))
-            if MissingNames:
-                raise ValueError(f'public symbols are missing {VariantPath} {MissingNames}')
-            OwnerNames, LegacyOps = MakeLegacy(Streams, OpsName)
-            if getattr(ModuleData, OwnerName) != OwnerNames:
-                raise ValueError(f'legacy owners drifted {VariantPath}')
-            if getattr(ModuleData, OpsName) != LegacyOps:
-                raise ValueError(f'legacy operations drifted {VariantPath}')
-            if GetLiveStats(ModuleData, OpsName, StreamNames) != ByteStats:
-                raise ValueError(f'encoded bytes drifted {VariantPath}')
-        ModulePaths = tuple(('convert.adapters.solidworks.programs.' + VariantPath.replace('/', '.') + '.Methods.' + MethodItem.GroupPath.replace('/', '.') for MethodItem in MethodItems))
-        RegistryPath = ProgramRoot / VariantPath / 'Registry.py'
-        if RegistryPath.read_text(encoding='utf-8') != RenderRegistry(ProgramItem, ModulePaths):
-            raise ValueError(f'variant registry drifted {VariantPath}')
-        MethodTotal += len(MethodItems)
-        StreamTotal += len(Streams)
+        VariantGroups, MethodCount, StreamCount, OperationCount = VerifyVariant(ProgramRoot, Catalogs, StatRecord, CheckRuntime)
+        UsedGroups.update(VariantGroups)
+        MethodTotal += MethodCount
+        StreamTotal += StreamCount
         OperationTotal += OperationCount
     if UsedGroups != set(Catalogs):
         raise ValueError('owner catalogs contain missing or unused groups')
