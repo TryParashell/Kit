@@ -301,10 +301,13 @@ def IsOracleReady() -> bool:
     except ImportError:
         return False
     del WinThreeTwocom
-    for RootValue in (Winreg.HKEY_CLASSES_ROOT,):
+    RegistryRoot = getattr(Winreg, "HKEY_CLASSES_ROOT")
+    OpenRegistryKey = getattr(Winreg, "OpenKey")
+    QueryRegistryValue = getattr(Winreg, "QueryValueEx")
+    for RootValue in (RegistryRoot,):
         try:
-            with Winreg.OpenKey(RootValue, "SldWorks.Application\\CLSID") as LookupKey:
-                ItemValueA = Winreg.QueryValueEx(LookupKey, "")[0]
+            with OpenRegistryKey(RootValue, "SldWorks.Application\\CLSID") as LookupKey:
+                ItemValueA = QueryRegistryValue(LookupKey, "")[0]
         except OSError:
             continue
         if isinstance(ItemValueA, str) and ItemValueA.startswith("{"):
