@@ -29,8 +29,8 @@ def LoadRepair() -> dict[str, object]:
     return Runpy.run_path(str(ScriptPath), run_name="SpdxRepairTest")
 
 
-# adversarial fixtures prove automated remediation stays bounded to validated repository data
-class TestSpdxRepair(UnitTest.TestCase):
+# adversarial diff fixtures prove automation accepts only canonical repository destinations
+class TestDiffGuard(UnitTest.TestCase):
 
     # nul records must preserve rename destinations while rejecting every ambiguous path spelling
     def TestDiffParse(CaseSelf) -> None:
@@ -50,6 +50,10 @@ class TestSpdxRepair(UnitTest.TestCase):
             with CaseSelf.subTest(PathBytes=PathBytes):
                 with CaseSelf.assertRaises(ValueError):
                     ParseDiff(b"M\0" + PathBytes + b"\0")
+
+
+# byte focused fixtures protect untouched content from newline normalization during repair
+class TestByteRepair(UnitTest.TestCase):
 
     # inserted headers must retain existing newline bytes and preserve unterminated shebang content
     def TestMissBytes(CaseSelf) -> None:
@@ -73,6 +77,10 @@ class TestSpdxRepair(UnitTest.TestCase):
                 ScriptPath.read_bytes(),
                 ShebangBytes + b"\n" + RepairValues["MakeHeader"](HeaderLines, b"\n"),
             )
+
+
+# span focused fixtures prevent damaged notices from consuming neighboring source documentation
+class TestSpanRepair(UnitTest.TestCase):
 
     # recognizable fragments may be replaced but adjacent documentation must make repair fail closed
     def TestBoundRepair(CaseSelf) -> None:
@@ -114,6 +122,10 @@ class TestSpdxRepair(UnitTest.TestCase):
             )
             CaseSelf.assertEqual(EncodingPath.read_bytes(), EncodingBytes)
 
+
+# format focused fixtures allow proven legacy styles without authorizing style guesses
+class TestStyleGuard(UnitTest.TestCase):
+
     # unknown formats may retain a proven marker but must never receive a guessed missing style
     def TestUnkStyle(CaseSelf) -> None:
         GuardValues = LoadGuard()
@@ -153,6 +165,10 @@ class TestSpdxRepair(UnitTest.TestCase):
             CaseSelf.assertFalse(IsFixed, ReasonText)
             CaseSelf.assertEqual(MissingPath.read_bytes(), OriginalBytes)
 
+
+# text focused fixtures keep malformed known source files inside the enforcement boundary
+class TestTextGuard(UnitTest.TestCase):
+
     # known source formats must report invalid utf eight instead of being silently treated as binary
     def TestInvalidText(CaseSelf) -> None:
         GuardValues = LoadGuard()
@@ -165,6 +181,10 @@ class TestSpdxRepair(UnitTest.TestCase):
             )
         CaseSelf.assertFalse(IsValid)
         CaseSelf.assertIn("UTF-8", ReasonText)
+
+
+# path focused fixtures keep filesystem traversal limited to regular worktree files
+class TestPathGuard(UnitTest.TestCase):
 
     # regular candidates pass while missing directories and lexical links never reach content checks
     def TestPathBound(CaseSelf) -> None:
@@ -189,6 +209,10 @@ class TestSpdxRepair(UnitTest.TestCase):
                     GuardValues["ResolvePath"](RootPath, "Folder/Child.py")
                 )
 
+
+# skill focused fixtures preserve agent metadata while restoring its distinct license contract
+class TestSkillGuard(UnitTest.TestCase):
+
     # agent skill repair stays inside the selected worktree and preserves all nonlicense frontmatter
     def TestSkillField(CaseSelf) -> None:
         GuardValues = LoadGuard()
@@ -208,6 +232,10 @@ class TestSpdxRepair(UnitTest.TestCase):
                 b"license: LicenseRef-PolyForm-Strict-1.0.0\r\n", SourceBytes
             )
             CaseSelf.assertIn(b"name: alpha\r\n", SourceBytes)
+
+
+# revision focused fixtures bind materialized files to one exact commit identity
+class TestHeadGuard(UnitTest.TestCase):
 
     # exact commit and worktree checks prevent symbolic revisions or a stale materialized head
     def TestExactHead(CaseSelf) -> None:

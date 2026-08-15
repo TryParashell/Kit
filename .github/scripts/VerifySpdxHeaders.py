@@ -556,6 +556,36 @@ def GetDiffFiles(
     return ParseDiff(ResultInfo.stdout)
 
 
+# verification batching keeps command setup independent from per file evidence and reporting
+def CheckFiles(
+    ChangedPaths: list[str], CanonLines: list[str], WorktreeRoot: Pathlib.Path
+) -> int:
+    FailureList: list[tuple[str, str]] = []
+    CheckedCount = 0
+    for RelPath in ChangedPaths:
+        if IsPathExempt(RelPath):
+            continue
+        SourcePath = ResolvePath(WorktreeRoot, RelPath)
+        if SourcePath is None:
+            FailureList.append((RelPath, "path is missing symlinked or nonregular"))
+            print(f"FAIL {RelPath!r}: path is missing symlinked or nonregular")
+            continue
+        CheckedCount += 1
+        IsValid, ReasonText = CheckFile(SourcePath, CanonLines, WorktreeRoot)
+        if not IsValid:
+            FailureList.append((RelPath, ReasonText))
+        StatusText = "OK " if IsValid else "FAIL"
+        print(f"{StatusText} {RelPath}: {ReasonText}")
+    print(f"\nChecked {CheckedCount} in-scope file(s); {len(FailureList)} failure(s).")
+    if FailureList:
+        print(
+            "\nOne or more changed files are missing or have a modified required SPDX header",
+            file=System.stderr,
+        )
+        return 1
+    return 0
+
+
 # argument parsing stays focused because command validation and repository work change independently
 def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
     ParserInfo = Argparse.ArgumentParser(description=__doc__)
@@ -599,30 +629,7 @@ def MainRun(ArgValues: list[str] | None = None) -> int:
     ChangedPaths = GetDiffFiles(ArgsInfo.BaseRef, ArgsInfo.HeadRef)
     if ArgsInfo.FixMissing:
         return RepairFilesMut(ChangedPaths, CanonLines, WorktreeRoot)
-    FailureList: list[tuple[str, str]] = []
-    CheckedCount = 0
-    for RelPath in ChangedPaths:
-        if IsPathExempt(RelPath):
-            continue
-        SourcePath = ResolvePath(WorktreeRoot, RelPath)
-        if SourcePath is None:
-            FailureList.append((RelPath, "path is missing symlinked or nonregular"))
-            print(f"FAIL {RelPath!r}: path is missing symlinked or nonregular")
-            continue
-        CheckedCount += 1
-        IsValid, ReasonText = CheckFile(SourcePath, CanonLines, WorktreeRoot)
-        if not IsValid:
-            FailureList.append((RelPath, ReasonText))
-        StatusText = "OK " if IsValid else "FAIL"
-        print(f"{StatusText} {RelPath}: {ReasonText}")
-    print(f"\nChecked {CheckedCount} in-scope file(s); {len(FailureList)} failure(s).")
-    if FailureList:
-        print(
-            "\nOne or more changed files are missing or have a modified required SPDX header",
-            file=System.stderr,
-        )
-        return 1
-    return 0
+    return CheckFiles(ChangedPaths, CanonLines, WorktreeRoot)
 
 
 if __name__ == "__main__":
