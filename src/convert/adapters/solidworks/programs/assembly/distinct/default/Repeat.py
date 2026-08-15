@@ -12,10 +12,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    BuildOverrides,
     FieldOp,
-    FieldValue as FieldType,
+    FieldOverrides,
 )
-from convert.adapters.solidworks.programs.Common.FieldEncoder import RequireInt
+from convert.adapters.solidworks.programs.Common.FieldEncoder import (
+    BuildShiftMap,
+    RequireInt,
+)
 
 from convert.adapters.solidworks.programs.assembly.distinct.quintuples.Program import (
     EncodeField,
@@ -119,7 +123,7 @@ KHeaderTailStart = 3106
 # operation emission preserves typed ownership while applying semantic values
 def EncodeOps(
     Operations: Sequence[FieldOp],
-    Overrides: Mapping[int, FieldType],
+    Overrides: FieldOverrides,
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
@@ -301,14 +305,15 @@ def EncodeConfig(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     SuffixOps = SliceOps("Contents/Config-0", SuffixStart)
-    SuffixOverrides: dict[int, FieldType] = {}
-    for Operation in SuffixOps:
-        RelativePos = Operation[0] - SuffixStart
-        DefaultValue = RequireInt(Operation[4], "configuration suffix reference")
-        if RelativePos in KConfigShiftFive:
-            SuffixOverrides[RelativePos] = DefaultValue + (5 * BaseShift)
-        elif RelativePos in KConfigShiftOne:
-            SuffixOverrides[RelativePos] = DefaultValue + BaseShift
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        (
+            (KConfigShiftFive, 5 * BaseShift),
+            (KConfigShiftOne, BaseShift),
+        ),
+        "configuration suffix reference",
+    )
     SuffixOverrides[23442] = ItemCount
     SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
@@ -341,9 +346,8 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
             UnitStart + UnitWidth,
         )
         RefValues = {
-            Operation[0] - UnitStart: RequireInt(
-                Operation[4], "resolved unit reference"
-            )
+            Operation[0]
+            - UnitStart: RequireInt(Operation[4], "resolved unit reference")
             + (5 * BaseShift)
             for Operation in UnitOps
             if Operation[3] == "classref"
@@ -361,16 +365,16 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     SuffixOps = SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
-    SuffixOverrides: dict[int, FieldType] = {}
-    for Operation in SuffixOps:
-        RelativePos = Operation[0] - SuffixStart
-        DefaultValue = RequireInt(Operation[4], "resolved suffix reference")
-        if RelativePos in KResolvedShiftNine:
-            SuffixOverrides[RelativePos] = DefaultValue + (9 * BaseShift)
-        elif RelativePos in KResolvedShiftFive:
-            SuffixOverrides[RelativePos] = DefaultValue + (5 * BaseShift)
-        elif RelativePos in KResolvedShiftOne:
-            SuffixOverrides[RelativePos] = DefaultValue + BaseShift
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        (
+            (KResolvedShiftNine, 9 * BaseShift),
+            (KResolvedShiftFive, 5 * BaseShift),
+            (KResolvedShiftOne, BaseShift),
+        ),
+        "resolved suffix reference",
+    )
     SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
@@ -411,13 +415,15 @@ def EncodeHeader(
         )
     FirstItem = UniqueValues[0]
     FirstStem = PureWindowsPath(FirstItem.CompPath).stem
-    ExtOverrides: dict[int, FieldType] = {
-        4: 24 + ItemCount,
-        31: UniqueCount,
-        75: FirstItem.CompPath,
-        211: 74 + (2 * BaseShift),
-        213: FirstStem,
-    }
+    ExtOverrides = BuildOverrides(
+        {
+            4: 24 + ItemCount,
+            31: UniqueCount,
+            75: FirstItem.CompPath,
+            211: 74 + (2 * BaseShift),
+            213: FirstStem,
+        }
+    )
     if FirstItem.FileStamp > 0:
         ExtOverrides[232] = FirstItem.FileStamp
     ExtPrefix = EncodeOps(
@@ -434,14 +440,16 @@ def EncodeHeader(
         TemplateIndex = min(FileIndex, KTracedCount)
         FileStart = KHeaderFileStart + ((TemplateIndex - 2) * KHeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
-        FileOverrides: dict[int, FieldType] = {
-            0: 72 + (2 * BaseShift),
-            2: 74 + (2 * BaseShift),
-            4: ItemValue.CompPath,
-            140: 74 + (2 * BaseShift),
-            142: FileStem,
-            191: FileIndex - 1,
-        }
+        FileOverrides = BuildOverrides(
+            {
+                0: 72 + (2 * BaseShift),
+                2: 74 + (2 * BaseShift),
+                4: ItemValue.CompPath,
+                140: 74 + (2 * BaseShift),
+                142: FileStem,
+                191: FileIndex - 1,
+            }
+        )
         if ItemValue.FileStamp > 0:
             FileOverrides[161] = ItemValue.FileStamp
         FileData.extend(

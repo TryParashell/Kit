@@ -295,7 +295,13 @@ KFieldOwners, KResolvedOps = BuildProgram(
 )
 
 # generated registry exports remain explicit for facade composition and extension imports
-__all__ = ["KFieldOwners", "KResolvedOps", "KMethodPrograms"]
+__all__ = [
+    "KFieldOwners",
+    "KResolvedOps",
+    "KMethodPrograms",
+    "FieldOwners",
+    "ResolvedOps",
+]
 
 # compatibility binding preserves its established public import after decomposition
 FieldOwners = KFieldOwners

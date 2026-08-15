@@ -44,3 +44,10 @@ StreamPrograms: TypeAlias = dict[str, tuple[FieldOp, ...]]
 
 # serializer callers override recovered defaults only at exact native source offsets
 FieldOverrides: TypeAlias = Mapping[int, FieldValue]
+
+
+# mixed override tables need one concrete builder so inference stays stable during later mutation
+def BuildOverrides(
+    InitialValues: FieldOverrides | None = None,
+) -> dict[int, FieldValue]:
+    return {} if InitialValues is None else dict(InitialValues)

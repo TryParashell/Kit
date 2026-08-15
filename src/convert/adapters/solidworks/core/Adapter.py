@@ -20,7 +20,7 @@ import re as RegexLib
 import struct as Struct
 import tempfile as Tempfile
 from types import MappingProxyType
-from typing import Any as AnyValue, Mapping, Sequence, TypeGuard, cast as CastValue
+from typing import Mapping, Sequence, TypeGuard, cast as CastValue
 import xml.etree.ElementTree as XmlTree
 from convert.adapters.base import (
     AdapterInfo,
@@ -158,6 +158,7 @@ from convert.adapters.solidworks.container.Format import (
     SUFFIX_BY_FORMAT_ID as SuffixByFormatId,
 )
 from convert.adapters.solidworks.core.FeatureKindByNative import KFeatureKindByNative
+from convert.adapters.solidworks.core.Display import NativeDisplay
 from convert.adapters.solidworks.core.Native import (
     NativeDimension,
     NativeFeature,
@@ -167,6 +168,7 @@ from convert.adapters.solidworks.core.Native import (
     NativeOperation,
     NativePlane,
     NativeProfile,
+    NativeRule,
     NativeSketch,
     NativeAssemblyEnvelope as NativeAsmEnvelope,
     DIRECTION_AXIS_ROLE as DirectionAxisRole,
@@ -175,6 +177,8 @@ from convert.adapters.solidworks.core.Native import (
     encode_native_part as EncodeNativePart,
     operation_axis_subelement as OperationAxisSubElem,
 )
+from interchange.features.FeatureContract import FeatureDef
+from interchange.geometry.models.GeometryTypes import KGeometryTypes
 from convert.adapters.solidworks.container.Parasolid import (
     ParasolidPayload,
     ParasolidWriteError,
@@ -316,9 +320,7 @@ class SldprtAdapter:
     def probe(self, SourceValue: Source) -> ProbeResult:
         return Probe(self, SourceValue)
 
-    def read(
-        self, SourceValue: Source, Options: ReadOptions | None = None
-    ) -> CadDoc:
+    def read(self, SourceValue: Source, Options: ReadOptions | None = None) -> CadDoc:
         return ReadAction(self, SourceValue, Options)
 
     def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
@@ -700,9 +702,7 @@ def BuildSavedPlan(
         AppUsable = BooleanValue(
             Attestation["application_usable"], "application_usable"
         )
-        VendorLoadable = BooleanValue(
-            Attestation["vendor_loadable"], "vendor_loadable"
-        )
+        VendorLoadable = BooleanValue(Attestation["vendor_loadable"], "vendor_loadable")
         NativeBrep = str(Attestation.get("native_brep", "template"))
         NativeContent = "source-preserved"
     else:
@@ -1288,7 +1288,7 @@ class BundleState:
 def BundleComponent(
     DocValue: CadDocument,
     Definition: ComponentDefinition,
-    Documents: Mapping[str, AnyValue],
+    Documents: Mapping[str, CadDocument],
 ) -> CadDoc | None:
     Component = Documents.get(Definition.document_id)
     if (
@@ -1332,7 +1332,7 @@ def BundleNameMut(
 def PlanBundleMut(
     DocValue: CadDocument,
     Definitions: Sequence[ComponentDefinition],
-    Documents: Mapping[str, AnyValue],
+    Documents: Mapping[str, CadDocument],
     Target: PathValue,
     FinalPath: PathValue,
     StateMut: BundleState,
@@ -1386,7 +1386,7 @@ def BundleMember(
     Settings: WriteOptions,
     Names: Mapping[str, str],
     Stamps: Mapping[str, int],
-) -> tuple[AnyValue, bytes]:
+) -> tuple[WriteResult, bytes]:
     Buffer = BytesIo()
     Values = dict(Settings.values)
     Values["portable"] = False
@@ -3049,9 +3049,7 @@ def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def KeywordsBytes(
-    Prefix: bytes, RootValue: XmlTree.Element, Trailing: bytes
-) -> bytes:
+def KeywordsBytes(Prefix: bytes, RootValue: XmlTree.Element, Trailing: bytes) -> bytes:
     Serialized = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
     if not isinstance(Serialized, bytes):
         raise TypeError("keyword xml serialization must produce bytes")
@@ -3523,6 +3521,12 @@ def PatchRectangle(
         (XOneValue, YOneValue),
         (XZero, YOneValue),
     )
+    if all(
+        MathValue.isclose(SourceValue, TargetValue, abs_tol=1e-09)
+        for SourcePoint, TargetPoint in zip(SourceCorners, Points, strict=True)
+        for SourceValue, TargetValue in zip(SourcePoint, TargetPoint, strict=True)
+    ):
+        return
     for Marker in Sketch.markers:
         if Marker.coordinates_mm is None:
             continue
@@ -3545,7 +3549,7 @@ def RoundNumber(Value: float) -> float:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParamValues(Parameters: Sequence[Parameter]) -> tuple[AnyValue, ...]:
+def ParamValues(Parameters: Sequence[Parameter]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3582,7 +3586,7 @@ def TransformValues(Transform: Transform) -> tuple[float, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[AnyValue, ...]:
+def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3598,7 +3602,7 @@ def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def GeomValues(GeomValue: Any) -> AnyValue:
+def GeomValues(GeomValue: KGeometryTypes) -> object:
     if isinstance(GeomValue, PointGeom):
         return (
             "point",
@@ -3620,7 +3624,7 @@ def GeomValues(GeomValue: Any) -> AnyValue:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SketchValues(Sketches: Sequence[SketchData]) -> tuple[AnyValue, ...]:
+def SketchValues(Sketches: Sequence[SketchData]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3663,8 +3667,8 @@ def SketchValues(Sketches: Sequence[SketchData]) -> tuple[AnyValue, ...]:
 
 # this definition exists because focused behavior needs one stable owner
 def DefinitionValue(
-    Definition: Any, ParamValue: ParameterValue | None = None
-) -> AnyValue:
+    Definition: FeatureDef | None, ParamValue: ParameterValue | None = None
+) -> object:
     if isinstance(Definition, ExtrusionFeature):
         Length = ParamValue or Definition.length
         return (
@@ -3686,7 +3690,7 @@ def DefinitionValue(
 # this definition exists because focused behavior needs one stable owner
 def FeatureValues(
     Features: Sequence[FeatureStep], Parameters: Sequence[Parameter] = ()
-) -> tuple[AnyValue, ...]:
+) -> tuple[object, ...]:
     ParamById = {Param.id: Param for Param in Parameters}
     return tuple(
         (
@@ -3737,7 +3741,7 @@ def IsNativeFeature(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SelectionValues(Selections: Sequence[Selection]) -> tuple[AnyValue, ...]:
+def SelectionValues(Selections: Sequence[Selection]) -> tuple[object, ...]:
     return tuple(
         (
             (Selection.id, Selection.name, Selection.path, dict(Selection.query))
@@ -3747,7 +3751,7 @@ def SelectionValues(Selections: Sequence[Selection]) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[AnyValue, ...]:
+def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3764,7 +3768,7 @@ def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[AnyValue, ...
 
 
 # this definition exists because focused behavior needs one stable owner
-def BodyValues(Bodies: Sequence[Body]) -> tuple[AnyValue, ...]:
+def BodyValues(Bodies: Sequence[Body]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3782,7 +3786,7 @@ def BodyValues(Bodies: Sequence[Body]) -> tuple[AnyValue, ...]:
 # this definition exists because focused behavior needs one stable owner
 def NativeBody(
     Model: NativeModel, Timeline: tuple[FeatureStep, ...]
-) -> tuple[AnyValue, ...]:
+) -> tuple[object, ...]:
     BodyFeature = SolidBody(Model.features)
     BodyItem = BodyValue(
         id="sldprt:body:1",
@@ -3801,7 +3805,7 @@ def NativeBody(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[AnyValue, ...]:
+def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -4248,7 +4252,9 @@ def IsPatchValueMut(
 
 # this predicate exists because native mate alignment has a coded binary field
 def IsPatchAlignMut(
-    BufferMut: bytearray, MateValue: NativeMate, TargetValue: AnyValue
+    BufferMut: bytearray,
+    MateValue: NativeMate,
+    TargetValue: MateAlignment | str,
 ) -> bool:
     AlignmentCode = next(
         (
@@ -4348,7 +4354,7 @@ def NativeMateA(DataValue: bytes | bytearray, MateValue: NativeMate) -> int | No
 
 
 # this definition exists because focused behavior needs one stable owner
-def Definition(Definition: ComponentDefinition) -> tuple[AnyValue, ...]:
+def Definition(Definition: ComponentDefinition) -> tuple[object, ...]:
     return (
         Definition.id,
         Definition.name,
@@ -4358,7 +4364,7 @@ def Definition(Definition: ComponentDefinition) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def InstanceValues(Instance: ComponentInstance) -> tuple[AnyValue, ...]:
+def InstanceValues(Instance: ComponentInstance) -> tuple[object, ...]:
     return (
         Instance.id,
         Instance.name,
@@ -4378,7 +4384,7 @@ def InstanceValues(Instance: ComponentInstance) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def AsmStructure(AsmValue: AssemblyData) -> tuple[AnyValue, ...]:
+def AsmStructure(AsmValue: AssemblyData) -> tuple[object, ...]:
     return (
         AsmValue.root_definition_id,
         tuple(
@@ -4398,13 +4404,13 @@ def NativeAsmData(Native: NativeAssembly) -> AsmData:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeAsmValues(Native: NativeAssembly) -> tuple[AnyValue, ...]:
+def NativeAsmValues(Native: NativeAssembly) -> tuple[object, ...]:
     return AsmStructure(NativeAsmData(Native))
 
 
 # this definition exists because focused behavior needs one stable owner
 def DivergedKeys(
-    Donor: Mapping[str, Any], Desired: Mapping[str, Any]
+    Donor: Mapping[str, object], Desired: Mapping[str, object]
 ) -> tuple[str, ...]:
     return tuple(sorted(set(Donor) ^ set(Desired))) + tuple(
         (
@@ -4467,7 +4473,7 @@ def MateValues(
     Entities: Sequence[MateEntity],
     Mates: Sequence[MateConstraint],
     Groups: Sequence[MateGroup],
-) -> tuple[AnyValue, ...]:
+) -> tuple[object, ...]:
     return (
         tuple(
             (
@@ -4519,7 +4525,7 @@ def MateValues(
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateParamValue(Value: ParameterValue | None) -> AnyValue:
+def MateParamValue(Value: ParameterValue | None) -> object:
     if (
         Value is None
         or isinstance(Value.value, bool)
@@ -4545,7 +4551,7 @@ def MateParamValue(Value: ParameterValue | None) -> AnyValue:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshValues(Meshes: Sequence[Mesh]) -> tuple[AnyValue, ...]:
+def MeshValues(Meshes: Sequence[Mesh]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -4725,9 +4731,15 @@ def WriteTargetMut(
 
 
 # this definition exists because assembly part metadata shares one decode pass
-def AsmPartFields(
-    Archive: SldprtArchive, Settings: ReadOptions
-) -> tuple[AnyValue, ...]:
+def AsmPartFields(Archive: SldprtArchive, Settings: ReadOptions) -> tuple[
+    NativeModel,
+    tuple[Config, ...],
+    tuple[Param, ...],
+    tuple[SupportPlane, ...],
+    tuple[SketchData, ...],
+    tuple[Selection, ...],
+    tuple[FeatureStep, ...],
+]:
     SelectedStream = ResolvedStream(Archive.streams, ResolvedFeaturesStream)
     Model = DecodeNativeModel(
         Archive.require(KeywordsStream),
@@ -5102,11 +5114,18 @@ def AsmDocuments(
 
 
 # this definition exists because component faces share one indexed mesh accumulator
-def MeshGeometry(Component: AnyValue) -> tuple[AnyValue, ...]:
+def MeshGeometry(
+    Component: NativeDisplay,
+) -> tuple[
+    list[VectorThree],
+    list[VectorThree],
+    list[tuple[int, int, int]],
+    list[dict[str, object]],
+]:
     Vertices: list[VectorThree] = []
     Normals: list[VectorThree] = []
     Triangles: list[tuple[int, int, int]] = []
-    Faces: list[dict[str, AnyValue]] = []
+    Faces: list[dict[str, object]] = []
     for FaceValue in Component.faces:
         VertexStart = len(Vertices)
         TriangleStart = len(Triangles)
@@ -5114,7 +5133,11 @@ def MeshGeometry(Component: AnyValue) -> tuple[AnyValue, ...]:
         Normals.extend((VectorThree(*Normal) for Normal in FaceValue.normals))
         Triangles.extend(
             (
-                tuple((Index + VertexStart for Index in Triangle))
+                (
+                    Triangle[0] + VertexStart,
+                    Triangle[1] + VertexStart,
+                    Triangle[2] + VertexStart,
+                )
                 for Triangle in FaceValue.triangle_indices
             )
         )
@@ -5812,7 +5835,7 @@ def MateGroups(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Flattened(Native: NativeAssembly) -> tuple[dict[str, AnyValue], ...]:
+def Flattened(Native: NativeAssembly) -> tuple[dict[str, object], ...]:
     Identity = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
@@ -5838,7 +5861,7 @@ def Flattened(Native: NativeAssembly) -> tuple[dict[str, AnyValue], ...]:
 # this definition exists because focused behavior needs one stable owner
 def FlattenedMates(
     Native: NativeAssembly, Mates: tuple[MateConstraint, ...]
-) -> tuple[dict[str, AnyValue], ...]:
+) -> tuple[dict[str, object], ...]:
     Identity = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
@@ -5852,7 +5875,7 @@ def FlattenedMates(
             )
         )
         OwnerPaths[ItemValue.definition_id].append((ItemValue.path, InstanceIds))
-    Result: list[dict[str, AnyValue]] = []
+    Result: list[dict[str, object]] = []
     for MateValue in Mates:
         OwnerId = int(MateValue.owner_definition_id.rsplit(":", 1)[-1])
         for Index, (SourcePath, InstancePath) in enumerate(OwnerPaths.get(OwnerId, [])):
@@ -5896,7 +5919,7 @@ def Companion(Label: str) -> tuple[BrepPayload, ...]:
         if Choice is None:
             continue
         DataValue = Choice.read_bytes()
-        Attributes: dict[str, AnyValue] = {
+        Attributes: dict[str, object] = {
             "companion_path": str(Choice.resolve()),
             "source_assembly": str(Source),
         }
@@ -6374,7 +6397,9 @@ def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[SketchData, ...]:
 
 
 # this definition exists because profile primitives share one entity mapping pass
-def ProfileSketch(Sketch: NativeSketch) -> tuple[AnyValue, ...]:
+def ProfileSketch(
+    Sketch: NativeSketch,
+) -> tuple[list[SketchEntity], dict[str, str], dict[int, str], set[int]]:
     Entities: list[SketchEntity] = []
     RefMap: dict[str, str] = {}
     ProfileEntities: dict[int, str] = {}
@@ -6601,7 +6626,7 @@ def MarkerLinear(
     CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]],
     CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
     ResolvedSemantic: str,
-) -> tuple[AnyValue, AnyValue] | None:
+) -> tuple[GeomKind, KGeometryTypes] | None:
     if ResolvedSemantic == "point" and Marker.coordinates_mm is not None:
         return (GeomKind.POINT, PointGeom(VectorTwo(*Marker.coordinates_mm)))
     if ResolvedSemantic != "line" or Marker.endpoint_indices is None:
@@ -6624,9 +6649,9 @@ def MarkerCurved(
     Marker: NativeMarker,
     CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
     ResolvedSemantic: str,
-) -> tuple[AnyValue, AnyValue]:
-    KindValue: AnyValue = GeomKind.NATIVE
-    GeomValue: AnyValue = None
+) -> tuple[GeomKind, KGeometryTypes]:
+    KindValue = GeomKind.NATIVE
+    GeomValue: KGeometryTypes | None = None
     if ResolvedSemantic in {"circle", "arc"}:
         Circular = MarkerCircular(Marker, CoordinatesByIndex, ResolvedSemantic)
         if Circular is not None:
@@ -6654,7 +6679,7 @@ def MarkerGeometry(
     CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]],
     CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
     ResolvedSemantic: str,
-) -> tuple[AnyValue, AnyValue]:
+) -> tuple[GeomKind, KGeometryTypes]:
     Linear = MarkerLinear(
         Marker, CoordinatesByPrefix, CoordinatesByIndex, ResolvedSemantic
     )
@@ -6980,8 +7005,16 @@ def RuleContextA(Sketch: NativeSketch, ParamIds: set[str]) -> RuleContext:
 
 # this definition exists because each native rule needs deterministic occurrence binding
 def RulePartsMut(
-    RuleValue: AnyValue, RefMap: Mapping[str, str], ContextMut: RuleContext
-) -> tuple[AnyValue, ...]:
+    RuleValue: NativeRule, RefMap: Mapping[str, str], ContextMut: RuleContext
+) -> tuple[
+    list[RuleRef],
+    str,
+    str,
+    int,
+    NativeDimension | None,
+    str | None,
+    str,
+]:
     ResolvedRefs = [RefMap.get(RefValue) for RefValue in RuleValue.references]
     References = (
         [RuleRef(RefValue) for RefValue in ResolvedRefs]
@@ -7022,7 +7055,7 @@ def RulePartsMut(
 # this definition exists because resolved rule parts need one neutral constructor
 def BuildSketchRule(
     Sketch: NativeSketch,
-    RuleValue: AnyValue,
+    RuleValue: NativeRule,
     RefMap: Mapping[str, str],
     ContextMut: RuleContext,
 ) -> SketchRule:
@@ -7219,13 +7252,7 @@ def OperationA(
 # this definition exists because focused behavior needs one stable owner
 def OperationId(Operation: NativeOperation, Producer: int, LocalId: int) -> str:
     Duplicate = (
-        sum(
-            (
-                RefLocal == LocalId
-                for _, RefLocal in Operation.selection_references
-            )
-        )
-        > 1
+        sum((RefLocal == LocalId for _, RefLocal in Operation.selection_references)) > 1
     )
     return SelectionId(
         Operation.object_id,
@@ -7324,12 +7351,10 @@ def Timeline(
         ParamIds = tuple(
             (
                 ParamId
-                for _, ParamId in ParamEntries(
-                    Feature.object_id, Feature.dimensions
-                )
+                for _, ParamId in ParamEntries(Feature.object_id, Feature.dimensions)
             )
         )
-        Attributes: dict[str, AnyValue] = {
+        Attributes: dict[str, object] = {
             "native_object_id": Feature.object_id,
             "native_type": Feature.kind,
             "xml_tag": Feature.xml_tag,
@@ -7399,8 +7424,8 @@ def FinalBodyId(
 
 
 # this definition exists because focused behavior needs one stable owner
-def OperationAttrs(Operation: NativeOperation) -> dict[str, AnyValue]:
-    Result: dict[str, AnyValue] = {
+def OperationAttrs(Operation: NativeOperation) -> dict[str, object]:
+    Result: dict[str, object] = {
         "profile_native_id": Operation.profile_id,
         "native_dependencies": Operation.dependencies,
         "family_code": Operation.family_code,
@@ -7949,9 +7974,6 @@ def AxisSourceId(KindValue: str, NativeId: int) -> str:
 def MarkerId(NativeId: int, Offset: int) -> str:
     return f"sldprt:sketch:{NativeId}:native:{Offset}"
 
-
-# this binding exists because shared behavior needs one stable value
-Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
 ArcEllipseGeometry = ArcEllipseGeom

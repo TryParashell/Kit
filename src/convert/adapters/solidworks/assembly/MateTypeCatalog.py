@@ -8,48 +8,69 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue, Callable
+from dataclasses import dataclass as DataClass
+
+
+# mate classification records stay concrete so catalog construction cannot erase their fields
+@DataClass(frozen=True, slots=True)
+class NativeMateType:
+    code: int | None
+    api_name: str
+    kind: str
+    class_names: tuple[str, ...] = ()
+    name_prefixes: tuple[str, ...] = ()
+    value_semantic: str = ""
+    neutral_kind: str = ""
+
+
+# entity classification records stay concrete so marker catalogs retain exact element types
+@DataClass(frozen=True, slots=True)
+class NativeMateTypeA:
+    code: int | None
+    api_name: str
+    kind: str
+    markers: tuple[str, ...] = ()
 
 
 # mate type construction stays independent because classification data has one focused owner
-def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
+def BuildMateTypes() -> tuple[NativeMateType, ...]:
     return (
-        MateType(
+        NativeMateType(
             0,
             "swMateCOINCIDENT",
             "coincident",
             ("MateCoincident", "moMateCoincident"),
             ("coincident",),
         ),
-        MateType(
+        NativeMateType(
             1,
             "swMateCONCENTRIC",
             "concentric",
             ("MateConcentric", "moMateConcentric"),
             ("concentric",),
         ),
-        MateType(
+        NativeMateType(
             2,
             "swMatePERPENDICULAR",
             "perpendicular",
             ("MatePerpendicular", "moMatePerpendicular"),
             ("perpendicular",),
         ),
-        MateType(
+        NativeMateType(
             3,
             "swMatePARALLEL",
             "parallel",
             ("MateParallel", "moMateParallel"),
             ("parallel",),
         ),
-        MateType(
+        NativeMateType(
             4,
             "swMateTANGENT",
             "tangent",
             ("MateTangent", "moMateTangent"),
             ("tangent",),
         ),
-        MateType(
+        NativeMateType(
             5,
             "swMateDISTANCE",
             "distance",
@@ -64,7 +85,7 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("distance", "limitdistance"),
             "length",
         ),
-        MateType(
+        NativeMateType(
             6,
             "swMateANGLE",
             "angle",
@@ -80,15 +101,15 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("angle", "limitangle"),
             "angle",
         ),
-        MateType(7, "swMateUNKNOWN", "native"),
-        MateType(
+        NativeMateType(7, "swMateUNKNOWN", "native"),
+        NativeMateType(
             8,
             "swMateSYMMETRIC",
             "symmetric",
             ("MateSymmetric", "moMateSymmetric"),
             ("symmetric",),
         ),
-        MateType(
+        NativeMateType(
             9,
             "swMateCAMFOLLOWER",
             "cam_tangent",
@@ -96,7 +117,7 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("cam", "cammatetangent", "camfollower"),
             neutral_kind="cam",
         ),
-        MateType(
+        NativeMateType(
             10,
             "swMateGEAR",
             "gear",
@@ -104,14 +125,14 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("gear", "gearmate"),
             "ratio",
         ),
-        MateType(
+        NativeMateType(
             11,
             "swMateWIDTH",
             "width",
             ("MateWidth", "moMateWidth"),
             ("width", "widthmate"),
         ),
-        MateType(
+        NativeMateType(
             12,
             "swMateLOCKTOSKETCH",
             "lock_to_sketch",
@@ -119,7 +140,7 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("locktosketch", "locktosketchmate"),
             neutral_kind="lock",
         ),
-        MateType(
+        NativeMateType(
             13,
             "swMateRACKPINION",
             "rack_pinion",
@@ -127,18 +148,18 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("rackpinion",),
             "length",
         ),
-        MateType(14, "swMateMAXMATES", "native"),
-        MateType(
+        NativeMateType(14, "swMateMAXMATES", "native"),
+        NativeMateType(
             15, "swMatePATH", "path", ("MatePath", "moMatePath"), ("path", "pathmate")
         ),
-        MateType(
+        NativeMateType(
             16,
             "swMateLOCK",
             "lock",
             ("MateInPlace", "MateLock", "moMateInPlace", "moMateLock"),
             ("inplace", "lock", "lockmate"),
         ),
-        MateType(
+        NativeMateType(
             17,
             "swMateSCREW",
             "screw",
@@ -146,7 +167,7 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("screw", "screwmate"),
             "length",
         ),
-        MateType(
+        NativeMateType(
             18,
             "swMateLINEARCOUPLER",
             "linear_coupler",
@@ -154,35 +175,37 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("linearcoupler",),
             "ratio",
         ),
-        MateType(
+        NativeMateType(
             19,
             "swMateUNIVERSALJOINT",
             "universal_joint",
             ("MateUniversalJoint", "moMateUniversalJoint"),
             ("universaljoint", "universalmate"),
         ),
-        MateType(
+        NativeMateType(
             20,
             "swMateCOORDINATE",
             "coordinate",
             ("MateCoordinate", "moMateCoordinate"),
             ("coordinate",),
         ),
-        MateType(
+        NativeMateType(
             21, "swMateSLOT", "slot", ("MateSlot", "moMateSlot"), ("slot", "slotmate")
         ),
-        MateType(22, "swMateHINGE", "hinge", ("MateHinge", "moMateHinge"), ("hinge",)),
-        MateType(
+        NativeMateType(
+            22, "swMateHINGE", "hinge", ("MateHinge", "moMateHinge"), ("hinge",)
+        ),
+        NativeMateType(
             23, "swMateSLIDER", "slider", ("MateSlider", "moMateSlider"), ("slider",)
         ),
-        MateType(
+        NativeMateType(
             24,
             "swMatePROFILECENTER",
             "profile_center",
             ("MateProfileCenter", "moMateProfileCenter"),
             ("profilecenter",),
         ),
-        MateType(
+        NativeMateType(
             25,
             "swMateMAGNETIC",
             "magnetic",
@@ -193,42 +216,46 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
 
 
 # entity reference construction stays independent because geometry classification has one focused owner
-def BuildRefTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
+def BuildRefTypes() -> tuple[NativeMateTypeA, ...]:
     return (
-        MateType(0, "swMateEntity2ReferenceType_Point", "point", ("refpoint", "point")),
-        MateType(1, "swMateEntity2ReferenceType_Line", "line", ("line",)),
-        MateType(2, "swMateEntity2ReferenceType_Circle", "circle", ("circle",)),
-        MateType(3, "swMateEntity2ReferenceType_Plane", "plane", ("plane",)),
-        MateType(
+        NativeMateTypeA(
+            0, "swMateEntity2ReferenceType_Point", "point", ("refpoint", "point")
+        ),
+        NativeMateTypeA(1, "swMateEntity2ReferenceType_Line", "line", ("line",)),
+        NativeMateTypeA(2, "swMateEntity2ReferenceType_Circle", "circle", ("circle",)),
+        NativeMateTypeA(3, "swMateEntity2ReferenceType_Plane", "plane", ("plane",)),
+        NativeMateTypeA(
             4,
             "swMateEntity2ReferenceType_Cylinder",
             "cylinder",
             ("cylinder", "wzdhole", "sweepside"),
         ),
-        MateType(5, "swMateEntity2ReferenceType_Sphere", "sphere", ("sphere",)),
-        MateType(6, "swMateEntity2ReferenceType_Set", "native"),
-        MateType(7, "swMateEntity2ReferenceType_Cone", "cone", ("cone",)),
-        MateType(
+        NativeMateTypeA(5, "swMateEntity2ReferenceType_Sphere", "sphere", ("sphere",)),
+        NativeMateTypeA(6, "swMateEntity2ReferenceType_Set", "native"),
+        NativeMateTypeA(7, "swMateEntity2ReferenceType_Cone", "cone", ("cone",)),
+        NativeMateTypeA(
             8, "swMateEntity2ReferenceType_SweptSurface", "surface", ("sweptsurface",)
         ),
-        MateType(
+        NativeMateTypeA(
             9,
             "swMateEntity2ReferenceType_MultipleSurface",
             "surface",
             ("multiplesurface",),
         ),
-        MateType(
+        NativeMateTypeA(
             10,
             "swMateEntity2ReferenceType_GenSurface",
             "surface",
             ("gensurface", "generalsurface", "surface"),
         ),
-        MateType(11, "swMateEntity2ReferenceType_Ellipse", "curve", ("ellipse",)),
-        MateType(
+        NativeMateTypeA(
+            11, "swMateEntity2ReferenceType_Ellipse", "curve", ("ellipse",)
+        ),
+        NativeMateTypeA(
             12,
             "swMateEntity2ReferenceType_GeneralCurve",
             "curve",
             ("generalcurve", "curve"),
         ),
-        MateType(13, "swMateEntity2ReferenceType_UNKNOWN", "native"),
+        NativeMateTypeA(13, "swMateEntity2ReferenceType_UNKNOWN", "native"),
     )

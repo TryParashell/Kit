@@ -14,9 +14,12 @@ from pathlib import PureWindowsPath
 from types import MappingProxyType
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
     FieldOp,
-    FieldValue as FieldType,
+    FieldOverrides,
 )
-from convert.adapters.solidworks.programs.Common.FieldEncoder import RequireInt
+from convert.adapters.solidworks.programs.Common.FieldEncoder import (
+    BuildShiftMap,
+    RequireInt,
+)
 
 from convert.adapters.solidworks.programs.assembly.quintuples.Program import (
     EncodeField,
@@ -141,7 +144,7 @@ def IsIdentityBasis(BasisVals: tuple[float, ...]) -> bool:
 # one operation tuple retains its typed serializer owner and native field value
 def EncodeOps(
     Operations: Sequence[FieldOp],
-    Overrides: Mapping[int, FieldType],
+    Overrides: FieldOverrides,
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
@@ -302,13 +305,12 @@ def EncodeConfig(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     RefShift = 4 * (ItemCount - KTracedCount)
-    SuffixOverrides: dict[int, FieldType] = {
-        OffsetValue: RequireInt(Operation[4], "configuration suffix reference")
-        + RefShift
-        for OffsetValue in KConfigShiftRefs
-        for Operation in SliceOps("Contents/Config-0", SuffixStart)
-        if Operation[0] - SuffixStart == OffsetValue
-    }
+    SuffixOverrides = BuildShiftMap(
+        SliceOps("Contents/Config-0", SuffixStart),
+        SuffixStart,
+        ((KConfigShiftRefs, RefShift),),
+        "configuration suffix reference",
+    )
     SuffixOverrides[23442] = ItemCount
     SuffixData = EncodeOps(
         SliceOps("Contents/Config-0", SuffixStart),
@@ -337,9 +339,8 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
             UnitStart + UnitWidth,
         )
         RefValues = {
-            Operation[0] - UnitStart: RequireInt(
-                Operation[4], "resolved unit reference"
-            )
+            Operation[0]
+            - UnitStart: RequireInt(Operation[4], "resolved unit reference")
             + BaseShift
             for Operation in UnitOps
             if Operation[3] == "classref"
@@ -358,14 +359,15 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     ShiftCount = ItemCount - KTracedCount
     SuffixOps = SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
-    SuffixOverrides: dict[int, FieldType] = {}
-    for Operation in SuffixOps:
-        RelativePos = Operation[0] - SuffixStart
-        DefaultValue = RequireInt(Operation[4], "resolved suffix reference")
-        if RelativePos in KResolvedShiftEight:
-            SuffixOverrides[RelativePos] = DefaultValue + (8 * ShiftCount)
-        elif RelativePos in KResolvedShiftFour:
-            SuffixOverrides[RelativePos] = DefaultValue + (4 * ShiftCount)
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        (
+            (KResolvedShiftEight, 8 * ShiftCount),
+            (KResolvedShiftFour, 4 * ShiftCount),
+        ),
+        "resolved suffix reference",
+    )
     SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
@@ -402,12 +404,12 @@ def EncodeHeader(
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     RefShift = 2 * (ItemCount - KTracedCount)
     SuffixOps = SliceOps("Contents/Config-0-ModelHeader", SuffixStart)
-    SuffixOverrides: dict[int, FieldType] = {
-        OffsetValue: RequireInt(Operation[4], "header suffix reference") + RefShift
-        for OffsetValue in KHeaderShiftRefs
-        for Operation in SuffixOps
-        if Operation[0] - SuffixStart == OffsetValue
-    }
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        ((KHeaderShiftRefs, RefShift),),
+        "header suffix reference",
+    )
     SuffixOverrides.update(
         {
             4: 24 + ItemCount,

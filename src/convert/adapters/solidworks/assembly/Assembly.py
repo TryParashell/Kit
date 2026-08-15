@@ -14,7 +14,7 @@ import math as MathValue
 import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
-from typing import Any as AnyValue, Iterable, Mapping, Sequence, cast as CastValue
+from typing import Iterable, Literal, Mapping, Sequence, cast as CastValue
 import xml.etree.ElementTree as XmlTree
 from interchange import (
     AssemblyData as AsmData,
@@ -54,6 +54,8 @@ from convert.adapters.solidworks.container.Format import (
 from convert.adapters.solidworks.assembly.MateTypeCatalog import (
     BuildMateTypes,
     BuildRefTypes,
+    NativeMateType,
+    NativeMateTypeA,
 )
 
 # this binding exists because shared behavior needs one stable value
@@ -173,18 +175,6 @@ KMateLossReasons = (
 
 
 # this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class NativeMateType:
-    code: int | None
-    api_name: str
-    kind: str
-    class_names: tuple[str, ...] = ()
-    name_prefixes: tuple[str, ...] = ()
-    value_semantic: str = ""
-    neutral_kind: str = ""
-
-
-# this definition exists because focused behavior needs one stable owner
 class NativeMateCode(IntEnum):
     ANY = 0
     ALIGNED = 1
@@ -200,17 +190,8 @@ class NativeMateA:
     kind: str
 
 
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class NativeMateTypeA:
-    code: int | None
-    api_name: str
-    kind: str
-    markers: tuple[str, ...] = ()
-
-
 # this binding exists because shared behavior needs one stable value
-KNativeMateTypes = BuildMateTypes(NativeMateType)
+KNativeMateTypes = BuildMateTypes()
 
 # this binding exists because shared behavior needs one stable value
 KNativeMateTypeExtensions = (
@@ -229,11 +210,24 @@ KNativeMateTypeRecords = (*KNativeMateTypes, *KNativeMateTypeExtensions)
 
 # this definition exists because focused behavior needs one stable owner
 def ClassifierMap(
-    Records: Iterable[NativeMateType | NativeMateEntityType], AttrValue: str
+    Records: Iterable[NativeMateType | NativeMateTypeA],
+    AttrValue: Literal["class_names", "name_prefixes", "markers"],
 ) -> Mapping[str, str]:
     Result: dict[str, str] = {}
     for Record in Records:
-        for Value in getattr(Record, AttrValue):
+        if AttrValue == "markers":
+            if not isinstance(Record, NativeMateTypeA):
+                raise TypeError("marker classifiers require entity type records")
+            Values = Record.markers
+        else:
+            if not isinstance(Record, NativeMateType):
+                raise TypeError("mate classifiers require mate type records")
+            Values = (
+                Record.class_names
+                if AttrValue == "class_names"
+                else Record.name_prefixes
+            )
+        for Value in Values:
             KeyValue = Value.casefold()
             Previous = Result.get(KeyValue)
             if Previous is not None and Previous != Record.kind:
@@ -296,7 +290,7 @@ KNativeMateEntityGeomTypA = (
 )
 
 # this binding exists because shared behavior needs one stable value
-KNativeMateEntityRefTypes = BuildRefTypes(NativeMateTypeA)
+KNativeMateEntityRefTypes = BuildRefTypes()
 
 # this binding exists because shared behavior needs one stable value
 KNativeMateEntityType = (
@@ -673,7 +667,7 @@ def BuildAsmPlan(
 
 
 # file declarations remain separate because models may share one physical component source
-def AddAsmHeader(RootValue: AnyValue, PlanValue: AsmEncodePlan) -> None:
+def AddAsmHeader(RootValue: XmlTree.Element, PlanValue: AsmEncodePlan) -> None:
     Header = XmlTree.SubElement(
         RootValue, "swHeader", {"swObjCount": str(len(PlanValue.UniqueFileKeys))}
     )
@@ -701,7 +695,7 @@ def AddAsmHeader(RootValue: AnyValue, PlanValue: AsmEncodePlan) -> None:
 
 # occurrence rendering stays focused so definition metadata cannot drift from child references
 def AddAsmReference(
-    ModelValue: AnyValue,
+    ModelValue: XmlTree.Element,
     Instance: ComponentInstance,
     Target: ComponentDefinition,
     ItemIndex: int,
@@ -747,7 +741,7 @@ def AddAsmReference(
 
 # one model renderer keeps optional metadata and owned occurrences under the same definition
 def AddAsmModel(
-    ModelList: AnyValue,
+    ModelList: XmlTree.Element,
     Definition: ComponentDefinition,
     OwnedItems: list[tuple[int, ComponentInstance]],
     PlanValue: AsmEncodePlan,
@@ -783,7 +777,9 @@ def AddAsmModel(
 
 
 # model collection rendering stays independent because component ownership drives its own traversal
-def AddAsmModels(RootValue: AnyValue, PlanValue: AsmEncodePlan, RootId: str) -> None:
+def AddAsmModels(
+    RootValue: XmlTree.Element, PlanValue: AsmEncodePlan, RootId: str
+) -> None:
     ModelList = XmlTree.SubElement(
         RootValue, "swModelList", {"swObjCount": str(len(PlanValue.Definitions))}
     )
@@ -799,7 +795,9 @@ def AddAsmModels(RootValue: AnyValue, PlanValue: AsmEncodePlan, RootId: str) -> 
 
 
 # configuration rendering remains separate because active state does not affect component topology
-def AddAsmConfigs(RootValue: AnyValue, PlanValue: AsmEncodePlan, RootId: str) -> None:
+def AddAsmConfigs(
+    RootValue: XmlTree.Element, PlanValue: AsmEncodePlan, RootId: str
+) -> None:
     ConfigList = XmlTree.SubElement(
         RootValue,
         "swConfigurationList",
@@ -994,7 +992,7 @@ def DefinitionFile(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PreferredNative(Value: str, Prefix: str, AttrValue: Any) -> int | None:
+def PreferredNative(Value: str, Prefix: str, AttrValue: object) -> int | None:
     Native = PositiveInteger(AttrValue)
     if Native is not None:
         return Native
@@ -1004,8 +1002,10 @@ def PreferredNative(Value: str, Prefix: str, AttrValue: Any) -> int | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PositiveInteger(Value: Any) -> int | None:
+def PositiveInteger(Value: object) -> int | None:
     if isinstance(Value, bool):
+        return None
+    if not isinstance(Value, (int, float, str, bytes, bytearray)):
         return None
     try:
         Result = int(Value)
@@ -1530,13 +1530,8 @@ def NativeGroup(Group: MateGroup) -> str:
     Lowered = Group.name.casefold()
     for Record in Candidates:
         if any((Lowered.startswith(Prefix) for Prefix in Record.name_prefixes)):
-            ClassName = Record.class_names[0]
-            if isinstance(ClassName, str):
-                return ClassName
-    ClassName = Candidates[0].class_names[0]
-    if not isinstance(ClassName, str):
-        raise TypeError("native mate class name must be text")
-    return ClassName
+            return Record.class_names[0]
+    return Candidates[0].class_names[0]
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2639,9 +2634,6 @@ def Integer(Value: str | None, Default: int = 0) -> int:
 def IsYesAction(Value: str | None) -> bool:
     return Value == "YES"
 
-
-# this binding exists because shared behavior needs one stable value
-Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
 AssemblyData = AsmData

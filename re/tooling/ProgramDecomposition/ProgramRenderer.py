@@ -72,7 +72,11 @@ def RenderOwner(OwnerSites: tuple[tuple[object, str], ...]) -> str:
         )
     )
     SourceLines.extend(("}", ""))
-    return FormatSource("\n".join(SourceLines))
+    RenderedText = FormatSource("\n".join(SourceLines))
+    OwnerMarker = (
+        "\n# exact trace spellings stay centralized so variant tables never duplicate owners"
+    )
+    return RenderedText.replace(OwnerMarker, "\n" + OwnerMarker, 1)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -103,7 +107,9 @@ def RenderMethod(OwnerModule: str, MethodData: MethodData) -> str:
         )
         SourceLines.append("        ),")
     SourceLines.extend(("    },", ")", ""))
-    return FormatSource("\n".join(SourceLines))
+    RenderedText = FormatSource("\n".join(SourceLines))
+    MethodMarker = "\n# isolated method data lets new reverse engineered serializers compose independently"
+    return RenderedText.replace(MethodMarker, "\n" + MethodMarker, 1)
 
 
 # canonical constant names keep generated registries compliant without changing legacy public symbols
@@ -194,11 +200,22 @@ def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> st
         SourceLines.append("    KMethodPrograms,")
         SourceLines.append(f"    {StreamName!r},")
         SourceLines.append(")")
+    ExportNames = tuple(
+        dict.fromkeys(
+            (
+                OwnerConst,
+                OpsConst,
+                "KMethodPrograms",
+                ProgramData.OwnerName,
+                ProgramData.OpsName,
+            )
+        )
+    )
     SourceLines.extend(
         (
             "",
             "# generated registry exports remain explicit for facade composition and extension imports",
-            f"__all__ = [{OwnerConst!r}, {OpsConst!r}, 'KMethodPrograms']",
+            f"__all__ = [{', '.join(repr(NameText) for NameText in ExportNames)}]",
         )
     )
     AddAliasesMut(SourceLines, ProgramData, OwnerConst, OpsConst)
@@ -235,6 +252,22 @@ def GetRemovedLines(
     return RemovedLines
 
 
+# registry imports need one canonical public form so analyzers agree after every regeneration
+def GetRegistryData(TreeData: AstLib.Module) -> tuple[set[int], tuple[str, ...]]:
+    RemovedLines: set[int] = set()
+    RegistryNames: set[str] = set()
+    for NodeData in TreeData.body:
+        if not (
+            isinstance(NodeData, AstLib.ImportFrom)
+            and NodeData.level == 1
+            and NodeData.module == "Registry"
+        ):
+            continue
+        RemovedLines.update(range(NodeData.lineno, NodeData.end_lineno + 1))
+        RegistryNames.update(AliasData.name for AliasData in NodeData.names)
+    return RemovedLines, tuple(sorted(RegistryNames))
+
+
 # registry insertion stays isolated so source ordering remains deterministic across generated facades
 def InsertRegistry(
     SourceLines: list[str],
@@ -252,6 +285,22 @@ def InsertRegistry(
     return FormatSource("\n".join(OutputLines))
 
 
+# facade spacing stays stable so analyzer exports do not churn recovered program bodies
+def FixFacadeSpace(SourceText: str) -> str:
+    ImportMarker = "from .Registry import ("
+    ImportStart = SourceText.index(ImportMarker)
+    ImportEnd = SourceText.index("\n)", ImportStart) + 2
+    PrefixText = SourceText[:ImportStart].rstrip("\n")
+    SuffixText = SourceText[ImportEnd:].lstrip("\n")
+    return (
+        PrefixText
+        + "\n\n"
+        + SourceText[ImportStart:ImportEnd]
+        + "\n\n\n"
+        + SuffixText
+    )
+
+
 # facade rewriting stays small so parsing removal and insertion can evolve independently
 def RewriteFacade(ProgramData: ProgramData) -> str:
     SourceLines = ProgramData.SourceText.splitlines()
@@ -259,17 +308,9 @@ def RewriteFacade(ProgramData: ProgramData) -> str:
         ProgramData.SourceText, filename=str(ProgramData.SourcePath)
     )
     TargetNames = {ProgramData.OwnerName, ProgramData.OpsName}
-    RegistryNames = {
-        AliasData.asname or AliasData.name
-        for NodeData in TreeData.body
-        if isinstance(NodeData, AstLib.ImportFrom)
-        and NodeData.level == 1
-        and (NodeData.module == "Registry")
-        for AliasData in NodeData.names
-    }
-    if TargetNames.issubset(RegistryNames):
-        return FormatSource(ProgramData.SourceText)
-    RemovedLines = GetRemovedLines(TreeData, SourceLines, TargetNames)
+    RegistryLines, ImportedNames = GetRegistryData(TreeData)
+    RegistryNames = tuple(sorted(set(ImportedNames) | TargetNames))
+    RemovedLines = GetRemovedLines(TreeData, SourceLines, TargetNames) | RegistryLines
     ImportEnds = (
         NodeData.end_lineno
         for NodeData in TreeData.body
@@ -279,11 +320,12 @@ def RewriteFacade(ProgramData: ProgramData) -> str:
     ImportLines = [
         "",
         "from .Registry import (",
-        f"    {ProgramData.OwnerName},",
-        f"    {ProgramData.OpsName},",
+        *(f"    {RegistryName} as {RegistryName}," for RegistryName in RegistryNames),
         ")",
     ]
-    return InsertRegistry(SourceLines, RemovedLines, InsertAfter, ImportLines)
+    return FixFacadeSpace(
+        InsertRegistry(SourceLines, RemovedLines, InsertAfter, ImportLines)
+    )
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

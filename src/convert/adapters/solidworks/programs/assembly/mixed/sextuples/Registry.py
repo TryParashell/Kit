@@ -689,7 +689,13 @@ KFieldOwners, KStreamPrograms = BuildStreams(
 )
 
 # generated registry exports remain explicit for facade composition and extension imports
-__all__ = ["KFieldOwners", "KStreamPrograms", "KMethodPrograms"]
+__all__ = [
+    "KFieldOwners",
+    "KStreamPrograms",
+    "KMethodPrograms",
+    "FieldOwners",
+    "StreamPrograms",
+]
 
 # compatibility binding preserves its established public import after decomposition
 FieldOwners = KFieldOwners

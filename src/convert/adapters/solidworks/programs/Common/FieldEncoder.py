@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 import struct as StructLib
 
 from convert.adapters.solidworks.container.Archive import (
@@ -19,6 +19,7 @@ from convert.adapters.solidworks.container.Archive import (
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    BuildOverrides,
     FieldOp,
     FieldOverrides,
     FieldValue,
@@ -46,6 +47,25 @@ def RequireInt(FieldData: FieldValue, ErrorScope: str) -> int:
     if not isinstance(FieldData, int):
         raise SldprtFormatError(f"{ErrorScope} requires an integer field value")
     return FieldData
+
+
+# selected suffix references need shared filtering before recursive values are narrowed to integers
+def BuildShiftMap(
+    Operations: Sequence[FieldOp],
+    BasePos: int,
+    ShiftRules: Sequence[tuple[Collection[int], int]],
+    ErrorScope: str,
+) -> dict[int, FieldValue]:
+    ShiftValues = BuildOverrides()
+    for Operation in Operations:
+        RelativePos = Operation[0] - BasePos
+        for TargetOffsets, ShiftValue in ShiftRules:
+            if RelativePos in TargetOffsets:
+                ShiftValues[RelativePos] = (
+                    RequireInt(Operation[4], ErrorScope) + ShiftValue
+                )
+                break
+    return ShiftValues
 
 
 # archive field encoding centralizes the recovered structural value grammar
