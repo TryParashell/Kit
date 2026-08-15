@@ -8643,7 +8643,7 @@ def KeywordsPayload(
     ModelName: str,
     Objects: tuple[_WriteObject, ...],
     ObjectIds: Mapping[str, int],
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
 ) -> bytes:
     Children: list[str] = []
     Configurations = DocValue.configurations or ()
@@ -8712,7 +8712,7 @@ def FeaturesPayload(
     DocValue: CadDocument,
     ModelName: str,
     ObjectIds: Mapping[str, int],
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
 ) -> bytes:
     Header = XmlElem(
         "swHeader",
@@ -8971,7 +8971,7 @@ def ConfigAtomTree(SolidFeatureTreeIds: tuple[int, ...]) -> tuple[int, ...]:
 def NativeEnvelope(
     DocValue: CadDocument,
     ModelName: str,
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     SolidFeatureTreeIds: tuple[int, ...] = (),
     HeaderFeatureObjects: tuple[tuple[int, str, bool], ...] = (),
     HeaderFeatureStamps: Mapping[int, tuple[int, ...]] | None = None,
@@ -9312,7 +9312,7 @@ def NativeAsmA(
 
 # this definition exists because focused behavior needs one stable owner
 def ModelHeader(
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     ConfigName: str,
     UserName: str = "Kit",
     SolidFeatureTreeIds: tuple[int, ...] = (),
@@ -9455,7 +9455,7 @@ def HeaderBoundsMut(
 
 # this definition exists because focused behavior needs one stable owner
 def HeaderPayload(
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     ConfigName: str,
     Objects: Sequence[tuple[int, str, bool]],
     DocPath: str,
@@ -9495,7 +9495,7 @@ def HeaderPayload(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ConfigHeader(ConfigName: str, Identity: _NativeIdentity) -> bytes:
+def ConfigHeader(ConfigName: str, Identity: NativeIdentity) -> bytes:
     return b"".join(
         (
             ClassDecl("dmConfigMgrHeader_c"),
@@ -9557,7 +9557,7 @@ def VersionHistory() -> bytes:
 # this definition exists because focused behavior needs one stable owner
 def Biography(
     ModelName: str,
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     TemplatePath: str = "C:\\Kit\\Part.PRTDOT",
     DocSuffix: str = PartSuffix,
 ) -> bytes:

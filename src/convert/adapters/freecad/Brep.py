@@ -1442,7 +1442,7 @@ def GeneratedPcurvA(
 
 
 # seam inputs stay isolated because only paired circular loops on ruled surfaces qualify
-def GetSeamInputs(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
+def GetSeamInputs(FaceValue: BrepFace, Graph: ModelGraph, Tolerance: float) -> (
     tuple[
         CylinderSurface | ConeSurface,
         tuple[BrepCoedge, BrepCoedge],
@@ -1571,7 +1571,7 @@ def AlignSeam(
 
 # seam span validation stays isolated because connector geometry must remain on the supporting surface
 def GetSeamSpan(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     Edges: tuple[BrepEdge, ...],
     Surface: CylinderSurface | ConeSurface,
     LowIndex: int,
@@ -1608,7 +1608,7 @@ def GetSeamSpan(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
+def SeamBandA(FaceValue: BrepFace, Graph: ModelGraph, Tolerance: float) -> (
     tuple[
         BrepCoedge,
         BrepCoedge,
@@ -1661,7 +1661,7 @@ def AddSeamMut(
     Result: dict[str, EdgePcurve],
     SeamBands: dict[str, SeamBand],
     FaceValue: BrepFace,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     SeamValue: KSeamValue,
 ) -> None:
     LowCoedge, HighCoedge, LowGenerated, HighGenerated = SeamValue[:4]
@@ -1715,7 +1715,7 @@ def GetUvOffset(
 def AddCoedgeMut(
     Records: list[str],
     Result: dict[str, EdgePcurve],
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     Surface: BrepSurface,
     Coedge: BrepCoedge,
     Tolerance: float,
@@ -1752,7 +1752,7 @@ def AddCoedgeMut(
 def AddLoopMut(
     Records: list[str],
     Result: dict[str, EdgePcurve],
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     LoopId: str,
     Surface: BrepSurface,
     Tolerance: float,
@@ -1778,7 +1778,7 @@ def AddLoopMut(
 
 # edge pcurve assembly composes focused seam and loop writers because their continuity rules differ
 def EdgePcurveA(
-    Model: BrepModel, Graph: _ModelGraph, Tolerance: float
+    Model: BrepModel, Graph: ModelGraph, Tolerance: float
 ) -> tuple[tuple[str, ...], Mapping[str, EdgePcurve], Mapping[str, SeamBand]]:
     PcurveData = tuple(PcurveRecord(ItemValue) for ItemValue in Model.pcurves)
     Records = [RecordText for RecordText, _ in PcurveData]
@@ -1813,7 +1813,7 @@ def EdgePcurveA(
 
 # this definition exists because focused behavior needs one stable owner
 def LoopUvPoints(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop
 ) -> tuple[tuple[float, float], ...] | None:
     Surface = Graph.surfaces[FaceValue.surface_id]
     Values: list[tuple[float, float]] = []
@@ -1839,7 +1839,7 @@ def LoopUvPoints(
 
 # this definition exists because focused behavior needs one stable owner
 def FaceLoop(
-    Graph: _ModelGraph, FaceValue: BrepFace, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, Tolerance: float
 ) -> dict[str, bool]:
     AreaTolerance = max(Tolerance * Tolerance, 1e-10)
     LoopPoints = {
@@ -1883,7 +1883,7 @@ def HasCoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
 
 # planar point extraction stays isolated because line and surface evidence must precede polygon tests
 def GetPlanarPoints(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
 ) -> tuple[tuple[tuple[float, float], ...], float] | None:
     if len(LoopValue.coedge_ids) < 3:
         return None
@@ -1981,7 +1981,7 @@ def HasCrossings(Points: tuple[tuple[float, float], ...], Epsilon: float) -> boo
 
 # planar loop proof composes point convexity and crossing evidence because each can reject independently
 def IsPlanarLoop(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
 ) -> bool:
     PointData = GetPlanarPoints(Graph, FaceValue, LoopValue, Tolerance)
     if PointData is None:
@@ -1998,7 +1998,7 @@ def IsPlanarLoop(
 
 # this definition exists because focused behavior needs one stable owner
 def PlanarCircle(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
 ) -> tuple[tuple[float, float], float] | None:
     if len(LoopValue.coedge_ids) != 1:
         return None
@@ -2034,10 +2034,10 @@ def PlanarCircle(
 
 # this definition exists because focused behavior needs one stable owner
 def FaceIsProven(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceValue: BrepFace,
     Tolerance: float,
-    SeamBands: Mapping[str, _SeamBand],
+    SeamBands: Mapping[str, SeamBand],
 ) -> None:
     if FaceValue.id in SeamBands:
         return
@@ -2066,10 +2066,10 @@ def FaceIsProven(
 
 # this definition exists because focused behavior needs one stable owner
 def FaceEdge(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceValue: BrepFace,
     LoopReversals: Mapping[str, bool],
-    SeamBands: Mapping[str, _SeamBand],
+    SeamBands: Mapping[str, SeamBand],
 ) -> tuple[tuple[str, bool], ...]:
     BandValue = SeamBands.get(FaceValue.id)
     if BandValue is not None:
@@ -2094,7 +2094,7 @@ def FaceEdge(
 
 
 # shell face collection stays isolated because repeated faces invalidate native shell topology
-def GetFaceUses(Shell: BrepShell, Graph: _ModelGraph) -> tuple[BrepFaceUse, ...]:
+def GetFaceUses(Shell: BrepShell, Graph: ModelGraph) -> tuple[BrepFaceUse, ...]:
     FaceUses = tuple(Graph.face_uses[ValueId] for ValueId in Shell.face_use_ids)
     FaceIds = tuple(Value.face_id for Value in FaceUses)
     if len(FaceIds) != len(set(FaceIds)):
@@ -2166,7 +2166,7 @@ def AddFaceCompMut(
 
 # preferred orientation mutates one component because geometric face sense chooses global parity
 def SetFaceSenseMut(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceUses: tuple[BrepFaceUse, ...],
     Component: tuple[str, ...],
     Assigned: dict[str, bool],
@@ -2186,7 +2186,7 @@ def SetFaceSenseMut(
 # shell orientation composes incidence traversal and geometric sense because each proves one constraint
 def OrientShell(
     Shell: BrepShell,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]],
 ) -> dict[str, bool]:
     FaceUses = GetFaceUses(Shell, Graph)
@@ -2204,7 +2204,7 @@ def OrientShell(
 # shell face assembly stays small because each shell owns an independent orientation graph
 def ShellFace(
     Model: BrepModel,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]],
 ) -> dict[str, bool]:
     Result: dict[str, bool] = {}
@@ -2214,7 +2214,7 @@ def ShellFace(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ShellUse(Model: BrepModel, Graph: _ModelGraph) -> dict[str, bool]:
+def ShellUse(Model: BrepModel, Graph: ModelGraph) -> dict[str, bool]:
     Result: dict[str, bool] = {}
     for Region in Model.regions:
         if Region.solid:
@@ -2257,7 +2257,7 @@ def CheckEdgeGeom(
 
 # coedge grouping stays isolated because wire and surface uses follow different native contracts
 def GroupCoedges(
-    EdgeValue: BrepEdge, Graph: _ModelGraph
+    EdgeValue: BrepEdge, Graph: ModelGraph
 ) -> dict[str, list[BrepCoedge]]:
     Grouped: dict[str, list[BrepCoedge]] = {}
     for CoedgeId in Graph.edge_uses[EdgeValue.id]:
@@ -2275,7 +2275,7 @@ def GroupCoedges(
 def GetPcurveReps(
     EdgeId: str,
     Grouped: Mapping[str, list[BrepCoedge]],
-    EdgePcurves: Mapping[str, _EdgePcurve],
+    EdgePcurves: Mapping[str, EdgePcurve],
     SurfaceIndexes: Mapping[str, int],
 ) -> tuple[str, ...]:
     Representations: list[str] = []
@@ -2310,10 +2310,10 @@ def GetPcurveReps(
 # edge geometry composition stays small because grouping and pcurve encoding own their validation
 def EdgeGeom(
     EdgeValue: BrepEdge,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     CurveIndexes: Mapping[str, int],
     CurveScales: Mapping[str, float],
-    EdgePcurves: Mapping[str, _EdgePcurve],
+    EdgePcurves: Mapping[str, EdgePcurve],
     SurfaceIndexes: Mapping[str, int],
     Tolerance: float,
 ) -> tuple[str, ...]:
@@ -2349,7 +2349,7 @@ def EdgeGeom(
 
 # this definition exists because focused behavior needs one stable owner
 def ShapeLines(
-    Records: Sequence[_ShapeRecord], RootValue: tuple[str, bool]
+    Records: Sequence[ShapeRecord], RootValue: tuple[str, bool]
 ) -> list[str]:
     Ordinals = {Record.key: Index for Index, Record in enumerate(Records, 1)}
     Count = len(Records)

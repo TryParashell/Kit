@@ -1943,7 +1943,7 @@ def Advance(
 def GroupElemLength(
     BlobValue: bytes,
     Cursor: int,
-    Frame: _Frame,
+    Frame: Frame,
     Offset: int,
     BaseValue: int,
     MoVersion: int | None,
@@ -2024,7 +2024,7 @@ def GetTailSize(BlobValue: bytes, BaseValue: int, HeaderSize: int) -> int:
 def GroupOpenMut(
     BlobValue: bytes,
     Cursor: int,
-    Frame: _Frame,
+    Frame: Frame,
     Offset: int,
     BaseValue: int,
     MoVersion: int | None,
@@ -2113,7 +2113,7 @@ def GroupCount(
 
 
 # this definition exists because focused behavior needs one stable owner
-def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
+def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[Frame]) -> str:
     if not Frames:
         return ""
     Frame = Frames[-1]
@@ -2139,7 +2139,7 @@ def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OuterName(ClassIndex: int, Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
+def OuterName(ClassIndex: int, Layouts: LayoutTable, Frames: Sequence[Frame]) -> str:
     Alias = f"{KOuterPrefix}{ClassIndex}"
     if Alias in Layouts:
         return Alias

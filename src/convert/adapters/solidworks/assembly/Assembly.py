@@ -2465,7 +2465,7 @@ def ClassRefToken(DataValue: bytes, Offset: int) -> int | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateTokenKinds(Records: Sequence[_MateRecord]) -> dict[int, str]:
+def MateTokenKinds(Records: Sequence[MateRecord]) -> dict[int, str]:
     Candidates: dict[int, set[str]] = {}
     for Record in Records:
         ClassToken = Record.class_token

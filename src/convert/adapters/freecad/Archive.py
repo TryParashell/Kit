@@ -4071,7 +4071,7 @@ def Without(Value: Mapping[str, object]) -> dict[str, object]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def AddOriginMut(Graph: _Graph, AsmValue: _Object) -> str:
+def AddOriginMut(Graph: _Graph, AsmValue: Object) -> str:
     Origin = Graph.add(
         "App::Origin",
         f"{AsmValue.name}_Origin",
@@ -6127,7 +6127,7 @@ def DocProperties(Label: str, DocId: str, DocTimestamp: str) -> XmlTree.Element:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SerializeObject(Parent: ET.Element, ObjValue: _Object) -> None:
+def SerializeObject(Parent: ET.Element, ObjValue: Object) -> None:
     Attributes = {"name": ObjValue.name}
     if ObjValue.extensions:
         Attributes["Extensions"] = "True"
@@ -6156,7 +6156,7 @@ def SerializeObject(Parent: ET.Element, ObjValue: _Object) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def SanitizePayload(
-    Objects: list[_Object], PayloadEntries: Mapping[str, bytes]
+    Objects: list[Object], PayloadEntries: Mapping[str, bytes]
 ) -> None:
     for ObjValue in Objects:
         for PropElem in ObjValue.properties:

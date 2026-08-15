@@ -437,7 +437,7 @@ def ElemData(NodeValue: ET.Element) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeObjectA(ObjValue: _NativeObject) -> dict[str, AnyValue]:
+def NativeObjectA(ObjValue: NativeObject) -> dict[str, AnyValue]:
     return {
         "name": ObjValue.name,
         "type_id": ObjValue.type_id,
@@ -458,7 +458,7 @@ def NativeObjectA(ObjValue: _NativeObject) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ReadStringHash(Native: _NativeArchive) -> dict[str, AnyValue] | None:
+def ReadStringHash(Native: NativeArchive) -> dict[str, AnyValue] | None:
     Nodes = [
         ElemData(NodeValue)
         for NodeValue in Native.root
@@ -481,7 +481,7 @@ def ReadStringHash(Native: _NativeArchive) -> dict[str, AnyValue] | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OtherEntryData(Native: _NativeArchive) -> list[dict[str, AnyValue]]:
+def OtherEntryData(Native: NativeArchive) -> list[dict[str, AnyValue]]:
     Represented: set[str] = set()
     for ObjValue in Native.objects:
         for NodeValue in ObjValue.properties.values():
@@ -513,7 +513,7 @@ def OtherEntryData(Native: _NativeArchive) -> list[dict[str, AnyValue]]:
 
 # this definition exists because focused behavior needs one stable owner
 def NativePayloads(
-    Native: _NativeArchive, DataValue: bytes, SourcePath: str
+    Native: NativeArchive, DataValue: bytes, SourcePath: str
 ) -> tuple[BrepPayload, BrepPayload]:
     NativeDigest = Hashlib.sha256(DataValue).digest()
     NativeName = FilePath(SourcePath).name if SourcePath else f"Document{Suffix}"
@@ -554,7 +554,7 @@ def NativePayloads(
 
 # this definition exists because focused behavior needs one stable owner
 def FindChild(
-    ObjValue: _NativeObject, NameValue: str, TagValue: str | None = None
+    ObjValue: NativeObject, NameValue: str, TagValue: str | None = None
 ) -> XmlTree.Element | None:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
@@ -586,13 +586,13 @@ def Integer(Value: str | None, Default: int = 0) -> int:
 
 
 # this definition exists because focused behavior needs one stable owner
-def String(ObjValue: _NativeObject, NameValue: str, Default: str = "") -> str:
+def String(ObjValue: NativeObject, NameValue: str, Default: str = "") -> str:
     NodeValue = FindChild(ObjValue, NameValue, "String")
     return Default if NodeValue is None else NodeValue.get("value", Default)
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsBoolValue(ObjValue: _NativeObject, NameValue: str, Default: bool = False) -> bool:
+def IsBoolValue(ObjValue: NativeObject, NameValue: str, Default: bool = False) -> bool:
     NodeValue = FindChild(ObjValue, NameValue, "Bool")
     if NodeValue is None:
         return Default
@@ -600,19 +600,19 @@ def IsBoolValue(ObjValue: _NativeObject, NameValue: str, Default: bool = False) 
 
 
 # this definition exists because focused behavior needs one stable owner
-def Float(ObjValue: _NativeObject, NameValue: str, Default: float = 0.0) -> float:
+def Float(ObjValue: NativeObject, NameValue: str, Default: float = 0.0) -> float:
     NodeValue = FindChild(ObjValue, NameValue, "Float")
     return Default if NodeValue is None else Number(NodeValue.get("value"), Default)
 
 
 # this definition exists because focused behavior needs one stable owner
-def EnumAction(ObjValue: _NativeObject, NameValue: str, Default: int = 0) -> int:
+def EnumAction(ObjValue: NativeObject, NameValue: str, Default: int = 0) -> int:
     NodeValue = FindChild(ObjValue, NameValue, "Integer")
     return Default if NodeValue is None else Integer(NodeValue.get("value"), Default)
 
 
 # this definition exists because focused behavior needs one stable owner
-def LinkAction(ObjValue: _NativeObject, NameValue: str) -> str:
+def LinkAction(ObjValue: NativeObject, NameValue: str) -> str:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
         return ""
@@ -629,7 +629,7 @@ def LinkAction(ObjValue: _NativeObject, NameValue: str) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def LinkList(ObjValue: _NativeObject, NameValue: str) -> tuple[str, ...]:
+def LinkList(ObjValue: NativeObject, NameValue: str) -> tuple[str, ...]:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
         return ()
@@ -650,7 +650,7 @@ def LinkList(ObjValue: _NativeObject, NameValue: str) -> tuple[str, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PlacementElem(ObjValue: _NativeObject, NameValue: str) -> XmlTree.Element | None:
+def PlacementElem(ObjValue: NativeObject, NameValue: str) -> XmlTree.Element | None:
     return FindChild(ObjValue, NameValue, "PropertyPlacement")
 
 
@@ -726,7 +726,7 @@ def TransformA(NodeValue: ET.Element | None) -> Transform:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ReadExpressions(ObjValue: _NativeObject) -> dict[str, str]:
+def ReadExpressions(ObjValue: NativeObject) -> dict[str, str]:
     NodeValue = ObjValue.properties.get("ExpressionEngine")
     if NodeValue is None:
         return {}
@@ -1289,7 +1289,7 @@ def IsTransformNear(
 
 # this definition exists because focused behavior needs one stable owner
 def OriginPlane(
-    ObjValue: _NativeObject, Transform: Transform
+    ObjValue: NativeObject, Transform: Transform
 ) -> tuple[int, Transform] | None:
     Value = KOriginPlaneFrames.get(ObjValue.name)
     if (
@@ -1464,7 +1464,7 @@ def ReframeGeom(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SupportTarget(ObjValue: _NativeObject) -> str:
+def SupportTarget(ObjValue: NativeObject) -> str:
     for NameValue in ("AttachmentSupport", "Support"):
         NodeValue = ObjValue.properties.get(NameValue)
         if NodeValue is None:
@@ -1482,7 +1482,7 @@ def SupportTarget(ObjValue: _NativeObject) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsSupportPlane(ObjValue: _NativeObject, SupportTargets: set[str]) -> bool:
+def IsSupportPlane(ObjValue: NativeObject, SupportTargets: set[str]) -> bool:
     if ObjValue.type_id in SupportPlaneTypeIds or ObjValue.name in SupportTargets:
         return True
     Marker = f"{ObjValue.type_id} {ProxyClass(ObjValue)}".casefold()
@@ -1530,7 +1530,7 @@ def RuleElemSlots(NodeValue: ET.Element) -> tuple[tuple[int, int], ...]:
 
 # this definition collects support plane objects transforms and principal frames
 def OriginData(
-    Objects: tuple[_NativeObject, ...], SupportTargets: set[str]
+    Objects: tuple[NativeObject, ...], SupportTargets: set[str]
 ) -> tuple[
     dict[str, NativeObject], dict[str, Transform], dict[str, tuple[int, Transform]]
 ]:
@@ -1552,7 +1552,7 @@ def OriginData(
 
 # this definition finds principal frames that constrained geometry cannot safely adopt
 def BlockedFrames(
-    Objects: tuple[_NativeObject, ...],
+    Objects: tuple[NativeObject, ...],
     OriginFrames: Mapping[str, tuple[int, Transform]],
     SourceTransforms: Mapping[str, Transform],
 ) -> set[str]:
@@ -1873,7 +1873,7 @@ def NativeSketchMut(
 
 # this definition coordinates support plane and sketch decoding
 def ParseSketchMut(
-    Objects: tuple[_NativeObject, ...],
+    Objects: tuple[NativeObject, ...],
     Parameters: list[Parameter],
     ConsumedExpressions: set[tuple[str, str]],
 ) -> tuple[tuple[SupportPlane, ...], tuple[Sketch, ...]]:
@@ -1904,7 +1904,7 @@ def ParseSketchMut(
 
 
 # this definition exists because focused behavior needs one stable owner
-def HasShapeProp(ObjValue: _NativeObject) -> bool:
+def HasShapeProp(ObjValue: NativeObject) -> bool:
     return any(
         (
             NodeValue.find("./Part") is not None
@@ -1914,7 +1914,7 @@ def HasShapeProp(ObjValue: _NativeObject) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsFeatureObject(ObjValue: _NativeObject) -> bool:
+def IsFeatureObject(ObjValue: NativeObject) -> bool:
     if ObjValue.type_id in NonFeatureObjectTypeIds or ObjValue.type_id.startswith(
         AsmObjectTypePrefix
     ):
@@ -1928,7 +1928,7 @@ def IsFeatureObject(ObjValue: _NativeObject) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OrderedFeatures(Objects: tuple[_NativeObject, ...]) -> tuple[NativeObject, ...]:
+def OrderedFeatures(Objects: tuple[NativeObject, ...]) -> tuple[NativeObject, ...]:
     Candidates = [ObjValue for ObjValue in Objects if IsFeatureObject(ObjValue)]
     Names = {ObjValue.name for ObjValue in Candidates}
     Remaining = list(Candidates)
@@ -1954,7 +1954,7 @@ def OrderedFeatures(Objects: tuple[_NativeObject, ...]) -> tuple[NativeObject, .
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsBodyContainer(ObjValue: _NativeObject) -> bool:
+def IsBodyContainer(ObjValue: NativeObject) -> bool:
     return ObjValue.type_id in BodyContainerTypeIds or (
         ObjValue.type_id == "App::DocumentObjectGroup"
         and "SourceBodyJSON" in ObjValue.properties
@@ -1963,7 +1963,7 @@ def IsBodyContainer(ObjValue: _NativeObject) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FeatureKindA(ObjValue: _NativeObject) -> FeatureKind:
+def FeatureKindA(ObjValue: NativeObject) -> FeatureKind:
     Declared = String(ObjValue, "FeatureKind").casefold()
     if Declared:
         try:
@@ -1981,7 +1981,7 @@ def FeatureKindA(ObjValue: _NativeObject) -> FeatureKind:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FeatureA(ObjValue: _NativeObject) -> tuple[Selection, ...]:
+def FeatureA(ObjValue: NativeObject) -> tuple[Selection, ...]:
     Values: list[tuple[str, str, str]] = []
     for PropName, PropElem in ObjValue.properties.items():
         for LinkValue in PropElem.findall("./LinkSub"):
@@ -2053,7 +2053,7 @@ def FeatureA(ObjValue: _NativeObject) -> tuple[Selection, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Explicit(Objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
+def Explicit(Objects: tuple[NativeObject, ...]) -> tuple[Selection, ...]:
     Result: list[Selection] = []
     for ObjValue in Objects:
         SelectionId = String(ObjValue, "KitSelectionId")
@@ -2127,7 +2127,7 @@ def Explicit(Objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
 
 # this definition exists because focused behavior needs one stable owner
 def FeatureMut(
-    ObjValue: _NativeObject,
+    ObjValue: NativeObject,
     FeatureId: str,
     Parameters: list[Parameter],
     ConsumedExpressions: set[tuple[str, str]],
@@ -2175,7 +2175,7 @@ def ExtrusionEnd(TypeCode: int, ObjectTypeId: str) -> ExtrusionEndCondition:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Extrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
+def Extrusion(ObjValue: NativeObject) -> ExtrusionFeature:
     EndCondition = ExtrusionEnd(EnumAction(ObjValue, "Type"), ObjValue.type_id)
     SideType = EnumAction(ObjValue, "SideType", -1)
     SecondEndCondition = (
@@ -2231,7 +2231,7 @@ def Extrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PartExtrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
+def PartExtrusion(ObjValue: NativeObject) -> ExtrusionFeature:
     DirectionNode = FindChild(ObjValue, "Dir", "PropertyVector")
     Direction = None
     if DirectionNode is not None:
@@ -2313,7 +2313,7 @@ def MakeBrepPayload(
 
 # this definition collects every native shape payload and owner relationship
 def BuildBrep(
-    Native: _NativeArchive, FeatureIds: dict[str, str], BodyIds: dict[str, str]
+    Native: NativeArchive, FeatureIds: dict[str, str], BodyIds: dict[str, str]
 ) -> tuple[tuple[BrepPayload, ...], dict[str, list[str]]]:
     Payloads: list[BrepPayload] = []
     OwnerPayloads: dict[str, list[str]] = {}
@@ -2470,7 +2470,7 @@ def MeshData(
 
 
 # this definition decodes every valid native mesh property
-def ParseMeshes(Native: _NativeArchive) -> tuple[MeshValue, ...]:
+def ParseMeshes(Native: NativeArchive) -> tuple[MeshValue, ...]:
     Result: list[MeshValue] = []
     for ObjValue in Native.objects:
         for PropName, PropElem in ObjValue.properties.items():
@@ -2503,7 +2503,7 @@ def ParseMeshes(Native: _NativeArchive) -> tuple[MeshValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ProxyClass(ObjValue: _NativeObject) -> str:
+def ProxyClass(ObjValue: NativeObject) -> str:
     NodeValue = ObjValue.properties.get("Proxy")
     if NodeValue is None:
         return ""
@@ -2512,7 +2512,7 @@ def ProxyClass(ObjValue: _NativeObject) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Enumeration(ObjValue: _NativeObject, NameValue: str) -> str:
+def Enumeration(ObjValue: NativeObject, NameValue: str) -> str:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
         return ""
@@ -2527,7 +2527,7 @@ def Enumeration(ObjValue: _NativeObject, NameValue: str) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def XlinkData(ObjValue: _NativeObject, NameValue: str) -> dict[str, AnyValue]:
+def XlinkData(ObjValue: NativeObject, NameValue: str) -> dict[str, AnyValue]:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
         return {"file": "", "stamp": "", "name": "", "subelements": []}
@@ -2546,7 +2546,7 @@ def XlinkData(ObjValue: _NativeObject, NameValue: str) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def LinkedObjectA(ObjValue: _NativeObject) -> str:
+def LinkedObjectA(ObjValue: NativeObject) -> str:
     Linked = ObjValue.properties.get("LinkedObject")
     if Linked is not None and Linked.find("./XLink") is not None:
         return "LinkedObject"
@@ -2571,29 +2571,29 @@ def LinkedObjectA(ObjValue: _NativeObject) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def LinkedObject(ObjValue: _NativeObject) -> dict[str, AnyValue]:
+def LinkedObject(ObjValue: NativeObject) -> dict[str, AnyValue]:
     PropName = LinkedObjectA(ObjValue)
     return XlinkData(ObjValue, PropName) if PropName else XlinkData(ObjValue, "")
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsLinkObject(ObjValue: _NativeObject) -> bool:
+def IsLinkObject(ObjValue: NativeObject) -> bool:
     return bool(LinkedObjectA(ObjValue))
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsAsmLinkObject(ObjValue: _NativeObject) -> bool:
+def IsAsmLinkObject(ObjValue: NativeObject) -> bool:
     return IsLinkObject(ObjValue) and {"Group", "Rigid"}.issubset(ObjValue.properties)
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsGroundedJoint(ObjValue: _NativeObject) -> bool:
+def IsGroundedJoint(ObjValue: NativeObject) -> bool:
     Proxy = ProxyClass(ObjValue).casefold()
     return "groundedjoint" in Proxy or JointGroundProp in ObjValue.properties
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsJointObject(ObjValue: _NativeObject) -> bool:
+def IsJointObject(ObjValue: NativeObject) -> bool:
     if IsGroundedJoint(ObjValue):
         return True
     Marker = f"{ObjValue.type_id} {ProxyClass(ObjValue)}".casefold()
@@ -2607,7 +2607,7 @@ def IsJointObject(ObjValue: _NativeObject) -> bool:
 
 # this definition exists because focused behavior needs one stable owner
 def FindJointGroup(
-    Objects: tuple[_NativeObject, ...], ByName: Mapping[str, _NativeObject]
+    Objects: tuple[NativeObject, ...], ByName: Mapping[str, NativeObject]
 ) -> NativeObject | None:
     Exact = next(
         (ObjValue for ObjValue in Objects if ObjValue.type_id == AsmJointGroupTypeId),
@@ -2632,7 +2632,7 @@ def FindJointGroup(
 
 
 # this definition exists because focused behavior needs one stable owner
-def AsmRootObject(Objects: tuple[_NativeObject, ...]) -> NativeObject | None:
+def AsmRootObject(Objects: tuple[NativeObject, ...]) -> NativeObject | None:
     Exact = next(
         (ObjValue for ObjValue in Objects if ObjValue.type_id == AsmRootTypeId), None
     )
@@ -2682,7 +2682,7 @@ def MateEntityKindA(Value: str) -> MateEntityKind:
 
 # this definition exists because focused behavior needs one stable owner
 def MateValuesMut(
-    ObjValue: _NativeObject,
+    ObjValue: NativeObject,
     KindValue: MateKind | str,
     MateId: str,
     Parameters: list[Parameter],
@@ -2741,7 +2741,7 @@ def MateValuesMut(
 
 
 # this definition exists because focused behavior needs one stable owner
-def StoredMateValue(ObjValue: _NativeObject) -> ParamValue | None:
+def StoredMateValue(ObjValue: NativeObject) -> ParamValue | None:
     Source = String(ObjValue, "MateValueJSON")
     if not Source:
         return None
@@ -2781,7 +2781,7 @@ def StoredMateValue(ObjValue: _NativeObject) -> ParamValue | None:
 # this definition exists because focused behavior needs one stable owner
 def EmbeddedDoc(
     Target: str,
-    TargetObj: _NativeObject | None,
+    TargetObj: NativeObject | None,
     Identity: str,
     Payloads: tuple[BrepPayload, ...],
 ) -> tuple[str, CadDoc, tuple[str, ...]]:
@@ -2866,7 +2866,7 @@ def IsReparsePath(PathValue: FilePath, RootValue: FilePath) -> bool:
 
 
 # this definition lists unique external document references in stable order
-def OuterFileNames(Native: _NativeArchive) -> list[str]:
+def OuterFileNames(Native: NativeArchive) -> list[str]:
     return sorted(
         {
             str(Linked["file"])
@@ -2942,7 +2942,7 @@ def ReadOuterMut(Choice: FilePath, State: OuterState, Depth: int) -> CadDoc:
 
 # this definition resolves and loads all guarded external document references
 def OuterDocsMut(
-    Native: _NativeArchive, SourcePath: str, State: _ExternalState | None, Depth: int
+    Native: NativeArchive, SourcePath: str, State: OuterState | None, Depth: int
 ) -> tuple[dict[str, tuple[str, CadDoc]], list[dict[str, str]]]:
     Source = ResolvedSource(SourcePath)
     Resolved: dict[str, tuple[str, CadDoc]] = {}
@@ -3334,7 +3334,7 @@ def MateGroupSet(
 
 # this definition coordinates native assembly component and mate decoding
 def ParseAsm(
-    Native: _NativeArchive,
+    Native: NativeArchive,
     OwnerPayloads: dict[str, list[str]],
     BrepPayloads: tuple[BrepPayload, ...],
     OuterDocuments: dict[str, tuple[str, CadDocument]],
@@ -3386,7 +3386,7 @@ def ParseAsm(
 
 # this definition exists because focused behavior needs one stable owner
 def RemainingMut(
-    Objects: tuple[_NativeObject, ...],
+    Objects: tuple[NativeObject, ...],
     Parameters: list[Parameter],
     Consumed: set[tuple[str, str]],
 ) -> None:
@@ -3421,7 +3421,7 @@ def RemainingMut(
 
 # this definition exists because focused behavior needs one stable owner
 def BuildConfigs(
-    Objects: tuple[_NativeObject, ...], FeatureIds: dict[str, str]
+    Objects: tuple[NativeObject, ...], FeatureIds: dict[str, str]
 ) -> tuple[Config, ...]:
     Values = [
         ObjValue for ObjValue in Objects if String(ObjValue, "KitConfigurationId")
@@ -3844,7 +3844,7 @@ def ReadNativeFcstd(
     DataValue: bytes,
     SourcePath: str = "",
     *,
-    StateValue: _ExternalState | None = None,
+    StateValue: OuterState | None = None,
     OuterDepth: int = 0,
 ) -> CadDoc:
     Native = LoadNative(DataValue)
