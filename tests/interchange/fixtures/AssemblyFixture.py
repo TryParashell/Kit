@@ -69,14 +69,14 @@ def BuildAssembly() -> CadDocument:
         RootValue.id,
         (),
         MateEntityKind.KPlane,
-        SourceEntityId="plane:front",
+        source_entity_id="plane:front",
     )
     SecondEntity = MateEntity(
         "mate-entity:part",
         RootValue.id,
         (SubassemblyInst.id, PartInstance.id),
         MateEntityKind.KPlane,
-        SourceEntityId="plane:xy",
+        source_entity_id="plane:xy",
     )
     MateValue = MateConstraint(
         "mate:1",

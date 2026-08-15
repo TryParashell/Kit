@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from copy import copy as CopyValue
-from collections.abc import Mapping as MappingBase
 from inspect import Parameter as FuncParam
 from inspect import Signature as FuncSig
 from inspect import signature as GetSignature
@@ -159,20 +158,11 @@ def BindFieldMut(ClassType: type[object], ModelName: str, LegacyName: str) -> No
 
 # declared compatibility members need concrete runtime properties before annotations are normalized
 def BindTypedFields(ClassType: type[object]) -> None:
-    RawAnnots: object = vars(ClassType).get("__annotations__", {})
-    if not isinstance(RawAnnots, MappingBase):
-        raise TypeError(f"{ClassType.__name__} annotations must form a mapping")
-    AnnotMap = CastValue(MappingBase[object, object], RawAnnots)
     FieldMap = GetFieldMap(ClassType)
-    for CompatName in AnnotMap:
-        if not isinstance(CompatName, str) or not CompatName[:1].isupper():
-            continue
-        try:
-            StoredField = GetStoredField(ClassType, CompatName)
-        except KeyError:
-            continue
-        if StoredField.name in FieldMap:
-            BindFieldMut(ClassType, StoredField.name, CompatName)
+    for StoredField in FieldMap.values():
+        WireName = GetWireField(StoredField.name, ClassType)
+        CompatName = GetModelField(WireName, ClassType)
+        BindFieldMut(ClassType, StoredField.name, CompatName)
 
 
 # one installer synchronizes historical identity signatures annotations and module globals

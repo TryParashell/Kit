@@ -191,29 +191,29 @@ def CheckNestedCaps() -> None:
         "definition:child",
         "Child",
         ComponentKind.KPart,
-        DocumentId="document:child",
-        SourcePath="Child.FCStd",
+        document_id="document:child",
+        source_path="Child.FCStd",
     )
     InstanceValue = ComponentInst(
-        "instance:child", "Child", ChildDef.EntityId, RootDef.EntityId
+        "instance:child", "Child", ChildDef.id, RootDef.id
     )
     MateEntityValue = MateEntity(
-        "mate-entity:root", RootDef.EntityId, (), MateEntityKind.KPlane
+        "mate-entity:root", RootDef.id, (), MateEntityKind.KPlane
     )
     MateValue = MateConstraint(
         "mate:root",
         "Root mate",
         MateKind.KCoincident,
-        RootDef.EntityId,
-        (MateEntityValue.EntityId,),
+        RootDef.id,
+        (MateEntityValue.id,),
     )
     AssemblyValue = AssemblyData(
-        RootDef.EntityId,
+        RootDef.id,
         (RootDef, ChildDef),
         (InstanceValue,),
-        Documents=(ComponentDoc("document:child", ChildValue),),
-        MateEntities=(MateEntityValue,),
-        Mates=(MateValue,),
+        documents=(ComponentDoc("document:child", ChildValue),),
+        mate_entities=(MateEntityValue,),
+        mates=(MateValue,),
     )
     RootValue = CadDocument(
         source=CadSource("test.assembly", "Root", "1" * 64),

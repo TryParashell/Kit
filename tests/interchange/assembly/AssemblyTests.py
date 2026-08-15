@@ -43,7 +43,7 @@ def CheckRoundtrip() -> None:
     assert isinstance(EmbeddedValue, CadDocument)
     assert EmbeddedValue == BuildDocument()
     assert RestoredValue.assembly.GetChildren("definition:root") == (
-        RestoredValue.assembly.Instances[0],
+        RestoredValue.assembly.instances[0],
     )
 
 
@@ -51,7 +51,7 @@ def CheckRoundtrip() -> None:
 def CheckTransform() -> None:
     AssemblyValue = BuildAssembly().assembly
     assert AssemblyValue is not None
-    TransformValue = AssemblyValue.Instances[0].Transform
+    TransformValue = AssemblyValue.instances[0].transform
     assert TransformValue.TransformPoint((1.0, 2.0, 3.0)) == (101.0, 22.0, 33.0)
     assert TransformValue.GetRows()[0] == (1.0, 0.0, 0.0, 100.0)
     assert TransformValue.GetRows() == TransformValue.GetRows()
@@ -65,13 +65,13 @@ def CheckCycle() -> None:
     CycleValue = ComponentInst(
         "instance:cycle",
         "Engine-1",
-        AssemblyValue.RootDefinitionId,
+        AssemblyValue.root_definition_id,
         "definition:subassembly",
     )
     InvalidValue = ReplaceValue(
         SourceValue,
         assembly=ReplaceValue(
-            AssemblyValue, Instances=(*AssemblyValue.Instances, CycleValue)
+            AssemblyValue, instances=(*AssemblyValue.instances, CycleValue)
         ),
     )
     with PytestLib.raises(DocumentError, match="contains a cycle"):
@@ -84,17 +84,17 @@ def CheckBadLinks() -> None:
     AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     InvalidInst = ReplaceValue(
-        AssemblyValue.Instances[0], Transform=TransformMatrix((1.0,) * 15)
+        AssemblyValue.instances[0], transform=TransformMatrix((1.0,) * 15)
     )
     InvalidEntity = ReplaceValue(
-        AssemblyValue.MateEntities[1], InstancePath=("instance:part",)
+        AssemblyValue.mate_entities[1], instance_path=("instance:part",)
     )
     InvalidValue = ReplaceValue(
         SourceValue,
         assembly=ReplaceValue(
             AssemblyValue,
-            Instances=(InvalidInst, *AssemblyValue.Instances[1:]),
-            MateEntities=(AssemblyValue.MateEntities[0], InvalidEntity),
+            instances=(InvalidInst, *AssemblyValue.instances[1:]),
+            mate_entities=(AssemblyValue.mate_entities[0], InvalidEntity),
         ),
     )
     ErrorValues = InvalidValue.validate()
@@ -126,17 +126,17 @@ def CheckMeshRound() -> None:
     Definitions = tuple(
         (
             (
-                ReplaceValue(DefinitionValue, MeshIds=(MeshValue.EntityId,))
-                if DefinitionValue.EntityId == "definition:part"
+                ReplaceValue(DefinitionValue, mesh_ids=(MeshValue.id,))
+                if DefinitionValue.id == "definition:part"
                 else DefinitionValue
             )
-            for DefinitionValue in AssemblyValue.Definitions
+            for DefinitionValue in AssemblyValue.definitions
         )
     )
     ExtendedValue = ReplaceValue(
         SourceValue,
         meshes=(MeshValue,),
-        assembly=ReplaceValue(AssemblyValue, Definitions=Definitions),
+        assembly=ReplaceValue(AssemblyValue, definitions=Definitions),
     )
     ExtendedValue.assert_valid()
     RestoredValue = CadDocument.from_json(ExtendedValue.to_json())
@@ -167,13 +167,13 @@ def CheckChildError() -> None:
     SourceValue = BuildAssembly()
     AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
-    LinkedValue = AssemblyValue.Documents[0]
-    InvalidLinked = ReplaceValue(LinkedValue.Document, configurations=())
+    LinkedValue = AssemblyValue.documents[0]
+    InvalidLinked = ReplaceValue(LinkedValue.document, configurations=())
     InvalidValue = ReplaceValue(
         SourceValue,
         assembly=ReplaceValue(
             AssemblyValue,
-            Documents=(ReplaceValue(LinkedValue, Document=InvalidLinked),),
+            documents=(ReplaceValue(LinkedValue, document=InvalidLinked),),
         ),
     )
     assert (
