@@ -25,9 +25,7 @@ def GetDocLinkErrs(
                 f"component document {ItemValue.id} does not contain a CadDocument"
             )
         elif NestedDocument is DocumentValue:
-            ErrorValues.append(
-                f"component document {ItemValue.id} contains its owner"
-            )
+            ErrorValues.append(f"component document {ItemValue.id} contains its owner")
         else:
             ErrorValues.extend(
                 f"component document {ItemValue.id}: {ErrorText}"

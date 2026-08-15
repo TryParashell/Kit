@@ -26,13 +26,9 @@ def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
             )
             for VertexValue in MeshValue.vertices
         ):
-            ErrorValues.append(
-                f"mesh {MeshValue.id} contains a non-finite vertex"
-            )
+            ErrorValues.append(f"mesh {MeshValue.id} contains a non-finite vertex")
         if MeshValue.normals and len(MeshValue.normals) != len(MeshValue.vertices):
-            ErrorValues.append(
-                f"mesh {MeshValue.id} has a mismatched normal count"
-            )
+            ErrorValues.append(f"mesh {MeshValue.id} has a mismatched normal count")
         if any(
             not all(
                 IsFiniteNum(SourceValue)
@@ -44,9 +40,7 @@ def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
             )
             for NormalValue in MeshValue.normals
         ):
-            ErrorValues.append(
-                f"mesh {MeshValue.id} contains a non-finite normal"
-            )
+            ErrorValues.append(f"mesh {MeshValue.id} contains a non-finite normal")
         for TriangleValue in MeshValue.triangles:
             if (
                 len(TriangleValue) != 3
@@ -56,8 +50,6 @@ def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
                     for IndexValue in TriangleValue
                 )
             ):
-                ErrorValues.append(
-                    f"mesh {MeshValue.id} contains an invalid triangle"
-                )
+                ErrorValues.append(f"mesh {MeshValue.id} contains an invalid triangle")
                 break
     return tuple(ErrorValues)

@@ -59,13 +59,9 @@ def GetMateEntErrs(
                 break
             CurrentDefId = InstanceValue.definition_id
         if EntityValue.frame is not None and not EntityValue.frame.IsFinite():
-            ErrorValues.append(
-                f"mate entity {EntityValue.id} has an invalid frame"
-            )
+            ErrorValues.append(f"mate entity {EntityValue.id} has an invalid frame")
         if EntityValue.radius is not None and not IsValidRadius(EntityValue.radius):
-            ErrorValues.append(
-                f"mate entity {EntityValue.id} has an invalid radius"
-            )
+            ErrorValues.append(f"mate entity {EntityValue.id} has an invalid radius")
         ErrorValues.extend(
             GetSelectErrors(
                 DocumentValue,

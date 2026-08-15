@@ -42,8 +42,7 @@ def GetPayloadIds(DocumentValue: CadDocument) -> frozenset[int]:
         for IndexValue, PayloadValue in enumerate(DocumentValue.brep_payloads)
         if PayloadValue.role in (PayloadRole.KVerification, PayloadRole.KDocument)
         and PayloadValue.data == SourceDigest
-        and PayloadValue.sha256.casefold()
-        == HashCodec.sha256(SourceDigest).hexdigest()
+        and PayloadValue.sha256.casefold() == HashCodec.sha256(SourceDigest).hexdigest()
     )
     if len(DocumentIndexes) != 1 or len(BindingIndexes) != 1:
         return frozenset()

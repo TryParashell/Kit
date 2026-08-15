@@ -39,10 +39,7 @@ def GetGraphErrors(
     ErrorValues: list[str] = []
     if AssemblyValue.root_definition_id not in Definitions:
         ErrorValues.append("assembly references missing root component definition")
-    elif (
-        Definitions[AssemblyValue.root_definition_id].kind
-        != ComponentKind.KAssembly
-    ):
+    elif Definitions[AssemblyValue.root_definition_id].kind != ComponentKind.KAssembly:
         ErrorValues.append("assembly root component definition is not an assembly")
     DefinitionGraph: dict[str, set[str]] = {
         DefinitionId: set() for DefinitionId in Definitions

@@ -21,9 +21,7 @@ def GetConfigErrs(
             ConfigValue.parent_id
             and ConfigValue.parent_id not in IdentitySets["configurations"]
         ):
-            ErrorValues.append(
-                f"configuration {ConfigValue.id} has missing parent"
-            )
+            ErrorValues.append(f"configuration {ConfigValue.id} has missing parent")
         for OverrideValue in ConfigValue.overrides:
             if OverrideValue.parameter_id not in IdentitySets["parameters"]:
                 ErrorValues.append(
@@ -57,9 +55,7 @@ def GetPlaneErrs(
             PlaneValue.support_selection_id
             and PlaneValue.support_selection_id not in IdentitySets["selections"]
         ):
-            ErrorValues.append(
-                f"plane {PlaneValue.id} references missing selection"
-            )
+            ErrorValues.append(f"plane {PlaneValue.id} references missing selection")
         if (
             PlaneValue.offset_parameter_id
             and PlaneValue.offset_parameter_id not in IdentitySets["parameters"]
@@ -77,9 +73,7 @@ def GetSketchErrs(
     ErrorValues: list[str] = []
     for SketchValue in DocumentValue.sketches:
         if SketchValue.support_plane_id not in IdentitySets["support_planes"]:
-            ErrorValues.append(
-                f"sketch {SketchValue.id} references missing plane"
-            )
+            ErrorValues.append(f"sketch {SketchValue.id} references missing plane")
         EntityIds = {EntityValue.id for EntityValue in SketchValue.entities}
         for RelationValue in SketchValue.constraints:
             for ReferenceValue in RelationValue.references:

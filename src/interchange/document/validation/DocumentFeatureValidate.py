@@ -31,9 +31,7 @@ def GetFeatureErrs(
             FeatureValue.sketch_id
             and FeatureValue.sketch_id not in IdentitySets["sketches"]
         ):
-            ErrorValues.append(
-                f"feature {FeatureValue.id} references missing sketch"
-            )
+            ErrorValues.append(f"feature {FeatureValue.id} references missing sketch")
         for InputId in FeatureValue.input_feature_ids:
             if InputId not in FeatureOrders:
                 ErrorValues.append(
@@ -55,7 +53,5 @@ def GetFeatureErrs(
                 )
     for BodyValue in DocumentValue.bodies:
         if BodyValue.final_feature_id not in IdentitySets["feature_timeline"]:
-            ErrorValues.append(
-                f"body {BodyValue.id} references missing final feature"
-            )
+            ErrorValues.append(f"body {BodyValue.id} references missing final feature")
     return tuple(ErrorValues)
