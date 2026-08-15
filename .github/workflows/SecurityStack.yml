@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   python-security:
-    name: Enterprise Python security tools
+    name: Python security tools
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -81,7 +81,7 @@ jobs:
           uv run pip-audit --strict --requirement "${RUNNER_TEMP}/runtime-requirements.txt"
 
       - name: Run Safety SCA
-        run: uv run safety scan --output text
+        run: uv run safety check --file "${RUNNER_TEMP}/runtime-requirements.txt" --output text
 
       - name: Run Checkov IaC
         run: uv run checkov --directory . --quiet --skip-path .venv --skip-path examples --skip-path re
