@@ -33,12 +33,13 @@ def GetReplayMut(SourceData: KSourceType) -> KSourceType:
     if isinstance(SourceData, (str, FilePath, bytes, bytearray)):
         return SourceData
     if isinstance(SourceData, ReplaySource):
+        CanReplay = True
         try:
             StreamPos = SourceData.tell()
             SourceData.seek(StreamPos)
         except (OSError, TypeError, ValueError):
-            pass
-        else:
+            CanReplay = False
+        if CanReplay:
             return SourceData
     SourceValue = SourceData.read()
     if isinstance(SourceValue, str):

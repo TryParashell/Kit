@@ -102,9 +102,7 @@ class bad:
             for FindingInfo in FindingList
             if FindingInfo.RuleCode == "NAM001"
         }
-        CaseSelf.assertLessEqual(
-            {"bad", "calc", "self", "bad_attr", "local_name"}, BadNames
-        )
+        CaseSelf.assertLessEqual({"bad", "calc", "local_name"}, BadNames)
 
 
 # reserved bindings and type only imports share coverage because both remain valid python binding forms
@@ -135,6 +133,54 @@ if TypeChecking:
         CaseSelf.assertNotIn(
             "CON001", {FindingInfo.RuleCode for FindingInfo in FindingList}
         )
+
+    # python and compatibility bindings remain valid because callers do not control their spelling
+    @staticmethod
+    def CheckRuntime() -> None:
+        CaseSelf = KAssertions
+        BodyText = """from dataclasses import dataclass as MakeDataClass
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING as IsTypeCheck
+from typing import Protocol
+
+# serialized states retain vendor member names because changing them alters runtime values
+class RuntimeState(Enum):
+    LEGACY_VALUE = "legacy"
+
+# records retain public wire names because constructor and serializer contracts depend on them
+@MakeDataClass
+class RuntimeRecord:
+    field_value: int
+
+    # historical access remains available because existing consumers use this public property
+    @property
+    def field_value_alias(self) -> int:
+        return self.field_value
+
+    if IsTypeCheck:
+
+        # historical construction remains typed because existing consumers use these keywords
+        def __init__(self, field_value: int) -> None: ...
+
+# compatibility aliases preserve imports because downstream callers own the original spelling
+legacy_record = RuntimeRecord
+
+# protocols retain python ecosystem names because structural callers impose their signatures
+class RuntimeProtocol(Protocol):
+
+    # stream reading remains structural because adapters accept standard binary sources
+    def read(self, size: int) -> bytes: ...
+"""
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            SourcePath = WriteSample(FilePath(TmpPath), MakeSource(BodyText))
+            FindingList = CheckPaths([SourcePath])
+        NamingCodes = {
+            FindingInfo.RuleCode
+            for FindingInfo in FindingList
+            if FindingInfo.RuleCode in {"NAM001", "CON001"}
+        }
+        CaseSelf.assertEqual(NamingCodes, set())
 
 
 # import fixtures stay focused because wildcard dependencies need one unmistakable diagnostic

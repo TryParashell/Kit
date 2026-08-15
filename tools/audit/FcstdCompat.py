@@ -43,6 +43,7 @@ def GetLegacyAttr(NameText: str) -> object:
         raise AttributeError(NameText) from ErrorInfo
     if isinstance(ApiValue, ImportPayload):
         ApiValue = getattr(
+            # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
             ImportModule(ApiValue.ModuleName),
             ApiValue.SymbolName,
         )

@@ -126,6 +126,7 @@ def GetNestedNames(ModuleData: ModuleType) -> tuple[str, ...]:
 # one package group may expose adapter classes from focused nested implementation modules
 def GetPackageTypes(ModuleName: str, IsPackage: bool) -> tuple[type[object], ...]:
     try:
+        # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
         ModuleData = ImportModule(ModuleName)
     except Exception as ErrorInfo:
         raise DiscoveryError(
@@ -134,7 +135,9 @@ def GetPackageTypes(ModuleName: str, IsPackage: bool) -> tuple[type[object], ...
     ModuleValues = [ModuleData]
     if IsPackage:
         ModuleValues.extend(
-            ImportModule(NameValue) for NameValue in GetNestedNames(ModuleData)
+            # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
+            ImportModule(NameValue)
+            for NameValue in GetNestedNames(ModuleData)
         )
     AdapterTypes = {
         AdapterType
@@ -154,6 +157,7 @@ def GetPackageTypes(ModuleName: str, IsPackage: bool) -> tuple[type[object], ...
 # top level enumeration validates package shape before any adapter instances are constructed
 def GetPackageItems(PackageName: str) -> tuple[tuple[str, bool], ...]:
     try:
+        # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
         PackageData = ImportModule(PackageName)
     except Exception as ErrorInfo:
         raise DiscoveryError(

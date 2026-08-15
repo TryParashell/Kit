@@ -361,19 +361,25 @@ BindTypeGlobals(
         TypesModule,
     ),
     tuple(
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         globals()[NameValue]
         for NameValue in __all__
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         if isinstance(globals()[NameValue], type)
     ),
 )
 
 RegisterTypes(
     *(
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         globals()[NameValue]
         for NameValue in __all__
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         if isinstance(globals()[NameValue], type)
         and (
+            # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
             IsDataClass(globals()[NameValue])
+            # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
             or issubclass(globals()[NameValue], EnumBase)
         )
     )

@@ -2182,33 +2182,6 @@ SUFFIX_BY_DOCUMENT_TYPE = SuffixByDocType
 Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-_FORMAT_ID = KFormatId
-
-# this binding exists because shared behavior needs one stable value
-_MANIFEST_MAGIC = KManifestMagic
-
-# this binding exists because shared behavior needs one stable value
-_MANIFEST_NAME = KManifestName
-
-# this binding exists because shared behavior needs one stable value
-_MAX_MANIFEST_BYTES = KMaxManifestBytes
-
-# this binding exists because shared behavior needs one stable value
-_MAX_MANIFEST_JSON_DEPTH = KMaxManifestJsonDepth
-
-# this binding exists because shared behavior needs one stable value
-_NATIVE_DOCUMENT_BINDING_ID = KNativeDocBindingId
-
-# this binding exists because shared behavior needs one stable value
-_NATIVE_DOCUMENT_ID = KNativeDocId
-
-# this binding exists because shared behavior needs one stable value
-_NEUTRAL_BREP_FORMAT_IDS = KNeutralBrepFormatIds
-
-# this binding exists because shared behavior needs one stable value
-_OPENCASCADE_FORMAT_IDS = KOpencascadeFormatIds
-
-# this binding exists because shared behavior needs one stable value
 _PARASOLID_FORMAT_IDS = KParasolidFormatIds
 
 # this binding exists because shared behavior needs one stable value
