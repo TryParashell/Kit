@@ -20,9 +20,6 @@ if str(KEntryRoot) not in System.path:
 from tools.audit.FcstdCompat import GetLegacyAttr, KLegacyApi
 from tools.audit.FcstdCli import MainRun
 
-# explicit exports retain legacy imports because reverse engineering notebooks may use them
-__all__ = tuple(KLegacyApi)
-
 
 # compatibility resolution prevents module restructuring from breaking existing audit automation
 def __getattr__(NameText: str) -> object:

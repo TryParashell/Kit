@@ -52,6 +52,7 @@ from convert.adapters.solidworks.container.Format import (
 )
 from interchange import (
     BooleanOperation,
+    CadDocument,
     Capability,
     CircleGeometry,
     FeatureKind,
@@ -65,12 +66,12 @@ KSample = FilePath(__file__).parents[4] / "examples" / ".SLDPRT" / "example.SLDP
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFPVAEADFAI() -> None:
     assert SldprtAdapter().info is InfoInfo
-    assert IdsInfo == (InfoInfo.format_id, *InfoInfo.aliases)
-    assert tuple(SuffixA) == InfoInfo.extensions
+    assert IdsInfo == (InfoInfo.FormatId, *InfoInfo.AliasNames)
+    assert tuple(SuffixA) == InfoInfo.Extensions
     assert tuple(SuffixA.values()) == IdsInfo
     assert IdInfoB == {FormatId: SuffixD for SuffixD, FormatId in SuffixA.items()}
     assert (IdInfoA, IdInfo) == IdsInfo
-    assert (SuffixC, Suffix) == InfoInfo.extensions
+    assert (SuffixC, Suffix) == InfoInfo.Extensions
     assert Versions == frozenset({3, 4})
     assert (
         Stream,
@@ -111,7 +112,7 @@ def TestFPVAEADFAI() -> None:
     assert TypesB == frozenset({"featsolidbodyfolder", "solidbodyfolder"})
     assert all(
         (
-            SolidworksAdapter._FEATURE_KIND_BY_NATIVE[NativeType]
+            SolidworksAdapter.KFeatureKindByNative[NativeType]
             == FeatureKind.REFERENCE
             for NativeType in (*TypesA, *TypesB)
         )
@@ -135,8 +136,8 @@ def TestMLIRLACWUF() -> None:
     for Length, Relative in Expected.items():
         DataValue = bytearray(Length + 4)
         StructLib.pack_into("<I", DataValue, Relative, 42)
-        assert SolidworksNative._marker_local_id(bytes(DataValue), 0, Length) == 42
-    assert SolidworksNative._marker_local_id(bytes(2048), 0, 2048) is None
+        assert SolidworksNative.MarkerLocalId(bytes(DataValue), 0, Length) == 42
+    assert SolidworksNative.MarkerLocalId(bytes(2048), 0, 2048) is None
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -190,7 +191,7 @@ def TestPLHOSD() -> None:
         "solidbodyfolder",
     }
     SourceRoot = FilePath(SolidworksAdapter.__file__).parents[1]
-    Occurrences = {ItemValue: [] for ItemValue in ValueList}
+    Occurrences: dict[str, list[str]] = {ItemValue: [] for ItemValue in ValueList}
     for TargetPath in SourceRoot.rglob("*.py"):
         RelativePath = TargetPath.relative_to(SourceRoot)
         if "programs" in RelativePath.parts or TargetPath.name == "AssemblyCore.py":
@@ -336,5 +337,5 @@ def TestPBIPBFB() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestNJRKHAB() -> None:
     SourceDoc = SldprtAdapter().read(KSample)
-    Restored = type(SourceDoc).from_json(SourceDoc.to_json())
+    Restored = CadDocument.from_json(SourceDoc.to_json())
     assert Restored == SourceDoc

@@ -75,7 +75,7 @@ def TestPSPCETF() -> None:
     CursorPos = 0
     ObjectCount = 0
     DefineCount = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, IgnoredValue in KResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in KResolvedOps:
         assert StartPos == CursorPos
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KFieldOwners)
@@ -162,9 +162,9 @@ def TestFCPSWNPSWP(TmpPath: FilePath) -> None:
         resolved_stream=StreamB,
     )
     assert HasVendorPartEncoding(SourceData)
-    assert ResultData.vendor_loadable is True
-    assert ResultData.application_usable is True
-    assert ResultData.near_lossless is True
+    assert ResultData.IsVendorLoadable is True
+    assert ResultData.IsAppUsable is True
+    assert ResultData.IsNearLossless is True
     assert len(ResolvedData) == 12283
     assert Hashlib.sha256(ResolvedData).hexdigest() == KGateDigest
     assert tuple(

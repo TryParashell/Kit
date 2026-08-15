@@ -7,13 +7,12 @@
 # to you under it immediately and permanently.
 
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from convert.adapters.base.AdapterInfo import AdapterInfo
-from convert.adapters.base.AdapterProtocols import CadAdapter
-from convert.adapters.base.AdapterProtocols import CadReaderAdapter
-from convert.adapters.base.AdapterProtocols import CadWriterAdapter
+from convert.adapters.base.AdapterProtocols import CadAdapter as KCadAdapter
+from convert.adapters.base.AdapterProtocols import CadReaderAdapter as KCadReaderAdapter
+from convert.adapters.base.AdapterProtocols import CadWriterAdapter as KCadWriterAdapter
 from convert.adapters.base.ContractTypes import IsBinaryTarget
 from convert.adapters.base.ContractTypes import IsDeviceName
 from convert.adapters.base.ContractTypes import KSourceType
@@ -26,23 +25,29 @@ from convert.adapters.base.TransferContract import TransferMode
 from convert.adapters.base.WriteOptions import WriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 
-from interchange import Capability
-from interchange import Diagnostic
+from interchange import Capability as KCapability
+from interchange import Diagnostic as KDiagnostic
 
 # historical path annotations need resolution after records move behind this compatibility facade
-globals()["Path"] = FilePath
-
-# historical unconstrained annotations need resolution after records move behind this compatibility facade
-globals()["Any"] = AnyValue
+Path = FilePath
 
 # historical mapping annotations need resolution after records move behind this compatibility facade
-globals()["Mapping"] = TypeMap
+Mapping = TypeMap
 
 # historical capability annotations need resolution after records move behind this compatibility facade
-globals()["Capability"] = Capability
+Capability = KCapability
 
 # historical diagnostic annotations need resolution after records move behind this compatibility facade
-globals()["Diagnostic"] = Diagnostic
+Diagnostic = KDiagnostic
+
+# protocol exports remain explicit because registries validate adapter capabilities structurally
+CadAdapter = KCadAdapter
+
+# reader exports remain explicit because adapters are registered independently
+CadReaderAdapter = KCadReaderAdapter
+
+# writer exports remain explicit because output adapters have a separate contract
+CadWriterAdapter = KCadWriterAdapter
 
 for PublicType in (
     AdapterInfo,
@@ -61,16 +66,16 @@ setattr(CapTransfer, "__qualname__", "CapabilityTransfer")
 
 
 # source annotation stays stable because every existing adapter imports this public contract
-globals()["Source"] = KSourceType
+Source = KSourceType
 
 # destination annotation stays stable because every existing writer imports this public contract
-globals()["Destination"] = KTargetType
+Destination = KTargetType
 
 # transfer contract name stays stable because writer implementations construct it directly
-globals()["CapabilityTransfer"] = CapTransfer
+CapabilityTransfer = CapTransfer
 
 # windows helper name stays stable because payload validation imports the historical spelling
-globals()["is_windows_device_name"] = IsDeviceName
+is_windows_device_name = IsDeviceName
 
 # binary helper name stays stable because existing writers use the historical spelling
-globals()["is_binary_destination"] = IsBinaryTarget
+is_binary_destination = IsBinaryTarget

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from pathlib import Path as FilePath
+from typing import Protocol
 
 from interchange import CadDocument
 
@@ -19,14 +20,44 @@ from convert.adapters.registry.RegistrySelect import SelectReader
 from convert.adapters.staging.SourceReplay import GetReplayMut
 
 # historical source annotations need local resolution after public methods move to the registry facade
-globals()["Source"] = KSourceType
+Source = KSourceType
+
+
+# selection mixins need a concrete reader catalog boundary without depending on registry composition
+class ReadCatalog(Protocol):
+
+    # selection requires deterministic access to every registered reader
+    def GetReaders(self) -> tuple[CadReaderAdapter, ...]: ...
+
+
+# read orchestration needs only lookup selection and adapter aware reading from its host
+class ReadLookup(Protocol):
+
+    # explicit format requests need canonical reader lookup from the composed registry
+    def GetReader(self, FormatId: str) -> CadReaderAdapter: ...
+
+    # implicit format requests need probe based selection from the composed registry
+    def PickReader(self, SourceData: KSourceType) -> CadReaderAdapter: ...
+
+    # document convenience reads delegate to the adapter aware operation on the same host
+    def ReadAdapter(
+        self,
+        SourceData: KSourceType,
+        **NamedValues: object,
+    ) -> tuple[CadDocument, CadReaderAdapter]: ...
 
 
 # historical read keywords stay centralized because callers pass explicit source format and options
 def GetReadArgs(
     NamedValues: dict[str, object],
 ) -> tuple[str | None, ReadOptions | None]:
-    AllowedNames = {"format_id", "FormatId", "options", "OptionsData"}
+    AllowedNames = {
+        "format_id",
+        "FormatId",
+        "options",
+        "OptionsData",
+        "ReadOpts",
+    }
     UnknownNames = tuple(
         NameText for NameText in NamedValues if NameText not in AllowedNames
     )
@@ -36,10 +67,14 @@ def GetReadArgs(
         )
     if "format_id" in NamedValues and "FormatId" in NamedValues:
         raise TypeError("read() got multiple values for 'format_id'")
-    if "options" in NamedValues and "OptionsData" in NamedValues:
+    OptionNames = {"options", "OptionsData", "ReadOpts"} & NamedValues.keys()
+    if len(OptionNames) > 1:
         raise TypeError("read() got multiple values for 'options'")
     FormatId = NamedValues.get("format_id", NamedValues.get("FormatId"))
-    OptionsData = NamedValues.get("options", NamedValues.get("OptionsData"))
+    OptionsData = NamedValues.get(
+        "options",
+        NamedValues.get("OptionsData", NamedValues.get("ReadOpts")),
+    )
     if FormatId is not None and not isinstance(FormatId, str):
         raise TypeError("format id must be a string")
     if OptionsData is not None and not isinstance(OptionsData, ReadOptions):
@@ -48,28 +83,27 @@ def GetReadArgs(
 
 
 # reader selection remains separate because probing and lookup change independently from reading
-class ReadSelectApi:
+class ReadSelectApi(ReadCatalog):
 
     # probing delegates to a focused selector while retaining the established registry method
-    def PickReader(SelfValue, SourceData: KSourceType) -> CadReaderAdapter:
-        return SelectReader(SelfValue.GetReaders(), SourceData)
+    def PickReader(self, SourceData: KSourceType) -> CadReaderAdapter:
+        return SelectReader(self.GetReaders(), SourceData)
 
 
 # document reading owns replayable stream handling and post read validation
-class ReadApi:
+class ReadApi(ReadLookup):
 
     # convenience reading returns only the document while preserving adapter aware behavior
     def ReadDocument(
-        SelfValue,
+        self,
         SourceData: KSourceType,
         **NamedValues: object,
     ) -> CadDocument:
-        DocumentData, AdapterData = SelfValue.ReadAdapter(SourceData, **NamedValues)
-        return DocumentData
+        return self.ReadAdapter(SourceData, **NamedValues)[0]
 
     # replayable inputs ensure probing never consumes one shot sources before reading
     def ReadAdapter(
-        SelfValue,
+        self,
         SourceData: KSourceType,
         **NamedValues: object,
     ) -> tuple[CadDocument, CadReaderAdapter]:
@@ -79,9 +113,7 @@ class ReadApi:
         if not isinstance(ReplaySource, (str, FilePath, bytes, bytearray)):
             StreamPos = ReplaySource.tell()
         AdapterData = (
-            SelfValue.GetReader(FormatId)
-            if FormatId
-            else SelfValue.PickReader(ReplaySource)
+            self.GetReader(FormatId) if FormatId else self.PickReader(ReplaySource)
         )
         if not isinstance(ReplaySource, (str, FilePath, bytes, bytearray)):
             ReplaySource.seek(StreamPos)

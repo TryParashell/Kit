@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import replace as ReplaceValue
 from io import BytesIO
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 
 import pytest as Pytest
 
@@ -19,6 +18,7 @@ from convert.adapters import (
     AdapterInfo,
     AdapterRegistry,
     ApplicationUsabilityError,
+    Destination,
     WriteOptions,
     WriteResult,
 )
@@ -30,19 +30,16 @@ from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapte
 class NeedAdapter(ResultAdapter):
 
     # external dependency evidence exercises default and self contained rejection gates
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
         return ReplaceValue(
-            super().WriteData(DocumentData, TargetData, OptionsData),
+            super().write(DocumentData, TargetData, OptionsData),
             requirements=("external application",),
         )
-
-
-setattr(NeedAdapter, "write", NeedAdapter.WriteData)
 
 
 # one dependency registry keeps requirement policy tests focused on caller options
@@ -102,32 +99,34 @@ def CheckStream() -> None:
 class BundleAdapter(ResultAdapter):
 
     # path restriction forces bundle rollback through transactional filesystem staging
-    def CanWrite(SelfValue, DocumentData: CadDocument, TargetData: AnyValue) -> bool:
+    def supports(
+        self,
+        DocumentData: CadDocument,
+        TargetData: Destination,
+    ) -> bool:
         return isinstance(TargetData, (str, FilePath))
 
     # generated companions prove rejection restores both destination and neighboring files
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
+        if not isinstance(TargetData, (str, FilePath)):
+            raise TypeError("bundle adapter requires a filesystem destination")
         OutputPath = FilePath(TargetData).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
         OutputPath.write_bytes(b"generated")
         (OutputPath.parent / "component.bin").write_bytes(b"generated component")
         return WriteResult(
             OutputPath,
-            SelfValue.info.format_id,
+            self.info.format_id,
             len(b"generated"),
             requirements=("external component file",),
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(BundleAdapter, "supports", BundleAdapter.CanWrite)
-setattr(BundleAdapter, "write", BundleAdapter.WriteData)
 
 
 # rejected bundles restore every preexisting file before surfacing dependency evidence

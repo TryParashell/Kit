@@ -100,10 +100,7 @@ def BuildTriangle() -> BrepModel:
 
 
 # historical imports keep conversion suites independent from helper renaming
-def __getattr__(NameText: str) -> object:
-    if NameText == "triangle_brep":
-        return BuildTriangle
-    raise AttributeError(f"module {__name__!r} has no attribute {NameText!r}")
+triangle_brep = BuildTriangle
 
 
 # behavior coverage protects portable interchange semantics during structural refactors

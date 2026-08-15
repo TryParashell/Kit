@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
+from convert.adapters.solidworks.programs.Common.ProgramContract import MethodProgram
 from convert.adapters.solidworks.programs.Owners.Sldmodu.MoConfigObjectWeldmemberFeatDataC.UpdateParentConfigObject import (
     KOwnerSites,
 )
 
 
 # isolated method data lets new reverse engineered serializers compose independently
-KMethodProgram = (
+KMethodProgram: MethodProgram = (
     KOwnerSites,
     {
         "Contents/CMgr": ((1031, 4, 8563, "primitive:long", 4),),

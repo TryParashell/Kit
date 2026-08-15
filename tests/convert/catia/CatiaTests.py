@@ -11,7 +11,7 @@ from dataclasses import replace as Replace
 import hashlib as Hashlib
 from io import BytesIO as BytesIo, StringIO as StringIo
 import json as JsonValue
-from pathlib import Path as FilePath
+from pathlib import Path, Path as FilePath
 import struct as Struct
 from xml.etree import ElementTree as XmlTree
 import zipfile as Zipfile
@@ -26,20 +26,25 @@ from convert import (
 )
 from convert.adapters import ReadOptions, WriteOptions
 from convert.adapters.base import CarrierReason, TransferMode
-from convert.adapters.catia import (
+from convert.adapters.base.WriteResult import WriteResult
+from convert.adapters.catia.Adapter import (
     CatiaAdapter,
     CatiaAdapterError,
-    Cfv2Archive as CfvTwoArchive,
-    Cfv2FormatError as CfvTwoFormatError,
+    ReadCatia,
+    SemanticDigest,
+    WriteCatia,
+)
+from convert.adapters.catia.Container import (
+    AppendCfvTwo as AppendCfvTwoStream,
+    BuildCfvTwo,
+    BuildDecl,
+    CfvTwoArchive,
+    CfvTwoDecl,
+    CfvTwoFormat as CfvTwoFormatError,
+    CfvTwoStream,
     OsmxArchive,
     OsmxFormatError,
-    append_cfv2_stream as AppendCfvTwoStream,
-    build_cfv2 as BuildCfvTwo,
-    build_declaration as BuildDecl,
-    read_catia as ReadCatia,
-    write_catia as WriteCatia,
 )
-from convert.adapters.catia.Adapter import _semantic_digest as SemanticDigest
 from convert.adapters.catia.Format import (
     DOCUMENT_TYPE_BY_SUFFIX as DocTypeBySuffix,
     INFO as InfoValue,
@@ -52,9 +57,9 @@ from convert.adapters.solidworks import (
     read_sldprt as ReadSldprt,
     write_sldprt as WriteSldprt,
 )
+from convert.engine.EngineResult import ConversionResult
 from convert.geometry.Parasolid import encode_brep_model as EncodeBrepModel
 from interchange import (
-    BrepPayload,
     Capability,
     Configuration as Config,
     Diagnostic as DiagValue,
@@ -64,6 +69,8 @@ from interchange import (
     Severity,
     frozen_mapping as FrozenMapping,
 )
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.payloads.PayloadRecord import BrepPayload
 from tests.interchange.document.DocumentTests import document as DocValue
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
@@ -358,7 +365,13 @@ def LoadPartState(
     PathValue: FilePath,
     ExpectedClasses: tuple[str, ...],
     FragmentedGeom: set[str],
-) -> tuple[bytes, CfvTwoArchive, tuple, object, object]:
+) -> tuple[
+    bytes,
+    CfvTwoArchive,
+    tuple[CfvTwoDecl, ...],
+    CfvTwoStream,
+    CfvTwoStream,
+]:
     Source = PathValue.read_bytes()
     Archive = CfvTwoArchive.from_bytes(Source)
     Declarations = Archive.declarations()
@@ -420,7 +433,11 @@ def LoadPartState(
 
 
 # declaration payloads need byte level checks independent from document metadata checks
-def VerifyDeclData(Archive, DocValue, Declarations: tuple) -> None:
+def VerifyDeclData(
+    Archive: CfvTwoArchive,
+    DocValue: CadDocument,
+    Declarations: tuple[CfvTwoDecl, ...],
+) -> None:
     DeclPayloads = DocValue.brep_payloads[2:]
     assert len(DeclPayloads) == len(Declarations)
     for DeclValue, Payload in zip(Declarations, DeclPayloads):
@@ -437,10 +454,10 @@ def VerifyDeclData(Archive, DocValue, Declarations: tuple) -> None:
 def VerifyPartDoc(
     PathValue: FilePath,
     Source: bytes,
-    Archive,
-    Declarations: tuple,
-    CgmStream,
-    PartStream,
+    Archive: CfvTwoArchive,
+    Declarations: tuple[CfvTwoDecl, ...],
+    CgmStream: CfvTwoStream,
+    PartStream: CfvTwoStream,
 ) -> None:
     DocValue = OpenDoc(PathValue)
     assert len(DocValue.support_planes) == 3
@@ -677,7 +694,7 @@ def TestStripped(TmpPath: Path) -> None:
 
 
 # native geometry payloads need focused validation against their declared source streams
-def VerifyCgmData(Archive, DocValue) -> None:
+def VerifyCgmData(Archive: CfvTwoArchive, DocValue: CadDocument) -> None:
     NativeContainers = DocValue.brep_payloads[2:]
     assert [Payload.schema for Payload in NativeContainers] == [
         DeclValue.class_name for DeclValue in Archive.declarations()
@@ -716,7 +733,7 @@ def VerifyCgmData(Archive, DocValue) -> None:
 
 
 # parametric feature metadata needs isolation from native geometry payload checks
-def VerifyFeatData(DocValue) -> None:
+def VerifyFeatData(DocValue: CadDocument) -> None:
     FeatureGraph = next(
         (
             Payload
@@ -1212,7 +1229,7 @@ def TestUnresolved(TmpPath: Path) -> None:
 
 
 # generated carriers need their compatibility claims checked independently from restored content
-def VerifyKitMeta(Result) -> None:
+def VerifyKitMeta(Result: ConversionResult) -> None:
     assert Result.destination_format == "catia.v5"
     assert Result.output.metadata["mode"] == "generated_cfv2"
     assert Result.output.metadata["compatibility"] == "kit-neutral-only"
@@ -1226,7 +1243,7 @@ def VerifyKitMeta(Result) -> None:
 
 
 # restored foreign content needs semantic equality checks separated from carrier metadata
-def VerifySldData(Source, Restored) -> None:
+def VerifySldData(Source: CadDocument, Restored: CadDocument) -> None:
     assert Restored.source.format_id == "catia.v5"
     assert (
         Restored.metadata["catia.embedded_source_format_id"] == Source.source.format_id
@@ -1280,6 +1297,8 @@ def TestSolidworksA(TmpPath: Path) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def TestSolidworks(TmpPath: Path) -> None:
+    if not KSldasm.is_file():
+        Pytest.skip("bundled SOLIDWORKS assembly example is unavailable")
     Source = OpenDoc(KSldasm)
     Output = TmpPath / "Piston.CATProduct"
     Result = Convert(KSldasm, Output, allow_carrier=True)
@@ -1299,6 +1318,8 @@ def TestSolidworks(TmpPath: Path) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def TestEnforceDoc(TmpPath: Path) -> None:
+    if not KSldasm.is_file():
+        Pytest.skip("bundled SOLIDWORKS assembly example is unavailable")
     Adapter = CatiaAdapter()
     PartValue = OpenDoc(KSldprt)
     AsmValue = OpenDoc(KSldasm)
@@ -1374,7 +1395,7 @@ def TestReaderPart() -> None:
 
 
 # edited carriers need compatibility claims checked separately from archive byte retention
-def VerifyEditMeta(Result, Source: FilePath, Output: FilePath) -> None:
+def VerifyEditMeta(Result: WriteResult, Source: FilePath, Output: FilePath) -> None:
     assert Result.metadata["mode"] == "native_base_with_neutral_edits"
     assert Result.metadata["compatibility"] == "native-base-neutral-overlay"
     assert Result.metadata["vendor_loadable"] is False
@@ -1387,7 +1408,7 @@ def VerifyEditMeta(Result, Source: FilePath, Output: FilePath) -> None:
 
 
 # native streams must remain byte exact while the neutral overlay changes
-def VerifyStream(Source: FilePath, Output: FilePath):
+def VerifyStream(Source: FilePath, Output: FilePath) -> CfvTwoArchive:
     OriginalArchive = CfvTwoArchive.from_bytes(Source.read_bytes())
     OutputArchive = CfvTwoArchive.from_bytes(Output.read_bytes())
     assert tuple(
@@ -1406,7 +1427,7 @@ def VerifyStream(Source: FilePath, Output: FilePath):
 
 
 # restored edits need semantic checks independent from physical archive preservation
-def VerifyEditState(Changed, Restored) -> None:
+def VerifyEditState(Changed: CadDocument, Restored: CadDocument) -> None:
     assert Restored.source.format_id == "catia.v5"
     assert (
         Restored.metadata["catia.container_compatibility"]
@@ -1452,7 +1473,7 @@ def VerifyEditState(Changed, Restored) -> None:
 
 
 # exact carrier replay needs proof separate from edited model restoration
-def VerifyReplay(TmpPath: FilePath, Output: FilePath, Restored) -> None:
+def VerifyReplay(TmpPath: FilePath, Output: FilePath, Restored: CadDocument) -> None:
     Replay = TmpPath / "ChangedReplay.CATPart"
     ReplayResult = WriteDoc(Restored, Replay, allow_carrier=True)
     assert ReplayResult.metadata["mode"] == "exact_carrier_roundtrip"
@@ -1461,7 +1482,7 @@ def VerifyReplay(TmpPath: FilePath, Output: FilePath, Restored) -> None:
 
 
 # archive tampering needs an isolated proof that native compatibility is revoked
-def VerifyTampered(Output: FilePath, OutputArchive) -> None:
+def VerifyTampered(Output: FilePath, OutputArchive: CfvTwoArchive) -> None:
     Tampered = bytearray(Output.read_bytes())
     Tolerance = OutputArchive.outer.stream("GesToler")
     assert Tolerance is not None
@@ -1981,6 +2002,8 @@ def TestCatpartB(TmpPath: Path) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def TestEngineAlias(TmpPath: Path) -> None:
+    if not KSldasm.is_file():
+        Pytest.skip("bundled SOLIDWORKS assembly example is unavailable")
     Output = TmpPath / "Piston.SLDASM"
     Result = Convert(KSldasm, Output)
     assert Result.source_format == "solidworks.sldasm"

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+from typing import TYPE_CHECKING as IsTypeCheck
 
 from interchange.core.Common import FreezeMapping
 from interchange.assembly.ComponentDefinition import ComponentDef
@@ -19,6 +20,9 @@ from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateEntity import MateEntity
 from interchange.assembly.MateGroup import MateGroup
 from interchange.core.ModelBase import ModelBase, ModelDataMut
+
+if IsTypeCheck:
+    from interchange.document.models.DocumentModel import CadDocument
 
 
 # assembly data composes occurrences documents and mates into one portable graph
@@ -37,24 +41,24 @@ class AssemblyData(ModelBase):
     Attributes: TypeMap[str, AnyValue]
 
     # definition lookup gives callers one consistent missing identifier failure mode
-    def GetDefinition(SelfValue, EntityId: str) -> ComponentDef:
-        for DefinitionValue in SelfValue.Definitions:
+    def GetDefinition(self, EntityId: str) -> ComponentDef:
+        for DefinitionValue in self.Definitions:
             if DefinitionValue.EntityId == EntityId:
                 return DefinitionValue
         raise KeyError(f"unknown component definition id {EntityId!r}")
 
     # embedded document lookup avoids exposing storage details to assembly consumers
-    def GetDocument(SelfValue, EntityId: str) -> AnyValue:
-        for DocumentValue in SelfValue.Documents:
+    def GetDocument(self, EntityId: str) -> CadDocument:
+        for DocumentValue in self.Documents:
             if DocumentValue.EntityId == EntityId:
                 return DocumentValue.Document
         raise KeyError(f"unknown component document id {EntityId!r}")
 
     # child ordering stays deterministic when source order values contain ties
-    def GetChildren(SelfValue, DefinitionId: str) -> tuple[ComponentInst, ...]:
+    def GetChildren(self, DefinitionId: str) -> tuple[ComponentInst, ...]:
         ChildValues = (
             InstanceValue
-            for InstanceValue in SelfValue.Instances
+            for InstanceValue in self.Instances
             if InstanceValue.OwnerDefinitionId == DefinitionId
         )
 

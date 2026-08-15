@@ -19,13 +19,14 @@ from convert.adapters import (
     ApplicationUsabilityError,
     CarrierReason,
     CapabilityTransfer,
+    Destination,
     ReadOptions,
     TransferMode,
     WriteOptions,
     WriteResult,
 )
 from convert.engine import ConversionEngine
-from interchange import Capability
+from interchange import CadDocument, Capability
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
 
@@ -83,24 +84,33 @@ def CheckSafety() -> None:
 
 # metadata cannot contradict typed usability fields because consumers trust both representations
 @Pytest.mark.parametrize(
-    ("MetadataMap", "FieldValues"),
+    ("MetadataMap", "FieldName"),
     (
-        ({"application_usable": True}, {"application_usable": False}),
-        ({"vendor_loadable": True}, {"vendor_loadable": False}),
+        ({"application_usable": True}, "application_usable"),
+        ({"vendor_loadable": True}, "vendor_loadable"),
     ),
 )
 def CheckMetaRule(
     MetadataMap: dict[str, bool],
-    FieldValues: dict[str, bool],
+    FieldName: str,
 ) -> None:
     with Pytest.raises(ValueError, match="contradicts the write result"):
-        WriteResult(
-            None,
-            "format.contradictory",
-            0,
-            metadata=MetadataMap,
-            **FieldValues,
-        )
+        if FieldName == "application_usable":
+            WriteResult(
+                None,
+                "format.contradictory",
+                0,
+                metadata=MetadataMap,
+                application_usable=False,
+            )
+        else:
+            WriteResult(
+                None,
+                "format.contradictory",
+                0,
+                metadata=MetadataMap,
+                vendor_loadable=False,
+            )
 
 
 # application usability implies vendor loading because unusable vendor output cannot satisfy that claim
@@ -164,20 +174,17 @@ def CheckCarFacts() -> None:
 class LoadableAdapter(ResultAdapter):
 
     # partial usability evidence exercises the registrys independent field preservation
-    def WriteData(
-        SelfValue,
-        DocumentData,
-        TargetData,
-        OptionsData=None,
+    def write(
+        self,
+        DocumentData: CadDocument,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
         return ReplaceValue(
-            super().WriteData(DocumentData, TargetData, OptionsData),
+            super().write(DocumentData, TargetData, OptionsData),
             application_usable=False,
             vendor_loadable=True,
         )
-
-
-setattr(LoadableAdapter, "write", LoadableAdapter.WriteData)
 
 
 # registry policy must preserve truthful independent usability fields from writers

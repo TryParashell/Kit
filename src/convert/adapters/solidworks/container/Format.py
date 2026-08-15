@@ -234,142 +234,142 @@ def IsComponentPath(Value: str) -> bool:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_FORMAT_ID"] = KAsmFormatId
+ASSEMBLY_FORMAT_ID = KAsmFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_SUFFIX"] = KAsmSuffix
+ASSEMBLY_SUFFIX = KAsmSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["CANONICAL_PLANE_FEATURE_TYPE"] = KCanonicalPlaneFeatureTyA
+CANONICAL_PLANE_FEATURE_TYPE = KCanonicalPlaneFeatureTyA
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_MARKER"] = KClassMarker
+CLASS_MARKER = KClassMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["COMPONENT_TREE_STREAM"] = KComponentTreeStream
+COMPONENT_TREE_STREAM = KComponentTreeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIGURATION_STREAM"] = KConfigStream
+CONFIGURATION_STREAM = KConfigStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTAINER_VERSIONS"] = KContainerVersions
+CONTAINER_VERSIONS = KContainerVersions
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTENT_TYPES_STREAM"] = KContentTypesStream
+CONTENT_TYPES_STREAM = KContentTypesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIMENSION_SCALAR_HEADERS"] = KDimensionScalarHeaders
+DIMENSION_SCALAR_HEADERS = KDimensionScalarHeaders
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_LISTS_STREAM"] = KDisplayListsStream
+DISPLAY_LISTS_STREAM = KDisplayListsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DRAWING_FORMAT_ID"] = KDrawingFormatId
+DRAWING_FORMAT_ID = KDrawingFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["DRAWING_FORMAT_NAME"] = KDrawingFormatName
+DRAWING_FORMAT_NAME = KDrawingFormatName
 
 # this binding exists because shared behavior needs one stable value
-globals()["DRAWING_STREAM_TOKENS"] = KDrawingStreamTokens
+DRAWING_STREAM_TOKENS = KDrawingStreamTokens
 
 # this binding exists because shared behavior needs one stable value
-globals()["DRAWING_SUFFIX"] = KDrawingSuffix
+DRAWING_SUFFIX = KDrawingSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURES_STREAM"] = KFeaturesStream
+FEATURES_STREAM = KFeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["FORMAT_IDS"] = KFormatIds
+FORMAT_IDS = KFormatIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FORMAT_ID_BY_SUFFIX"] = KFormatIdBySuffix
+FORMAT_ID_BY_SUFFIX = KFormatIdBySuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = KInfoValue
+INFO = KInfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["KEYWORDS_STREAM"] = KeywordsStream
+KEYWORDS_STREAM = KeywordsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_DOCUMENT_STREAM"] = KitDocStream
+KIT_DOCUMENT_STREAM = KitDocStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_NATIVE_STREAM"] = KitNativeStream
+KIT_NATIVE_STREAM = KitNativeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_RESOLVED_STREAM"] = KitResolvedStream
+KIT_RESOLVED_STREAM = KitResolvedStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_NAME"] = KMatesStreamName
+MATES_STREAM_NAME = KMatesStreamName
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_SUFFIX"] = KMatesStreamSuffix
+MATES_STREAM_SUFFIX = KMatesStreamSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["OFFICIAL_REFERENCE_PLANE_FEATURE_TYPES"] = KOfficialRefPlaneFeature
+OFFICIAL_REFERENCE_PLANE_FEATURE_TYPES = KOfficialRefPlaneFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["PARTITION_STREAM"] = KPartitionStream
+PARTITION_STREAM = KPartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_FORMAT_ID"] = KPartFormatId
+PART_FORMAT_ID = KPartFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_SUFFIX"] = KPartSuffix
+PART_SUFFIX = KPartSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["PLANE_FEATURE_TYPES"] = KPlaneFeatureTypes
+PLANE_FEATURE_TYPES = KPlaneFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["RELATIONSHIPS_STREAM"] = KRelationshipsStream
+RELATIONSHIPS_STREAM = KRelationshipsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["RESOLVED_FEATURES_LANE"] = KResolvedFeaturesLane
+RESOLVED_FEATURES_LANE = KResolvedFeaturesLane
 
 # this binding exists because shared behavior needs one stable value
-globals()["RESOLVED_FEATURES_STREAM"] = KResolvedFeaturesStream
+RESOLVED_FEATURES_STREAM = KResolvedFeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["SERIALIZED_STRING_MARKER"] = KSerializedStringMarker
+SERIALIZED_STRING_MARKER = KSerializedStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["SOLIDWORKS_STREAM"] = KSolidworksStream
+SOLIDWORKS_STREAM = KSolidworksStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["SOLID_BODY_FEATURE_TYPES"] = KSolidBodyFeatureTypes
+SOLID_BODY_FEATURE_TYPES = KSolidBodyFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX_BY_FORMAT_ID"] = KSuffixByFormatId
+SUFFIX_BY_FORMAT_ID = KSuffixByFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RESOLVED_LANE_PREFIX"] = KResolvedLanePrefix
+_RESOLVED_LANE_PREFIX = KResolvedLanePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RESOLVED_LANE_SUFFIX"] = KResolvedLaneSuffix
+_RESOLVED_LANE_SUFFIX = KResolvedLaneSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dimension_scalar_value_offset"] = LegacyScalar
+dimension_scalar_value_offset = LegacyScalar
 
 # this binding exists because shared behavior needs one stable value
-globals()["drawing_stream_names"] = DrawingStream
+drawing_stream_names = DrawingStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_cad_path"] = IsCadPath
+is_cad_path = IsCadPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_component_path"] = IsComponentPath
+is_component_path = IsComponentPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_drawing_path"] = IsDrawingPath
+is_drawing_path = IsDrawingPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["part_lane_names"] = PartLaneNames
+part_lane_names = PartLaneNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["unsupported_document_reason"] = UnsupportedDoc
+unsupported_document_reason = UnsupportedDoc

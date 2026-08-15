@@ -40,19 +40,19 @@ KInfoValue = AdapterInfo(
 )
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_TYPE_BY_SUFFIX"] = KDocTypeBySuffix
+DOCUMENT_TYPE_BY_SUFFIX = KDocTypeBySuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = KInfoValue
+INFO = KInfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_DOCUMENT_TYPE"] = KPartDocType
+PART_DOCUMENT_TYPE = KPartDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["PRODUCT_DOCUMENT_TYPE"] = KProductDocType
+PRODUCT_DOCUMENT_TYPE = KProductDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX_BY_DOCUMENT_TYPE"] = KSuffixByDocType
+SUFFIX_BY_DOCUMENT_TYPE = KSuffixByDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations

@@ -11,7 +11,7 @@ import struct as StructLib
 import pytest as PytestLib
 from convert.adapters.solidworks import SldprtArchive, build_sldprt as BuildSldprt
 from convert.adapters.solidworks.container.Container import (
-    container_signatures as ContainerSignatures,
+    Container as ContainerSignatures,
 )
 
 # centralizes shared evidence so every related assertion uses one value
@@ -41,7 +41,9 @@ def DecodedName(ItemValue: bytes) -> str:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def ReadDirMeta(BlobInfo: bytes, Streams: tuple) -> tuple[int, int]:
+def ReadDirMeta(
+    BlobInfo: bytes, Streams: tuple[tuple[str, bytes], ...]
+) -> tuple[int, int]:
     EndOffset = len(BlobInfo) - 22
     (
         DiskNumber,
@@ -66,7 +68,11 @@ def ReadDirMeta(BlobInfo: bytes, Streams: tuple) -> tuple[int, int]:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def AssertDirEntry(
-    BlobInfo: bytes, Archive, Cursor: int, ExpectedName: str, ExpectedData: bytes
+    BlobInfo: bytes,
+    Archive: SldprtArchive,
+    Cursor: int,
+    ExpectedName: str,
+    ExpectedData: bytes,
 ) -> tuple[int, int]:
     assert BlobInfo[Cursor : Cursor + 4] == KSignature
     assert BlobInfo[Cursor + 6 : Cursor + 12] == KMarker
@@ -111,7 +117,7 @@ def TestGCHCND() -> None:
     assert Archive.file_id == KIdInfo
     assert Archive.streams == dict(Streams)
     Cursor, EndOffset = ReadDirMeta(BlobInfo, Streams)
-    Timestamps = set()
+    Timestamps: set[int] = set()
     for ExpectedName, ExpectedData in Streams:
         Cursor, TypeId = AssertDirEntry(
             BlobInfo, Archive, Cursor, ExpectedName, ExpectedData

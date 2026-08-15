@@ -10,9 +10,15 @@ from __future__ import annotations
 
 from dataclasses import replace as ReplaceValue
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 
-from convert.adapters import AdapterInfo, WriteResult
+from convert.adapters import (
+    AdapterInfo,
+    Destination,
+    ProbeResult,
+    Source,
+    WriteOptions,
+    WriteResult,
+)
 from convert.adapters.json import JsonAdapter
 from interchange import CadDocument, Capability
 from tests.interchange.document.DocumentTests import BuildDocument
@@ -23,79 +29,73 @@ class ResultAdapter(JsonAdapter):
 
     # injected metadata and result names isolate each registry policy under test
     def __init__(
-        SelfValue,
+        self,
         InfoData: AdapterInfo,
         *,
         ProbeFormat: str | None = None,
         WriteFormat: str | None = None,
     ) -> None:
-        SelfValue.InfoData = InfoData
-        SelfValue.ProbeFormat = ProbeFormat
-        SelfValue.WriteFormat = WriteFormat
+        self.InfoData = InfoData
+        self.ProbeFormat = ProbeFormat
+        self.WriteFormat = WriteFormat
 
     # injected metadata keeps tests independent from the json adapter singleton
     @property
-    def GetInfo(SelfValue) -> AdapterInfo:
-        return SelfValue.InfoData
+    def info(self) -> AdapterInfo:
+        return self.InfoData
 
     # probe rewriting exercises registry validation while retaining real json recognition
-    def ProbeData(SelfValue, SourceData: AnyValue):
+    def probe(self, SourceData: Source) -> ProbeResult:
         ResultData = super().probe(SourceData)
         return ReplaceValue(
             ResultData,
-            format_id=SelfValue.ProbeFormat or SelfValue.info.format_id,
+            format_id=self.ProbeFormat or self.info.format_id,
         )
 
     # write rewriting exercises registry validation while retaining real output behavior
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
         ResultData = super().write(DocumentData, TargetData, OptionsData)
         return ReplaceValue(
             ResultData,
-            adapter=SelfValue.WriteFormat or SelfValue.info.format_id,
+            adapter=self.WriteFormat or self.info.format_id,
         )
-
-
-for LegacyName, MethodName in {
-    "info": "GetInfo",
-    "probe": "ProbeData",
-    "write": "WriteData",
-}.items():
-    setattr(ResultAdapter, LegacyName, getattr(ResultAdapter, MethodName))
 
 
 # path only carrier output lets staging tests inspect rollback without format specific writers
 class CarrierAdapter(ResultAdapter):
 
     # path restriction forces registry staging through its transactional filesystem branch
-    def CanWrite(SelfValue, DocumentData: CadDocument, TargetData: AnyValue) -> bool:
+    def supports(
+        self,
+        DocumentData: CadDocument,
+        TargetData: Destination,
+    ) -> bool:
         return isinstance(TargetData, (str, FilePath))
 
     # unusable output exercises rollback after a writer creates the staged artifact
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
+        if not isinstance(TargetData, (str, FilePath)):
+            raise TypeError("carrier adapter requires a filesystem destination")
         OutputPath = FilePath(TargetData).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
         OutputPath.write_bytes(b"carrier")
         return WriteResult(
             OutputPath,
-            SelfValue.info.format_id,
+            self.info.format_id,
             len(b"carrier"),
             application_usable=False,
             vendor_loadable=False,
         )
-
-
-setattr(CarrierAdapter, "supports", CarrierAdapter.CanWrite)
-setattr(CarrierAdapter, "write", CarrierAdapter.WriteData)
 
 
 # uniform metadata construction keeps registry policy tests focused on their behavioral difference

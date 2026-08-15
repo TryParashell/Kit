@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass as DataClass
 from inspect import Parameter as SigParam
 from inspect import Signature as CallSignature
+from typing import TYPE_CHECKING as IsTypeCheck
+from typing import overload as Overload
 
 from interchange import Capability
 
@@ -57,22 +59,121 @@ class AdapterInfo(ContractBase):
     PartExts: tuple[str, ...] = ()
     AssemblyExts: tuple[str, ...] = ()
 
+    if IsTypeCheck:
+
+        # historical keywords remain typed because plugin constructors depend on this public contract
+        @Overload
+        def __init__(
+            self,
+            format_id: str,
+            name: str,
+            version: str,
+            extensions: tuple[str, ...],
+            aliases: tuple[str, ...] = (),
+            capabilities: frozenset[Capability] = frozenset(),
+            media_types: tuple[str, ...] = (),
+            native_capabilities: frozenset[Capability] = frozenset(),
+            part_extensions: tuple[str, ...] = (),
+            assembly_extensions: tuple[str, ...] = (),
+        ) -> None: ...
+
+        # canonical keywords remain typed because dataclass replacement constructs records from storage fields
+        @Overload
+        def __init__(
+            self,
+            FormatId: str,
+            DisplayName: str,
+            VersionText: str,
+            Extensions: tuple[str, ...],
+            AliasNames: tuple[str, ...] = (),
+            Capabilities: frozenset[Capability] = frozenset(),
+            MediaTypes: tuple[str, ...] = (),
+            NativeCaps: frozenset[Capability] = frozenset(),
+            PartExts: tuple[str, ...] = (),
+            AssemblyExts: tuple[str, ...] = (),
+        ) -> None: ...
+
+        # broad implementation parameters exist only to connect both statically checked constructor forms
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+
+        # both keyword eras remain visible because document routing callers upgraded independently
+        @Overload
+        def extensions_for(self, *, assembly: bool) -> tuple[str, ...]: ...
+
+        # both keyword eras remain visible because document routing callers upgraded independently
+        @Overload
+        def extensions_for(self, *, Assembly: bool) -> tuple[str, ...]: ...
+
+        # dynamic dispatch still validates collisions while overloads describe every supported spelling
+        def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
+            return self.GetExtensions(**NamedValues)
+
+    # historical format access remains typed because registry callers use the established public field
+    @property
+    def format_id(self) -> str:
+        return self.FormatId
+
+    # historical display access remains typed because external catalogs render this established public field
+    @property
+    def name(self) -> str:
+        return self.DisplayName
+
+    # historical version access remains typed because plugin diagnostics expose this established public field
+    @property
+    def version(self) -> str:
+        return self.VersionText
+
+    # historical extension access remains typed because selectors consume this established public field
+    @property
+    def extensions(self) -> tuple[str, ...]:
+        return self.Extensions
+
+    # historical alias access remains typed because registry namespaces consume this established public field
+    @property
+    def aliases(self) -> tuple[str, ...]:
+        return self.AliasNames
+
+    # historical capability access remains typed because policy callers compare this established public field
+    @property
+    def capabilities(self) -> frozenset[Capability]:
+        return self.Capabilities
+
+    # historical media access remains typed because discovery consumers inspect this established public field
+    @property
+    def media_types(self) -> tuple[str, ...]:
+        return self.MediaTypes
+
+    # historical native capability access remains typed because transfer policy consumes this public field
+    @property
+    def native_capabilities(self) -> frozenset[Capability]:
+        return self.NativeCaps
+
+    # historical part extension access remains typed because document routing consumes this public field
+    @property
+    def part_extensions(self) -> tuple[str, ...]:
+        return self.PartExts
+
+    # historical assembly extension access remains typed because document routing consumes this public field
+    @property
+    def assembly_extensions(self) -> tuple[str, ...]:
+        return self.AssemblyExts
+
     # document kind lookup belongs here so clients need no format specific branching
-    def GetExtensions(SelfValue, **NamedValues: object) -> tuple[str, ...]:
+    def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
-        return SelfValue.AssemblyExts if Assembly else SelfValue.PartExts
+        return self.AssemblyExts if Assembly else self.PartExts
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
-    def __repr__(SelfValue) -> str:
+    def __repr__(self) -> str:
         FieldValues = ", ".join(
-            f"{LegacyName}={getattr(SelfValue, ModelName)!r}"
+            f"{LegacyName}={getattr(self, ModelName)!r}"
             for LegacyName, ModelName in KLegacyFields
         )
         return f"AdapterInfo({FieldValues})"
 
 
 # historical dataclass reflection remains available because plugin tooling inspects legacy field names
-KLegacyFields = (
+KLegacyFields: tuple[tuple[str, str], ...] = (
     ("format_id", "FormatId"),
     ("name", "DisplayName"),
     ("version", "VersionText"),
@@ -86,7 +187,7 @@ KLegacyFields = (
 )
 
 # canonical field order remains necessary for immutable slot pickle restoration
-KModelFields = tuple(ModelName for LegacyName, ModelName in KLegacyFields)
+KModelFields = tuple(FieldPair[1] for FieldPair in KLegacyFields)
 
 
 # immutable slot pickles read canonical storage despite historical field reflection

@@ -8,15 +8,50 @@
 
 from io import TextIOBase as TextStream
 from pathlib import Path as FilePath
-from typing import BinaryIO as BinaryStream
-from typing import TextIO as TypeTextStream
+from typing import Protocol
+from typing import TypeAlias
+
+
+# binary sources need only the operation consumed by adapters rather than full seekable io
+class BinaryReceiver(Protocol):
+
+    # adapters accept one shot binary streams because registry replay preserves their payload
+    def read(self, size: int | None = -1, /) -> bytes:
+        raise TypeError("binary receivers require a concrete read implementation")
+
+
+# text sources need only the operation consumed by adapters rather than full seekable io
+class TextReceiver(Protocol):
+
+    # adapters accept one shot text streams because registry replay preserves their payload
+    def read(self, size: int | None = -1, /) -> str:
+        raise TypeError("text receivers require a concrete read implementation")
+
+
+# binary destinations expose the narrow operation required for complete payload emission
+class BinaryWriter(Protocol):
+
+    # writers return counts so short destination writes remain detectable
+    def write(self, data: bytes, /) -> int | None:
+        raise TypeError("binary writers require a concrete write implementation")
+
+
+# text destinations expose the narrow operation required for complete payload emission
+class TextWriter(Protocol):
+
+    # writers return counts so short destination writes remain detectable
+    def write(self, data: str, /) -> int | None:
+        raise TypeError("text writers require a concrete write implementation")
+
 
 # reader contracts accept paths memory payloads and caller owned streams
-KSourceType = str | FilePath | bytes | bytearray | BinaryStream | TypeTextStream
+KSourceType: TypeAlias = (
+    str | FilePath | bytes | bytearray | BinaryReceiver | TextReceiver
+)
 
 
 # writer contracts accept filesystem destinations and caller owned streams
-KTargetType = str | FilePath | BinaryStream | TypeTextStream
+KTargetType: TypeAlias = str | FilePath | BinaryWriter | TextWriter
 
 
 # windows path validation must reject reserved device names before filesystem access

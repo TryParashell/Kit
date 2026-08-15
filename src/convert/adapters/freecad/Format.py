@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
+from collections.abc import Mapping
 from types import MappingProxyType
 from convert.adapters.base import AdapterInfo, CarrierReason
 from interchange import Capability
@@ -22,10 +23,12 @@ from convert.adapters.freecad.Protocol import (
 KSuffix = ".FCStd"
 
 # this binding exists because shared behavior needs one stable value
-KCapabilityWriteTypeIds = MappingProxyType(
+KCapabilityWriteTypeIds: Mapping[Capability, frozenset[str]] = MappingProxyType(
     {
         Capability.PARAMETERS: frozenset({"Spreadsheet::Sheet"}),
-        Capability.PARAMETRIC_HISTORY: frozenset().union(*FeatureWriteTypeIds.values()),
+        Capability.PARAMETRIC_HISTORY: frozenset[str]().union(
+            *FeatureWriteTypeIds.values()
+        ),
         Capability.SUPPORT_PLANES: frozenset({"App::Plane"}),
         Capability.EDITABLE_SKETCHES: frozenset({SketchTypeId}),
         Capability.SELECTIONS: frozenset({"App::PropertyLinkSubList"}),
@@ -47,12 +50,12 @@ KCapabilityWriteTypeIds = MappingProxyType(
         Capability.COMPONENT_DOCUMENTS: frozenset({"App::PropertyXLink"}),
         Capability.EXTERNAL_REFERENCES: frozenset({"App::PropertyXLink"}),
         Capability.MATERIALS: frozenset({"App::PropertyString:MaterialId"}),
-        Capability.NATIVE_PAYLOADS: frozenset(),
-        Capability.PROVENANCE: frozenset(),
-        Capability.ROUNDTRIP_METADATA: frozenset(),
+        Capability.NATIVE_PAYLOADS: frozenset[str](),
+        Capability.PROVENANCE: frozenset[str](),
+        Capability.ROUNDTRIP_METADATA: frozenset[str](),
     }
 )
-if KCapabilityWriteTypeIds.keys() != set(Capability):
+if set(KCapabilityWriteTypeIds) != set(Capability):
     raise RuntimeError("FreeCAD capability write types are not exhaustive")
 
 # this binding exists because shared behavior needs one stable value
@@ -78,7 +81,7 @@ KCapabilityCarrierReasons = MappingProxyType(
         Capability.ROUNDTRIP_METADATA: CarrierReason.TARGET_UNSUPPORTED,
     }
 )
-if KCapabilityCarrierReasons.keys() != set(Capability):
+if set(KCapabilityCarrierReasons) != set(Capability):
     raise RuntimeError("FreeCAD capability carrier reasons are not exhaustive")
 
 # this binding exists because shared behavior needs one stable value
@@ -103,37 +106,37 @@ KInfoValue = AdapterInfo(
 KFormatId = KInfoValue.format_id
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_JOINT_GROUP_TYPE_ID"] = AsmJointGroupTypeId
+ASSEMBLY_JOINT_GROUP_TYPE_ID = AsmJointGroupTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_LINK_TYPE_ID"] = AsmLinkTypeId
+ASSEMBLY_LINK_TYPE_ID = AsmLinkTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_ROOT_TYPE_ID"] = AsmRootTypeId
+ASSEMBLY_ROOT_TYPE_ID = AsmRootTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["CAPABILITY_CARRIER_REASONS"] = KCapabilityCarrierReasons
+CAPABILITY_CARRIER_REASONS = KCapabilityCarrierReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["CAPABILITY_WRITE_TYPE_IDS"] = KCapabilityWriteTypeIds
+CAPABILITY_WRITE_TYPE_IDS = KCapabilityWriteTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_WRITE_TYPE_IDS"] = FeatureWriteTypeIds
+FEATURE_WRITE_TYPE_IDS = FeatureWriteTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FORMAT_ID"] = KFormatId
+FORMAT_ID = KFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = KInfoValue
+INFO = KInfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_CAPABILITIES"] = KNativeCapabilities
+NATIVE_CAPABILITIES = KNativeCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_TYPE_ID"] = SketchTypeId
+SKETCH_TYPE_ID = SketchTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX"] = KSuffix
+SUFFIX = KSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations

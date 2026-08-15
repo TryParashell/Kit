@@ -30,7 +30,7 @@ from .registry import ApplicationUsabilityError
 from .registry import CapabilityLossError
 
 # legacy helper spelling remains available because payload validation imports this public name
-globals()["is_windows_device_name"] = IsDeviceName
+is_windows_device_name = IsDeviceName
 
 # package exports stay explicit so split implementation modules never leak into wildcard imports
 __all__ = (

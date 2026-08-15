@@ -10,12 +10,13 @@ from __future__ import annotations
 import hashlib as Hashlib
 import json as JsonLib
 from pathlib import Path as FilePath
+from typing import TypeGuard
 import pytest as PytestLib
 from convert.adapters.solidworks.container.Container import (
+    Container as ContainerSignatures,
     DEFAULT_FILE_ID as IdInfo,
     DEFAULT_SIGNATURES as Signatures,
     SldprtArchive,
-    _template_fields as TemplateFields,
     build_sldprt as BuildSldprt,
     signature_triplet as SignatureTriplet,
 )
@@ -86,25 +87,46 @@ def HostRows(BlobInfo: bytes) -> list[tuple[int, tuple[str, str, str]]]:
     for Index in range(KEntries):
         HeadInfo = KOffset + 4 * Index
         FileId = int.from_bytes(BlobInfo[HeadInfo : HeadInfo + 4], "big")
-        Magics = tuple(
-            (
-                bytes(reversed(BlobInfo[Start : Start + 4])).hex()
-                for Start in (
-                    SigBase + 12 * Index + 4 * SlotInfo for SlotInfo in range(3)
-                )
-            )
+        Magics = (
+            bytes(
+                reversed(BlobInfo[SigBase + 12 * Index : SigBase + 12 * Index + 4])
+            ).hex(),
+            bytes(
+                reversed(BlobInfo[SigBase + 12 * Index + 4 : SigBase + 12 * Index + 8])
+            ).hex(),
+            bytes(
+                reversed(BlobInfo[SigBase + 12 * Index + 8 : SigBase + 12 * Index + 12])
+            ).hex(),
         )
         RowsInfo.append((FileId, Magics))
     return RowsInfo
 
 
+# keeps external data bounded before content assertions
+def IsObjectMap(Value: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(Value, dict)
+
+
+# keeps external data bounded before content assertions
+def IsObjectList(Value: object) -> TypeGuard[list[object]]:
+    return isinstance(Value, list)
+
+
 # keeps this focused behavior isolated so regressions remain immediately visible
 def RecordedHD() -> str:
-    Payload = JsonLib.loads(KManifest.read_text(encoding="utf-8"))
-    Entries = Payload if isinstance(Payload, list) else Payload.get("binaries", ())
+    Payload: object = JsonLib.loads(KManifest.read_text(encoding="utf-8"))
+    if not IsObjectMap(Payload):
+        raise AssertionError(f"{KManifest} must contain an object")
+    Entries: object = Payload.get("binaries")
+    if not IsObjectList(Entries):
+        raise AssertionError(f"{KManifest} must contain binary entries")
     for Entry in Entries:
-        if isinstance(Entry, dict) and Entry.get("name") == KNameInfo:
-            return str(Entry["sha256"])
+        if not IsObjectMap(Entry):
+            continue
+        NameValue: object = Entry.get("name")
+        DigestValue: object = Entry.get("sha256")
+        if NameValue == KNameInfo and isinstance(DigestValue, str):
+            return DigestValue
     raise AssertionError(f"{KNameInfo} is absent from {KManifest}")
 
 
@@ -123,7 +145,7 @@ def TestTCRIAGROTVT() -> None:
     HostInfo = LoadHostDll()
     RowsInfo = HostRows(HostInfo)
     assert len(RowsInfo) == KEntries
-    assert len({FileId for FileId, IgnoredValue in RowsInfo}) == KEntries
+    assert len({FileId for FileId, _ in RowsInfo}) == KEntries
     assert RowsInfo[KIndex] == (IdInfo, KRowInfo)
     Matches = [
         Index
@@ -159,7 +181,7 @@ def TestGCUTCR() -> None:
     Archive = SldprtArchive.from_bytes(BlobInfo)
     assert Archive.file_id == IdInfo
     assert Archive.streams == Streams
-    SignaturesA, IgnoredValue = TemplateFields(BlobInfo, Archive)
+    SignaturesA = ContainerSignatures(BlobInfo)
     assert SignaturesA == Signatures
 
 
@@ -181,7 +203,7 @@ def TestEDPTOIWTOS() -> None:
     for TargetPath in Documents:
         BlobInfo = TargetPath.read_bytes()
         Archive = SldprtArchive.from_bytes(BlobInfo, TargetPath)
-        SignaturesA, IgnoredValue = TemplateFields(BlobInfo, Archive)
+        SignaturesA = ContainerSignatures(BlobInfo)
         assert Archive.file_id in HostRowsA, TargetPath.name
         Recorded = HostRowsA[Archive.file_id]
         assert (
@@ -201,6 +223,6 @@ def TestTPPADIWAST() -> None:
     Rebuilt = BuildSldprt(SourceDoc.streams, template=Template)
     Archive = SldprtArchive.from_bytes(Rebuilt)
     assert Archive.file_id == SourceDoc.file_id
-    Expected, IgnoredValue = TemplateFields(Template, SourceDoc)
-    Actual, IgnoredValue = TemplateFields(Rebuilt, Archive)
+    Expected = ContainerSignatures(Template)
+    Actual = ContainerSignatures(Rebuilt)
     assert Actual == Expected

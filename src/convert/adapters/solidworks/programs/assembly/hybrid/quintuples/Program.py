@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
@@ -19,23 +21,26 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 )
 
 from .Registry import (
-    FieldOwners,
+    KFieldOwners,
     StreamPrograms,
 )
 
 
+# compatibility binding preserves the generated owner catalog facade
+FieldOwners = KFieldOwners
+
 # legacy format access remains available while shared encoding owns the mapping
-globals()["PrimitiveFormats"] = KPrimitiveFormats
+PrimitiveFormats = KPrimitiveFormats
 
 
 # each operation serializes one recovered value through its typed contract
-def EncodeField(KindName: str, FieldValue: AnyValue) -> bytes:
+def EncodeField(KindName: str, FieldValue: FieldType) -> bytes:
     return EncodeValue(KindName, FieldValue, "assembly")
 
 
 # callers may replace semantic fields while source offsets preserve field order
 def EncodeProgram(
-    StreamName: str, Overrides: Mapping[int, AnyValue] | None = None
+    StreamName: str, Overrides: Mapping[int, FieldType] | None = None
 ) -> bytes:
     try:
         Operations = StreamPrograms[StreamName]

@@ -12,7 +12,11 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldOp,
+    FieldValue as FieldType,
+)
+from convert.adapters.solidworks.programs.Common.FieldEncoder import RequireInt
 
 from convert.adapters.solidworks.programs.assembly.distinct.default.Repeat import (
     KConfigShiftFive as ConfigShiftMap,
@@ -67,14 +71,15 @@ KHeaderTailStart = 2718
 
 # operation emission preserves typed ownership while applying semantic values
 def EncodeOps(
-    Operations: Sequence[tuple[int, int, int, str, AnyValue]],
-    Overrides: Mapping[int, AnyValue],
+    Operations: Sequence[FieldOp],
+    Overrides: Mapping[int, FieldType],
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
     BasisMap = BasisValues or {}
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+    for Operation in Operations:
+        StartPos, KindName, DefaultValue = Operation[0], Operation[3], Operation[4]
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
         BasisValue = BasisMap.get(StartPos - BasePos)
@@ -90,7 +95,7 @@ def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[tuple[int, int, int, str, AnyValue], ...]:
+) -> tuple[FieldOp, ...]:
     return tuple(
         Operation
         for Operation in StreamPrograms[StreamName]
@@ -265,9 +270,10 @@ def EncodeConfig(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     SuffixOps = SliceOps("Contents/Config-0", SuffixStart)
-    SuffixOverrides: dict[int, AnyValue] = {}
-    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
-        RelativePos = StartPos - SuffixStart
+    SuffixOverrides: dict[int, FieldType] = {}
+    for Operation in SuffixOps:
+        RelativePos = Operation[0] - SuffixStart
+        DefaultValue = RequireInt(Operation[4], "configuration suffix reference")
         if RelativePos in ConfigShiftMap:
             SuffixOverrides[RelativePos] = DefaultValue + MapShift
         elif RelativePos in ConfigShiftUnique:
@@ -311,9 +317,12 @@ def EncodeResolved(
             UnitStart + UnitWidth,
         )
         RefValues = {
-            StartPos - UnitStart: DefaultValue + MapShift
-            for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in UnitOps
-            if KindName == "classref"
+            Operation[0] - UnitStart: RequireInt(
+                Operation[4], "resolved unit reference"
+            )
+            + MapShift
+            for Operation in UnitOps
+            if Operation[3] == "classref"
         }
         UnitData.extend(
             EncodeOps(
@@ -328,9 +337,10 @@ def EncodeResolved(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     SuffixOps = SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
-    SuffixOverrides: dict[int, AnyValue] = {}
-    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
-        RelativePos = StartPos - SuffixStart
+    SuffixOverrides: dict[int, FieldType] = {}
+    for Operation in SuffixOps:
+        RelativePos = Operation[0] - SuffixStart
+        DefaultValue = RequireInt(Operation[4], "resolved suffix reference")
         if RelativePos in ResolvedShiftLink:
             SuffixOverrides[RelativePos] = DefaultValue + LinkShift
         elif RelativePos in ResolvedShiftMap:
@@ -440,26 +450,23 @@ def EncodeHeader(
 
 
 # legacy aliases preserve recovered hybrid helpers and existing external callers
-KLegacyAliases = {
-    "InsertSpecs": KInsertSpecs,
-    "TracedCount": KTracedCount,
-    "TracedUnique": KTracedUnique,
-    "HeaderExtStart": KHeaderExtStart,
-    "HeaderExtWidth": KHeaderExtWidth,
-    "HeaderFileStart": KHeaderFileStart,
-    "HeaderFileWidth": KHeaderFileWidth,
-    "HeaderTailStart": KHeaderTailStart,
-    "_EmitOps": EncodeOps,
-    "_SliceOps": SliceOps,
-    "_PathKey": PathKey,
-    "_UniqueItems": UniqueItems,
-    "_PathIndex": PathIndex,
-    "_EncodeCMgr": EncodeCmgr,
-    "_EncodeConfig": EncodeConfig,
-    "_EncodeResolved": EncodeResolved,
-    "_EncodeHeader": EncodeHeader,
-}
-globals().update(KLegacyAliases)
+InsertSpecs = KInsertSpecs
+TracedCount = KTracedCount
+TracedUnique = KTracedUnique
+HeaderExtStart = KHeaderExtStart
+HeaderExtWidth = KHeaderExtWidth
+HeaderFileStart = KHeaderFileStart
+HeaderFileWidth = KHeaderFileWidth
+HeaderTailStart = KHeaderTailStart
+_EmitOps = EncodeOps
+_SliceOps = SliceOps
+_PathKey = PathKey
+_UniqueItems = UniqueItems
+_PathIndex = PathIndex
+_EncodeCMgr = EncodeCmgr
+_EncodeConfig = EncodeConfig
+_EncodeResolved = EncodeResolved
+_EncodeHeader = EncodeHeader
 
 
 # canonical hybrid programs scale repeated paths with distinct internal identities

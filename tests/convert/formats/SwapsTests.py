@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass as DataClass
 from functools import lru_cache as LruCache
 import gc as GcValue
 import hashlib as Hashlib
@@ -16,22 +17,127 @@ from pathlib import Path as PathValue
 import re as RegexLib
 import shutil as Shutil
 import struct as Struct
+from typing import Mapping as TypeMap
 
 import pytest as Pytest
 
-from convert import (
-    CarrierReason,
-    convert as Convert,
-    open_document as OpenDocument,
-    registry as Registry,
+from convert.adapters.base.ContractTypes import (
+    KSourceType as SourceData,
+    KTargetType as TargetData,
 )
+from convert.adapters.base.TransferContract import CarrierReason
 from convert.adapters.solidworks import SldprtFormatError
-from interchange import (
-    AssemblyData,
-    CadDocument,
-    Capability,
-    source_payload_indexes as SourcePayloadIndexes,
-)
+from convert.api.ApiContext import KAdapterRegistry as Registry
+from convert.api.ApiConvert import ConvertFile as Convert
+from convert.api.ApiOpen import OpenDocument
+from convert.engine.EngineResult import ConversionResult
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.MateGroup import MateGroup
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.models.DocumentPayload import GetPayloadIds
+from interchange.enums.EnumDocument import Capability
+from interchange.enums.EnumUnits import UnitSystem
+from interchange.features.FeatureBody import DesignBody
+from interchange.features.FeatureStep import FeatureStep
+from interchange.geometry.models.Selection import Selection
+from interchange.geometry.models.Sketch import Sketch
+from interchange.geometry.models.SupportPlane import SupportPlane
+from interchange.mesh.SurfaceMesh import SurfaceMesh
+from interchange.payloads.PayloadRecord import BrepPayload
+from interchange.payloads.PayloadRoles import PayloadRole
+from interchange.records.RecordConfig import Configuration
+from interchange.records.RecordParameter import Parameter
+from interchange.records.RecordProvenance import Provenance
+
+
+# mesh comparisons need stable names so nested document signatures remain statically concrete
+@DataClass(frozen=True, slots=True)
+class MeshSig:
+    EntityId: str
+    EntityName: str
+    VertexCount: int
+    TriangleCount: int
+    NormalCount: int
+    ContentDigest: str
+    Provenance: Provenance | None
+    Attributes: TypeMap[str, object]
+
+
+# payload comparisons need validated bytes and explicit fields instead of anonymous tuple positions
+@DataClass(frozen=True, slots=True)
+class BrepSig:
+    EntityId: str
+    FormatId: str
+    EntityKind: str
+    SchemaText: str
+    SourceDigest: str
+    ByteCount: int | None
+    ContentDigest: str | None
+    SourceStream: str
+    Provenance: Provenance | None
+    Attributes: TypeMap[str, object]
+    ValueRole: PayloadRole
+    FileExtension: str
+
+
+# assembly recursion needs a named contract so embedded documents retain their concrete signature
+@DataClass(frozen=True, slots=True)
+class AssemblySig:
+    RootDefinitionId: str
+    Definitions: tuple[ComponentDef, ...]
+    Instances: tuple[ComponentInst, ...]
+    Documents: tuple[tuple[str, DocumentSig], ...]
+    MateEntities: tuple[MateEntity, ...]
+    Mates: tuple[MateConstraint, ...]
+    MateGroups: tuple[MateGroup, ...]
+    Attributes: TypeMap[str, object]
+
+
+# document equality needs an explicit cross format contract rather than a partially unknown tuple
+@DataClass(frozen=True, slots=True)
+class DocumentSig:
+    Configurations: tuple[Configuration, ...]
+    Parameters: tuple[Parameter, ...]
+    SupportPlanes: tuple[SupportPlane, ...]
+    Sketches: tuple[Sketch, ...]
+    Selections: tuple[Selection, ...]
+    FeatureTimeline: tuple[FeatureStep, ...]
+    Bodies: tuple[DesignBody, ...]
+    Meshes: tuple[MeshSig, ...]
+    BrepPayloads: tuple[BrepSig, ...]
+    Capabilities: frozenset[Capability]
+    Units: UnitSystem
+    SchemaVersion: str
+    Assembly: AssemblySig | None
+
+
+# output flags need runtime validation because writer metadata is an extensible object mapping
+def IsMetaFlag(Metadata: TypeMap[str, object], KeyValue: str) -> bool:
+    FlagValue = Metadata.get(KeyValue)
+    if not isinstance(FlagValue, bool):
+        raise TypeError(f"output metadata {KeyValue!r} must be a bool")
+    return FlagValue
+
+
+# referenced file accounting needs an integer distinct from boolean metadata values
+def GetMetaCount(Metadata: TypeMap[str, object], KeyValue: str) -> int:
+    CountValue = Metadata.get(KeyValue)
+    if not isinstance(CountValue, int) or isinstance(CountValue, bool):
+        raise TypeError(f"output metadata {KeyValue!r} must be an int")
+    return CountValue
+
+
+# compatibility branches need a validated text discriminator before policy checks
+def GetMetaText(Metadata: TypeMap[str, object], KeyValue: str) -> str:
+    TextValue = Metadata.get(KeyValue)
+    if not isinstance(TextValue, str):
+        raise TypeError(f"output metadata {KeyValue!r} must be a string")
+    return TextValue
+
 
 # this binding exists because shared behavior needs one stable value
 KRootValue = PathValue(__file__).parents[3]
@@ -154,78 +260,81 @@ KSupportedFiles = tuple(
 
 
 # this definition exists because focused behavior needs one stable owner
-def AssemblyS(Assembly: AssemblyData | None):
+def AssemblyS(Assembly: AssemblyData | None) -> AssemblySig | None:
     if Assembly is None:
         return None
-    return (
-        Assembly.root_definition_id,
-        Assembly.definitions,
-        Assembly.instances,
-        tuple(
-            (Component.id, DocumentS(Component.document))
-            for Component in Assembly.documents
-        ),
-        Assembly.mate_entities,
-        Assembly.mates,
-        Assembly.mate_groups,
-        Assembly.attributes,
+    Documents: list[tuple[str, DocumentSig]] = []
+    for Component in Assembly.Documents:
+        Embedded = Component.Document
+        if not isinstance(Embedded, CadDocument):
+            raise TypeError("assembly component document must be a CadDocument")
+        Documents.append((Component.EntityId, DocumentS(Embedded)))
+    return AssemblySig(
+        Assembly.RootDefinitionId,
+        Assembly.Definitions,
+        Assembly.Instances,
+        tuple(Documents),
+        Assembly.MateEntities,
+        Assembly.Mates,
+        Assembly.MateGroups,
+        Assembly.Attributes,
     )
 
 
 # this definition exists because focused behavior needs one stable owner
-def DocumentS(Document: CadDocument):
-    EnvelopeIndexes = (
-        SourcePayloadIndexes(Document)
-        if isinstance(Document.source.attributes.get("embedded_source_format_id"), str)
-        else frozenset()
+def DocumentS(Document: CadDocument) -> DocumentSig:
+    EmbeddedFormat: object = Document.Source.Attributes.get("embedded_source_format_id")
+    EnvelopeIndexes: frozenset[int] = (
+        GetPayloadIds(Document) if isinstance(EmbeddedFormat, str) else frozenset[int]()
     )
-    return (
-        Document.configurations,
-        Document.parameters,
-        Document.support_planes,
-        Document.sketches,
-        Document.selections,
-        Document.feature_timeline,
-        Document.bodies,
-        tuple(MeshSignature(MeshValue) for MeshValue in Document.meshes),
+    return DocumentSig(
+        Document.Configurations,
+        Document.Parameters,
+        Document.SupportPlanes,
+        Document.Sketches,
+        Document.Selections,
+        Document.FeatureTimeline,
+        Document.Bodies,
+        tuple(MeshSignature(MeshValue) for MeshValue in Document.Meshes),
         tuple(
             BrepSignature(Payload)
-            for Index, Payload in enumerate(Document.brep_payloads)
+            for Index, Payload in enumerate(Document.BrepPayloads)
             if Index not in EnvelopeIndexes
         ),
-        Document.capabilities,
-        Document.units,
-        Document.schema_version,
-        AssemblyS(Document.assembly),
+        Document.Capabilities,
+        Document.Units,
+        Document.SchemaVersion,
+        AssemblyS(Document.Assembly),
     )
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshSignature(MeshValue):
+def MeshSignature(MeshValue: SurfaceMesh) -> MeshSig:
     Digest = Hashlib.sha256()
-    for Vertex in MeshValue.vertices:
-        Digest.update(Struct.pack("!ddd", Vertex.x, Vertex.y, Vertex.z))
-    for Triangle in MeshValue.triangles:
+    for Vertex in MeshValue.Vertices:
+        Digest.update(Struct.pack("!ddd", Vertex.XCoord, Vertex.YCoord, Vertex.ZCoord))
+    for Triangle in MeshValue.Triangles:
         Digest.update(Struct.pack("!qqq", *Triangle))
-    for Normal in MeshValue.normals:
-        Digest.update(Struct.pack("!ddd", Normal.x, Normal.y, Normal.z))
-    return (
-        MeshValue.id,
-        MeshValue.name,
-        len(MeshValue.vertices),
-        len(MeshValue.triangles),
-        len(MeshValue.normals),
+    for Normal in MeshValue.Normals:
+        Digest.update(Struct.pack("!ddd", Normal.XCoord, Normal.YCoord, Normal.ZCoord))
+    return MeshSig(
+        MeshValue.EntityId,
+        MeshValue.EntityName,
+        len(MeshValue.Vertices),
+        len(MeshValue.Triangles),
+        len(MeshValue.Normals),
         Digest.hexdigest(),
-        MeshValue.provenance,
-        MeshValue.attributes,
+        MeshValue.Provenance,
+        MeshValue.Attributes,
     )
 
 
 # this definition exists because focused behavior needs one stable owner
-def BrepSignature(Payload):
-    PayloadId = Payload.id
-    Attributes = Payload.attributes
-    if Payload.format_id == "catia.v5.cfv2" and Payload.kind == "native_document":
+def BrepSignature(Payload: BrepPayload) -> BrepSig:
+    PayloadId = Payload.EntityId
+    Attributes: TypeMap[str, object] = Payload.Attributes
+    PayloadData = Payload.PayloadData
+    if Payload.FormatId == "catia.v5.cfv2" and Payload.EntityKind == "native_document":
         PayloadId = "catia:native-document"
         Attributes = {
             KeyValue: Value
@@ -233,27 +342,23 @@ def BrepSignature(Payload):
             if KeyValue != "catia.replay_semantic_sha256"
         }
     elif (
-        Payload.format_id == "catia.v5.sha256"
-        and Payload.kind == "native_document_binding"
+        Payload.FormatId == "catia.v5.sha256"
+        and Payload.EntityKind == "native_document_binding"
     ):
         PayloadId = "catia:native-document-binding"
-    return (
+    return BrepSig(
         PayloadId,
-        Payload.format_id,
-        Payload.kind,
-        Payload.schema,
-        Payload.sha256,
-        len(Payload.data) if Payload.data is not None else None,
-        (
-            Hashlib.sha256(Payload.data).hexdigest()
-            if Payload.data is not None
-            else None
-        ),
-        Payload.source_stream,
-        Payload.provenance,
+        Payload.FormatId,
+        Payload.EntityKind,
+        Payload.SchemaText,
+        Payload.SourceDigest,
+        len(PayloadData) if PayloadData is not None else None,
+        Hashlib.sha256(PayloadData).hexdigest() if PayloadData is not None else None,
+        Payload.SourceStream,
+        Payload.Provenance,
         Attributes,
-        Payload.role,
-        Payload.file_extension,
+        Payload.ValueRole,
+        Payload.FileExtension,
     )
 
 
@@ -268,7 +373,7 @@ def Suffix(PathValueA: PathValue) -> str:
 
 # this definition exists because focused behavior needs one stable owner
 def TargetSuffixes(Document: CadDocument) -> tuple[str, ...]:
-    return KAssemblySuffixes if Document.assembly is not None else KPartSuffixes
+    return KAssemblySuffixes if Document.Assembly is not None else KPartSuffixes
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -284,17 +389,17 @@ def AssertTarget(
     Source: PathValue | bytes,
     IsAssembly: bool,
 ) -> None:
-    assert (Document.assembly is not None) == IsAssembly
+    assert (Document.Assembly is not None) == IsAssembly
     if SuffixA in {".SLDPRT", ".SLDASM"}:
-        assert Document.source.format_id == KFormatBySuffix[SuffixA]
+        assert Document.Source.FormatId == KFormatBySuffix[SuffixA]
     elif SuffixA in {".CATPart", ".CATProduct"}:
-        assert Document.metadata["catia.document_type"] == SuffixA[1:]
+        assert Document.Metadata["catia.document_type"] == SuffixA[1:]
     else:
         assert Registry.select_reader(Source).info.format_id == "freecad.fcstd"
 
 
 # this helper verifies the cross format transfer and losslessness contract
-def AssertTransfer(Result, SuffixA: str) -> None:
+def AssertTransfer(Result: ConversionResult, SuffixA: str) -> None:
     assert not Result.application_usable or Result.vendor_loadable
     ExpectedNearLossless = (
         Result.application_usable
@@ -318,15 +423,14 @@ def AssertTransfer(Result, SuffixA: str) -> None:
 
 
 # this helper verifies native metadata types and emitted reference files
-def AssertMetaShape(Result, IsAssembly: bool) -> None:
+def AssertMetaShape(Result: ConversionResult, IsAssembly: bool) -> None:
     Metadata = Result.output.metadata
-    assert isinstance(Metadata["vendor_loadable"], bool)
-    assert isinstance(Metadata["native_geometry"], bool)
-    assert isinstance(Metadata["native_history"], bool)
-    assert isinstance(Metadata["native_assembly"], bool)
-    assert isinstance(Metadata["native_self_contained"], bool)
-    ReferencedFilesWritten = Metadata["referenced_files_written"]
-    assert isinstance(ReferencedFilesWritten, int)
+    IsMetaFlag(Metadata, "vendor_loadable")
+    IsMetaFlag(Metadata, "native_geometry")
+    IsMetaFlag(Metadata, "native_history")
+    IsMetaFlag(Metadata, "native_assembly")
+    NativeSelfContained = IsMetaFlag(Metadata, "native_self_contained")
+    ReferencedFilesWritten = GetMetaCount(Metadata, "referenced_files_written")
     assert ReferencedFilesWritten >= 0
     if ReferencedFilesWritten:
         assert IsAssembly
@@ -339,40 +443,46 @@ def AssertMetaShape(Result, IsAssembly: bool) -> None:
         )
         assert len(Siblings) == ReferencedFilesWritten
         assert all(ItemValue.stat().st_size > 0 for ItemValue in Siblings)
-        assert Metadata["native_self_contained"] is Result.application_usable
+        assert NativeSelfContained is Result.application_usable
 
 
 # this helper verifies native capability claims against emitted metadata
-def AssertNative(Result, IsAssembly: bool) -> None:
+def AssertNative(Result: ConversionResult, IsAssembly: bool) -> None:
     Metadata = Result.output.metadata
-    if Metadata["compatibility"] == "native-exact":
-        assert Metadata["vendor_loadable"] is True
-        assert Metadata["native_geometry"] is True
-        assert Metadata["native_history"] is True
-        assert Metadata["native_assembly"] is IsAssembly
-        assert Metadata["native_self_contained"] is (not IsAssembly)
+    Compatibility = GetMetaText(Metadata, "compatibility")
+    VendorLoadable = IsMetaFlag(Metadata, "vendor_loadable")
+    NativeGeometry = IsMetaFlag(Metadata, "native_geometry")
+    NativeHistory = IsMetaFlag(Metadata, "native_history")
+    NativeAssembly = IsMetaFlag(Metadata, "native_assembly")
+    NativeSelfContained = IsMetaFlag(Metadata, "native_self_contained")
+    if Compatibility == "native-exact":
+        assert VendorLoadable is True
+        assert NativeGeometry is True
+        assert NativeHistory is True
+        assert NativeAssembly is IsAssembly
+        assert NativeSelfContained is (not IsAssembly)
         return
     Native = Result.output.native_capabilities
-    if Metadata["native_geometry"]:
+    if NativeGeometry:
         assert Capability.BREP in Native
-    if Metadata["native_history"]:
+    if NativeHistory:
         History = tuple(
             Transfer
             for Transfer in Result.output.transfers
             if Transfer.capability is Capability.PARAMETRIC_HISTORY
         )
         assert not History or Capability.PARAMETRIC_HISTORY in Native
-    if Metadata["native_assembly"]:
+    if NativeAssembly:
         assert IsAssembly
         assert Capability.ASSEMBLIES in Native
-    if Metadata["native_self_contained"]:
+    if NativeSelfContained:
         assert Result.application_usable is True
         assert Result.vendor_loadable is True
 
 
 # this helper applies the complete target verification rules to one result
 def AssertTVR(
-    Result,
+    Result: ConversionResult,
     SuffixA: str,
     IsAssembly: bool,
 ) -> None:
@@ -384,7 +494,7 @@ def AssertTVR(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ConvertWAG(Source, Destination):
+def ConvertWAG(Source: SourceData, Destination: TargetData) -> ConversionResult:
     Result = Convert(Source, Destination)
     assert Result.requirements == ()
     assert Result.dropped == frozenset()
@@ -429,14 +539,14 @@ def TestSFMRADK() -> None:
 
 # this helper verifies one forward conversion and its restored document
 def VerifyForward(
-    Source,
-    SourceSuffix,
-    DestinationSuffix,
-    OriginalSignature,
-    TmpPath,
-    Index,
-    IsAssembly,
-):
+    Source: SourceData,
+    SourceSuffix: str,
+    DestinationSuffix: str,
+    OriginalSignature: DocumentSig,
+    TmpPath: PathValue,
+    Index: int,
+    IsAssembly: bool,
+) -> tuple[PathValue, PathValue]:
     ForwardDirectory = TmpPath / f"forward_{Index}"
     ForwardDirectory.mkdir()
     Destination = ForwardDirectory / f"converted{DestinationSuffix}"
@@ -451,7 +561,7 @@ def VerifyForward(
     del Forward
     GcValue.collect()
     Restored = OpenDocument(Destination)
-    assert Restored.validate() == ()
+    assert Restored.GetErrors() == ()
     assert DocumentS(Restored) == OriginalSignature
     AssertTarget(Restored, DestinationSuffix, Destination, IsAssembly)
     del Restored
@@ -461,14 +571,14 @@ def VerifyForward(
 
 # this helper verifies one reverse conversion and its restored document
 def VerifyReverse(
-    Destination,
-    SourceSuffix,
-    DestinationSuffix,
-    OriginalSignature,
-    TmpPath,
-    Index,
-    IsAssembly,
-):
+    Destination: PathValue,
+    SourceSuffix: str,
+    DestinationSuffix: str,
+    OriginalSignature: DocumentSig,
+    TmpPath: PathValue,
+    Index: int,
+    IsAssembly: bool,
+) -> PathValue:
     ReverseDirectory = TmpPath / f"reverse_{Index}"
     ReverseDirectory.mkdir()
     Reverse = ReverseDirectory / f"converted{SourceSuffix}"
@@ -483,7 +593,7 @@ def VerifyReverse(
     del Backward
     GcValue.collect()
     ReversedDocument = OpenDocument(Reverse)
-    assert ReversedDocument.validate() == ()
+    assert ReversedDocument.GetErrors() == ()
     assert DocumentS(ReversedDocument) == OriginalSignature
     AssertTarget(ReversedDocument, SourceSuffix, Reverse, IsAssembly)
     del ReversedDocument
@@ -510,7 +620,7 @@ def TestEVFSRBD(
         if Source.is_file()
         else Pytest.skip(f"bundled example source is unavailable: {Source.name}")
     )
-    assert (Original.assembly is not None) == IsAssembly
+    assert (Original.Assembly is not None) == IsAssembly
     OriginalSignature = DocumentS(Original)
     ForwardDirectory = TmpPath / f"{NameValue}_forward"
     ForwardDirectory.mkdir()
@@ -521,7 +631,7 @@ def TestEVFSRBD(
     assert Result.destination_format == KFormatBySuffix[DestinationSuffix]
     assert Result.output.path == Destination.resolve()
     assert Result.output.bytes_written == Destination.stat().st_size
-    assert Restored.validate() == ()
+    assert Restored.GetErrors() == ()
     assert DocumentS(Restored) == OriginalSignature
     AssertTarget(Restored, DestinationSuffix, Destination, IsAssembly)
     AssertTVR(Result, DestinationSuffix, IsAssembly)
@@ -533,7 +643,7 @@ def TestEVFSRBD(
     assert ReverseResult.source_format == KFormatBySuffix[DestinationSuffix]
     assert ReverseResult.destination_format == KFormatBySuffix[SourceSuffix]
     assert ReverseResult.output.bytes_written == Reverse.stat().st_size
-    assert ReversedDocument.validate() == ()
+    assert ReversedDocument.GetErrors() == ()
     assert DocumentS(ReversedDocument) == OriginalSignature
     AssertTarget(ReversedDocument, SourceSuffix, Reverse, IsAssembly)
     AssertTVR(ReverseResult, SourceSuffix, IsAssembly)
@@ -567,7 +677,7 @@ def TestESESTEVFAB(
 ) -> None:
     SourceSuffix = Suffix(Source)
     Original = OpenDocument(Source)
-    IsAssembly = Original.assembly is not None
+    IsAssembly = Original.Assembly is not None
     assert IsAssembly is IsAssemblyFile(Source)
     OriginalSignature = DocumentS(Original)
     TargetSuffixesA = TargetSuffixes(Original)

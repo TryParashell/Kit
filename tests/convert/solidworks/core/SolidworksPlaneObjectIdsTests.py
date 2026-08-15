@@ -8,9 +8,9 @@
 
 from __future__ import annotations
 from convert.adapters.solidworks.core.Native import (
-    _principal_plane_ids as PrincipalPlaneIds,
-    _repair_plane_object_ids as RepairPlaneObjectIds,
-    _write_object_ids as WriteObjectIds,
+    PrincipalPlaneB as PrincipalPlaneIds,
+    RepairPlaneIMut as RepairPlaneObjectIds,
+    WriteObjectIds,
 )
 from interchange import (
     CadDocument,

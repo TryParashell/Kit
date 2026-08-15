@@ -58,9 +58,9 @@ class BrepPayload(ModelBase):
     FileExtension: str
 
     # invalid metadata must fail before bytes reach archive writers
-    def __post_init__(SelfValue) -> None:
-        if not isinstance(SelfValue.ValueRole, PayloadRole):
+    def __post_init__(self) -> None:
+        if type(self.ValueRole) is not PayloadRole:
             raise TypeError("payload role must be a PayloadRole")
-        ErrorText = FindExtError(SelfValue.FileExtension)
+        ErrorText = FindExtError(self.FileExtension)
         if ErrorText:
             raise ValueError(ErrorText)

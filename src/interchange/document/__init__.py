@@ -176,6 +176,14 @@ BindFunctionMut(
     globals(),
 )
 
+CadDocumentValidationError = DocumentError
+filter_document = FilterDocument
+infer_capabilities = InferCaps
+retained_capabilities = GetRetainedCaps
+semantic_metadata = GetSemanticMeta
+source_payload_indexes = GetPayloadIds
+with_wrapper_metadata = AddWrapperMeta
+
 
 # document consumers need one intentional facade while implementations remain independently reviewable
 __all__ = (

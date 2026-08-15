@@ -75,17 +75,16 @@ dev = [
     "checkov>=3.3.11",
     "detect-secrets>=1.5.0",
     "mypy>=2.3.1",
+    "numpy<2.5",
     "pip-audit>=2.9.0",
     "pyright>=1.1.411",
     "ruff>=0.16.3",
     "safety>=3.8.1",
     "semgrep>=1.136.0",
     "setuptools==80.9.0",
+    "types-pywin32>=312.0.0.20260724",
     "zizmor>=1.29.0",
 ]
-
-
-
 [tool.ruff]
 target-version = "py311"
 line-length = 120
@@ -106,7 +105,7 @@ strict = true
 explicit_package_bases = true
 files = ["src", "tests", "tools"]
 exclude = '^(\.venv|examples|Parashell|modules)/'
-mypy_path = ["src", "tools", "tests"]
+mypy_path = ["src", ".", "re/tooling/ghidra/Generation"]
 warn_unused_configs = true
 show_error_codes = true
 pretty = true
@@ -116,23 +115,3 @@ include = ["src", "tests", "tools"]
 exclude = [".venv", "examples", "Parashell", "modules", "tests/oracle"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
-reportMissingTypeStubs = "warning"
-reportUnknownMemberType = "warning"
-reportUnknownArgumentType = "warning"
-reportUnknownVariableType = "warning"
-reportUnknownParameterType = "warning"
-reportSelfClsParameterName = "none"
-reportUnsupportedDunderAll = "warning"
-
-reportAttributeAccessIssue = "none"
-reportPossiblyUnboundVariable = "none"
-reportUnusedVariable = "none"
-reportUnnecessaryIsInstance = "none"
-reportMissingImports = "none"
-reportUntypedBaseClass = "none"
-reportArgumentType = "none"
-reportMissingParameterType = "none"
-reportCallIssue = "none"
-reportReturnType = "none"
-reportAssignmentType = "none"
-reportOperatorIssue = "none"

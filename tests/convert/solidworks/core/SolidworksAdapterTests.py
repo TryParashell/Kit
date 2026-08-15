@@ -17,15 +17,15 @@ from convert.adapters.solidworks import (
     read_sldprt as ReadSldprt,
 )
 from convert.adapters.solidworks.core.Adapter import (
-    _FEATURE_KIND_BY_NATIVE as Native,
-    _final_body_feature_id as FinalBodyFeatureId,
-    _feature_kind as FeatureKindA,
-    _is_geometry_brep_payload as IsGeometryBrepPayload,
-    _marker_curve_semantic as MarkerCurveSemantic,
-    _sketch as Sketch,
-    _sketch_constraints as SketchConstraints,
-    _solid_body_feature as SolidBodyFeature,
-    _timeline as Timeline,
+    KFeatureKindByNative as Native,
+    FinalBodyId as FinalBodyFeatureId,
+    FeatureKindA,
+    IsGeomBrep as IsGeometryBrepPayload,
+    MarkerCurve as MarkerCurveSemantic,
+    SketchA as Sketch,
+    SketchB as SketchConstraints,
+    SolidBody as SolidBodyFeature,
+    Timeline,
 )
 from convert.adapters.solidworks.container.Container import (
     container_signatures as ContainerSignatures,
@@ -42,18 +42,19 @@ from convert.adapters.solidworks.core.Native import (
     NativeOperation,
     NativePlane,
     NativeSketch,
-    _decode_planes as DecodePlanes,
-    _native_scale_factors as NativeScaleFactors,
-    _parse_native_equations as ParseNativeEquations,
-    _parse_keywords as ParseKeywords,
-    _reference_plane_ids as ReferencePlaneIds,
-    _constraints as Constraints,
-    _profiles as Profiles,
+    DecodePlanes,
+    NativeScale as NativeScaleFactors,
+    ParseNative as ParseNativeEquations,
+    ParseKeywords,
+    RefPlaneIds as ReferencePlaneIds,
+    Constraints,
+    DecodeProfiles as Profiles,
     decode_native_model as DecodeNativeModel,
 )
 from interchange import (
     BooleanOperation,
     BrepPayload,
+    CadDocument,
     Capability,
     CircleGeometry,
     ExtrusionFeature,
@@ -99,7 +100,7 @@ def ResolvedNR(
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAAESC() -> None:
-    assert SldprtAdapter().info.capabilities == frozenset(Capability)
+    assert SldprtAdapter().info.Capabilities == frozenset(Capability)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1004,7 +1005,7 @@ def TestAAMARNJ() -> None:
     Adapter = SldprtAdapter()
     assert Adapter.probe(SourceDoc).confidence == 1.0
     Document = ReadSldprt(SourceDoc, include_brep=False)
-    Restored = type(Document).from_json(Document.to_json())
+    Restored = CadDocument.from_json(Document.to_json())
     assert Restored.validate() == ()
     assert Restored.source.path == "<memory>"
     assert Restored.feature("sldprt:feature:116").name == "Fillet1"

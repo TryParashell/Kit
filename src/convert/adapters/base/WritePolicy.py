@@ -153,6 +153,13 @@ def NormalizeUsable(ResultData: WriteResult) -> WriteResult:
     )
 
 
+# writer outcomes cross plugin boundaries so policy needs one concrete runtime result gate
+def GetWriteResult(ResultValue: object) -> WriteResult:
+    if not isinstance(ResultValue, WriteResult):
+        raise RegistryError("writer returned an invalid write result")
+    return ResultValue
+
+
 # checked writer invocation protects registry policy from malformed adapter outcomes
 def RunCheckedMut(
     DocumentData: CadDocument,
@@ -162,21 +169,19 @@ def RunCheckedMut(
     AllowCarrier: bool,
     NeedSelfContained: bool,
 ) -> WriteResult:
-    ResultData = AdapterData.write(DocumentData, TargetData, OptionsData)
-    if not isinstance(ResultData, WriteResult):
-        raise RegistryError(
-            f"writer {AdapterData.info.format_id} returned an invalid write result"
-        )
+    ResultData = GetWriteResult(
+        AdapterData.write(DocumentData, TargetData, OptionsData)
+    )
     if GetFormatKey(ResultData.AdapterName) not in GetFormatKeys(AdapterData.info):
         raise RegistryError(
-            f"writer {AdapterData.info.format_id} returned write format {ResultData.AdapterName}"
+            f"writer {AdapterData.info.FormatId} returned write format {ResultData.AdapterName}"
         )
     TransferValues = CheckTransfers(DocumentData, AdapterData.info, ResultData)
     CheckedResult = NormalizeUsable(
         ReplaceValue(ResultData, Transfers=TransferValues, DroppedCaps=frozenset())
     )
     if NeedSelfContained and CheckedResult.Requirements:
-        raise UsabilityError(AdapterData.info.format_id, CheckedResult)
+        raise UsabilityError(AdapterData.info.FormatId, CheckedResult)
     if not AllowCarrier and (
         not CheckedResult.IsAppUsable
         or not CheckedResult.IsVendorLoadable
@@ -184,5 +189,5 @@ def RunCheckedMut(
         or bool(CheckedResult.DroppedCaps)
         or bool(GetBlockers(CheckedResult))
     ):
-        raise UsabilityError(AdapterData.info.format_id, CheckedResult)
+        raise UsabilityError(AdapterData.info.FormatId, CheckedResult)
     return CheckedResult

@@ -29,10 +29,7 @@ def BuildAssembly() -> CadDocument:
 
 
 # historical imports keep conversion suites independent from helper renaming
-def __getattr__(NameText: str) -> object:
-    if NameText == "assembly_document":
-        return BuildAssembly
-    raise AttributeError(f"module {__name__!r} has no attribute {NameText!r}")
+assembly_document = BuildAssembly
 
 
 # behavior coverage protects portable interchange semantics during structural refactors

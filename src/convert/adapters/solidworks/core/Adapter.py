@@ -160,6 +160,7 @@ from convert.adapters.solidworks.core.FeatureKindByNative import KFeatureKindByN
 from convert.adapters.solidworks.core.Native import (
     NativeDimension,
     NativeFeature,
+    XmlFeature,
     NativeMarker,
     NativeModel,
     NativeOperation,
@@ -260,21 +261,16 @@ KTargetUnsupported = frozenset(
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class Generated:
-    locals().setdefault("__annotations__", {})
-    __annotations__["streams"] = "dict[str, bytes]"
-    __annotations__["native_brep"] = "str"
-    __annotations__["native_capabilities"] = "frozenset[Capability]"
-    __annotations__["compatibility"] = "str"
-    __annotations__["application_usable"] = "bool"
-    __annotations__["vendor_loadable"] = "bool"
-    __annotations__["mixed_capabilities"] = "frozenset[Capability]"
-    locals()["mixed_capabilities"] = frozenset()
-    __annotations__["unexpressed"] = "tuple[str, ...]"
-    locals()["unexpressed"] = ()
-    __annotations__["donor_notes"] = "tuple[str, ...]"
-    locals()["donor_notes"] = ()
-    __annotations__["reader_gaps"] = "tuple[str, ...]"
-    locals()["reader_gaps"] = ()
+    streams: dict[str, bytes]
+    native_brep: str
+    native_capabilities: frozenset[Capability]
+    compatibility: str
+    application_usable: bool
+    vendor_loadable: bool
+    mixed_capabilities: frozenset[Capability] = frozenset()
+    unexpressed: tuple[str, ...] = ()
+    donor_notes: tuple[str, ...] = ()
+    reader_gaps: tuple[str, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -313,6 +309,29 @@ KWrapperMetaKeys = KSourceKeys | frozenset(
 # this definition exists because focused behavior needs one stable owner
 class SldprtAdapter:
     __slots__ = ()
+
+    @property
+    def info(self) -> AdapterInfo:
+        return InfoAction(self)
+
+    def probe(self, SourceValue: Source) -> ProbeResult:
+        return Probe(self, SourceValue)
+
+    def read(
+        self, SourceValue: Source, Options: ReadOptions | None = None
+    ) -> CadDoc:
+        return ReadAction(self, SourceValue, Options)
+
+    def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
+        return IsSupports(self, DocValue, TargetValue)
+
+    def write(
+        self,
+        DocValue: CadDocument,
+        TargetValue: Target,
+        Options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return Write(self, DocValue, TargetValue, Options)
 
 
 # adapter metadata stays isolated so discovery can inspect capabilities without reading documents
@@ -384,14 +403,6 @@ def Write(
     Options: WriteOptions | None = None,
 ) -> WriteResult:
     return WriteDocument(Instance, DocValue, Target, Options)
-
-
-setattr(SldprtAdapter, "info", property(InfoAction))
-setattr(SldprtAdapter, "probe", Probe)
-setattr(SldprtAdapter, "read", ReadAction)
-setattr(SldprtAdapter, "supports", IsSupports)
-setattr(SldprtAdapter, "write", Write)
-setattr(SldprtAdapter, "Supports", IsSupports)
 
 
 # generated writing needs one immutable input bundle so selection policy cannot drift across phases
@@ -7534,7 +7545,7 @@ def OperationValue(
 
 
 # this definition exists because focused behavior needs one stable owner
-def FeatureKindA(Feature: NativeFeature) -> FeatureKind:
+def FeatureKindA(Feature: NativeFeature | XmlFeature) -> FeatureKind:
     if getattr(Feature, "class_name", "") in {"moSketchHole", "moHoleWzd_c"}:
         return FeatureKind.HOLE
     return KFeatureKindByNative.get(Feature.kind.casefold().strip(), FeatureKind.NATIVE)
@@ -7812,928 +7823,928 @@ def MarkerId(NativeId: int, Offset: int) -> str:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcEllipseGeometry"] = ArcEllipseGeom
+ArcEllipseGeometry = ArcEllipseGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcGeometry"] = ArcGeom
+ArcGeometry = ArcGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcParabolaGeometry"] = ArcParabolaGeom
+ArcParabolaGeometry = ArcParabolaGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["AssemblyData"] = AsmData
+AssemblyData = AsmData
 
 # this binding exists because shared behavior needs one stable value
-globals()["Body"] = BodyValue
+Body = BodyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["BooleanOperation"] = BoolOperation
+BooleanOperation = BoolOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()["BytesIO"] = BytesIo
+BytesIO = BytesIo
 
 # this binding exists because shared behavior needs one stable value
-globals()["COMPONENT_TREE_STREAM"] = ComponentTreeStream
+COMPONENT_TREE_STREAM = ComponentTreeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTAINER_VERSIONS"] = ContainerVersions
+CONTAINER_VERSIONS = ContainerVersions
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTENT_TYPES_STREAM"] = ContentTypesStream
+CONTENT_TYPES_STREAM = ContentTypesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CircleGeometry"] = CircleGeom
+CircleGeometry = CircleGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ComponentDocument"] = ComponentDoc
+ComponentDocument = ComponentDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["Configuration"] = Config
+Configuration = Config
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintReference"] = RuleRef
+ConstraintReference = RuleRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIRECTION_AXIS_ROLE"] = DirectionAxisRole
+DIRECTION_AXIS_ROLE = DirectionAxisRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_LISTS_STREAM"] = DisplayListsStream
+DISPLAY_LISTS_STREAM = DisplayListsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["Destination"] = Target
+Destination = Target
 
 # this binding exists because shared behavior needs one stable value
-globals()["Diagnostic"] = DiagValue
+Diagnostic = DiagValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
+ET = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["EllipseGeometry"] = EllipseGeom
+EllipseGeometry = EllipseGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURES_STREAM"] = FeaturesStream
+FEATURES_STREAM = FeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["FORMAT_ID_BY_SUFFIX"] = FormatIdBySuffix
+FORMAT_ID_BY_SUFFIX = FormatIdBySuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["GeometryKind"] = GeomKind
+GeometryKind = GeomKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = InfoValue
+INFO = InfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["KEYWORDS_STREAM"] = KeywordsStream
+KEYWORDS_STREAM = KeywordsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_DOCUMENT_STREAM"] = KitDocStream
+KIT_DOCUMENT_STREAM = KitDocStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_NATIVE_STREAM"] = KitNativeStream
+KIT_NATIVE_STREAM = KitNativeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_RESOLVED_STREAM"] = KitResolvedStream
+KIT_RESOLVED_STREAM = KitResolvedStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["LineGeometry"] = LineGeom
+LineGeometry = LineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_NAME"] = MatesStreamName
+MATES_STREAM_NAME = MatesStreamName
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_SUFFIX"] = MatesStreamSuffix
+MATES_STREAM_SUFFIX = MatesStreamSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_VALUE_SEMANTICS"] = MateValueSemantics
+MATE_VALUE_SEMANTICS = MateValueSemantics
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateConstraint"] = MateRule
+MateConstraint = MateRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["Matrix4"] = MatrixFour
+Matrix4 = MatrixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()["Mesh"] = MeshValue
+Mesh = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ALIGNMENT_BY_CODE"] = NativeMateAlignmentByCode
+NATIVE_MATE_ALIGNMENT_BY_CODE = NativeMateAlignmentByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_MARKERS"] = NativeMateEntityMarkers
+NATIVE_MATE_ENTITY_MARKERS = NativeMateEntityMarkers
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_NEUTRAL_KIND_ALIASES"] = NativeMateNeutralKind
+NATIVE_MATE_NEUTRAL_KIND_ALIASES = NativeMateNeutralKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssembly"] = NativeAsm
+NativeAssembly = NativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyDefinition"] = NativeAsmDefinition
+NativeAssemblyDefinition = NativeAsmDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyEncoding"] = NativeAsmEncoding
+NativeAssemblyEncoding = NativeAsmEncoding
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyEnvelope"] = NativeAsmEnvelope
+NativeAssemblyEnvelope = NativeAsmEnvelope
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyOccurrence"] = NativeAsmItem
+NativeAssemblyOccurrence = NativeAsmItem
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeGeometry"] = NativeGeom
+NativeGeometry = NativeGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["PARTITION_STREAM"] = PartitionStream
+PARTITION_STREAM = PartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["PLANE_FEATURE_TYPES"] = PlaneFeatureTypes
+PLANE_FEATURE_TYPES = PlaneFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["Parameter"] = Param
+Parameter = Param
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterRole"] = ParamRole
+ParameterRole = ParamRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterValue"] = ParamValue
+ParameterValue = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["PathValue"] = FilePath
+PathValue = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["PointGeometry"] = PointGeom
+PointGeometry = PointGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["RELATIONSHIPS_STREAM"] = RelationshipsStream
+RELATIONSHIPS_STREAM = RelationshipsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["RESOLVED_FEATURES_STREAM"] = ResolvedFeaturesStream
+RESOLVED_FEATURES_STREAM = ResolvedFeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["ReferencePlaneFeature"] = RefPlaneFeature
+ReferencePlaneFeature = RefPlaneFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["SOLIDWORKS_STREAM"] = SolidworksStream
+SOLIDWORKS_STREAM = SolidworksStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["SOLID_BODY_FEATURE_TYPES"] = SolidBodyFeatureTypes
+SOLID_BODY_FEATURE_TYPES = SolidBodyFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX_BY_FORMAT_ID"] = SuffixByFormatId
+SUFFIX_BY_FORMAT_ID = SuffixByFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["SelectionPathElement"] = SelectionPathElem
+SelectionPathElement = SelectionPathElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["SketchConstraint"] = SketchRule
+SketchConstraint = SketchRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["SplineGeometry"] = SplineGeom
+SplineGeometry = SplineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector2"] = VectorTwo
+Vector2 = VectorTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector3"] = VectorThree
+Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_DONOR_CARRIED_STREAMS"] = KAsmDonorCarriedStreams
+_ASSEMBLY_DONOR_CARRIED_STREAMS = KAsmDonorCarriedStreams
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_FORMAT_ID"] = KAsmFormatId
+_ASSEMBLY_FORMAT_ID = KAsmFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_READER_REQUIRED_STREAMS"] = KAsmReaderRequiredStreams
+_ASSEMBLY_READER_REQUIRED_STREAMS = KAsmReaderRequiredStreams
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_REWRITABLE_DONOR_STREAMS"] = KAsmRewritableDonorStreaA
+_ASSEMBLY_REWRITABLE_DONOR_STREAMS = KAsmRewritableDonorStreaA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ATTESTED_COMPATIBILITIES"] = KAttestedCompatibilities
+_ATTESTED_COMPATIBILITIES = KAttestedCompatibilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["_AssemblyBundle"] = AsmBundle
+_AssemblyBundle = AsmBundle
 
 # this binding exists because shared behavior needs one stable value
-globals()["_AssemblyTemplatePatch"] = AsmTemplate
+_AssemblyTemplatePatch = AsmTemplate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FEATURE_KIND_BY_NATIVE"] = KFeatureKindByNative
+_FEATURE_KIND_BY_NATIVE = KFeatureKindByNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FORMAT_ID"] = KFormatId
+_FORMAT_ID = KFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_GeneratedStreams"] = Generated
+_GeneratedStreams = Generated
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NUMBER_TEXT"] = KNumberText
+_NUMBER_TEXT = KNumberText
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RESOLVED_CONFIGURATION_STREAM"] = KResolvedConfigStream
+_RESOLVED_CONFIGURATION_STREAM = KResolvedConfigStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_BYTES_KEY"] = KSourceBytesKey
+_SOURCE_BYTES_KEY = KSourceBytesKey
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_FORMAT_KEY"] = KSourceFormatKey
+_SOURCE_FORMAT_KEY = KSourceFormatKey
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_KEYS"] = KSourceKeys
+_SOURCE_KEYS = KSourceKeys
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_SEMANTIC_SHA256_KEY"] = KSourceSemanticShaTwoFive
+_SOURCE_SEMANTIC_SHA256_KEY = KSourceSemanticShaTwoFive
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_SHA256_KEY"] = KSourceShaTwoFiveSixKey
+_SOURCE_SHA256_KEY = KSourceShaTwoFiveSixKey
 
 # this binding exists because shared behavior needs one stable value
-globals()["_TARGET_UNSUPPORTED_CAPABILITIES"] = KTargetUnsupported
+_TARGET_UNSUPPORTED_CAPABILITIES = KTargetUnsupported
 
 # this binding exists because shared behavior needs one stable value
-globals()["_WRAPPER_METADATA_KEYS"] = KWrapperMetaKeys
+_WRAPPER_METADATA_KEYS = KWrapperMetaKeys
 
 # this binding exists because shared behavior needs one stable value
-globals()["_apply_native_equations"] = ApplyNativeMut
+_apply_native_equations = ApplyNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_bounding_box"] = AsmBoundingBox
+_assembly_bounding_box = AsmBoundingBox
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_bundle"] = AsmBundleA
+_assembly_bundle = AsmBundleA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_definition_id"] = AsmDefinitionId
+_assembly_definition_id = AsmDefinitionId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_definitions"] = AsmDefinitions
+_assembly_definitions = AsmDefinitions
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_document"] = AsmDoc
+_assembly_document = AsmDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_documents"] = AsmDocuments
+_assembly_documents = AsmDocuments
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_instance_id"] = AsmInstanceId
+_assembly_instance_id = AsmInstanceId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_instances"] = AsmInstances
+_assembly_instances = AsmInstances
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_mate_entity"] = AsmMateEntity
+_assembly_mate_entity = AsmMateEntity
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_mates"] = AsmMates
+_assembly_mates = AsmMates
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_matrix"] = AsmMatrix
+_assembly_matrix = AsmMatrix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_meshes"] = AsmMeshes
+_assembly_meshes = AsmMeshes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_reader_gaps"] = AsmReaderGaps
+_assembly_reader_gaps = AsmReaderGaps
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_structure_values"] = AsmStructure
+_assembly_structure_values = AsmStructure
 
 # this binding exists because shared behavior needs one stable value
-globals()["_attested_generated_bundle_names"] = AttestedBundle
+_attested_generated_bundle_names = AttestedBundle
 
 # this binding exists because shared behavior needs one stable value
-globals()["_attested_native_proof"] = AttestedNative
+_attested_native_proof = AttestedNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_attested_transfers"] = Attested
+_attested_transfers = Attested
 
 # this binding exists because shared behavior needs one stable value
-globals()["_axis_source_id"] = AxisSourceId
+_axis_source_id = AxisSourceId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_body_values"] = BodyValues
+_body_values = BodyValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bounding_box"] = BoundingBoxA
+_bounding_box = BoundingBoxA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_brep_payload"] = BrepPayloadA
+_brep_payload = BrepPayloadA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_brep_payloads"] = BrepPayloads
+_brep_payloads = BrepPayloads
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bundle_requirements_satisfied"] = IsBundleSatisfi
+_bundle_requirements_satisfied = IsBundleSatisfi
 
 # this binding exists because shared behavior needs one stable value
-globals()["_companion_payloads"] = Companion
+_companion_payloads = Companion
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_file_index"] = ComponentFile
+_component_file_index = ComponentFile
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_id"] = ConfigId
+_configuration_id = ConfigId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_values"] = ConfigValues
+_configuration_values = ConfigValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configurations"] = Configurations
+_configurations = Configurations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_coordinate_offset"] = Coordinate
+_coordinate_offset = Coordinate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_coordinate_reference"] = CoordinateRef
+_coordinate_reference = CoordinateRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_structure_values"] = Definition
+_definition_structure_values = Definition
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_value"] = DefinitionValue
+_definition_value = DefinitionValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_destination_format_id"] = TargetFormatId
+_destination_format_id = TargetFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_destination_path"] = TargetPath
+_destination_path = TargetPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["_dimension_parameter_value"] = DimensionParam
+_dimension_parameter_value = DimensionParam
 
 # this binding exists because shared behavior needs one stable value
-globals()["_dimension_text"] = DimensionText
+_dimension_text = DimensionText
 
 # this binding exists because shared behavior needs one stable value
-globals()["_direction_axis_selections"] = DirectionAxis
+_direction_axis_selections = DirectionAxis
 
 # this binding exists because shared behavior needs one stable value
-globals()["_diverged_donor_records"] = DivergedDonor
+_diverged_donor_records = DivergedDonor
 
 # this binding exists because shared behavior needs one stable value
-globals()["_diverged_keys"] = DivergedKeys
+_diverged_keys = DivergedKeys
 
 # this binding exists because shared behavior needs one stable value
-globals()["_document_without_source"] = DocWithout
+_document_without_source = DocWithout
 
 # this binding exists because shared behavior needs one stable value
-globals()["_embedded_document"] = EmbeddedDoc
+_embedded_document = EmbeddedDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_definition"] = BuildFeature
+_feature_definition = BuildFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_id"] = FeatureId
+_feature_id = FeatureId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_kind"] = FeatureKindA
+_feature_kind = FeatureKindA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_provenance"] = FeatureA
+_feature_provenance = FeatureA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_span_provenance"] = FeatureSpan
+_feature_span_provenance = FeatureSpan
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_values"] = FeatureValues
+_feature_values = FeatureValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_final_body_feature_id"] = FinalBodyId
+_final_body_feature_id = FinalBodyId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_flattened_mates"] = FlattenedMates
+_flattened_mates = FlattenedMates
 
 # this binding exists because shared behavior needs one stable value
-globals()["_flattened_occurrences"] = Flattened
+_flattened_occurrences = Flattened
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_assembly_capabilities"] = GeneratedAsm
+_generated_assembly_capabilities = GeneratedAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_assembly_notes"] = GeneratedAsmA
+_generated_assembly_notes = GeneratedAsmA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_assembly_structure_matches"] = IsGeneratedAsmB
+_generated_assembly_structure_matches = IsGeneratedAsmB
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_integer"] = GeneratedA
+_generated_integer = GeneratedA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_occurrence_labels"] = GeneratedItem
+_generated_occurrence_labels = GeneratedItem
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_reference_number"] = GeneratedRef
+_generated_reference_number = GeneratedRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_generated_streams"] = GeneratedB
+_generated_streams = GeneratedB
 
 # this binding exists because shared behavior needs one stable value
-globals()["_geometry_values"] = GeomValues
+_geometry_values = GeomValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_instance_structure_values"] = InstanceValues
+_instance_structure_values = InstanceValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_geometry_brep_payload"] = IsGeomBrep
+_is_geometry_brep_payload = IsGeomBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_keywords_bytes"] = KeywordsBytes
+_keywords_bytes = KeywordsBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_keywords_root"] = KeywordsRoot
+_keywords_root = KeywordsRoot
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_arc_ellipse_geometry"] = MarkerArcGeom
+_marker_arc_ellipse_geometry = MarkerArcGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_circular_geometry"] = MarkerCircular
+_marker_circular_geometry = MarkerCircular
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_curve_reference_indices"] = MarkerCurveRef
+_marker_curve_reference_indices = MarkerCurveRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_curve_semantic"] = MarkerCurve
+_marker_curve_semantic = MarkerCurve
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_ellipse_geometry"] = MarkerEllipse
+_marker_ellipse_geometry = MarkerEllipse
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_entity"] = MarkerEntity
+_marker_entity = MarkerEntity
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_id"] = MarkerId
+_marker_id = MarkerId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_object_reference_indices"] = MarkerObjectRef
+_marker_object_reference_indices = MarkerObjectRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_parabola_geometry"] = MarkerParabola
+_marker_parabola_geometry = MarkerParabola
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_spline_geometry"] = MarkerSpline
+_marker_spline_geometry = MarkerSpline
 
 # this binding exists because shared behavior needs one stable value
-globals()["_marker_spline_reference_indices"] = MarkerSplineRef
+_marker_spline_reference_indices = MarkerSplineRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_groups"] = MateGroups
+_mate_groups = MateGroups
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_instance_path"] = MateInstance
+_mate_instance_path = MateInstance
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_parameter_value"] = MateParamValue
+_mate_parameter_value = MateParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_payload"] = MatePayload
+_mate_payload = MatePayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_provenance"] = MateProvenance
+_mate_provenance = MateProvenance
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_sources"] = MateSources
+_mate_sources = MateSources
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_values"] = MateValues
+_mate_values = MateValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mesh_values"] = MeshValues
+_mesh_values = MeshValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_data"] = NativeAsmData
+_native_assembly_data = NativeAsmData
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_matrix"] = NativeAsmMatrix
+_native_assembly_matrix = NativeAsmMatrix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_structure_values"] = NativeAsmValues
+_native_assembly_structure_values = NativeAsmValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_attestation"] = Native
+_native_attestation = Native
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_attestation_bytes"] = NativeBytes
+_native_attestation_bytes = NativeBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_body_values"] = NativeBody
+_native_body_values = NativeBody
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_definition_key"] = NativeKey
+_native_definition_key = NativeKey
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_equation_value"] = NativeEquation
+_native_equation_value = NativeEquation
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_feature_definitions_unchanged"] = IsNativeFeature
+_native_feature_definitions_unchanged = IsNativeFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_id"] = NativeId
+_native_id = NativeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_marker_geometry"] = NativeMarkerA
+_native_marker_geometry = NativeMarkerA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_mate_alignment_offset"] = NativeMateA
+_native_mate_alignment_offset = NativeMateA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_mate_values"] = NativeMateB
+_native_mate_values = NativeMateB
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_part_model"] = NativePartModel
+_native_part_model = NativePartModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_source_matches_document"] = IsNativeSourceD
+_native_source_matches_document = IsNativeSourceD
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_stream_sha256"] = NativeStreamSha
+_native_stream_sha256 = NativeStreamSha
 
 # this binding exists because shared behavior needs one stable value
-globals()["_nested_assembly_document"] = NestedAsmDoc
+_nested_assembly_document = NestedAsmDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_nested_definition_map"] = NestedMap
+_nested_definition_map = NestedMap
 
 # this binding exists because shared behavior needs one stable value
-globals()["_nested_occurrence_map"] = NestedItemMap
+_nested_occurrence_map = NestedItemMap
 
 # this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_alignment"] = NeutralMate
+_neutral_mate_alignment = NeutralMate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_entity_kind"] = NeutralMateKind
+_neutral_mate_entity_kind = NeutralMateKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_kind"] = NeutralMateKinA
+_neutral_mate_kind = NeutralMateKinA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_value"] = NeutralMateA
+_neutral_mate_value = NeutralMateA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_operation_attributes"] = OperationAttrs
+_operation_attributes = OperationAttrs
 
 # this binding exists because shared behavior needs one stable value
-globals()["_operation_dimension_value"] = OperationValue
+_operation_dimension_value = OperationValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_operation_selection_entries"] = OperationA
+_operation_selection_entries = OperationA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_operation_selection_id"] = OperationId
+_operation_selection_id = OperationId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_orthonormal_transform"] = IsOrthonormal
+_orthonormal_transform = IsOrthonormal
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parameter_entries"] = ParamEntries
+_parameter_entries = ParamEntries
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parameter_id"] = ParamId
+_parameter_id = ParamId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parameter_millimeters"] = ParamA
+_parameter_millimeters = ParamA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parameter_values"] = ParamValues
+_parameter_values = ParamValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parameters"] = Parameters
+_parameters = Parameters
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parasolid_payload"] = Parasolid
+_parasolid_payload = Parasolid
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_assembly_instances"] = PatchAsmMut
+_patch_assembly_instances = PatchAsmMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_assembly_mates"] = PatchAsmMateMut
+_patch_assembly_mates = PatchAsmMateMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_coordinate"] = IsPatchCoordina
+_patch_coordinate = IsPatchCoordina
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_feature_names"] = IsPatchFeatuMut
+_patch_feature_names = IsPatchFeatuMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_native_assembly"] = PatchNativeAMut
+_patch_native_assembly = PatchNativeAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_native_template"] = PatchNativeMut
+_patch_native_template = PatchNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_parameters"] = IsPatchParamete
+_patch_parameters = IsPatchParamete
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_rectangle_profile"] = PatchRectangle
+_patch_rectangle_profile = PatchRectangle
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_sketch_geometry"] = PatchSketchGeom
+_patch_sketch_geometry = PatchSketchGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_support_planes"] = PatchSupport
+_patch_support_planes = PatchSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()["_patch_template_brep"] = PatchTemplatMut
+_patch_template_brep = PatchTemplatMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_payload_values"] = PayloadValues
+_payload_values = PayloadValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_plane_id"] = PlaneId
+_plane_id = PlaneId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_plane_values"] = PlaneValues
+_plane_values = PlaneValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_planes"] = Planes
+_planes = Planes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_point_values"] = PointValues
+_point_values = PointValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_preserved_generated_mate_streams"] = SavedGenerated
+_preserved_generated_mate_streams = SavedGenerated
 
 # this binding exists because shared behavior needs one stable value
-globals()["_preserved_native_mate_matches"] = IsSavedNativeMa
+_preserved_native_mate_matches = IsSavedNativeMa
 
 # this binding exists because shared behavior needs one stable value
-globals()["_preserved_source"] = SavedSource
+_preserved_source = SavedSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["_profile_edge_id"] = ProfileEdgeId
+_profile_edge_id = ProfileEdgeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_profile_extrema"] = ProfileExtrema
+_profile_extrema = ProfileExtrema
 
 # this binding exists because shared behavior needs one stable value
-globals()["_profile_id"] = ProfileId
+_profile_id = ProfileId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_provenance"] = ProvenanceA
+_provenance = ProvenanceA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_replay_compatibility"] = Replay
+_replay_compatibility = Replay
 
 # this binding exists because shared behavior needs one stable value
-globals()["_required_capabilities"] = Required
+_required_capabilities = Required
 
 # this binding exists because shared behavior needs one stable value
-globals()["_resolved_component_path"] = ResolvedPath
+_resolved_component_path = ResolvedPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["_resolved_features_stream"] = ResolvedStream
+_resolved_features_stream = ResolvedStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_retain_source"] = RetainSource
+_retain_source = RetainSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["_round_number"] = RoundNumber
+_round_number = RoundNumber
 
 # this binding exists because shared behavior needs one stable value
-globals()["_selection_id"] = SelectionId
+_selection_id = SelectionId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_selection_values"] = SelectionValues
+_selection_values = SelectionValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_selections"] = Selections
+_selections = Selections
 
 # this binding exists because shared behavior needs one stable value
-globals()["_semantic_document"] = SemanticDoc
+_semantic_document = SemanticDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_semantic_sha256"] = SemanticShaTwo
+_semantic_sha256 = SemanticShaTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketch"] = SketchA
+_sketch = SketchA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketch_constraints"] = SketchB
+_sketch_constraints = SketchB
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketch_id"] = SketchId
+_sketch_id = SketchId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketch_values"] = SketchValues
+_sketch_values = SketchValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketches"] = Sketches
+_sketches = Sketches
 
 # this binding exists because shared behavior needs one stable value
-globals()["_solid_body_feature"] = SolidBody
+_solid_body_feature = SolidBody
 
 # this binding exists because shared behavior needs one stable value
-globals()["_solidworks_package_streams"] = Solidworks
+_solidworks_package_streams = Solidworks
 
 # this binding exists because shared behavior needs one stable value
-globals()["_solidworks_transfers"] = SolidworksA
+_solidworks_transfers = SolidworksA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_solidworks_xml"] = SolidworksXml
+_solidworks_xml = SolidworksXml
 
 # this binding exists because shared behavior needs one stable value
-globals()["_source_bytes"] = SourceBytes
+_source_bytes = SourceBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_source_template"] = SourceTemplate
+_source_template = SourceTemplate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_timeline"] = Timeline
+_timeline = Timeline
 
 # this binding exists because shared behavior needs one stable value
-globals()["_transform_values"] = TransformValues
+_transform_values = TransformValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_typed_brep"] = TypedBrep
+_typed_brep = TypedBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_unit_vector"] = IsUnitVector
+_unit_vector = IsUnitVector
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validate_source_suffix"] = ValidateSource
+_validate_source_suffix = ValidateSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["_vector_values"] = VectorValues
+_vector_values = VectorValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_write_destination"] = WriteTargetMut
+_write_destination = WriteTargetMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_xml_attribute"] = XmlAttr
+_xml_attribute = XmlAttr
 
 # this binding exists because shared behavior needs one stable value
-globals()["_xml_elements_by_id"] = XmlElementsById
+_xml_elements_by_id = XmlElementsById
 
 # this binding exists because shared behavior needs one stable value
-globals()["_yes_text"] = YesText
+_yes_text = YesText
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_sldprt"] = BuildSldprt
+build_sldprt = BuildSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["contains_parasolid_payload"] = ContainsParasolidPayload
+contains_parasolid_payload = ContainsParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = DataClass
+dataclass = DataClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_brep_model"] = DecodeBrepModel
+decode_brep_model = DecodeBrepModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_mate_list"] = DecodeMateList
+decode_mate_list = DecodeMateList
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_native_assembly"] = DecodeNativeAsm
+decode_native_assembly = DecodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_native_model"] = DecodeNativeModel
+decode_native_model = DecodeNativeModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_partition_stream"] = DecodePartitionStream
+decode_partition_stream = DecodePartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["defaultdict"] = Defaultdict
+defaultdict = Defaultdict
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_blank_partition_stream"] = EncodeBlankPartition
+encode_blank_partition_stream = EncodeBlankPartition
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_brep_model"] = EncodeBrepModel
+encode_brep_model = EncodeBrepModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_native_assembly"] = EncodeNativeAsm
+encode_native_assembly = EncodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_native_assembly_envelope"] = EncodeNativeAsmEnvelope
+encode_native_assembly_envelope = EncodeNativeAsmEnvelope
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_native_part"] = EncodeNativePart
+encode_native_part = EncodeNativePart
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_partition_stream"] = EncodePartitionStream
+encode_partition_stream = EncodePartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["filter_document"] = FilterDoc
+filter_document = FilterDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["frozen_mapping"] = FrozenMapping
+frozen_mapping = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["infer_capabilities"] = InferCapabilities
+infer_capabilities = InferCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_binary_destination"] = IsBinaryTarget
+is_binary_destination = IsBinaryTarget
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_native_parasolid_payload"] = IsNativeParasolidPayload
+is_native_parasolid_payload = IsNativeParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["json"] = JsonValue
+json = JsonValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["operation_axis_subelement"] = OperationAxisSubElem
+operation_axis_subelement = OperationAxisSubElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["os"] = OsModule
+os = OsModule
 
 # this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["read_sldprt"] = ReadSldprt
+read_sldprt = ReadSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["replace"] = Replace
+replace = Replace
 
 # this binding exists because shared behavior needs one stable value
-globals()["retained_capabilities"] = RetainedCapabilities
+retained_capabilities = RetainedCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["semantic_metadata"] = SemanticMeta
+semantic_metadata = SemanticMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["source_payload_indexes"] = SourcePayloadIndexes
+source_payload_indexes = SourcePayloadIndexes
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["suppress"] = Suppress
+suppress = Suppress
 
 # this binding exists because shared behavior needs one stable value
-globals()["tempfile"] = Tempfile
+tempfile = Tempfile
 
 # this binding exists because shared behavior needs one stable value
-globals()["with_wrapper_metadata"] = WithWrapperMeta
+with_wrapper_metadata = WithWrapperMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["write_sldprt"] = WriteSldprt
+write_sldprt = WriteSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["ApplyNative"] = ApplyNativeMut
+ApplyNative = ApplyNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["BundleSatisfied"] = IsBundleSatisfi
+BundleSatisfied = IsBundleSatisfi
 
 # this binding exists because shared behavior needs one stable value
-globals()["GeneratedAsmB"] = IsGeneratedAsmB
+GeneratedAsmB = IsGeneratedAsmB
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeFeatureA"] = IsNativeFeature
+NativeFeatureA = IsNativeFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeSourceDoc"] = IsNativeSourceD
+NativeSourceDoc = IsNativeSourceD
 
 # this binding exists because shared behavior needs one stable value
-globals()["Orthonormal"] = IsOrthonormal
+Orthonormal = IsOrthonormal
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchAsm"] = PatchAsmMut
+PatchAsm = PatchAsmMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchAsmMates"] = PatchAsmMateMut
+PatchAsmMates = PatchAsmMateMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchCoordinate"] = IsPatchCoordina
+PatchCoordinate = IsPatchCoordina
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchFeature"] = IsPatchFeatuMut
+PatchFeature = IsPatchFeatuMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchNative"] = PatchNativeMut
+PatchNative = PatchNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchNativeAsm"] = PatchNativeAMut
+PatchNativeAsm = PatchNativeAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchParameters"] = IsPatchParamete
+PatchParameters = IsPatchParamete
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchTemplate"] = PatchTemplatMut
+PatchTemplate = PatchTemplatMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["SavedNativeMate"] = IsSavedNativeMa
+SavedNativeMate = IsSavedNativeMa
 
 # this binding exists because shared behavior needs one stable value
-globals()["UnitVector"] = IsUnitVector
+UnitVector = IsUnitVector
 
 # this binding exists because shared behavior needs one stable value
-globals()["WriteTarget"] = WriteTargetMut
+WriteTarget = WriteTargetMut

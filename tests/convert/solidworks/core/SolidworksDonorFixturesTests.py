@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 import hashlib as Hashlib
-import json as JsonLib
 from pathlib import Path as FilePath
 from convert.adapters.solidworks.core.Topology import (
     BOSS_OPERATION as Operation,
@@ -19,6 +18,13 @@ from convert.adapters.solidworks.core.Topology import (
     REVOLVE_CUT_OPERATION as OperationC,
     REVOLVE_SUPPORTS as Supports,
     SUPPORTED_END_CONDITIONS as ConditionsA,
+)
+from tests.convert.solidworks.core.SolidworksDonorFixtureManifest import (
+    DonorManifest,
+    DonorMetadata,
+    DonorRecord,
+    LoadDonorManifest,
+    LoadDonorMetadata,
 )
 
 # centralizes shared evidence so every related assertion uses one value
@@ -65,16 +71,13 @@ KeysInfo = (
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def Manifest() -> dict[str, object]:
-    assert KPathInfo.is_file(), f"missing donor fixture manifest {KPathInfo}"
-    return JsonLib.loads(KPathInfo.read_text(encoding="utf-8"))
+def Manifest() -> DonorManifest:
+    return LoadDonorManifest(KPathInfo)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def ManifestDonors() -> dict[str, dict[str, object]]:
-    Donors = Manifest()["donors"]
-    assert isinstance(Donors, dict)
-    return Donors
+def ManifestDonors() -> dict[str, DonorRecord]:
+    return Manifest().donors
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -83,9 +86,9 @@ def ContainerFN(NameText: str) -> str:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def MetaInfo(DonorId: str) -> dict[str, object]:
+def MetaInfo(DonorId: str) -> DonorMetadata:
     TargetPath = KRootInfo / DonorId / KNameInfo
-    return JsonLib.loads(TargetPath.read_text(encoding="utf-8"))
+    return LoadDonorMetadata(TargetPath)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -101,7 +104,7 @@ def TestEMDHAFD() -> None:
 def TestTMLETCFD() -> None:
     Donors = ManifestDonors()
     assert len(Donors) == KCount
-    assert Manifest()["donor_count"] == KCount
+    assert Manifest().donor_count == KCount
     OnDisk = sorted(
         (TargetPath.name for TargetPath in KRootInfo.iterdir() if TargetPath.is_dir())
     )
@@ -111,11 +114,11 @@ def TestTMLETCFD() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestERFMIMD() -> None:
     for DonorId, RecordInfo in ManifestDonors().items():
-        Resolved = RecordInfo["resolved"]
+        Resolved = RecordInfo.resolved
         Payload = (KRootInfo / DonorId / KNameInfoA).read_bytes()
-        assert Resolved["length"] == len(Payload), DonorId
-        assert Resolved["sha256"] == Hashlib.sha256(Payload).hexdigest(), DonorId
-        assert Resolved["file"] == KNameInfoA, DonorId
+        assert Resolved.length == len(Payload), DonorId
+        assert Resolved.sha256 == Hashlib.sha256(Payload).hexdigest(), DonorId
+        assert Resolved.file == KNameInfoA, DonorId
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -126,28 +129,28 @@ def TestTMTTCFB() -> None:
     )
     ContainerBytes = 0
     for DonorId, RecordInfo in Donors.items():
-        for NameText in RecordInfo["container"]:
+        for NameText in RecordInfo.container:
             TargetPath = KRootInfo / DonorId / KDirectory
             ContainerBytes += len((TargetPath / ContainerFN(NameText)).read_bytes())
-    assert Manifest()["resolved_bytes"] == ResolvedBytes
-    assert Manifest()["container_bytes"] == ContainerBytes
+    assert Manifest().resolved_bytes == ResolvedBytes
+    assert Manifest().container_bytes == ContainerBytes
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestECFMIMD() -> None:
     for DonorId, RecordInfo in ManifestDonors().items():
-        Index = RecordInfo["container"]
+        Index = RecordInfo.container
         assert Index, DonorId
         for NameText, Entry in Index.items():
             TargetPath = KRootInfo / DonorId / KDirectory
             TargetPath = TargetPath / ContainerFN(NameText)
             Payload = TargetPath.read_bytes()
-            assert Entry["length"] == len(Payload), (DonorId, NameText)
-            assert Entry["sha256"] == Hashlib.sha256(Payload).hexdigest(), (
+            assert Entry.length == len(Payload), (DonorId, NameText)
+            assert Entry.sha256 == Hashlib.sha256(Payload).hexdigest(), (
                 DonorId,
                 NameText,
             )
-            assert Entry["file"] == f"{KDirectory}/{TargetPath.name}", (
+            assert Entry.file == f"{KDirectory}/{TargetPath.name}", (
                 DonorId,
                 NameText,
             )
@@ -157,14 +160,13 @@ def TestECFMIMD() -> None:
 def TestEMFAWTMAIS() -> None:
     for DonorId, RecordInfo in ManifestDonors().items():
         MetaInfoA = MetaInfo(DonorId)
-        assert MetaInfoA["donor_id"] == DonorId
-        assert MetaInfoA["stream_bytes"] == RecordInfo["resolved"]["length"]
-        assert isinstance(MetaInfoA["measured"], bool)
+        assert MetaInfoA.donor_id == DonorId
+        assert MetaInfoA.stream_bytes == RecordInfo.resolved.length
+        assert isinstance(MetaInfoA.measured, bool)
         Streams = {
-            ItemValue["name"]: ItemValue["file"]
-            for ItemValue in MetaInfoA["container_streams"]
+            ItemValue.name: ItemValue.file for ItemValue in MetaInfoA.container_streams
         }
-        assert sorted(Streams) == sorted(RecordInfo["container"])
+        assert sorted(Streams) == sorted(RecordInfo.container)
         for NameText, FileName in Streams.items():
             assert FileName == ContainerFN(NameText), DonorId
 
@@ -173,24 +175,41 @@ def TestEMFAWTMAIS() -> None:
 def TestEMFDOEPF() -> None:
     for DonorId in ManifestDonors():
         MetaInfoA = MetaInfo(DonorId)
-        Count = len(MetaInfoA["features"])
+        Count = len(MetaInfoA.features)
         assert Count >= 1, DonorId
-        for LookupKey in KeysInfo:
-            assert len(MetaInfoA[LookupKey]) == Count, (DonorId, LookupKey)
-        for LookupKey in (
-            "axis_directions",
-            "swept_arc_counts",
-            "inherited_directions",
+        for LookupKey, Values in zip(
+            KeysInfo,
+            (
+                MetaInfoA.features,
+                MetaInfoA.feature_ids,
+                MetaInfoA.sketch_ids,
+                MetaInfoA.feature_names,
+                MetaInfoA.sketch_names,
+                MetaInfoA.point_counts,
+                MetaInfoA.arc_counts,
+                MetaInfoA.depth_present,
+            ),
+            strict=True,
         ):
-            assert len(MetaInfoA[LookupKey]) <= Count, (DonorId, LookupKey)
-        assert len(MetaInfoA["spare_plane_names"]) == len(
-            MetaInfoA["spare_plane_ids"]
+            assert len(Values) == Count, (DonorId, LookupKey)
+        for LookupKey, Values in zip(
+            ("axis_directions", "swept_arc_counts", "inherited_directions"),
+            (
+                MetaInfoA.axis_directions,
+                MetaInfoA.swept_arc_counts,
+                MetaInfoA.inherited_directions,
+            ),
+            strict=True,
+        ):
+            assert len(Values) <= Count, (DonorId, LookupKey)
+        assert len(MetaInfoA.spare_plane_names) == len(
+            MetaInfoA.spare_plane_ids
         ), DonorId
-        assert len(MetaInfoA["spare_plane_frames"]) == len(
-            MetaInfoA["spare_plane_ids"]
+        assert len(MetaInfoA.spare_plane_frames) == len(
+            MetaInfoA.spare_plane_ids
         ), DonorId
-        assert len(set(MetaInfoA["spare_equations"])) == len(
-            MetaInfoA["spare_equations"]
+        assert len(set(MetaInfoA.spare_equations)) == len(
+            MetaInfoA.spare_equations
         ), DonorId
 
 
@@ -199,7 +218,7 @@ def TestEMFUTNTV() -> None:
     for DonorId in ManifestDonors():
         MetaInfoA = MetaInfo(DonorId)
         for Entry, DepthPresent in zip(
-            MetaInfoA["features"], MetaInfoA["depth_present"], strict=True
+            MetaInfoA.features, MetaInfoA.depth_present, strict=True
         ):
             Topology = FeatureTopology(*Entry)
             assert list(Topology.key) == Entry, DonorId

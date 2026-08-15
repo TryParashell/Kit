@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed
 
@@ -27,7 +29,7 @@ KReferenceDigest = "f2dc3d440fb6ac956155e5d300c15e83a8574311c9e58802b514af486d44
 
 
 # typed replay emits the fixed configuration without retaining vendor byte spans
-def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
+def EncodeProgram(Overrides: Mapping[int, FieldType] | None = None) -> bytes:
     return ReplayFixed(KConfigOps, KReferenceLength, "Config-0", Overrides)
 
 

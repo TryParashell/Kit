@@ -17,25 +17,25 @@ class DocumentLookup:
     locals()["__slots__"] = ()
 
     # parameter lookup remains discoverable without coupling storage to callers
-    def GetParameter(SelfValue, EntityId: str) -> Parameter:
+    def GetParameter(self, EntityId: str) -> Parameter:
         from interchange.document.behavior.DocumentLookup import GetParameter
 
-        return GetParameter(SelfValue, EntityId)
+        return GetParameter(self, EntityId)
 
     # sketch lookup remains discoverable without coupling storage to callers
-    def GetSketch(SelfValue, EntityId: str) -> Sketch:
+    def GetSketch(self, EntityId: str) -> Sketch:
         from interchange.document.behavior.DocumentLookup import GetSketch
 
-        return GetSketch(SelfValue, EntityId)
+        return GetSketch(self, EntityId)
 
     # feature lookup remains discoverable without coupling timeline storage to callers
-    def GetFeature(SelfValue, EntityId: str) -> FeatureStep:
+    def GetFeature(self, EntityId: str) -> FeatureStep:
         from interchange.document.behavior.DocumentLookup import GetFeature
 
-        return GetFeature(SelfValue, EntityId)
+        return GetFeature(self, EntityId)
 
     # plane lookup remains discoverable without coupling support storage to callers
-    def GetPlane(SelfValue, EntityId: str) -> SupportPlane:
+    def GetPlane(self, EntityId: str) -> SupportPlane:
         from interchange.document.behavior.DocumentLookup import GetPlane
 
-        return GetPlane(SelfValue, EntityId)
+        return GetPlane(self, EntityId)

@@ -8,18 +8,17 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
-from interchange import frozen_mapping as FreezeMapping
+from interchange.core.Common import FreezeMapping
 
 
 # enforced write values prevent callers from weakening portable self contained output guarantees
 def BuildWriteVals(
-    InputValues: TypeMap[str, AnyValue] | None,
+    InputValues: TypeMap[str, object] | None,
     AllowCarrier: bool,
-) -> TypeMap[str, AnyValue]:
-    SelectedValues: dict[str, AnyValue] = {"portable": True}
+) -> TypeMap[str, object]:
+    SelectedValues: dict[str, object] = {"portable": True}
     if InputValues is not None:
         SelectedValues.update(InputValues)
     SelectedValues["allow_carrier"] = AllowCarrier

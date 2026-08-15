@@ -6,8 +6,7 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from functools import reduce as ReduceValues
-from operator import or_ as UnionValues
+from typing import TypeAlias
 
 from interchange.geometry.models.GeometryConics import (
     ArcEllipseGeom,
@@ -27,20 +26,17 @@ from interchange.geometry.models.GeometryCurves import (
 )
 
 # exhaustive geometry typing prevents new classes from escaping sketch validation
-KGeometryTypes = ReduceValues(
-    UnionValues,
-    (
-        PointGeometry,
-        LineGeometry,
-        CircleGeometry,
-        ArcGeometry,
-        EllipseGeometry,
-        ArcEllipseGeom,
-        HyperbolaGeom,
-        ArcHyperGeom,
-        ParabolaGeom,
-        ArcParabGeom,
-        SplineGeometry,
-        NativeGeometry,
-    ),
+KGeometryTypes: TypeAlias = (
+    PointGeometry
+    | LineGeometry
+    | CircleGeometry
+    | ArcGeometry
+    | EllipseGeometry
+    | ArcEllipseGeom
+    | HyperbolaGeom
+    | ArcHyperGeom
+    | ParabolaGeom
+    | ArcParabGeom
+    | SplineGeometry
+    | NativeGeometry
 )

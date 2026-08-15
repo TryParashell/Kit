@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass as Dataclass, replace as Replace
 import hashlib as Hashlib
 import json as JsonValue
@@ -14,9 +15,11 @@ import math as MathValue
 from pathlib import Path as FilePath, PurePosixPath
 import re as RegexLib
 import struct as Struct
-from typing import Any as AnyValue
+from typing import Any as AnyValue, cast as Cast
 import xml.etree.ElementTree as XmlTree
+import xml.etree.ElementTree as ET
 import zipfile as Zipfile
+from interchange.geometry.models.GeometryTypes import KGeometryTypes as GeometryTypes
 from interchange import (
     ArcEllipseGeometry as ArcEllipseGeom,
     ArcGeometry as ArcGeom,
@@ -88,15 +91,15 @@ from interchange import (
 from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
 from convert.adapters.freecad.Archive import (
     DOCUMENT_ENTRY as DocEntry,
+    MAX_ENTRY_SIZE as MaxEntrySize,
+    MAX_EXTERNAL_FILES as MaxOuterFiles,
+    MAX_TOTAL_SIZE as MaxTotalSize,
     NATIVE_DOCUMENT_SHA256_ATTRIBUTE as KNativeDocHashAttr,
-    _MAX_ENTRY_SIZE as MaxEntrySize,
-    _MAX_EXTERNAL_FILES as MaxOuterFiles,
-    _MAX_TOTAL_SIZE as MaxTotalSize,
-    _validated_archive_members as ValidatedArchiveMembers,
-    _validated_document_xml as ValidatedDocXml,
-    _validated_entry_name as ValidatedEntryName,
-    _validated_object_name as ValidatedObjectName,
     extract_manifest_from_fcstd as ExtractManifestFromFcstd,
+    validated_archive_members as ValidatedArchiveMembers,
+    validated_document_xml as ValidatedDocXml,
+    validated_entry_name as ValidatedEntryName,
+    validated_object_name as ValidatedObjectName,
 )
 from convert.adapters.freecad.Format import FORMAT_ID as FormatId, SUFFIX as Suffix
 from convert.adapters.freecad.Protocol import (
@@ -155,38 +158,35 @@ class NativeFreeCad(ValueError):
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class NativeObject:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["type_id"] = "str"
-    __annotations__["index"] = "int"
-    __annotations__["object_id"] = "str"
-    __annotations__["touched"] = "bool"
-    __annotations__["dependencies"] = "tuple[str, ...]"
-    __annotations__["extensions"] = "tuple[XmlTree.Element, ...]"
-    __annotations__["transient_properties"] = "tuple[XmlTree.Element, ...]"
-    __annotations__["properties"] = "dict[str, XmlTree.Element]"
+    name: str
+    type_id: str
+    index: int
+    object_id: str
+    touched: bool
+    dependencies: tuple[str, ...]
+    extensions: tuple[XmlTree.Element, ...]
+    transient_properties: tuple[XmlTree.Element, ...]
+    properties: dict[str, XmlTree.Element]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class NativeArchive:
-    locals().setdefault("__annotations__", {})
-    __annotations__["root"] = "XmlTree.Element"
-    __annotations__["objects"] = "tuple[NativeObject, ...]"
-    __annotations__["entries"] = "dict[str, bytes]"
-    __annotations__["document_xml"] = "bytes"
-    __annotations__["entry_order"] = "tuple[str, ...]"
+    root: XmlTree.Element
+    objects: tuple[NativeObject, ...]
+    entries: dict[str, bytes]
+    document_xml: bytes
+    entry_order: tuple[str, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class OuterState:
-    locals().setdefault("__annotations__", {})
-    __annotations__["root"] = "FilePath"
-    __annotations__["cache"] = "dict[FilePath, CadDoc]"
-    __annotations__["active"] = "set[FilePath]"
-    __annotations__["FileCount"] = "int"
-    __annotations__["TotalBytes"] = "int"
+    root: FilePath
+    cache: dict[FilePath, CadDoc]
+    active: set[FilePath]
+    FileCount: int
+    TotalBytes: int
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -565,6 +565,8 @@ def FindChild(
 
 # this definition exists because focused behavior needs one stable owner
 def Number(Value: str | None, Default: float = 0.0) -> float:
+    if Value is None:
+        return Default
     try:
         Result = float(Value)
     except (TypeError, ValueError):
@@ -574,6 +576,8 @@ def Number(Value: str | None, Default: float = 0.0) -> float:
 
 # this definition exists because focused behavior needs one stable owner
 def Integer(Value: str | None, Default: int = 0) -> int:
+    if Value is None:
+        return Default
     try:
         return int(Value)
     except (TypeError, ValueError):
@@ -746,7 +750,9 @@ def PropParamValue(NodeValue: ET.Element) -> ParamValue | None:
             for ItemValue in NodeValue.findall("./CustomEnumList/Enum")
         ]
         Index = Integer(Child.get("value"))
-        Value: str | int = Choices[Index] if 0 <= Index < len(Choices) else Index
+        Value: str | int | float | bool = (
+            Choices[Index] if 0 <= Index < len(Choices) else Index
+        )
         return ParamValue(Value, ValueKind.STRING if Choices else ValueKind.INTEGER)
     KindAndUnit = ScalarPropKinds.get(TypeId)
     if KindAndUnit is None:
@@ -957,7 +963,7 @@ def GeomAction(NodeValue: ET.Element, EntityId: str) -> tuple[GeomKind, AnyValue
     if Result is not None:
         return Result
     return (
-        GeomKindByTypeId.get(TypeId, GeomKind.NATIVE),
+        GeomKindByTypeId.get(TypeId) or GeomKind.NATIVE,
         NativeGeom(FormatId, TypeId or "unknown", ElemData(NodeValue)),
     )
 
@@ -1155,11 +1161,13 @@ def TraceLoopMut(
 def HasLoopTouch(
     Profiles: Sequence[tuple[int, tuple[str, ...], tuple[VectorTwo, ...]]],
 ) -> bool:
-    for FirstIndex, (Ignored, Ignored, FirstVertices) in enumerate(Profiles):
+    for FirstIndex, FirstProfile in enumerate(Profiles):
+        FirstVertices = FirstProfile[2]
         FirstSegments = tuple(
             zip(FirstVertices, (*FirstVertices[1:], FirstVertices[0]), strict=True)
         )
-        for Ignored, Ignored, SecondVertices in Profiles[FirstIndex + 1 :]:
+        for SecondProfile in Profiles[FirstIndex + 1 :]:
+            SecondVertices = SecondProfile[2]
             SecondSegments = tuple(
                 zip(
                     SecondVertices,
@@ -1202,9 +1210,10 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
             for Entity in Closed
         )
         return () if Invalid else tuple((Entity.id,) for Entity in Closed)
-    Endpoints = tuple(
+    Endpoints: tuple[VectorTwo, ...] = tuple(
         Point
-        for Ignored, Entity in Lines
+        for _, Entity in Lines
+        if isinstance(Entity.geometry, LineGeom)
         for Point in (Entity.geometry.start, Entity.geometry.end)
     )
     Roots = ClusterRoots(Endpoints)
@@ -1212,7 +1221,7 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
     if Roots is None or Incident is None:
         return ()
     Remaining = set(range(len(Lines)))
-    Profiles = []
+    Profiles: list[tuple[int, tuple[str, ...], tuple[VectorTwo, ...]]] = []
     while Remaining:
         Profile = TraceLoopMut(Lines, Endpoints, Roots, Incident, Remaining)
         if Profile is None:
@@ -1220,7 +1229,7 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
         Profiles.append(Profile)
     if HasLoopTouch(Profiles):
         return ()
-    return tuple(Profile for Ignored, Profile, Ignored in sorted(Profiles))
+    return tuple(Profile[1] for Profile in sorted(Profiles))
 
 
 # this binding exists because shared behavior needs one stable value
@@ -1331,7 +1340,12 @@ def ReframePoint(
 def ReframeDir(
     Value: Vector2, Reframe: tuple[float, float, float, float, float, float]
 ) -> VectorTwo:
-    XxValue, XyValue, Ignored, YxValue, YyValue, Ignored = Reframe
+    XxValue, XyValue, YxValue, YyValue = (
+        Reframe[0],
+        Reframe[1],
+        Reframe[3],
+        Reframe[4],
+    )
     return VectorTwo(
         XxValue * Value.x + XyValue * Value.y,
         YxValue * Value.x + YyValue * Value.y,
@@ -1344,7 +1358,12 @@ def CircleAngles(
     Start: float,
     EndValue: float,
 ) -> tuple[float, float]:
-    XxValue, XyValue, Ignored, YxValue, YyValue, Ignored = Reframe
+    XxValue, XyValue, YxValue, YyValue = (
+        Reframe[0],
+        Reframe[1],
+        Reframe[3],
+        Reframe[4],
+    )
     Determinant = XxValue * YyValue - XyValue * YxValue
     Rotation = MathValue.atan2(YxValue, XxValue)
     if Determinant < 0.0:
@@ -1358,15 +1377,21 @@ def ConicAngles(
     Start: float,
     EndValue: float,
 ) -> tuple[float, float]:
-    XxValue, XyValue, Ignored, YxValue, YyValue, Ignored = Reframe
+    XxValue, XyValue, YxValue, YyValue = (
+        Reframe[0],
+        Reframe[1],
+        Reframe[3],
+        Reframe[4],
+    )
     Determinant = XxValue * YyValue - XyValue * YxValue
     return (-EndValue, -Start) if Determinant < 0.0 else (Start, EndValue)
 
 
 # this definition applies an affine frame change to supported sketch geometry
 def ReframeGeom(
-    GeomValue: Any, Reframe: tuple[float, float, float, float, float, float]
-) -> AnyValue:
+    GeomValue: GeometryTypes,
+    Reframe: tuple[float, float, float, float, float, float],
+) -> GeometryTypes:
     if isinstance(GeomValue, PointGeom):
         return Replace(GeomValue, point=ReframePoint(GeomValue.point, Reframe))
     if isinstance(GeomValue, LineGeom):
@@ -1569,13 +1594,16 @@ def BuildPlanes(
     Planes: list[SupportPlane] = []
     PlaneIds: dict[str, str] = {}
     PlaneTransforms: dict[str, Transform] = {}
-    for NameValue, ObjValue in PlaneObjects.items():
+    for ObjValue in PlaneObjects.values():
         PlaneId = f"freecad:plane:{ObjValue.name}"
         PlaneIds[ObjValue.name] = PlaneId
         SourceTransform = SourceTransforms[ObjValue.name]
         Frame = OriginFrames.get(ObjValue.name)
         Principal = Frame is not None and ObjValue.name not in Blocked
-        PlaneTransform = Frame[1] if Principal else SourceTransform
+        if Principal and Frame is not None:
+            PlaneTransform = Frame[1]
+        else:
+            PlaneTransform = SourceTransform
         PlaneTransforms[ObjValue.name] = PlaneTransform
         Attributes: dict[str, AnyValue] = {"freecad": NativeObjectA(ObjValue)}
         if Principal and Frame is not None:
@@ -1947,7 +1975,8 @@ def FeatureKindA(ObjValue: _NativeObject) -> FeatureKind:
         return FeatureKind.IMPORTED
     if ObjValue.type_id in PrimitiveFeatureTypeIds:
         return FeatureKind.PRIMITIVE
-    return FeatureKindByTypeId.get(ObjValue.type_id, FeatureKind.NATIVE)
+    TypeKind = FeatureKindByTypeId.get(ObjValue.type_id)
+    return TypeKind if TypeKind is not None else FeatureKind.NATIVE
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2226,7 +2255,7 @@ def PartExtrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
 def BrepSidecars(
     NodeValue: ET.Element, FileName: str, Entries: Mapping[str, bytes]
 ) -> list[dict[str, AnyValue]]:
-    Sidecars = []
+    Sidecars: list[dict[str, AnyValue]] = []
     for Child in NodeValue.findall(".//*[@file]"):
         SidecarName = Child.get("file", "")
         if not SidecarName or SidecarName == FileName:
@@ -2574,7 +2603,7 @@ def IsJointObject(ObjValue: _NativeObject) -> bool:
 
 # this definition exists because focused behavior needs one stable owner
 def FindJointGroup(
-    Objects: tuple[_NativeObject, ...], ByName: dict[str, _NativeObject]
+    Objects: tuple[_NativeObject, ...], ByName: Mapping[str, _NativeObject]
 ) -> NativeObject | None:
     Exact = next(
         (ObjValue for ObjValue in Objects if ObjValue.type_id == AsmJointGroupTypeId),
@@ -2713,14 +2742,28 @@ def StoredMateValue(ObjValue: _NativeObject) -> ParamValue | None:
     if not Source:
         return None
     try:
-        Value = JsonValue.loads(Source)
+        Decoded: object = JsonValue.loads(Source)
     except (JsonValue.JSONDecodeError, RecursionError):
         return None
-    if not isinstance(Value, dict) or "value" not in Value:
+    if not isinstance(Decoded, dict):
         return None
-    KindValueA = Value.get("kind", ValueKind.NUMBER)
+    Value: dict[str, object] = {}
+    DecodedMapping = Cast(dict[object, object], Decoded)
+    for KeyValue, ItemValue in DecodedMapping.items():
+        if not isinstance(KeyValue, str):
+            return None
+        Value[KeyValue] = ItemValue
+    if "value" not in Value:
+        return None
+    KindValueA: object = Value.get("kind", ValueKind.NUMBER)
     if isinstance(KindValueA, dict):
-        KindValueA = KindValueA.get("value", ValueKind.NUMBER)
+        NestedValue: object = ValueKind.NUMBER
+        NestedMapping = Cast(dict[object, object], KindValueA)
+        for KeyValue, ItemValue in NestedMapping.items():
+            if KeyValue == "value":
+                NestedValue = ItemValue
+                break
+        KindValueA = NestedValue
     try:
         KindValue = ValueKind(str(KindValueA))
     except ValueError:
@@ -3128,7 +3171,9 @@ def JointKind(ObjValue: NativeObject) -> MateKind | str:
             return MateKind(StoredKind)
         except ValueError:
             return StoredKind
-    return MateKindByJointType.get(Enumeration(ObjValue, "JointType"), MateKind.NATIVE)
+    return (
+        MateKindByJointType.get(Enumeration(ObjValue, "JointType")) or MateKind.NATIVE
+    )
 
 
 # this definition builds mate entities and preserves native reference metadata
@@ -3872,526 +3917,523 @@ def ReadNativeFcstd(
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_JOINT_GROUP_TYPE_ID"] = AsmJointGroupTypeId
+ASSEMBLY_JOINT_GROUP_TYPE_ID = AsmJointGroupTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_OBJECT_TYPE_PREFIX"] = AsmObjectTypePrefix
+ASSEMBLY_OBJECT_TYPE_PREFIX = AsmObjectTypePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_ROOT_TYPE_ID"] = AsmRootTypeId
+ASSEMBLY_ROOT_TYPE_ID = AsmRootTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcEllipseGeometry"] = ArcEllipseGeom
+ArcEllipseGeometry = ArcEllipseGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcGeometry"] = ArcGeom
+ArcGeometry = ArcGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcHyperbolaGeometry"] = ArcHyperbolaGeom
+ArcHyperbolaGeometry = ArcHyperbolaGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcParabolaGeometry"] = ArcParabolaGeom
+ArcParabolaGeometry = ArcParabolaGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["AssemblyData"] = AsmData
+AssemblyData = AsmData
 
 # this binding exists because shared behavior needs one stable value
-globals()["BODY_CONTAINER_TYPE_IDS"] = BodyContainerTypeIds
+BODY_CONTAINER_TYPE_IDS = BodyContainerTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["Body"] = BodyValue
+Body = BodyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["BooleanOperation"] = BoolOperation
+BooleanOperation = BoolOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_KIND_BY_CODE"] = RuleKindByCode
+CONSTRAINT_KIND_BY_CODE = RuleKindByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_POINT_BY_INDEX"] = RulePointByIndex
+CONSTRAINT_POINT_BY_INDEX = RulePointByIndex
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_VALUE_KIND_BY_CODE"] = RuleValueKindByCode
+CONSTRAINT_VALUE_KIND_BY_CODE = RuleValueKindByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CircleGeometry"] = CircleGeom
+CircleGeometry = CircleGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ComponentDocument"] = ComponentDoc
+ComponentDocument = ComponentDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["Configuration"] = Config
+Configuration = Config
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintKind"] = RuleKind
+ConstraintKind = RuleKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintReference"] = RuleRef
+ConstraintReference = RuleRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIMENSIONAL_CONSTRAINT_CODES"] = DimensionalRuleCodes
+DIMENSIONAL_CONSTRAINT_CODES = DimensionalRuleCodes
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_ENTRY"] = DocEntry
+DOCUMENT_ENTRY = DocEntry
 
 # this binding exists because shared behavior needs one stable value
-globals()["Diagnostic"] = DiagValue
+Diagnostic = DiagValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
+EXTRUSION_TYPE_BY_CODE = ExtrusionTypeByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["EXTRUSION_TYPE_BY_CODE"] = ExtrusionTypeByCode
+EllipseGeometry = EllipseGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["EllipseGeometry"] = EllipseGeom
+FEATURE_KIND_BY_TYPE_ID = FeatureKindByTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_KIND_BY_TYPE_ID"] = FeatureKindByTypeId
+FORMAT_ID = FormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["FORMAT_ID"] = FormatId
+GEOMETRY_KIND_BY_TYPE_ID = GeomKindByTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_KIND_BY_TYPE_ID"] = GeomKindByTypeId
+GeometryKind = GeomKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["GeometryKind"] = GeomKind
+HyperbolaGeometry = HyperbolaGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["HyperbolaGeometry"] = HyperbolaGeom
+JOINT_GROUND_PROPERTY = JointGroundProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_GROUND_PROPERTY"] = JointGroundProp
+JOINT_REFERENCE_PROPERTIES = JointRefProperties
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_REFERENCE_PROPERTIES"] = JointRefProperties
+JOINT_RESERVED_LINK_PROPERTIES = JointReservedLink
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_RESERVED_LINK_PROPERTIES"] = JointReservedLink
+JOINT_TYPE_PROPERTIES = JointTypeProperties
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPE_PROPERTIES"] = JointTypeProperties
+LineGeometry = LineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["LineGeometry"] = LineGeom
+MATE_KINDS_USING_DISTANCE = MateKindsUsingDistance
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_KINDS_USING_DISTANCE"] = MateKindsUsingDistance
+MATE_KINDS_USING_SECOND_DISTANCE = MateKindsUsingSecond
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_KINDS_USING_SECOND_DISTANCE"] = MateKindsUsingSecond
+MATE_KIND_BY_JOINT_TYPE = MateKindByJointType
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_KIND_BY_JOINT_TYPE"] = MateKindByJointType
+MateConstraint = MateRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateConstraint"] = MateRule
+Matrix4 = MatrixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()["Matrix4"] = MatrixFour
+Mesh = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Mesh"] = MeshValue
+NATIVE_DOCUMENT_SHA256_ATTRIBUTE = KNativeDocHashAttr
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = KNativeDocHashAttr
+NON_FEATURE_OBJECT_TYPE_IDS = NonFeatureObjectTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["NON_FEATURE_OBJECT_TYPE_IDS"] = NonFeatureObjectTypeIds
+NativeFreeCADError = NativeFreeCad
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeFreeCADError"] = NativeFreeCad
+NativeGeometry = NativeGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeGeometry"] = NativeGeom
+PERMISSIVE_TRUE_VALUES = PermissiveTrueValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["PERMISSIVE_TRUE_VALUES"] = PermissiveTrueValues
+POCKET_TYPE_ID = PocketTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["POCKET_TYPE_ID"] = PocketTypeId
+PRIMITIVE_FEATURE_TYPE_IDS = PrimitiveFeatureTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["PRIMITIVE_FEATURE_TYPE_IDS"] = PrimitiveFeatureTypeIds
+ParabolaGeometry = ParabolaGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParabolaGeometry"] = ParabolaGeom
+Parameter = Param
 
 # this binding exists because shared behavior needs one stable value
-globals()["Parameter"] = Param
+ParameterValue = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterValue"] = ParamValue
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+PointGeometry = PointGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["PointGeometry"] = PointGeom
+SCALAR_PROPERTY_KINDS = ScalarPropKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["SCALAR_PROPERTY_KINDS"] = ScalarPropKinds
+SKETCH_TYPE_ID = SketchTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_TYPE_ID"] = SketchTypeId
+SPLINE_GEOMETRY_TYPE_IDS = SplineGeomTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["SPLINE_GEOMETRY_TYPE_IDS"] = SplineGeomTypeIds
+STRING_HASHER_TAGS = StringHasherTags
 
 # this binding exists because shared behavior needs one stable value
-globals()["STRING_HASHER_TAGS"] = StringHasherTags
+SUBELEMENT_KIND_BY_PREFIX = SubElemKindByPrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUBELEMENT_KIND_BY_PREFIX"] = SubElemKindByPrefix
+SUFFIX = Suffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX"] = Suffix
+SUPPORT_PLANE_TYPE_IDS = SupportPlaneTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUPPORT_PLANE_TYPE_IDS"] = SupportPlaneTypeIds
+SelectionPathElement = SelectionPathElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["SelectionPathElement"] = SelectionPathElem
+SketchConstraint = SketchRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["SketchConstraint"] = SketchRule
+SplineGeometry = SplineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["SplineGeometry"] = SplineGeom
+Vector2 = VectorTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector2"] = VectorTwo
+Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector3"] = VectorThree
+XML_TRUE_VALUES = XmlTrueValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["XML_TRUE_VALUES"] = XmlTrueValues
+_ExternalState = OuterState
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ExternalState"] = OuterState
+_GROOVE_TYPE_ID = KGrooveTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_GROOVE_TYPE_ID"] = KGrooveTypeId
+_MAX_ENTRY_SIZE = MaxEntrySize
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_ENTRY_SIZE"] = MaxEntrySize
+_MAX_EXTERNAL_DEPTH = KMaxOuterDepth
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_EXTERNAL_DEPTH"] = KMaxOuterDepth
+_MAX_EXTERNAL_FILES = MaxOuterFiles
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_EXTERNAL_FILES"] = MaxOuterFiles
+_MAX_TOTAL_SIZE = MaxTotalSize
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_TOTAL_SIZE"] = MaxTotalSize
+_MIN_OBJECT_GRAPH_SCHEMA_VERSION = KMinObjectGraphSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MIN_OBJECT_GRAPH_SCHEMA_VERSION"] = KMinObjectGraphSchema
+_NativeArchive = NativeArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NativeArchive"] = NativeArchive
+_NativeObject = NativeObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NativeObject"] = NativeObject
+_ORIGIN_PLANE_FRAMES = KOriginPlaneFrames
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ORIGIN_PLANE_FRAMES"] = KOriginPlaneFrames
+_SUBTRACTIVE_CAPABLE_KINDS = KSubtractiveCapableKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SUBTRACTIVE_CAPABLE_KINDS"] = KSubtractiveCapableKinds
+_SUBTRACTIVE_TYPE_IDS = KSubtractiveTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SUBTRACTIVE_TYPE_IDS"] = KSubtractiveTypeIds
+_archive_members = ArchiveMembers
 
 # this binding exists because shared behavior needs one stable value
-globals()["_archive_members"] = ArchiveMembers
+_assembly_root_object = AsmRootObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_root_object"] = AsmRootObject
+_bool = IsBoolValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bool"] = IsBoolValue
+_build_brep_payloads = BuildBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_build_brep_payloads"] = BuildBrep
+_child = FindChild
 
 # this binding exists because shared behavior needs one stable value
-globals()["_child"] = FindChild
+_closed_profile_entity_ids = ClosedProfile
 
 # this binding exists because shared behavior needs one stable value
-globals()["_closed_profile_entity_ids"] = ClosedProfile
+_constraint_element_slots = RuleElemSlots
 
 # this binding exists because shared behavior needs one stable value
-globals()["_constraint_element_slots"] = RuleElemSlots
+_constraint_expression = RuleExpression
 
 # this binding exists because shared behavior needs one stable value
-globals()["_constraint_expression"] = RuleExpression
+_declared_count = DeclaredCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["_declared_count"] = DeclaredCount
+_decoded_document_brep = DecodedDocBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decoded_document_brep"] = DecodedDocBrep
+_dot = DotAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["_dot"] = DotAction
+_element_data = ElemData
 
 # this binding exists because shared behavior needs one stable value
-globals()["_element_data"] = ElemData
+_embedded_component_document = EmbeddedDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_embedded_component_document"] = EmbeddedDoc
+_entry_name = EntryName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_entry_name"] = EntryName
+_enum = EnumAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["_enum"] = EnumAction
+_enumeration_choice = Enumeration
 
 # this binding exists because shared behavior needs one stable value
-globals()["_enumeration_choice"] = Enumeration
+_explicit_selections = Explicit
 
 # this binding exists because shared behavior needs one stable value
-globals()["_explicit_selections"] = Explicit
+_expressions = ReadExpressions
 
 # this binding exists because shared behavior needs one stable value
-globals()["_expressions"] = ReadExpressions
+_external_documents = OuterDocsMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_external_documents"] = OuterDocsMut
+_extrusion_definition = Extrusion
 
 # this binding exists because shared behavior needs one stable value
-globals()["_extrusion_definition"] = Extrusion
+_extrusion_end_condition = ExtrusionEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()["_extrusion_end_condition"] = ExtrusionEnd
+_feature_kind = FeatureKindA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_kind"] = FeatureKindA
+_feature_parameters = FeatureMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_parameters"] = FeatureMut
+_feature_selections = FeatureA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_selections"] = FeatureA
+_float = Float
 
 # this binding exists because shared behavior needs one stable value
-globals()["_float"] = Float
+_geometry = GeomAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["_geometry"] = GeomAction
+_geometry_axis = GeomAxis
 
 # this binding exists because shared behavior needs one stable value
-globals()["_geometry_axis"] = GeomAxis
+_has_shape_property = HasShapeProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_has_shape_property"] = HasShapeProp
+_integer = Integer
 
 # this binding exists because shared behavior needs one stable value
-globals()["_integer"] = Integer
+_is_assembly_link_object = IsAsmLinkObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_assembly_link_object"] = IsAsmLinkObject
+_is_body_container = IsBodyContainer
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_body_container"] = IsBodyContainer
+_is_feature_object = IsFeatureObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_feature_object"] = IsFeatureObject
+_is_grounded_joint_object = IsGroundedJoint
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_grounded_joint_object"] = IsGroundedJoint
+_is_joint_object = IsJointObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_joint_object"] = IsJointObject
+_is_link_object = IsLinkObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_link_object"] = IsLinkObject
+_is_reparse_path = IsReparsePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_reparse_path"] = IsReparsePath
+_is_support_plane_object = IsSupportPlane
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_support_plane_object"] = IsSupportPlane
+_joint_group_object = FindJointGroup
 
 # this binding exists because shared behavior needs one stable value
-globals()["_joint_group_object"] = FindJointGroup
+_link = LinkAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["_link"] = LinkAction
+_link_list = LinkList
 
 # this binding exists because shared behavior needs one stable value
-globals()["_link_list"] = LinkList
+_linked_object_data = LinkedObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_linked_object_data"] = LinkedObject
+_linked_object_property = LinkedObjectA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_linked_object_property"] = LinkedObjectA
+_load_native_archive = LoadNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_load_native_archive"] = LoadNative
+_mate_entity_kind = MateEntityKindA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_entity_kind"] = MateEntityKindA
+_mate_values = MateValuesMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_values"] = MateValuesMut
+_native_configurations = BuildConfigs
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_configurations"] = BuildConfigs
+_native_document_payloads = NativePayloads
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_document_payloads"] = NativePayloads
+_native_object_data = NativeObjectA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_object_data"] = NativeObjectA
+_number = Number
 
 # this binding exists because shared behavior needs one stable value
-globals()["_number"] = Number
+_ordered_features = OrderedFeatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ordered_features"] = OrderedFeatures
+_origin_plane_frame = OriginPlane
 
 # this binding exists because shared behavior needs one stable value
-globals()["_origin_plane_frame"] = OriginPlane
+_other_entry_data = OtherEntryData
 
 # this binding exists because shared behavior needs one stable value
-globals()["_other_entry_data"] = OtherEntryData
+_parse_assembly = ParseAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parse_assembly"] = ParseAsm
+_parse_meshes = ParseMeshes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parse_meshes"] = ParseMeshes
+_parse_objects = ParseObjects
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parse_objects"] = ParseObjects
+_parse_sketches = ParseSketchMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parse_sketches"] = ParseSketchMut
+_part_extrusion_definition = PartExtrusion
 
 # this binding exists because shared behavior needs one stable value
-globals()["_part_extrusion_definition"] = PartExtrusion
+_placement_element = PlacementElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["_placement_element"] = PlacementElem
+_placement_matrix = PlacementMatrix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_placement_matrix"] = PlacementMatrix
+_plane_reframe = PlaneReframe
 
 # this binding exists because shared behavior needs one stable value
-globals()["_plane_reframe"] = PlaneReframe
+_point_on_segment = IsPointOnSeg
 
 # this binding exists because shared behavior needs one stable value
-globals()["_point_on_segment"] = IsPointOnSeg
+_points_close = IsPointClose
 
 # this binding exists because shared behavior needs one stable value
-globals()["_points_close"] = IsPointClose
+_property_parameter_value = PropParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_property_parameter_value"] = PropParamValue
+_proxy_class = ProxyClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_proxy_class"] = ProxyClass
+_reframe_geometry = ReframeGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["_reframe_geometry"] = ReframeGeom
+_remaining_expressions = RemainingMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_remaining_expressions"] = RemainingMut
+_resolved_source_path = ResolvedSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["_resolved_source_path"] = ResolvedSource
+_segment_orientation = Segment
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segment_orientation"] = Segment
+_segments_intersect_or_touch = HasSegmentTouch
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segments_intersect_or_touch"] = HasSegmentTouch
+_stored_count = StoredCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["_stored_count"] = StoredCount
+_stored_mate_value = StoredMateValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_stored_mate_value"] = StoredMateValue
+_string = String
 
 # this binding exists because shared behavior needs one stable value
-globals()["_string"] = String
+_string_hasher_data = ReadStringHash
 
 # this binding exists because shared behavior needs one stable value
-globals()["_string_hasher_data"] = ReadStringHash
+_support_target = SupportTarget
 
 # this binding exists because shared behavior needs one stable value
-globals()["_support_target"] = SupportTarget
+_transform = TransformA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_transform"] = TransformA
+_transform_close = IsTransformNear
 
 # this binding exists because shared behavior needs one stable value
-globals()["_transform_close"] = IsTransformNear
+_validated_archive_members = ValidatedArchiveMembers
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_archive_members"] = ValidatedArchiveMembers
+_validated_document_xml = ValidatedDocXml
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_document_xml"] = ValidatedDocXml
+_validated_entry_name = ValidatedEntryName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_entry_name"] = ValidatedEntryName
+_validated_object_name = ValidatedObjectName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_object_name"] = ValidatedObjectName
+_xlink_data = XlinkData
 
 # this binding exists because shared behavior needs one stable value
-globals()["_xlink_data"] = XlinkData
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+decode_ascii_brep = DecodeAsciiBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_ascii_brep"] = DecodeAsciiBrep
+extract_manifest_from_fcstd = ExtractManifestFromFcstd
 
 # this binding exists because shared behavior needs one stable value
-globals()["extract_manifest_from_fcstd"] = ExtractManifestFromFcstd
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
+infer_capabilities = InferCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["infer_capabilities"] = InferCapabilities
+json = JsonValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["json"] = JsonValue
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
+probe_native_fcstd = ProbeNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["probe_native_fcstd"] = ProbeNative
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
+read_native_fcstd = ReadNativeFcstd
 
 # this binding exists because shared behavior needs one stable value
-globals()["read_native_fcstd"] = ReadNativeFcstd
+replace = Replace
 
 # this binding exists because shared behavior needs one stable value
-globals()["replace"] = Replace
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["zipfile"] = Zipfile
+zipfile = Zipfile

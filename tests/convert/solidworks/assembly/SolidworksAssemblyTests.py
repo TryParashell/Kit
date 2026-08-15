@@ -19,14 +19,14 @@ from convert.adapters.solidworks import (
     build_sldprt as BuildSldprt,
 )
 from convert.adapters.solidworks.core.Adapter import (
-    _companion_payloads as CompanionPayloads,
-    _mate_groups as MateGroups,
-    _mate_instance_path as MateInstancePath,
-    _mate_payload as MatePayload,
-    _neutral_mate_alignment as NeutralMateAlignment,
-    _neutral_mate_entity_kind as NeutralMateEntityKind,
-    _neutral_mate_kind as NeutralMateKind,
-    _neutral_mate_value as NeutralMateValue,
+    Companion as CompanionPayloads,
+    MateGroups,
+    MateInstance as MateInstancePath,
+    MatePayload,
+    NeutralMate as NeutralMateAlignment,
+    NeutralMateKind as NeutralMateEntityKind,
+    NeutralMateKinA as NeutralMateKind,
+    NeutralMateA as NeutralMateValue,
 )
 from convert.adapters.solidworks.assembly.Assembly import (
     MATE_VALUE_SEMANTICS as Semantics,
@@ -43,17 +43,18 @@ from convert.adapters.solidworks.assembly.Assembly import (
     NativeMate,
     NativeMateAlignmentCode,
     NativeMateDimension,
-    _MATE_KIND_BY_CLASS as Class,
-    _MATE_KIND_BY_NAME as NameInfo,
-    _mate_alignment as MateAlignmentA,
-    _mate_entities as MateEntities,
-    _mate_kind as MateKindA,
-    _native_feature_id as NativeFeatureId,
+    KMateKindByClass as Class,
+    KMateKindByName as NameInfo,
+    MateAlignmentA,
+    MateEntities,
+    MateKind as MateKindA,
+    NativeFeatureId,
     decode_mate_list as DecodeMateList,
     decode_native_assembly as DecodeNativeAssembly,
 )
 from convert.adapters.solidworks.assembly.AssemblyCore import AsmCoreItem, EncodeAsmCore
 from interchange import (
+    CadDocument,
     Capability,
     ComponentInstance,
     ComponentKind,
@@ -211,12 +212,12 @@ def TestNFIDNIFS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.fixture(scope="module")
-def Document():
-    return SldprtAdapter().read(KAssembly, ReadOptions(include_brep=False))
+def Document() -> CadDocument:
+    return SldprtAdapter().read(KAssembly, ReadOptions(IncludeBrep=False))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestMARHDAH(Document) -> None:
+def TestMARHDAH(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     assert Document.validate() == ()
@@ -247,7 +248,7 @@ def TestMARHDAH(Document) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestACRTDD(Document) -> None:
+def TestACRTDD(Document: CadDocument) -> None:
     assert Document.capabilities == frozenset(
         {
             Capability.ASSEMBLIES,
@@ -528,7 +529,7 @@ def TestMNFDNMCN() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestMARETAS(Document) -> None:
+def TestMARETAS(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     RingInfo = next(
@@ -579,7 +580,7 @@ def TestMARETAS(Document) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestMARRANML(Document) -> None:
+def TestMARRANML(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     assert len(Assembly.mates) == 632
@@ -609,7 +610,7 @@ def TestMARRANML(Document) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestMARDMVAA(Document) -> None:
+def TestMARDMVAA(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     Distance = next(
@@ -830,7 +831,7 @@ def TestMLDUSWTSIR() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestMARERM(Document) -> None:
+def TestMARERM(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     assert len(Document.meshes) == 65
@@ -851,7 +852,7 @@ def TestMARERM(Document) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestNADPTOT(Document) -> None:
+def TestNADPTOT(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     Nested = [

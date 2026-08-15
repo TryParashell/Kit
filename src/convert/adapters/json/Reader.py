@@ -20,7 +20,7 @@ class JsonReader:
 
     # this reader restores filters and validates one interchange document
     def ReadAction(
-        Instance, SourceValue: Source, Options: ReadOptions | None = None
+        self, SourceValue: Source, Options: ReadOptions | None = None
     ) -> CadDocument:
         Settings = Options or ReadOptions()
         Document = CadDocument.from_json(ReadText(SourceValue))
@@ -49,4 +49,4 @@ class JsonReader:
             Document.assert_valid()
         return Document
 
-    locals()["read"] = ReadAction
+    read = ReadAction

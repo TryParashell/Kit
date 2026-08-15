@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from importlib import import_module as ImportModule
-from typing import Any as AnyValue
+from typing import NamedTuple
 
 from tools.skills.Descriptions import KDescriptions
 from tools.skills.SkillArgs import ParseArgs
@@ -22,14 +22,21 @@ from tools.skills.SkillSpecs import ValidateSpecs
 from tools.skills.SkillWriter import WriteSkills
 from tools.skills.YamlScalar import QuoteYaml
 
+
+# delayed imports keep compatibility names available without introducing eager dependency cycles
+class ImportPayload(NamedTuple):
+    ModuleName: str
+    SymbolName: str
+
+
 # legacy lookups preserve downstream imports while compliant names own current implementations
-KLegacyApi = {
-    "ROOT": ("tools.skills.SkillPaths", "KRootPath"),
-    "SOURCE_DIR": ("tools.skills.SkillPaths", "KSourceDir"),
-    "TARGET_DIR": ("tools.skills.SkillPaths", "KTargetDir"),
+KLegacyApi: dict[str, object | ImportPayload] = {
+    "ROOT": ImportPayload("tools.skills.SkillPaths", "KRootPath"),
+    "SOURCE_DIR": ImportPayload("tools.skills.SkillPaths", "KSourceDir"),
+    "TARGET_DIR": ImportPayload("tools.skills.SkillPaths", "KTargetDir"),
     "LICENSE": "LicenseRef-PolyForm-Strict-1.0.0",
     "DESCRIPTIONS": KDescriptions,
-    "KIRO_METADATA": ("tools.skills.SkillMetadata", "KSkillMetadata"),
+    "KIRO_METADATA": ImportPayload("tools.skills.SkillMetadata", "KSkillMetadata"),
     "source_body": StripSource,
     "quote_yaml": QuoteYaml,
     "source_path": GetSourcePath,
@@ -45,12 +52,14 @@ KLegacyApi = {
 
 
 # compatibility resolution prevents module restructuring from breaking existing automation
-def GetLegacyAttr(NameText: str) -> AnyValue:
+def GetLegacyAttr(NameText: str) -> object:
     try:
         ApiValue = KLegacyApi[NameText]
     except KeyError as ErrorInfo:
         raise AttributeError(NameText) from ErrorInfo
-    if isinstance(ApiValue, tuple):
-        ModuleName, SymbolName = ApiValue
-        ApiValue = getattr(ImportModule(ModuleName), SymbolName)
+    if isinstance(ApiValue, ImportPayload):
+        ApiValue = getattr(
+            ImportModule(ApiValue.ModuleName),
+            ApiValue.SymbolName,
+        )
     return ApiValue

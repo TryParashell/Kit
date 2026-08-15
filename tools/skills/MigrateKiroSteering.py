@@ -20,9 +20,6 @@ if str(KEntryRoot) not in System.path:
 from tools.skills.SkillCompat import GetLegacyAttr, KLegacyApi
 from tools.skills.SkillCli import MainRun
 
-# explicit exports retain legacy imports because downstream automation may still reference them
-__all__ = tuple(KLegacyApi)
-
 
 # legacy attribute resolution avoids forcing existing callers through an immediate migration
 def __getattr__(NameText: str) -> object:

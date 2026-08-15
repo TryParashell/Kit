@@ -9,30 +9,44 @@
 from __future__ import annotations
 
 from typing import Iterable as TypeIterable
+from typing import Protocol
 
 from convert.adapters.registry.RegistryDiscover import FindAdapters
 from convert.adapters.registry.RegistryErrors import DiscoveryError
 from convert.adapters.registry.RegistryRegisterApi import IsReplaceFlag
 from convert.adapters.registry.RegistryState import CopyState
+from convert.adapters.registry.RegistryState import RegistryHost
 
 # historical iterable annotations need local resolution after public methods move to the registry facade
-globals()["Iterable"] = TypeIterable
+Iterable = TypeIterable
 
 # built in discovery remains rooted above infrastructure packages after registry became a facade package
 KDefaultPackage = "convert.adapters"
 
 
 # discovery api ownership isolates package introspection from ordinary registry operations
-class DiscoveryApi:
+# discovery composition needs only the typed bulk registration boundary
+class DiscoveryHost(Protocol):
+
+    # package discovery delegates mutation so transaction policy remains centralized
+    def ExtendAll(
+        self,
+        AdapterValues: TypeIterable[object],
+        **NamedValues: object,
+    ) -> None: ...
+
+
+# discovery api ownership isolates package introspection from ordinary registry operations
+class DiscoveryApi(DiscoveryHost):
 
     # package failures retain one stable public category while preserving detailed causes
     def Introspect(
-        SelfValue,
+        self,
         PackageName: str = KDefaultPackage,
     ) -> tuple[str, ...]:
         try:
             AdapterValues = FindAdapters(PackageName)
-            SelfValue.ExtendAll(AdapterValues)
+            self.ExtendAll(AdapterValues)
         except DiscoveryError:
             raise
         except Exception as ErrorInfo:
@@ -40,24 +54,36 @@ class DiscoveryApi:
                 f"could not register adapters from {PackageName}"
             ) from ErrorInfo
         return tuple(
-            sorted({AdapterData.info.format_id for AdapterData in AdapterValues})
+            sorted({AdapterData.info.FormatId for AdapterData in AdapterValues})
         )
 
 
 # bulk api ownership isolates all or nothing extension from single adapter registration
-class ExtendApi:
+# bulk composition needs typed state plus the single adapter registration boundary
+class ExtendHost(RegistryHost, Protocol):
+
+    # bulk registration delegates each validated item through one transactional operation
+    def RegisterOne(
+        self,
+        AdapterData: object,
+        **NamedValues: object,
+    ) -> None: ...
+
+
+# bulk api ownership isolates all or nothing extension from single adapter registration
+class ExtendApi(ExtendHost):
 
     # complete rollback prevents earlier adapters from surviving a later registration failure
     def ExtendAll(
-        SelfValue,
+        self,
         AdapterValues: TypeIterable[object],
         **NamedValues: object,
     ) -> None:
-        PriorState = CopyState(SelfValue.BindingMap, SelfValue.AliasMap)
+        PriorState = CopyState(self.BindingMap, self.AliasMap)
         ReplaceFlag = IsReplaceFlag(NamedValues, "extend")
         try:
             for AdapterData in AdapterValues:
-                SelfValue.RegisterOne(AdapterData, ReplaceFlag=ReplaceFlag)
+                self.RegisterOne(AdapterData, ReplaceFlag=ReplaceFlag)
         except Exception:
-            SelfValue.BindingMap, SelfValue.AliasMap = PriorState
+            self.BindingMap, self.AliasMap = PriorState
             raise

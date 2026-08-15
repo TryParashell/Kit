@@ -44,14 +44,14 @@ class AdapterCaps(ModelBase):
 
     # historical constructor keywords must remain accepted without changing canonical storage
     def __init__(
-        SelfValue,
+        self,
         Values: frozenset[Capability] = frozenset(),
     ) -> None:
-        object.__setattr__(SelfValue, "Values", Values)
+        object.__setattr__(self, "Values", Values)
 
     # callers need one consistent containment check for adapter support declarations
-    def HasCapability(SelfValue, CapabilityValue: Capability) -> bool:
-        return CapabilityValue in SelfValue.Values
+    def HasCapability(self, CapabilityValue: Capability) -> bool:
+        return CapabilityValue in self.Values
 
 
 BindCompatMut(
@@ -99,13 +99,18 @@ for AttrName, AttrValue in {
 for AttrName, AttrValue in {"__module__": __name__}.items():
     setattr(TopologyCounts, AttrName, AttrValue)
 
-globals().update(
-    {
-        "ExtrusionEndCondition": ExtrudeEnd,
-        "FeatureDefinition": FeatureDef,
-        "TopologySummary": TopologyCounts,
-    }
-)
+ExtrusionEndCondition = ExtrudeEnd
+FeatureDefinition = FeatureDef
+TopologySummary = TopologyCounts
+AdapterCapabilities = AdapterCaps
+Body = DesignBody
+CircularPatternFeature = CirclePattern
+ExtrusionFeature = ExtrudeFeature
+FeatureConfigurationState = FeatureCfgState
+LinearPatternFeature = LinearPattern
+NativeFeatureDefinition = NativeFeature
+ReferencePlaneFeature = RefPlaneFeature
+RevolutionFeature = RevolveFeature
 
 
 # legacy module exports stay explicit so integrations cannot depend on implementation details

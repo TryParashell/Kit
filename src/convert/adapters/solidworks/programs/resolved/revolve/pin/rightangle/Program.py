@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     KPrimitiveFormats,
@@ -43,7 +45,7 @@ KProfileOffsets = (
 
 
 # callers can replace semantic fields while retaining recovered object framing
-def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
+def EncodeProgram(Overrides: Mapping[int, FieldType] | None = None) -> bytes:
     return ReplayResolved(KResolvedOps, KReferenceLength, Overrides, KPrimitiveFormats)
 
 

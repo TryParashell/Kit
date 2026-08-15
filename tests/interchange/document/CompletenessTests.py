@@ -18,6 +18,7 @@ from typing import get_args as GetTypeArgs
 from typing import get_origin as GetTypeOrigin
 from typing import get_type_hints as GetTypeHints
 import pytest as PytestLib
+from interchange import geometry as GeometryModule
 from interchange import (
     AssemblyData,
     BrepPayload,
@@ -63,11 +64,10 @@ class FutureFeature(FeatureDefinition):
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
-def GetExpectedIds(ValueType: type[object]) -> set[str]:
+def GetExpectedIds(ValueType: type[CadDocument] | type[AssemblyData]) -> set[str]:
     TypeHints = GetTypeHints(ValueType)
     ResultValue: set[str] = set()
-    for FieldValue in GetFields(ValueType):
-        FieldHint = TypeHints[FieldValue.name]
+    for FieldName, FieldHint in TypeHints.items():
         TypeArgs = GetTypeArgs(FieldHint)
         if (
             GetTypeOrigin(FieldHint) is tuple
@@ -82,23 +82,23 @@ def GetExpectedIds(ValueType: type[object]) -> set[str]:
                 )
             )
         ):
-            ResultValue.add(FieldValue.name)
+            ResultValue.add(FieldName)
     return ResultValue
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckIdFields() -> None:
     for ValueType in (CadDocument, AssemblyData):
-        assert {
-            NameValue for NameValue, LabelText in GetIdFields(ValueType)
-        } == GetExpectedIds(ValueType)
+        assert {NameValue for NameValue, _ in GetIdFields(ValueType)} == GetExpectedIds(
+            ValueType
+        )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckGeometry() -> None:
     ExpectedValues = {
         ItemValue
-        for NameValue, ItemValue in vars(KInterchangeApi.geometry).items()
+        for NameValue, ItemValue in vars(GeometryModule).items()
         if NameValue.endswith(("Geometry", "Geom"))
         and isinstance(ItemValue, type)
         and IsDataClass(ItemValue)

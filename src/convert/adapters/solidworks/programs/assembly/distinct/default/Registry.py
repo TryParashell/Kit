@@ -696,7 +696,7 @@ KFieldOwners, KStreamPrograms = BuildStreams(
 __all__ = ["KFieldOwners", "KStreamPrograms", "KMethodPrograms"]
 
 # compatibility binding preserves its established public import after decomposition
-globals()["FieldOwners"] = KFieldOwners
+FieldOwners = KFieldOwners
 
 # compatibility binding preserves its established public import after decomposition
-globals()["StreamPrograms"] = KStreamPrograms
+StreamPrograms = KStreamPrograms

@@ -123,7 +123,7 @@ def TestMPCPHETC() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMPCOTWG() -> None:
     CursorValue = 0
-    for StartPos, FieldWidth, OwnerIndex, KindNameA, DefaultValue in KConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, _, _ in KConfigOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KConfigOwners)
@@ -182,7 +182,7 @@ def TestMPPHETC() -> None:
 def TestMPPOTWG() -> None:
     CursorValue = 0
     AllowedKinds = {"definition", "classref", "objectref", "null", "string"}
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in KResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in KResolvedOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KFieldOwners)

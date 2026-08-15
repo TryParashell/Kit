@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -32,4 +31,19 @@ class Diagnostic(ModelBase):
     Level: Severity
     EntityId: str
     Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    Attributes: TypeMap[str, object]
+
+    # public diagnostics keep stable typed access for adapter and policy consumers
+    @property
+    def code(self) -> str:
+        return self.ErrorCode
+
+    # public diagnostics keep their human readable evidence statically accessible
+    @property
+    def message(self) -> str:
+        return self.MessageText
+
+    # public diagnostics preserve severity typing for filtering and policy decisions
+    @property
+    def severity(self) -> Severity:
+        return self.Level

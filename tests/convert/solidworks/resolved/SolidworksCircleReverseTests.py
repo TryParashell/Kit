@@ -46,9 +46,9 @@ KConfigDigest = "fc1cb072c15c9f334bab288234353e3dc27db5aa83abd61c6fdd95364ac276a
 # keeps this focused behavior isolated so regressions remain immediately visible
 def CanonResolved(OracleData: bytes) -> bytes:
     PathOffset = 9853
-    IgnoredValue, PathWidth = ReadString(OracleData, PathOffset)
+    _, PathWidth = ReadString(OracleData, PathOffset)
     PartOffset = PathOffset + PathWidth + 2
-    IgnoredValue, PartWidth = ReadString(OracleData, PartOffset)
+    _, PartWidth = ReadString(OracleData, PartOffset)
     return (
         OracleData[:PathOffset]
         + EncodeString("")
@@ -61,7 +61,7 @@ def CanonResolved(OracleData: bytes) -> bytes:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def CanonConfig(OracleData: bytes) -> bytes:
     PartOffset = 44
-    IgnoredValue, PartWidth = ReadString(OracleData, PartOffset)
+    _, PartWidth = ReadString(OracleData, PartOffset)
     return (
         OracleData[:PartOffset]
         + EncodeString("Part1")
@@ -79,7 +79,7 @@ def TestRRPCETF() -> None:
     CursorPos = 0
     ObjectCount = 0
     DefineCount = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, IgnoredValue in ResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in ResolvedOps:
         assert StartPos == CursorPos
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(ResolvedOwners)
@@ -110,7 +110,7 @@ def TestRCPCETF() -> None:
     CursorPos = 0
     ObjectCount = 0
     DefineCount = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, IgnoredValue in ConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in ConfigOps:
         assert StartPos == CursorPos
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(ConfigOwners)

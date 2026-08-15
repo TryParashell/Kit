@@ -446,7 +446,7 @@ KFieldOwners, KConfigOps = BuildProgram(
 __all__ = ["KFieldOwners", "KConfigOps", "KMethodPrograms"]
 
 # compatibility binding preserves its established public import after decomposition
-globals()["FieldOwners"] = KFieldOwners
+FieldOwners = KFieldOwners
 
 # compatibility binding preserves its established public import after decomposition
-globals()["ConfigOps"] = KConfigOps
+ConfigOps = KConfigOps

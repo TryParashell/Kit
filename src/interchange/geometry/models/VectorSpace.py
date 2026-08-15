@@ -6,6 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from typing import TYPE_CHECKING, ClassVar
+
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
@@ -15,3 +17,7 @@ class SpaceVector(ModelBase):
     XCoord: float
     YCoord: float
     ZCoord: float
+    if TYPE_CHECKING:
+        x: ClassVar[float]
+        y: ClassVar[float]
+        z: ClassVar[float]

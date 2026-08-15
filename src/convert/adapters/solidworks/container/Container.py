@@ -84,35 +84,37 @@ def Container(BlobValue: bytes | bytearray) -> tuple[bytes, bytes, bytes]:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class StreamRecord:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["data"] = "bytes"
-    __annotations__["offset"] = "int"
-    __annotations__["payload_offset"] = "int"
-    __annotations__["compressed_size"] = "int"
-    __annotations__["uncompressed_size"] = "int"
-    __annotations__["crc32"] = "int"
-    __annotations__["signature"] = "bytes"
+    name: str
+    data: bytes
+    offset: int
+    payload_offset: int
+    compressed_size: int
+    uncompressed_size: int
+    crc32: int
+    signature: bytes
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SldprtArchive:
-    locals().setdefault("__annotations__", {})
-    __annotations__["path"] = "Path"
-    __annotations__["file_id"] = "int"
-    __annotations__["format_version"] = "int"
-    __annotations__["records"] = "tuple[StreamRecord, ...]"
+    path: FilePath
+    file_id: int
+    format_version: int
+    records: tuple[StreamRecord, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def OpenAction(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
+    def OpenAction(
+        ClassType: type[SldprtArchive], SourcePath: str | FilePath
+    ) -> SldprtArchive:
         return OpenArchive(ClassType, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromBytes(
-        ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath = "<memory>"
+        ClassType: type[SldprtArchive],
+        BlobValue: bytes | bytearray,
+        SourcePath: str | FilePath = "<memory>",
     ) -> SldprtArchive:
         return ParseArchive(ClassType, BlobValue, SourcePath)
 
@@ -130,20 +132,43 @@ class SldprtArchive:
 
     # this definition exists because focused behavior needs one stable owner
     def Require(Instance, NameValue: str) -> bytes:
-        DataValue = Instance.get(NameValue)
+        DataValue = Instance.GetAction(NameValue)
         if DataValue is None:
             raise SldprtFormat(f"required stream is missing: {NameValue}")
         return DataValue
 
-    locals()["from_bytes"] = FromBytes
-    locals()["get"] = GetAction
-    locals()["open"] = OpenAction
-    locals()["require"] = Require
-    locals()["streams"] = Streams
+    @classmethod
+    def from_bytes(
+        ClassType: type[SldprtArchive],
+        BlobValue: bytes | bytearray,
+        SourcePath: str | FilePath = "<memory>",
+    ) -> SldprtArchive:
+        return ClassType.FromBytes(BlobValue, SourcePath)
+
+    # compatibility callers require the conventional archive open spelling
+    @classmethod
+    def open(
+        ClassType: type[SldprtArchive], SourcePath: str | FilePath
+    ) -> SldprtArchive:
+        return ClassType.OpenAction(SourcePath)
+
+    # compatibility callers require stream lookup through the conventional spelling
+    def get(Instance, NameValue: str) -> bytes | None:
+        return Instance.GetAction(NameValue)
+
+    # compatibility callers require stream lookup through the conventional spelling
+    def require(Instance, NameValue: str) -> bytes:
+        return Instance.Require(NameValue)
+
+    @property
+    def streams(Instance) -> dict[str, bytes]:
+        return Instance.Streams
 
 
 # this definition exists because archive loading needs one filesystem boundary
-def OpenArchive(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
+def OpenArchive(
+    ClassType: type[SldprtArchive], SourcePath: str | FilePath
+) -> SldprtArchive:
     Source = FilePath(SourcePath).expanduser().resolve()
     try:
         BlobValue = Source.read_bytes()
@@ -154,7 +179,9 @@ def OpenArchive(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
 
 # this definition exists because archive parsing needs one validated construction boundary
 def ParseArchive(
-    ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath = "<memory>"
+    ClassType: type[SldprtArchive],
+    BlobValue: bytes | bytearray,
+    SourcePath: str | FilePath = "<memory>",
 ) -> SldprtArchive:
     Source = FilePath(SourcePath)
     DataValue = bytes(BlobValue)
@@ -575,100 +602,100 @@ def EndSignature(BlobValue: bytes, CentralStart: int, Count: int) -> bytes:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTAINER_VERSIONS"] = ContainerVersions
+CONTAINER_VERSIONS = ContainerVersions
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTENT_TYPES_STREAM"] = ContentTypesStream
+CONTENT_TYPES_STREAM = ContentTypesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_FILE_ID"] = KDefaultFileId
+DEFAULT_FILE_ID = KDefaultFileId
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_SIGNATURES"] = KDefaultSignatures
+DEFAULT_SIGNATURES = KDefaultSignatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["RELATIONSHIPS_STREAM"] = RelationshipsStream
+RELATIONSHIPS_STREAM = RelationshipsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["SldprtFormatError"] = SldprtFormat
+SldprtFormatError = SldprtFormat
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ARCHIVE_OFFSET"] = KArchiveOffset
+_ARCHIVE_OFFSET = KArchiveOffset
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_FILE_ID"] = KDefaultFileIdA
+_DEFAULT_FILE_ID = KDefaultFileIdA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_TYPE_ID"] = KDefaultTypeId
+_DEFAULT_TYPE_ID = KDefaultTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_LOCAL_SIGNATURE_PREFIX"] = KLocalSignaturePrefix
+_LOCAL_SIGNATURE_PREFIX = KLocalSignaturePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_LOCAL_SIGNATURE_SIZE"] = KLocalSignatureSize
+_LOCAL_SIGNATURE_SIZE = KLocalSignatureSize
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_ARCHIVE_OFFSET"] = KMaxArchiveOffset
+_MAX_ARCHIVE_OFFSET = KMaxArchiveOffset
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_DIRECTORY_STREAM_COUNT"] = KMaxFolderStreamCount
+_MAX_DIRECTORY_STREAM_COUNT = KMaxFolderStreamCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_NAME_BYTES"] = KMaxNameBytes
+_MAX_NAME_BYTES = KMaxNameBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_STREAM_COUNT"] = KMaxStreamCount
+_MAX_STREAM_COUNT = KMaxStreamCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_UNCOMPRESSED_STREAM"] = KMaxUncompressedStream
+_MAX_UNCOMPRESSED_STREAM = KMaxUncompressedStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_TYPE_IDS_BY_NAME"] = KTypeIdsByName
+_TYPE_IDS_BY_NAME = KTypeIdsByName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decode_scanned_candidate"] = DecodeScanned
+_decode_scanned_candidate = DecodeScanned
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encode_directory_entry"] = EncodeFolder
+_encode_directory_entry = EncodeFolder
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encode_record"] = EncodeRecord
+_encode_record = EncodeRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encoded_name"] = EncodedName
+_encoded_name = EncodedName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_end_signature"] = EndSignature
+_end_signature = EndSignature
 
 # this binding exists because shared behavior needs one stable value
-globals()["_nibble_swap"] = NibbleSwap
+_nibble_swap = NibbleSwap
 
 # this binding exists because shared behavior needs one stable value
-globals()["_scan_records"] = ScanRecords
+_scan_records = ScanRecords
 
 # this binding exists because shared behavior needs one stable value
-globals()["_template_fields"] = TemplateFields
+_template_fields = TemplateFields
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_sldprt"] = BuildSldprt
+build_sldprt = BuildSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["container_signatures"] = Container
+container_signatures = Container
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["signature_triplet"] = Signature
+signature_triplet = Signature
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["zlib"] = ZlibValue
+zlib = ZlibValue

@@ -62,14 +62,14 @@ KViewInfo = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestBIBITTRB():
+def TestBIBITTRB() -> None:
     Encoded = EncodeBody(standard=Standards[0], user=KUserInfo)
     assert len(Encoded) == KBytesB
     assert Hashlib.sha256(Encoded).hexdigest() == KDigestA
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestDBCTCB():
+def TestDBCTCB() -> None:
     Opaque = sum((len(SpanInfo) for SpanInfo in Spans))
     assert len(Spans) == KSpans
     assert Opaque == KBytesD
@@ -90,7 +90,7 @@ def TestDWCNEVB() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestTHTRS():
+def TestTHTRS() -> None:
     assert len(Styles) == 7
     assert len(Bindings) == 40
     assert Generation == 18000
@@ -98,7 +98,7 @@ def TestTHTRS():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestDSMTRD():
+def TestDSMTRD() -> None:
     Stream = EncodeDefinitionStream()
     assert len(Stream) == KBytesA
     assert Hashlib.sha256(Stream).hexdigest() == KDigest
@@ -108,7 +108,7 @@ def TestDSMTRD():
 @PytestLib.mark.parametrize(
     ("Standard", "Expected"), (("moBS_c", 3736), ("moISO_c", 3737), ("moANSI_c", 3738))
 )
-def TestEDSEIRL(Standard, Expected):
+def TestEDSEIRL(Standard: str, Expected: int) -> None:
     Stream = EncodeDefinitionStream(standard=Standard)
     assert len(Stream) == Expected
     assert Stream.count(Standard.encode("ascii")) == 1
@@ -124,14 +124,14 @@ def TestEDSEIRL(Standard, Expected):
         ("abcdefghijklmnopqrstuvwxyz1", 3784),
     ),
 )
-def NamedTUNLMTSBTB(UserInfo, Expected):
+def NamedTUNLMTSBTB(UserInfo: str, Expected: int) -> None:
     Stream = EncodeDefinitionStream(user=UserInfo)
     assert len(Stream) == Expected
     assert Stream.count(EncodeString(UserInfo)) == 1
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestASTAC():
+def TestASTAC() -> None:
     PartDoc = EncodeDefinitionStream()
     Assembly = EncodeDefinitionStream(assembly=True)
     assert PartDoc[KOffset : KOffset + KBytes] == ClsidA
@@ -140,19 +140,19 @@ def TestASTAC():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestVBASTB():
+def TestVBASTB() -> None:
     Stream = EncodeDefinitionStream(view=KViewInfo)
     assert len(Stream) == KBytesA + KBytesE
     assert Stream[KOffset + KBytes + 3] == 1
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestUDSIR():
+def TestUDSIR() -> None:
     with PytestLib.raises(SldprtFormatError):
         EncodeDefinitionStream(standard="moDIN_c")
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSVBIR():
+def TestSVBIR() -> None:
     with PytestLib.raises(SldprtFormatError):
         EncodeDefinitionStream(view=(1.0, 0.0, 0.0))

@@ -7,17 +7,24 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+from collections.abc import Mapping, Sequence
 import json as JsonLib
 from pathlib import Path as FilePath
 import struct as StructLib
+from typing import TypedDict
 import pytest as PytestLib
 from convert.adapters.solidworks.container.Archive import (
     BIG_CLASS_TAG_BIT as BitInfo,
     BIG_OBJECT_TAG as TagInfo,
     CLASS_REFERENCE_KIND as KindInfo,
     CLASS_TAG_BIT as BitInfoA,
+    ClassLayout,
     DEFINITION_KIND as KindInfoA,
+    IsLayoutObject,
+    IsLayoutSequence,
+    LayoutObject,
     LayoutTable,
+    LayoutValue,
     Model,
     NULL_KIND as KindInfoB,
     NULL_TAG as TagInfoA,
@@ -49,6 +56,32 @@ from convert.adapters.solidworks.container.Format import (
     RESOLVED_FEATURES_STREAM as Stream,
 )
 from tests.convert.solidworks.core.SolidworksDonorVersion import GetDonorVer
+
+
+# preserves recorded archive segmentation with fields required by reconstruction checks
+class SegmentRecord(TypedDict):
+    index: int
+    offset: int
+    header: int
+    end: int
+    kind: str
+    tag: int
+    class_name: str
+    class_index: int
+    object_index: int
+    depth: int
+    parent: int
+    map_index: int
+
+
+# keeps recorded fixture metadata concrete after untyped json decoding
+class RecordedArchive(TypedDict):
+    part: str
+    stream_length: int
+    base_map_index: int
+    object_count: int
+    segments: list[SegmentRecord]
+
 
 # centralizes shared evidence so every related assertion uses one value
 KRootInfo = FilePath(__file__).parents[4]
@@ -93,16 +126,64 @@ def Layouts() -> LayoutTable:
     return LayoutTable.load(KLayouts)
 
 
+# rejects malformed recorded json before fixture reconstruction consumes its fields
+def RecordedString(Payload: LayoutObject, KeyValue: str) -> str:
+    Value = Payload.get(KeyValue)
+    if not isinstance(Value, str):
+        raise TypeError(f"recorded archive field {KeyValue!r} must be a string")
+    return Value
+
+
+# rejects malformed recorded json before numeric offsets enter archive operations
+def RecordedInteger(Payload: LayoutObject, KeyValue: str) -> int:
+    Value = Payload.get(KeyValue)
+    if not isinstance(Value, int) or isinstance(Value, bool):
+        raise TypeError(f"recorded archive field {KeyValue!r} must be an integer")
+    return Value
+
+
+# converts each json segment into the concrete record used by static reconstruction
+def RecordedSegment(Value: LayoutValue) -> SegmentRecord:
+    if not IsLayoutObject(Value):
+        raise TypeError("recorded archive segment must be an object")
+    return {
+        "index": RecordedInteger(Value, "index"),
+        "offset": RecordedInteger(Value, "offset"),
+        "header": RecordedInteger(Value, "header"),
+        "end": RecordedInteger(Value, "end"),
+        "kind": RecordedString(Value, "kind"),
+        "tag": RecordedInteger(Value, "tag"),
+        "class_name": RecordedString(Value, "class_name"),
+        "class_index": RecordedInteger(Value, "class_index"),
+        "object_index": RecordedInteger(Value, "object_index"),
+        "depth": RecordedInteger(Value, "depth"),
+        "parent": RecordedInteger(Value, "parent"),
+        "map_index": RecordedInteger(Value, "map_index"),
+    }
+
+
 # keeps this focused behavior isolated so regressions remain immediately visible
-def Recorded(Label: str) -> dict:
+def Recorded(Label: str) -> RecordedArchive:
     TargetPath = KSegments / f"segments_{Label}.json"
     if not TargetPath.is_file():
         PytestLib.skip(f"no recorded segmentation for {Label}")
-    return JsonLib.loads(TargetPath.read_text(encoding="utf-8"))
+    RawPayload: object = JsonLib.loads(TargetPath.read_text(encoding="utf-8"))
+    if not IsLayoutObject(RawPayload):
+        raise TypeError(f"recorded archive {TargetPath} must be a json object")
+    RawSegments = RawPayload.get("segments")
+    if not IsLayoutSequence(RawSegments):
+        raise TypeError(f"recorded archive {TargetPath} must contain a segments list")
+    return {
+        "part": RecordedString(RawPayload, "part"),
+        "stream_length": RecordedInteger(RawPayload, "stream_length"),
+        "base_map_index": RecordedInteger(RawPayload, "base_map_index"),
+        "object_count": RecordedInteger(RawPayload, "object_count"),
+        "segments": [RecordedSegment(Value) for Value in RawSegments],
+    }
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def RecordedPart(Payload: dict) -> tuple[bytes, int | None]:
+def RecordedPart(Payload: RecordedArchive) -> tuple[bytes, int | None]:
     PartDoc = FilePath(Payload["part"])
     if not PartDoc.is_file():
         PytestLib.skip(f"traced part {PartDoc} is not present in this checkout")
@@ -121,9 +202,7 @@ def AuthoredMV() -> int | None:
         TargetPath = KSegments / f"segments_{Label}.json"
         if not TargetPath.is_file():
             continue
-        PartDoc = FilePath(
-            JsonLib.loads(TargetPath.read_text(encoding="utf-8"))["part"]
-        )
+        PartDoc = FilePath(Recorded(Label)["part"])
         if not PartDoc.is_file():
             continue
         Version = ContainerMoVersion(
@@ -137,8 +216,10 @@ def AuthoredMV() -> int | None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def StaticSegments(BlobInfo: bytes, Payload: dict) -> tuple[StaticSegment, ...]:
-    RowsInfo = []
+def StaticSegments(
+    BlobInfo: bytes, Payload: RecordedArchive
+) -> tuple[StaticSegment, ...]:
+    RowsInfo: list[StaticSegment] = []
     for ItemValue in Payload["segments"]:
         Offset = ItemValue["offset"]
         Schema = (
@@ -168,7 +249,7 @@ def StaticSegments(BlobInfo: bytes, Payload: dict) -> tuple[StaticSegment, ...]:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def DonorStreams() -> tuple[tuple[str, bytes], ...]:
-    RowsInfo = []
+    RowsInfo: list[tuple[str, bytes]] = []
     for Donor in sorted(KDonors.iterdir()):
         StreamA = Donor / "resolved.bin"
         if StreamA.is_file():
@@ -429,8 +510,9 @@ def TestMRAUNK() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def SingleCT(Entry: dict) -> LayoutTable:
-    return LayoutTable.from_mapping({"version": 1, "classes": {"solo": Entry}})
+def SingleCT(Entry: LayoutObject) -> LayoutTable:
+    Classes: dict[str, LayoutValue] = {"solo": dict(Entry)}
+    return LayoutTable.from_mapping({"version": 1, "classes": Classes})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -888,8 +970,10 @@ def TestURCIR() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def PrefixTable(Prefix: int, TailInfo: dict | None = None) -> LayoutTable:
-    Entry: dict = {
+def PrefixTable(
+    Prefix: int, TailInfo: Mapping[str, LayoutValue] | None = None
+) -> LayoutTable:
+    Entry: dict[str, LayoutValue] = {
         "confidence": "partial",
         "child_slots": ["*", "*", "..."],
         "runs": {"lead": 4, "0": 2, "1": 6},
@@ -897,7 +981,7 @@ def PrefixTable(Prefix: int, TailInfo: dict | None = None) -> LayoutTable:
         "repeat_prefix": Prefix,
     }
     if TailInfo is not None:
-        Entry["variable_runs"] = [TailInfo]
+        Entry["variable_runs"] = [dict(TailInfo)]
     return LayoutTable.from_mapping({"version": 1, "classes": {"solo": Entry}})
 
 
@@ -1035,7 +1119,7 @@ def TestARCOZRNC() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertSkMeta(Layout) -> None:
+def AssertSkMeta(Layout: ClassLayout) -> None:
     assert Layout.walks_groups
     assert Layout.child_slots == ()
     assert Layout.repeat_count is None
@@ -1048,7 +1132,7 @@ def AssertSkMeta(Layout) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertSkGeom(Layout) -> None:
+def AssertSkGeom(Layout: ClassLayout) -> None:
     assert [Group.name for Group in Layout.groups] == [
         "entity",
         "point",
@@ -1070,7 +1154,7 @@ def AssertSkGeom(Layout) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertSkRels(Layout) -> None:
+def AssertSkRels(Layout: ClassLayout) -> None:
     Shape = {Group.name: Group for Group in Layout.groups}
     assert Shape["relation"].element_runs(18000) == (0, 16, 17, 4)
     assert Shape["relation"].element_runs(14000) == (0, 16, 16, 4)
@@ -1161,34 +1245,37 @@ def TestPBCAGNAC() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def MakeLayout(GroupData: dict, ChildSlots=(), RunData=None) -> LayoutTable:
+def MakeLayout(
+    GroupData: Mapping[str, LayoutValue],
+    ChildSlots: Sequence[LayoutValue] = (),
+    RunData: Mapping[str, LayoutValue] | None = None,
+) -> LayoutTable:
     if RunData is None:
         RunData = {"lead": 0}
+    Entry: dict[str, LayoutValue] = {
+        "confidence": "partial",
+        "child_slots": list(ChildSlots),
+        "runs": dict(RunData),
+        "groups": [dict(GroupData)],
+    }
     return LayoutTable.from_mapping(
         {
             "version": 1,
-            "classes": {
-                "solo": {
-                    "confidence": "partial",
-                    "child_slots": ChildSlots,
-                    "runs": RunData,
-                    "groups": [GroupData],
-                }
-            },
+            "classes": {"solo": Entry},
         }
     )
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRGAV() -> None:
-    Sound = {
+    Sound: dict[str, LayoutValue] = {
         "name": "loop",
         "count": {"back": 2, "width": 2},
         "slots": ["*"],
         "element": [0],
     }
     assert MakeLayout(Sound)["solo"].walks_groups
-    InvalidGroups = (
+    InvalidGroups: tuple[Mapping[str, LayoutValue], ...] = (
         {**Sound, "name": ""},
         {**Sound, "element": []},
         {**Sound, "element": [-1]},
@@ -1724,7 +1811,7 @@ def TestLTVII() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertLayoutRow(NameText, Entry) -> None:
+def AssertLayoutRow(NameText: str, Entry: ClassLayout) -> None:
     assert Entry.confidence in {"confirmed", "partial", "not found"}
     assert Entry.source
     assert set(Entry.runs_by_version) <= set(Entry.run_keys()), NameText
@@ -1754,16 +1841,15 @@ def AssertLayoutRow(NameText, Entry) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def GetRecordedSet() -> set[str]:
-    Recorded = set()
+    RecordedNames = set[str]()
     for Label in KLabels:
         TargetPath = KSegments / f"segments_{Label}.json"
         if not TargetPath.is_file():
             continue
-        Payload = JsonLib.loads(TargetPath.read_text(encoding="utf-8"))
-        for ItemValue in Payload["segments"]:
+        for ItemValue in Recorded(Label)["segments"]:
             if ItemValue["kind"] in {KindInfoA, KindInfo}:
-                Recorded.add(ItemValue["class_name"])
-    return Recorded
+                RecordedNames.add(ItemValue["class_name"])
+    return RecordedNames
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1811,8 +1897,11 @@ def DonorFC(NameText: str) -> int:
     MetaInfo = KDonors / NameText / "meta.json"
     if not MetaInfo.is_file():
         return -1
-    Features = JsonLib.loads(MetaInfo.read_text(encoding="utf-8")).get("features")
-    return len(Features) if isinstance(Features, list) else -1
+    RawMeta: object = JsonLib.loads(MetaInfo.read_text(encoding="utf-8"))
+    if not IsLayoutObject(RawMeta):
+        return -1
+    Features = RawMeta.get("features")
+    return len(Features) if IsLayoutSequence(Features) else -1
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

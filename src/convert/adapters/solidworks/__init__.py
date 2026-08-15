@@ -71,76 +71,76 @@ from convert.adapters.solidworks.container.Parasolid import (
 KAllValue = [NameValue for NameValue in globals() if not NameValue.startswith("_")]
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssembly"] = NativeAsm
+NativeAssembly = NativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyConfiguration"] = NativeAsmConfig
+NativeAssemblyConfiguration = NativeAsmConfig
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyDefinition"] = NativeAsmDefinition
+NativeAssemblyDefinition = NativeAsmDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyFile"] = NativeAsmFile
+NativeAssemblyFile = NativeAsmFile
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyOccurrence"] = NativeAsmItem
+NativeAssemblyOccurrence = NativeAsmItem
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeConfiguration"] = NativeConfig
+NativeConfiguration = NativeConfig
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeConstraint"] = NativeRule
+NativeConstraint = NativeRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeOccurrencePath"] = NativeItemPath
+NativeOccurrencePath = NativeItemPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_sldprt"] = BuildSldprt
+build_sldprt = BuildSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["contains_parasolid_payload"] = ContainsParasolidPayload
+contains_parasolid_payload = ContainsParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_brep_model"] = DecodeBrepModel
+decode_brep_model = DecodeBrepModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_display_lists"] = DecodeDisplayLists
+decode_display_lists = DecodeDisplayLists
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_mate_list"] = DecodeMateList
+decode_mate_list = DecodeMateList
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_native_assembly"] = DecodeNativeAsm
+decode_native_assembly = DecodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_native_model"] = DecodeNativeModel
+decode_native_model = DecodeNativeModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_partition_stream"] = DecodePartitionStream
+decode_partition_stream = DecodePartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_tessellation_faces"] = DecodeTessellationFaces
+decode_tessellation_faces = DecodeTessellationFaces
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_blank_partition_stream"] = EncodeBlankPartition
+encode_blank_partition_stream = EncodeBlankPartition
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_brep_model"] = EncodeBrepModel
+encode_brep_model = EncodeBrepModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_partition_stream"] = EncodePartitionStream
+encode_partition_stream = EncodePartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["expand_occurrence_paths"] = ExpandItemPaths
+expand_occurrence_paths = ExpandItemPaths
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_native_parasolid_payload"] = IsNativeParasolidPayload
+is_native_parasolid_payload = IsNativeParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["neutral_meshes"] = NeutralMeshes
+neutral_meshes = NeutralMeshes
 
 # this binding exists because shared behavior needs one stable value
-globals()["read_sldprt"] = ReadSldprt
+read_sldprt = ReadSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["write_sldprt"] = WriteSldprt
+write_sldprt = WriteSldprt

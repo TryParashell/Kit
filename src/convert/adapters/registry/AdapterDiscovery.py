@@ -14,6 +14,7 @@ from inspect import isclass as IsClass
 from pkgutil import iter_modules as IterModules
 from pkgutil import walk_packages as WalkPackages
 from types import ModuleType
+from typing import TypeGuard
 
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
@@ -43,6 +44,20 @@ def HasMethods(AdapterData: object, ProtocolType: type[object]) -> bool:
     MemberNames = (NameValue for NameValue in ProtocolNames if NameValue != "info")
     return all(
         callable(getattr(AdapterData, NameValue, None)) for NameValue in MemberNames
+    )
+
+
+# reader validation narrows discovered objects only after every callable contract is present
+def IsReaderAdapter(AdapterData: object) -> TypeGuard[CadReaderAdapter]:
+    return isinstance(AdapterData, CadReaderAdapter) and HasMethods(
+        AdapterData, CadReaderAdapter
+    )
+
+
+# writer validation narrows discovered objects only after every callable contract is present
+def IsWriterAdapter(AdapterData: object) -> TypeGuard[CadWriterAdapter]:
+    return isinstance(AdapterData, CadWriterAdapter) and HasMethods(
+        AdapterData, CadWriterAdapter
     )
 
 

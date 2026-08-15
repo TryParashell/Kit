@@ -8,23 +8,95 @@
 
 from __future__ import annotations
 
-from interchange import CadDocument, Capability
+from inspect import Parameter as SigParam
+from inspect import Signature as CallSignature
 
-from convert.adapters.base.ContractTypes import (
-    KSourceType as Source,
-    KTargetType as Destination,
-)
+from interchange import CadDocument
+
+from convert.adapters.base.ContractTypes import KSourceType as Source
+from convert.adapters.base.ContractTypes import KTargetType as Destination
 from convert.adapters.base.ReadOptions import ReadOptions
 from convert.adapters.base.TransferContract import CapTransfer as CapabilityTransfer
 from convert.adapters.base.WriteOptions import WriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 from convert.adapters.registry import AdapterRegistry
-from convert.engine.Compatibility.EngineType import BuildEngine
-from convert.engine.EngineReader import EngineRead
-from convert.engine.EngineResult import BuildResult
-from convert.engine.EngineWriter import EngineWrite
-from convert.results.ResultDetails import ResultDetails
-from convert.results.ResultFlags import ResultFlags
+from convert.engine.EngineResult import ConversionResult
+from convert.formats.SourceFormat import ResolveFormat
 
-globals().update({"ConversionResult": BuildResult()})
-globals().update({"ConversionEngine": BuildEngine(globals()["ConversionResult"])})
+
+# explicit coordinator methods replace runtime class generation while retaining public call signatures
+class ConversionEngine:
+
+    # registry injection keeps adapters replaceable without coupling conversion to discovery
+    def __init__(self, registry: AdapterRegistry) -> None:
+        self.registry = registry
+
+    # document reads retain the public compatibility signature at the static composition root
+    def read(
+        self,
+        source: Source,
+        *,
+        format_id: str | None = None,
+        options: ReadOptions | None = None,
+    ) -> CadDocument:
+        return self.registry.ReadDocument(source, FormatId=format_id, ReadOpts=options)
+
+    # document writes retain the public compatibility signature at the static composition root
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        *,
+        format_id: str | None = None,
+        options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return self.registry.WriteDocument(
+            document,
+            destination,
+            FormatId=format_id,
+            WriteOpts=options,
+        )
+
+    # conversion keeps adapter selection and output policy coordinated through one registry instance
+    def convert(
+        self,
+        source: Source,
+        destination: Destination,
+        *,
+        source_format: str | None = None,
+        destination_format: str | None = None,
+        read_options: ReadOptions | None = None,
+        write_options: WriteOptions | None = None,
+    ) -> ConversionResult:
+        document, reader = self.registry.ReadAdapter(
+            source,
+            FormatId=source_format,
+            ReadOpts=read_options,
+        )
+        output = self.registry.WriteDocument(
+            document,
+            destination,
+            FormatId=destination_format,
+            WriteOpts=write_options,
+        )
+        return ConversionResult(
+            document,
+            output,
+            ResolveFormat(document, reader),
+            output.AdapterName,
+        )
+
+
+setattr(
+    ConversionEngine.__init__,
+    "__signature__",
+    CallSignature(
+        (
+            SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
+            SigParam(
+                "registry", SigParam.POSITIONAL_OR_KEYWORD, annotation="AdapterRegistry"
+            ),
+        )
+    ),
+)
+ConversionEngine.__init__.__annotations__ = {"registry": "AdapterRegistry"}

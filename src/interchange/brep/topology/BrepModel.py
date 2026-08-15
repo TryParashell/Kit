@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, ClassVar
+
 from interchange.brep.curves.BrepCurves import BrepCurve
 from interchange.brep.curves.BrepPcurves import BrepPcurve
 from interchange.brep.surfaces.BrepSurfaces import BrepSurface
@@ -63,11 +65,25 @@ class BrepModel(ModelBase):
     Regions: tuple[BrepRegion, ...]
     Bodies: tuple[BrepBody, ...]
     SchemaVersion: str
+    if TYPE_CHECKING:
+        curves: ClassVar[tuple[BrepCurve, ...]]
+        pcurves: ClassVar[tuple[BrepPcurve, ...]]
+        surfaces: ClassVar[tuple[BrepSurface, ...]]
+        vertices: ClassVar[tuple[BrepVertex, ...]]
+        edges: ClassVar[tuple[BrepEdge, ...]]
+        coedges: ClassVar[tuple[BrepCoedge, ...]]
+        loops: ClassVar[tuple[BrepLoop, ...]]
+        wires: ClassVar[tuple[BrepWire, ...]]
+        faces: ClassVar[tuple[BrepFace, ...]]
+        face_uses: ClassVar[tuple[BrepFaceUse, ...]]
+        shells: ClassVar[tuple[BrepShell, ...]]
+        shell_uses: ClassVar[tuple[BrepShellUse, ...]]
+        regions: ClassVar[tuple[BrepRegion, ...]]
+        bodies: ClassVar[tuple[BrepBody, ...]]
+        schema_version: ClassVar[str]
 
     # model validation delegates because topology checks change independently from storage
-    def GetErrors(
-        SelfValue, DesignBodyIds: frozenset[str] = frozenset()
-    ) -> tuple[str, ...]:
+    def GetErrors(self, DesignBodyIds: frozenset[str] = frozenset()) -> tuple[str, ...]:
         from interchange.brep.validation.BrepValidate import GetBrepErrors
 
-        return GetBrepErrors(SelfValue, DesignBodyIds)
+        return GetBrepErrors(self, DesignBodyIds)

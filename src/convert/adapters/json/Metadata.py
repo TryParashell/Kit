@@ -38,11 +38,11 @@ class JsonMetadata:
 
     # this property gives the registry stable adapter metadata
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def InfoAction(self) -> AdapterInfo:
         return KInfoValue
 
     # this probe reads only enough data to identify an interchange document
-    def Probe(Instance, SourceValue: Source) -> ProbeResult:
+    def Probe(self, SourceValue: Source) -> ProbeResult:
         Suffix = ""
         if isinstance(SourceValue, (str, FilePath)):
             Suffix = FilePath(SourceValue).suffix.lower()
@@ -57,11 +57,11 @@ class JsonMetadata:
         return ProbeResult(KInfoValue.format_id, Confidence, Reason)
 
     # this check accepts matching paths and writable stream objects
-    def CanSupport(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+    def CanSupport(self, DocValue: CadDocument, Target: Destination) -> bool:
         if isinstance(Target, (str, FilePath)):
             return FilePath(Target).suffix.lower() in KInfoValue.extensions
         return callable(getattr(Target, "write", None))
 
-    locals()["info"] = InfoAction
-    locals()["probe"] = Probe
-    locals()["supports"] = CanSupport
+    info = InfoAction
+    probe = Probe
+    supports = CanSupport

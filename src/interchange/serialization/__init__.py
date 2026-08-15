@@ -13,11 +13,9 @@ from interchange.compatibility.PublicMetadata import BindFunctionMut
 from interchange.serialization.Deserialize import FromData
 from interchange.serialization.EncodeData import ToData
 from interchange.serialization.JsonCodec import DumpJson, LoadJson
-from interchange.serialization.MigrationRegistry import (
-    KMigrationRegistry,
-    RegMigration,
-)
-from interchange.serialization.TypeRegistry import KTypeRegistry, RegisterTypes
+from interchange.serialization.MigrationRegistry import RegMigration
+from interchange.serialization.TypeRegistry import RegisterTypes
+from interchange.serialization.TypeRegistry import KTypeRegistry
 
 BindFunctionMut(
     DumpJson,
@@ -120,6 +118,13 @@ BindFunctionMut(
     ),
     globals(),
 )
+
+dumps = DumpJson
+from_data = FromData
+loads = LoadJson
+register_migration = RegMigration
+register_types = RegisterTypes
+to_data = ToData
 
 
 # serialization consumers need one intentional historical public contract

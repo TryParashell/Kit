@@ -445,25 +445,25 @@ def CoreCoverage() -> Mapping[str, int]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["CoreFieldCount"] = KCoreFieldCount
+CoreFieldCount = KCoreFieldCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["CoreOpaqueBytes"] = KCoreOpaqueBytes
+CoreOpaqueBytes = KCoreOpaqueBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["CoreStreamNames"] = KCoreStreamNames
+CoreStreamNames = KCoreStreamNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeProgram2"] = EncodeProgramTwo
+EncodeProgram2 = EncodeProgramTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeProgram3"] = EncodeProgramThree
+EncodeProgram3 = EncodeProgramThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = DataClass
+dataclass = DataClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct

@@ -9,16 +9,35 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyValue
+from typing import Protocol, TypeGuard, cast
+
+
+# feature records need only the stable fields used by unsupported grammar reporting
+class FeaturePayload(Protocol):
+    attributes: Mapping[str, object]
+    kind: str
+
+
+# documents expose this narrow timeline contract so audit code avoids parser implementation details
+class DocumentPayload(Protocol):
+    feature_timeline: tuple[FeaturePayload, ...]
+
+
+# decoded extension metadata needs validated keys before typed lookups can be trusted
+def IsStringKeyedMapping(ValueData: object) -> TypeGuard[Mapping[str, object]]:
+    if not isinstance(ValueData, Mapping):
+        return False
+    CandidateData = cast(Mapping[object, object], ValueData)
+    return all(isinstance(KeyData, str) for KeyData in CandidateData)
 
 
 # feature identity exposes unsupported grammar without relying on unstable source filenames
-def FeatureTypes(DocumentData: AnyValue) -> tuple[str, ...]:
+def FeatureTypes(DocumentData: DocumentPayload) -> tuple[str, ...]:
     TypeNames: set[str] = set()
     for FeatureData in DocumentData.feature_timeline:
-        FreecadData = FeatureData.attributes.get("freecad")
+        FreecadData: object = FeatureData.attributes.get("freecad")
         TypeName = (
-            FreecadData.get("type_id", "") if isinstance(FreecadData, Mapping) else ""
+            FreecadData.get("type_id", "") if IsStringKeyedMapping(FreecadData) else ""
         )
         TypeNames.add(str(TypeName or FeatureData.kind))
     return tuple(sorted(TypeNames))

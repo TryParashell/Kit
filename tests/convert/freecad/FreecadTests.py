@@ -8,6 +8,7 @@
 
 from __future__ import annotations as Annotations
 import base64 as BaseSixFour
+from collections.abc import Callable as FuncCall
 from dataclasses import replace as Replace
 import hashlib as Hashlib
 import inspect as Inspect
@@ -16,6 +17,8 @@ import json as JsonValue
 import math as MathValue
 from pathlib import Path as FilePath
 import struct as Struct
+from types import MappingProxyType as MapProxy
+from typing import TypedDict as TypeDict
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import zlib as ZlibValue
@@ -27,7 +30,13 @@ from convert import (
     registry as Registry,
     write_document as WriteDoc,
 )
-from convert.adapters.base import CarrierReason, ReadOptions, TransferMode, WriteOptions
+from convert.adapters.base import (
+    CarrierReason,
+    ReadOptions,
+    TransferMode,
+    WriteOptions,
+    WriteResult,
+)
 from convert.adapters.freecad import (
     FreeCADAdapter as FreeCadAdapter,
     FreeCADAdapterError as FreeCadAdapterError,
@@ -38,7 +47,11 @@ from convert.adapters.freecad.Brep import brep_model_brep as BrepModelBrep
 from convert.adapters.freecad import Adapter as FreecadAdapterModule
 from convert.adapters.freecad import Archive as FreecadArchiveModule
 from convert.adapters.freecad import Native as FreecadNativeModule
-from convert.adapters.freecad.Adapter import _filtered_document as FilteredDoc
+from convert.adapters.freecad.Adapter import (
+    AnnotateNative,
+    FilteredDoc,
+    UnchangedNative,
+)
 from convert.adapters.freecad.Format import (
     CAPABILITY_CARRIER_REASONS as CapabilityCarrierReasons,
     CAPABILITY_WRITE_TYPE_IDS as CapabilityWriteTypeIds,
@@ -129,6 +142,13 @@ from convert.adapters.freecad.Protocol import (
     SUPPORT_PLANE_TYPE_IDS as SupportPlaneTypeIds,
     XML_TRUE_VALUES as XmlTrueValues,
 )
+from convert.adapters.freecad.Native import (
+    ClosedProfile,
+    NativeObject,
+    ParseSketchMut,
+    PlaneReframe,
+    ReframeGeom,
+)
 from convert.geometry.Opencascade import (
     is_structurally_valid_ascii_brep as IsStructurallyValidAscii,
 )
@@ -138,6 +158,7 @@ from interchange import (
     ArcParabolaGeometry as ArcParabolaGeom,
     BooleanOperation as BoolOperation,
     BrepPayload,
+    CadDocument,
     Capability,
     ChamferFeature,
     CircleGeometry as CircleGeom,
@@ -176,6 +197,24 @@ from interchange import (
 )
 from tests.interchange.document.DocumentTests import document as NeutralDoc
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
+
+# this binding keeps xml element annotations aligned with the imported parser
+ET = XmlTree
+
+# this binding keeps fixture paths aligned with the imported pathlib contract
+Path = FilePath
+
+# native fixture options need a closed schema so xml payloads remain statically typed
+NativeOptions = TypeDict(
+    "NativeOptions",
+    {
+        "id": str | int,
+        "touched": bool,
+        "extensions": tuple[str, ...],
+        "transient_properties": tuple[ET.Element, ...],
+    },
+    total=False,
+)
 
 # this binding exists because shared behavior needs one stable value
 KSample = FilePath(__file__).parents[3] / "examples" / ".SLDPRT" / "example.SLDPRT"
@@ -225,7 +264,7 @@ def TestClosedEdge() -> None:
             )
         )
     )
-    assert FreecadNativeModule._closed_profile_entity_ids((*First, *Second)) == (
+    assert ClosedProfile((*First, *Second)) == (
         ("edge:0", "edge:1", "edge:2", "edge:3"),
         ("edge:4", "edge:5", "edge:6"),
     )
@@ -256,7 +295,7 @@ def TestClosedEdge() -> None:
     ),
 )
 def TestClosed(Entities: tuple[SketchEntity, ...]) -> None:
-    assert FreecadNativeModule._closed_profile_entity_ids(Entities) == ()
+    assert ClosedProfile(Entities) == ()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -319,7 +358,7 @@ def TestOriginUse() -> None:
         Origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
         RoleValue: str = "",
         TypeId: str = "App::Plane",
-    ):
+    ) -> NativeObject:
         Placement = NativePlacement()
         Value = Placement.find("./PropertyPlacement")
         assert Value is not None
@@ -337,7 +376,7 @@ def TestOriginUse() -> None:
             Properties["Role"] = NativeProp(
                 "Role", "App::PropertyString", "String", {"value": RoleValue}
             )
-        return FreecadNativeModule._NativeObject(
+        return NativeObject(
             NameValue, TypeId, 0, NameValue, False, (), (), (), Properties
         )
 
@@ -364,7 +403,7 @@ def TestOriginUse() -> None:
             TypeId="PartDesign::Plane",
         ),
     )
-    Planes, Sketches = FreecadNativeModule._parse_sketches(Objects, [], set())
+    Planes, Sketches = ParseSketchMut(Objects, [], set())
     assert Sketches == ()
     assert [Value.id for Value in Planes] == [
         "freecad:plane:XY_Plane",
@@ -456,15 +495,13 @@ def TestPrincipal(
     ExpectedEnd: tuple[float, float],
 ) -> None:
     GeomValue = LineGeom(VectorTwo(2.0, 3.0), VectorTwo(5.0, 7.0))
-    Reframed = FreecadNativeModule._reframe_geometry(
-        GeomValue, FreecadNativeModule._plane_reframe(Source, Target)
-    )
+    Reframed = ReframeGeom(GeomValue, PlaneReframe(Source, Target))
     assert isinstance(Reframed, LineGeom)
     assert (Reframed.start.x, Reframed.start.y) == ExpectedStart
     assert (Reframed.end.x, Reframed.end.y) == ExpectedEnd
 
     # this definition exists because focused behavior needs one stable owner
-    def World(Transform: Transform, Point: Vector2) -> tuple[float, float, float]:
+    def World(Transform: Transform, Point: VectorTwo) -> tuple[float, float, float]:
         return (
             Transform.origin.x
             + Point.x * Transform.x_axis.x
@@ -535,9 +572,20 @@ def TestPrePayload() -> None:
         ),
     )
     Manifest = DocToManifest(Source)
-    for Payload in Manifest["brep_payloads"]["$tuple"]:
-        Payload.pop("role")
-        Payload.pop("file_extension")
+    PayloadContainerValue: object = Manifest.get("brep_payloads")
+    assert FreecadAdapterModule.IsPayloadMap(PayloadContainerValue)
+    PayloadSequenceValue: object = PayloadContainerValue.get("$tuple")
+    assert FreecadAdapterModule.IsPayloadSeq(PayloadSequenceValue)
+    LegacyPayloads: list[dict[str, object]] = []
+    for PayloadValue in PayloadSequenceValue:
+        assert FreecadAdapterModule.IsPayloadMap(PayloadValue)
+        PayloadData = dict(PayloadValue)
+        PayloadData.pop("role")
+        PayloadData.pop("file_extension")
+        LegacyPayloads.append(PayloadData)
+    PayloadContainer = dict(PayloadContainerValue)
+    PayloadContainer["$tuple"] = LegacyPayloads
+    Manifest["brep_payloads"] = PayloadContainer
     Carrier = BuildFcstdArchive(Manifest)
     Restored = FreeCadAdapter().read(
         Carrier, ReadOptions(include_brep=True, include_tessellation=True)
@@ -618,12 +666,14 @@ def NativeXlink(
 def NativeDeclsMut(
     RootValue: ET.Element,
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
-    ObjectOptions: dict[str, dict[str, object]],
+    ObjectOptions: dict[str, NativeOptions],
 ) -> None:
     Declarations = XmlTree.SubElement(
         RootValue, "Objects", {"Count": str(len(Objects)), "Dependencies": "1"}
     )
-    for NameValue, Ignored, Dependencies, Ignored in Objects:
+    for ObjectValue in Objects:
+        NameValue = ObjectValue[0]
+        Dependencies = ObjectValue[2]
         DependencyNode = XmlTree.SubElement(
             Declarations,
             "ObjectDeps",
@@ -631,7 +681,8 @@ def NativeDeclsMut(
         )
         for Dependency in Dependencies:
             XmlTree.SubElement(DependencyNode, "Dep", {"Name": Dependency})
-    for Index, (NameValue, TypeId, Ignored, Ignored) in enumerate(Objects, start=1):
+    for Index, ObjectValue in enumerate(Objects, start=1):
+        NameValue, TypeId = ObjectValue[:2]
         Options = ObjectOptions.get(NameValue, {})
         Attributes = {
             "type": TypeId,
@@ -647,20 +698,16 @@ def NativeDeclsMut(
 def NativeDataMut(
     RootValue: ET.Element,
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
-    ObjectOptions: dict[str, dict[str, object]],
+    ObjectOptions: dict[str, NativeOptions],
 ) -> None:
     DataValue = XmlTree.SubElement(
         RootValue, "ObjectData", {"Count": str(len(Objects))}
     )
-    for NameValue, Ignored, Ignored, Properties in Objects:
+    for ObjectValue in Objects:
+        NameValue = ObjectValue[0]
+        Properties = ObjectValue[3]
         Options = ObjectOptions.get(NameValue, {})
-        Extensions = tuple(
-            (
-                Value
-                for Value in Options.get("extensions", ())
-                if isinstance(Value, str) and Value
-            )
-        )
+        Extensions = Options.get("extensions", ())
         ObjectAttributes = {"name": NameValue}
         if Extensions:
             ObjectAttributes["Extensions"] = "True"
@@ -675,13 +722,7 @@ def NativeDataMut(
                     "Extension",
                     {"type": Extension, "name": Extension.rsplit("::", 1)[-1]},
                 )
-        TransientProperties = tuple(
-            (
-                Value
-                for Value in Options.get("transient_properties", ())
-                if isinstance(Value, XmlTree.Element)
-            )
-        )
+        TransientProperties = Options.get("transient_properties", ())
         PropNode = XmlTree.SubElement(
             ObjectNode,
             "Properties",
@@ -711,7 +752,7 @@ def EmitArchive(RootValue: ET.Element, Entries: dict[str, bytes]) -> bytes:
 def NativeArchive(
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
     Entries: dict[str, bytes],
-    ObjectOptions: dict[str, dict[str, object]] | None = None,
+    ObjectOptions: dict[str, NativeOptions] | None = None,
 ) -> bytes:
     Options = ObjectOptions or {}
     RootValue = XmlTree.Element(
@@ -723,7 +764,7 @@ def NativeArchive(
 
 
 # this definition exists because focused behavior needs one stable owner
-def RewriteDocXml(Source: bytes, Mutate) -> bytes:
+def RewriteDocXml(Source: bytes, Mutate: FuncCall[[ET.Element], None]) -> bytes:
     Output = IoStream.BytesIO()
     with Zipfile.ZipFile(IoStream.BytesIO(Source)) as InputArchive:
         RootValue = XmlTree.fromstring(InputArchive.read("Document.xml"))
@@ -1085,7 +1126,7 @@ def NativeOuterAsm(
     Links: tuple[tuple[str, str, str, str], ...],
     GroupedNames: tuple[str, ...] | None = None,
 ) -> bytes:
-    LinkNames = tuple((NameValue for NameValue, Ignored, Ignored, Ignored in Links))
+    LinkNames = tuple((LinkValue[0] for LinkValue in Links))
     GroupedNames = LinkNames if GroupedNames is None else GroupedNames
     AsmProperties = (
         NativeProp(
@@ -1151,12 +1192,8 @@ def TestAdapterAnd() -> None:
             for Reason in CapabilityCarrierReasons.values()
         )
     )
-    with Pytest.raises(TypeError):
-        CapabilityWriteTypeIds[Capability.PARAMETERS] = frozenset()
-    with Pytest.raises(TypeError):
-        CapabilityCarrierReasons[Capability.PARAMETERS] = (
-            CarrierReason.TARGET_UNSUPPORTED
-        )
+    assert isinstance(CapabilityWriteTypeIds, MapProxy)
+    assert isinstance(CapabilityCarrierReasons, MapProxy)
     assert NativeCapabilities == frozenset(
         (
             CapabilityValue
@@ -1982,7 +2019,7 @@ def TestPartdesignB() -> None:
 
 
 # this definition exists because native transfer modes form one independent write contract
-def VerifyTransfers(Result) -> None:
+def VerifyTransfers(Result: WriteResult) -> None:
     Transfers = {ItemValue.capability: ItemValue.mode for ItemValue in Result.transfers}
     assert Transfers[Capability.SUPPORT_PLANES] is TransferMode.NATIVE
     assert Transfers[Capability.BODY_STRUCTURE] is TransferMode.NATIVE
@@ -2040,7 +2077,7 @@ def VerifyWriteXml(PayloadData: bytes) -> None:
 
 
 # this definition exists because neutral readback must preserve interchange and native projections
-def VerifyReadback(PayloadData: bytes, DocValue, SelectionId: str) -> None:
+def VerifyReadback(PayloadData: bytes, DocValue: CadDocument, SelectionId: str) -> None:
     assert FreeCadAdapter().read(PayloadData) == DocValue
     Native = FreecadNativeModule.read_native_fcstd(PayloadData)
     assert len(Native.support_planes) == 1
@@ -2304,11 +2341,11 @@ def TestCustomAnd() -> None:
 @Pytest.mark.parametrize("SchemaVersion", (3, 4))
 def TestObjectGraph(SchemaVersion: int) -> None:
 
-    # this callback exists because local behavior needs one focused transformation
-    Source = RewriteDocXml(
-        NativePart(),
-        lambda RootValue: RootValue.set("SchemaVersion", str(SchemaVersion)),
-    )
+    # this callback exists because schema mutation needs a typed xml boundary
+    def SchemaMut(RootValue: ET.Element) -> None:
+        RootValue.set("SchemaVersion", str(SchemaVersion))
+
+    Source = RewriteDocXml(NativePart(), SchemaMut)
     DocValue = FreeCadAdapter().read(Source)
     assert DocValue.validate() == ()
     assert DocValue.source.attributes["freecad_schema_version"] == str(SchemaVersion)
@@ -2520,8 +2557,8 @@ def TestNeutralTrip() -> None:
     )
     Entities = tuple(
         (
-            SketchEntity(f"conic:{Index}", KindValue, GeomValue)
-            for Index, (KindValue, GeomValue, Ignored) in enumerate(Values)
+            SketchEntity(f"conic:{Index}", Value[0], Value[1])
+            for Index, Value in enumerate(Values)
         )
     )
     Sketch = Replace(
@@ -2544,14 +2581,13 @@ def TestNeutralTrip() -> None:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
     GeomNodes = RootValue.findall(".//Property[@name='Geometry']/GeometryList/Geometry")
     assert [ItemValue.get("type") for ItemValue in GeomNodes] == [
-        TypeId for Ignored, Ignored, TypeId in Values
+        Value[2] for Value in Values
     ]
     Native = FreecadNativeModule.read_native_fcstd(Output.getvalue())
     Restored = Native.sketches[0].entities
-    assert [ItemValue.kind for ItemValue in Restored] == [
-        KindValue for KindValue, Ignored, Ignored in Values
-    ]
-    for ItemValue, (Ignored, Expected, Ignored) in zip(Restored, Values, strict=True):
+    assert [ItemValue.kind for ItemValue in Restored] == [Value[0] for Value in Values]
+    for ItemValue, SourceValue in zip(Restored, Values, strict=True):
+        Expected = SourceValue[1]
         Actual = ItemValue.geometry
         assert type(Actual) is type(Expected)
         assert (Actual.center.x, Actual.center.y) == Pytest.approx(
@@ -2559,6 +2595,8 @@ def TestNeutralTrip() -> None:
         )
         ExpectedAxis = getattr(Expected, "major_axis", getattr(Expected, "axis", None))
         ActualAxis = getattr(Actual, "major_axis", getattr(Actual, "axis", None))
+        assert ExpectedAxis is not None
+        assert ActualAxis is not None
         assert (ActualAxis.x, ActualAxis.y) == Pytest.approx(
             (ExpectedAxis.x, ExpectedAxis.y)
         )
@@ -2672,13 +2710,13 @@ def TestGeomPayload() -> None:
         "./Properties/Property[@name='Geometry']/GeometryList/Geometry"
     )
     assert [ItemValue.get("type") for ItemValue in GeomNodes] == [
-        TypeId for Ignored, TypeId, Ignored in Kinds
+        Value[1] for Value in Kinds
     ]
     assert [list(ItemValue)[0].tag for ItemValue in GeomNodes] == [
-        TagValue for Ignored, Ignored, TagValue in Kinds
+        Value[2] for Value in Kinds
     ]
     assert [list(ItemValue)[0].get("Token") for ItemValue in GeomNodes] == [
-        KindValue.value for KindValue, Ignored, Ignored in Kinds
+        Value[0].value for Value in Kinds
     ]
     assert (
         SketchObject.find("./Properties/Property[@name='KitSketchDiagnosticsJSON']")
@@ -3064,9 +3102,9 @@ def TestNonFeature() -> None:
         )
     )
     Values = {
-        NodeValue.get("name"): NodeValue.find("./String").get("value")
+        NodeValue.get("name"): StringValue.get("value", "")
         for NodeValue in FeatureObject.findall("./Properties/Property")
-        if NodeValue.find("./String") is not None
+        if (StringValue := NodeValue.find("./String")) is not None
     }
     assert Values["KitRole"] == "feature-data"
     assert Values["NativeTypeId"] == "PartDesign::Hole"
@@ -3285,7 +3323,7 @@ def TestExplicit() -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestStrictTo(TmpPath) -> None:
+def TestStrictTo(TmpPath: FilePath) -> None:
     Output = TmpPath / "blocked.FCStd"
     with Pytest.raises(AppUsabilityError) as Captured:
         Convert(KSample, Output, allow_carrier=False)
@@ -3294,7 +3332,7 @@ def TestStrictTo(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestDirectFcstd(TmpPath) -> None:
+def TestDirectFcstd(TmpPath: FilePath) -> None:
     Output = TmpPath / "example.FCStd"
     Result = Convert(KSample, Output, allow_carrier=True)
     Restored = OpenDoc(Output)
@@ -3328,7 +3366,7 @@ def TestDirectFcstd(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstd(TmpPath) -> None:
+def TestFcstd(TmpPath: FilePath) -> None:
     Output = TmpPath / "example.FCStd"
     Convert(KSample, Output, allow_carrier=True)
     with Zipfile.ZipFile(Output) as Archive:
@@ -3409,7 +3447,7 @@ def TestFcstdEmits() -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdOutput(TmpPath) -> None:
+def TestFcstdOutput(TmpPath: FilePath) -> None:
     First = TmpPath / "first.FCStd"
     Second = TmpPath / "second.FCStd"
     Convert(KSample, First, allow_carrier=True)
@@ -3418,7 +3456,7 @@ def TestFcstdOutput(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdStream(TmpPath) -> None:
+def TestFcstdStream(TmpPath: FilePath) -> None:
     Output = TmpPath / "example.FCStd"
     Result = Convert(KSample, Output, allow_carrier=True)
     Stream = IoStream.BytesIO(Output.read_bytes())
@@ -3436,7 +3474,7 @@ def TestGenericIsAs() -> None:
 
 
 # this definition exists because opaque reads must retain their exact native payload
-def VerifyOpaque(DocValue, Source: bytes) -> None:
+def VerifyOpaque(DocValue: CadDocument, Source: bytes) -> None:
     assert DocValue.validate() == ()
     assert DocValue.feature_timeline == ()
     assert len(DocValue.brep_payloads) == 2
@@ -3580,7 +3618,7 @@ def TestUnknownData(CarrierSuffix: str, TmpPath: Path) -> None:
 
 
 # this definition exists because native part reads have a focused interchange contract
-def VerifyPart(DocValue) -> None:
+def VerifyPart(DocValue: CadDocument) -> None:
     assert DocValue.validate() == ()
     assert len(DocValue.sketches) == 1
     assert [str(Entity.kind) for Entity in DocValue.sketches[0].entities] == [
@@ -3620,9 +3658,10 @@ def VerifyPart(DocValue) -> None:
 
 
 # this definition exists because circle edits should alter only the intended sketch entity
-def EditCircle(DocValue):
+def EditCircle(DocValue: CadDocument) -> CadDocument:
     SketchModel = DocValue.sketches[0]
     CircleEntity = SketchModel.entities[0]
+    assert isinstance(CircleEntity.geometry, CircleGeom)
     EditedCircle = Replace(
         CircleEntity, geometry=Replace(CircleEntity.geometry, radius=7.5)
     )
@@ -3807,21 +3846,33 @@ def TestSketchShape() -> None:
     )
     assert SketchShape is not None
     assert FinalShape is not None
-    assert SketchShape.find("./Part").attrib == {
+    SketchPart = SketchShape.find("./Part")
+    SketchMap = SketchShape.find("./ElementMap")
+    SketchElem = SketchShape.find("./ElementMap/Element")
+    SketchMapTwo = SketchShape.find("./ElementMap2")
+    FinalPart = FinalShape.find("./Part")
+    FinalMapTwo = FinalShape.find("./ElementMap2")
+    assert SketchPart is not None
+    assert SketchMap is not None
+    assert SketchElem is not None
+    assert SketchMapTwo is not None
+    assert FinalPart is not None
+    assert FinalMapTwo is not None
+    assert SketchPart.attrib == {
         "ElementMap": "0.15.70200.5",
         "file": "Sketch.Shape.brp",
     }
-    assert SketchShape.find("./ElementMap").attrib == {"new": "1", "count": "1"}
-    assert SketchShape.find("./ElementMap/Element").attrib == {
+    assert SketchMap.attrib == {"new": "1", "count": "1"}
+    assert SketchElem.attrib == {
         "key": "Dummy",
         "value": "Dummy",
     }
-    assert SketchShape.find("./ElementMap2").attrib == {"file": "Sketch.Shape.Map.txt"}
-    assert FinalShape.find("./Part").attrib == {
+    assert SketchMapTwo.attrib == {"file": "Sketch.Shape.Map.txt"}
+    assert FinalPart.attrib == {
         "ElementMap": "1.15.70200.5",
         "file": "Final.Shape.brp",
     }
-    assert FinalShape.find("./ElementMap2").attrib == {"file": "Final.Shape.Map.txt"}
+    assert FinalMapTwo.attrib == {"file": "Final.Shape.Map.txt"}
 
 
 # this definition exists because string hasher fixtures require deterministic archive ordering
@@ -4073,12 +4124,9 @@ def VerifyGraphXml(RootValue: ET.Element) -> None:
         ItemValue.get("name")
         for ItemValue in Objects["Opaque"].findall("./Properties/Property")
     ] == ["Label", "Token", "Blob"]
-    assert (
-        Objects["Opaque"]
-        .find("./Properties/Property[@name='Token']/String")
-        .get("value")
-        == "retained"
-    )
+    TokenValue = Objects["Opaque"].find("./Properties/Property[@name='Token']/String")
+    assert TokenValue is not None
+    assert TokenValue.get("value") == "retained"
     assert [
         ItemValue.get("type")
         for ItemValue in Objects["Pad"].findall("./Extensions/Extension")
@@ -4375,7 +4423,7 @@ def TestAsmWrites() -> None:
             ObjValue.get("name", ""): ObjValue.get("type", "")
             for ObjValue in RootValue.findall("./Objects/Object")
         }
-        ComponentGroups = []
+        ComponentGroups: list[list[str]] = []
         for ObjValue in RootValue.findall("./ObjectData/Object"):
             DefinitionId = ObjValue.find(
                 "./Properties/Property[@name='DefinitionId']/String"
@@ -4400,7 +4448,7 @@ def TestAsmWrites() -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestOuterSource(TmpPath) -> None:
+def TestOuterSource(TmpPath: FilePath) -> None:
     First = TmpPath / "First.FCStd"
     Second = TmpPath / "Second.FCStd"
     First.write_bytes(NativePart())
@@ -4430,7 +4478,7 @@ def TestOuterSource(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestAsmGrouped(TmpPath) -> None:
+def TestAsmGrouped(TmpPath: FilePath) -> None:
     First = TmpPath / "First.FCStd"
     Second = TmpPath / "Second.FCStd"
     First.write_bytes(NativePart())
@@ -4503,7 +4551,7 @@ def VerifyPortable(Adapter: FreeCadAdapter, Target: FilePath) -> None:
 
 
 # this definition exists because stream targets must diagnose embedded external references
-def VerifyEmbedMut(Adapter: FreeCadAdapter, DocValue) -> None:
+def VerifyEmbedMut(Adapter: FreeCadAdapter, DocValue: CadDocument) -> None:
     PortableStream = IoStream.BytesIO()
     PortableResult = Adapter.write(DocValue, PortableStream)
     assert PortableResult.application_usable is False
@@ -4522,7 +4570,7 @@ def VerifyEmbedMut(Adapter: FreeCadAdapter, DocValue) -> None:
 
 
 # this definition exists because nonportable writes must retain their original relative reference
-def VerifyLinkMut(Adapter: FreeCadAdapter, DocValue) -> None:
+def VerifyLinkMut(Adapter: FreeCadAdapter, DocValue: CadDocument) -> None:
     Nonportable = IoStream.BytesIO()
     Adapter.write(DocValue, Nonportable, WriteOptions(values={"portable": False}))
     with Zipfile.ZipFile(IoStream.BytesIO(Nonportable.getvalue())) as Archive:
@@ -4535,7 +4583,7 @@ def VerifyLinkMut(Adapter: FreeCadAdapter, DocValue) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestLinkOnlyDoc(TmpPath) -> None:
+def TestLinkOnlyDoc(TmpPath: FilePath) -> None:
     SourceFolder = TmpPath / "source"
     Child = SourceFolder / "nested" / "Child.FCStd"
     Child.parent.mkdir(parents=True)
@@ -4574,7 +4622,7 @@ def TestLinkOnlyDoc(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestNonportable(TmpPath) -> None:
+def TestNonportable(TmpPath: FilePath) -> None:
     Child = TmpPath / "nested" / "Child.FCStd"
     Child.parent.mkdir()
     Child.write_bytes(NativePart())
@@ -4608,7 +4656,7 @@ def TestNonportable(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestPartExact(TmpPath) -> None:
+def TestPartExact(TmpPath: FilePath) -> None:
     Source = TmpPath / "source.FCStd"
     Source.write_bytes(NativePart())
     Target = TmpPath / "replay.FCStd"
@@ -4621,7 +4669,7 @@ def TestPartExact(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ForgedNativeDoc(DocValue, DataValue: bytes):
+def ForgedNativeDoc(DocValue: CadDocument, DataValue: bytes) -> CadDocument:
     Payload = next(
         (Value for Value in DocValue.brep_payloads if Value.role is PayloadRole.BREP)
     )
@@ -4637,7 +4685,7 @@ def ForgedNativeDoc(DocValue, DataValue: bytes):
             )
         ),
     )
-    return FreecadAdapterModule._annotate_native_sources(Forged)
+    return AnnotateNative(Forged)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4646,7 +4694,7 @@ def TestRecomputed(Rebuild: bool) -> None:
     DocValue = FreeCadAdapter().read(NativePart())
     ForgedData = b"\nCASCADE Topology V1, (c) Matra-Datavision\nchanged-invalid\n"
     Forged = ForgedNativeDoc(DocValue, ForgedData)
-    assert FreecadAdapterModule._unchanged_native_source(Forged) is None
+    assert UnchangedNative(Forged) is None
     Output = IoStream.BytesIO()
     Result = FreeCadAdapter().write(
         Forged, Output, WriteOptions(values={"rebuild": Rebuild})
@@ -4679,7 +4727,7 @@ def TestRecomputed(Rebuild: bool) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestRootCannot(TmpPath) -> None:
+def TestRootCannot(TmpPath: FilePath) -> None:
     Child = TmpPath / "Child.FCStd"
     Child.write_bytes(NativePart())
     Parent = TmpPath / "Parent.FCStd"
@@ -4715,9 +4763,7 @@ def TestRootCannot(TmpPath) -> None:
             )
         ),
     )
-    Forged = FreecadAdapterModule._annotate_native_sources(
-        Replace(DocValue, assembly=AsmValue)
-    )
+    Forged = AnnotateNative(Replace(DocValue, assembly=AsmValue))
     Target = TmpPath / "rebuilt" / "Parent.FCStd"
     Result = WriteDoc(Forged, Target, values={"rebuild": True})
     Transfers = {Value.capability: Value for Value in Result.transfers}
@@ -4746,7 +4792,7 @@ def TestRootCannot(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestAsmLink(TmpPath) -> None:
+def TestAsmLink(TmpPath: FilePath) -> None:
     Child = TmpPath / "Child.FCStd"
     Child.write_bytes(NativeAsm())
     Parent = TmpPath / "Parent.FCStd"
@@ -5272,7 +5318,7 @@ def TestExample(NameValue: str) -> None:
 
 
 # this definition exists because the bundled assembly has one stable native read contract
-def VerifyBundled(DocValue) -> tuple[bytes, ...]:
+def VerifyBundled(DocValue: CadDocument) -> tuple[bytes, ...]:
     assert DocValue.validate() == ()
     assert DocValue.assembly is not None
     assert len(DocValue.assembly.definitions) == 14
@@ -5313,7 +5359,7 @@ def VerifyBundled(DocValue) -> tuple[bytes, ...]:
 
 # this definition exists because each emitted component must contain loadable native shape data
 def CollectShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
-    EmittedShapes = []
+    EmittedShapes: list[bytes] = []
     for ComponentFile in ComponentFiles:
         with Zipfile.ZipFile(ComponentFile) as Archive:
             RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
@@ -5337,7 +5383,7 @@ def CollectShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestAsmFcstdAnd(TmpPath) -> None:
+def TestAsmFcstdAnd(TmpPath: FilePath) -> None:
     Source = KFreecadExamples / "AssemblyExample.FCStd"
     if not Source.is_file():
         Pytest.skip("bundled FreeCAD assembly example is unavailable")

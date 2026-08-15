@@ -58,7 +58,7 @@ KFieldOwners, KAnnotationOps = BuildProgram(
 __all__ = ["KFieldOwners", "KAnnotationOps", "KMethodPrograms"]
 
 # compatibility binding preserves its established public import after decomposition
-globals()["FieldOwners"] = KFieldOwners
+FieldOwners = KFieldOwners
 
 # compatibility binding preserves its established public import after decomposition
-globals()["AnnotationOps"] = KAnnotationOps
+AnnotationOps = KAnnotationOps

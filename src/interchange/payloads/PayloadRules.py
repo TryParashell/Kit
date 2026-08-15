@@ -42,4 +42,4 @@ KSuffixPayloadRules = (
 from interchange.payloads.PayloadRuleData import KFormatPayloadRules
 
 # legacy payload recovery needs ordered evidence matching historical output
-KLegacyPayloadRules = KFormatPayloadRules + KSuffixPayloadRules
+KLegacyPayloadRules: tuple[PayloadRule, ...] = KFormatPayloadRules + KSuffixPayloadRules

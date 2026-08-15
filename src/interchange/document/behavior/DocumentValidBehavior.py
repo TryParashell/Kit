@@ -12,13 +12,13 @@ class DocumentValid:
     locals()["__slots__"] = ()
 
     # validation remains a model method while independent rules stay in focused modules
-    def GetErrors(SelfValue) -> tuple[str, ...]:
+    def GetErrors(self) -> tuple[str, ...]:
         from interchange.document.validation.DocumentValidate import GetDocErrors
 
-        return GetDocErrors(SelfValue)
+        return GetDocErrors(self)
 
     # explicit assertion gives model callers the established aggregate exception behavior
-    def AssertValid(SelfValue) -> None:
+    def AssertValid(self) -> None:
         from interchange.document.validation.DocumentValidate import AssertValid
 
-        AssertValid(SelfValue)
+        AssertValid(self)

@@ -37,6 +37,7 @@ from interchange import (
 )
 from interchange.payloads.PayloadMigrate import GetLegacyFields
 from interchange.payloads.PayloadRules import KLegacyPayloadRules
+from interchange.payloads.PayloadRuleModel import PayloadRule
 from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, ToData
 from tests.interchange.fixtures.DocumentFixture import (
     BuildDocument as BuildFixtureDocument,
@@ -52,10 +53,7 @@ def BuildDocument() -> CadDocument:
 
 
 # historical imports keep conversion suites independent from helper renaming
-def __getattr__(NameText: str) -> object:
-    if NameText == "document":
-        return BuildDocument
-    raise AttributeError(f"module {__name__!r} has no attribute {NameText!r}")
+document = BuildDocument
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -125,7 +123,7 @@ def CheckPayRole(RoleValue: PayloadRole) -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 @PytestLib.mark.parametrize("RuleValue", KLegacyPayloadRules)
-def CheckRules(RuleValue) -> None:
+def CheckRules(RuleValue: PayloadRule) -> None:
     FormatId = sorted(RuleValue.FormatIds)[0] if RuleValue.FormatIds else ""
     KindValue = sorted(RuleValue.Kinds)[0] if RuleValue.Kinds else ""
     SchemaText = sorted(RuleValue.Schemas)[0] if RuleValue.Schemas else ""

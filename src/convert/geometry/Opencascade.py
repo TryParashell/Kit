@@ -13,7 +13,7 @@ from itertools import chain as Chain
 from math import isclose as IsClose, isfinite as IsFinite, sqrt as SquareRoot
 import re as RegexLib
 from sys import float_info as FloatInfo
-from typing import Any as AnyValue, Mapping
+from typing import Mapping, cast as Cast
 
 from interchange import (
     BrepBody,
@@ -85,7 +85,7 @@ KVersionLines = frozenset(
 KShapeTypes = frozenset({b"Ve", b"Ed", b"Wi", b"Fa", b"Sh", b"So", b"CS", b"Co"})
 
 # this binding exists because parser limits need one shared invariant
-KShapeChildTypes = {
+KShapeChildTypes: dict[bytes, frozenset[bytes]] = {
     b"Ve": frozenset(),
     b"Ed": frozenset({b"Ve"}),
     b"Wi": frozenset({b"Ed"}),
@@ -116,72 +116,72 @@ class TokenCursor:
     __slots__ = ("DataValueA", "Iterator", "Lookahead", "LastEnd", "Count")
 
     # this definition exists because focused parser behavior needs one stable owner
-    def __init__(SelfValue, DataValue: bytes) -> None:
-        SelfValue.DataValueA = DataValue
-        SelfValue.Iterator = iter(KTokenPattern.finditer(DataValue))
-        SelfValue.Lookahead: RegexLib.Match[bytes] | None = None
-        SelfValue.LastEnd = 0
-        SelfValue.Count = 0
+    def __init__(self, DataValue: bytes) -> None:
+        self.DataValueA = DataValue
+        self.Iterator = iter(KTokenPattern.finditer(DataValue))
+        self.Lookahead: RegexLib.Match[bytes] | None = None
+        self.LastEnd = 0
+        self.Count = 0
 
     # this definition exists because focused parser behavior needs one stable owner
-    def TakeToken(SelfValue) -> bytes:
-        if SelfValue.Lookahead is None:
+    def TakeToken(self) -> bytes:
+        if self.Lookahead is None:
             try:
-                MatchValue = next(SelfValue.Iterator)
+                MatchValue = next(self.Iterator)
             except StopIteration as ErrorValue:
                 raise DecodeFailure("unexpected end of BRep data") from ErrorValue
         else:
-            MatchValue = SelfValue.Lookahead
-            SelfValue.Lookahead = None
+            MatchValue = self.Lookahead
+            self.Lookahead = None
         Token = MatchValue.group(0)
-        SelfValue.LastEnd = MatchValue.end()
-        SelfValue.Count += 1
-        if SelfValue.Count > KMaxTokens or len(Token) > 128:
+        self.LastEnd = MatchValue.end()
+        self.Count += 1
+        if self.Count > KMaxTokens or len(Token) > 128:
             raise DecodeFailure("BRep token bounds exceeded")
         return Token
 
     # this definition exists because focused parser behavior needs one stable owner
-    def PeekToken(SelfValue) -> bytes | None:
-        if SelfValue.Lookahead is None:
+    def PeekToken(self) -> bytes | None:
+        if self.Lookahead is None:
             try:
-                SelfValue.Lookahead = next(SelfValue.Iterator)
+                self.Lookahead = next(self.Iterator)
             except StopIteration:
                 return None
-        return SelfValue.Lookahead.group(0)
+        return self.Lookahead.group(0)
 
 
 # this class exists because line sensitive token rules need one focused owner
-class TokenLines:
+class TokenLines(TokenCursor):
     __slots__ = ()
 
     # this definition exists because focused parser behavior needs one stable owner
-    def IsFaceTriNext(SelfValue) -> bool:
-        CurrentEnd = SelfValue.DataValueA.find(b"\n", SelfValue.LastEnd)
+    def IsFaceTriNext(self) -> bool:
+        CurrentEnd = self.DataValueA.find(b"\n", self.LastEnd)
         if CurrentEnd < 0:
             return False
-        CurrentTail = SelfValue.DataValueA[SelfValue.LastEnd : CurrentEnd]
+        CurrentTail = self.DataValueA[self.LastEnd : CurrentEnd]
         if RegexLib.fullmatch(rb"[ \t]*\r?", CurrentTail) is None:
             return False
         NextStart = CurrentEnd + 1
-        NextEnd = SelfValue.DataValueA.find(b"\n", NextStart)
+        NextEnd = self.DataValueA.find(b"\n", NextStart)
         if NextEnd < 0:
-            NextEnd = len(SelfValue.DataValueA)
-        LineValue = SelfValue.DataValueA[NextStart:NextEnd]
+            NextEnd = len(self.DataValueA)
+        LineValue = self.DataValueA[NextStart:NextEnd]
         return RegexLib.fullmatch(rb"2[ \t]+[1-9]\d*[ \t]*\r?", LineValue) is not None
 
     # this definition exists because focused parser behavior needs one stable owner
-    def ExpectToken(SelfValue, Expected: bytes) -> None:
-        if SelfValue.TakeToken() != Expected:
+    def ExpectToken(self, Expected: bytes) -> None:
+        if self.TakeToken() != Expected:
             raise DecodeFailure("unexpected BRep token")
 
 
 # this class exists because numeric token conversion needs one focused owner
-class TokenValues:
+class TokenValues(TokenCursor):
     __slots__ = ()
 
     # this definition exists because focused parser behavior needs one stable owner
-    def ReadInteger(SelfValue, Minimum: int = 0, Maximum: int = KMaxShapes) -> int:
-        Token = SelfValue.TakeToken()
+    def ReadInteger(self, Minimum: int = 0, Maximum: int = KMaxShapes) -> int:
+        Token = self.TakeToken()
         if KIntegerPattern.fullmatch(Token) is None:
             raise DecodeFailure("invalid BRep integer")
         Value = int(Token)
@@ -191,9 +191,9 @@ class TokenValues:
 
     # this definition exists because focused parser behavior needs one stable owner
     def SignedInteger(
-        SelfValue, Minimum: int = -KMaxShapes, Maximum: int = KMaxShapes
+        self, Minimum: int = -KMaxShapes, Maximum: int = KMaxShapes
     ) -> int:
-        Token = SelfValue.TakeToken()
+        Token = self.TakeToken()
         if KIntegerPattern.fullmatch(Token) is None:
             raise DecodeFailure("invalid BRep integer")
         Value = int(Token)
@@ -202,8 +202,8 @@ class TokenValues:
         return Value
 
     # this definition exists because focused parser behavior needs one stable owner
-    def ReadNumber(SelfValue) -> float:
-        Token = SelfValue.TakeToken()
+    def ReadNumber(self) -> float:
+        Token = self.TakeToken()
         if len(Token) > 30:
             raise DecodeFailure("BRep number is out of bounds")
         try:
@@ -216,7 +216,7 @@ class TokenValues:
 
 
 # this class exists because parser consumers need one complete token interface
-class Tokens(TokenCursor, TokenLines, TokenValues):
+class Tokens(TokenLines, TokenValues):
     __slots__ = ()
 
 
@@ -353,7 +353,7 @@ def IsBoolean(TokensA: Tokens) -> bool:
 def ReadNumbers(TokensA: Tokens, Count: int) -> None:
     if Count < 0 or Count > KMaxGeometry:
         raise DecodeFailure("BRep numeric record is out of bounds")
-    for ValueName in range(Count):
+    for _ in range(Count):
         TokensA.ReadNumber()
 
 
@@ -404,7 +404,7 @@ def CurveSpline(TokensA: Tokens, Dimension: int, KindValue: int) -> None:
     Poles = TokensA.ReadInteger(2, KMaxGeometry)
     Knots = TokensA.ReadInteger(2, KMaxGeometry)
     ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
-    for ValueName in range(Knots):
+    for _ in range(Knots):
         TokensA.ReadNumber()
         TokensA.ReadInteger(1, KMaxGeometry)
 
@@ -454,7 +454,7 @@ def SurfaceSpline(TokensA: Tokens, KindValue: int) -> None:
     Poles = BoundedProduct(UPoles, VPoles)
     ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
     for Count in (UKnots, VKnots):
-        for ValueName in range(Count):
+        for _ in range(Count):
             TokensA.ReadNumber()
             TokensA.ReadInteger(1, KMaxGeometry)
 
@@ -528,7 +528,11 @@ def NormalizeVector(Value: tuple[float, float, float]) -> tuple[float, float, fl
     Magnitude = SquareRoot(sum(Component * Component for Component in Value))
     if not IsFinite(Magnitude) or Magnitude <= FloatInfo.min:
         raise DecodeFailure("invalid BRep location transform")
-    Result = tuple(Component / Magnitude for Component in Value)
+    Result = (
+        Value[0] / Magnitude,
+        Value[1] / Magnitude,
+        Value[2] / Magnitude,
+    )
     if not all(IsFinite(Component) for Component in Result):
         raise DecodeFailure("invalid BRep location transform")
     return Result
@@ -540,27 +544,26 @@ def OrthoVectors(
 ) -> tuple[tuple[float, float, float], ...]:
     FirstValue = NormalizeVector(Values[0])
     Projection = sum(Values[1][IndexA] * FirstValue[IndexA] for IndexA in range(3))
-    Second = NormalizeVector(
-        tuple(
-            Values[1][IndexA] - Projection * FirstValue[IndexA] for IndexA in range(3)
-        )
+    SecondInput = (
+        Values[1][0] - Projection * FirstValue[0],
+        Values[1][1] - Projection * FirstValue[1],
+        Values[1][2] - Projection * FirstValue[2],
     )
+    Second = NormalizeVector(SecondInput)
     FirstProjection = sum(Values[2][IndexA] * FirstValue[IndexA] for IndexA in range(3))
     SecondProjection = sum(Values[2][IndexA] * Second[IndexA] for IndexA in range(3))
-    Third = NormalizeVector(
-        tuple(
-            Values[2][IndexA]
-            - FirstProjection * FirstValue[IndexA]
-            - SecondProjection * Second[IndexA]
-            for IndexA in range(3)
-        )
+    ThirdInput = (
+        Values[2][0] - FirstProjection * FirstValue[0] - SecondProjection * Second[0],
+        Values[2][1] - FirstProjection * FirstValue[1] - SecondProjection * Second[1],
+        Values[2][2] - FirstProjection * FirstValue[2] - SecondProjection * Second[2],
     )
+    Third = NormalizeVector(ThirdInput)
     return FirstValue, Second, Third
 
 
 # this definition exists because focused parser behavior needs one stable owner
 def ParseTransform(TokensA: Tokens) -> tuple[float, ...]:
-    Values = tuple(TokensA.ReadNumber() for ValueName in range(12))
+    Values = tuple(TokensA.ReadNumber() for _ in range(12))
     Determinant = (
         Values[0] * (Values[5] * Values[10] - Values[6] * Values[9])
         - Values[1] * (Values[4] * Values[10] - Values[6] * Values[8])
@@ -571,18 +574,21 @@ def ParseTransform(TokensA: Tokens) -> tuple[float, ...]:
     Scale = abs(Determinant) ** (1.0 / 3.0)
     if Determinant < 0.0:
         Scale = -Scale
-    RowsValue = (
-        tuple(Values[IndexA] / Scale for IndexA in (0, 1, 2)),
-        tuple(Values[IndexA] / Scale for IndexA in (4, 5, 6)),
-        tuple(Values[IndexA] / Scale for IndexA in (8, 9, 10)),
+    RowsValue: tuple[tuple[float, float, float], ...] = (
+        (Values[0] / Scale, Values[1] / Scale, Values[2] / Scale),
+        (Values[4] / Scale, Values[5] / Scale, Values[6] / Scale),
+        (Values[8] / Scale, Values[9] / Scale, Values[10] / Scale),
     )
-    Columns = tuple(
-        tuple(RowsValue[RowValue][Column] for RowValue in range(3))
-        for Column in range(3)
+    Columns = (
+        (RowsValue[0][0], RowsValue[1][0], RowsValue[2][0]),
+        (RowsValue[0][1], RowsValue[1][1], RowsValue[2][1]),
+        (RowsValue[0][2], RowsValue[1][2], RowsValue[2][2]),
     )
     Columns = OrthoVectors(Columns)
-    RowsValue = tuple(
-        tuple(Columns[Column][RowValue] for Column in range(3)) for RowValue in range(3)
+    RowsValue = (
+        (Columns[0][0], Columns[1][0], Columns[2][0]),
+        (Columns[0][1], Columns[1][1], Columns[2][1]),
+        (Columns[0][2], Columns[1][2], Columns[2][2]),
     )
     OrthoVectors(RowsValue)
     return Values
@@ -787,9 +793,10 @@ def LocationPoint(Value: tuple[float, ...], Point: VectorThree) -> VectorThree:
 # this definition exists because focused parser behavior needs one stable owner
 def ApplyDirection(Value: tuple[float, ...], Direction: VectorThree) -> VectorThree:
     Components = (Direction.x, Direction.y, Direction.z)
-    Transformed = tuple(
-        sum(Value[RowValue * 4 + Column] * Components[Column] for Column in range(3))
-        for RowValue in range(3)
+    Transformed = (
+        sum(Value[Column] * Components[Column] for Column in range(3)),
+        sum(Value[4 + Column] * Components[Column] for Column in range(3)),
+        sum(Value[8 + Column] * Components[Column] for Column in range(3)),
     )
     Normalized = NormalizeVector(Transformed)
     return VectorThree(*Normalized)
@@ -887,7 +894,7 @@ def ReadLocations(TokensA: Tokens) -> int:
 # this definition exists because focused parser behavior needs one stable owner
 def ReadCurves(TokensA: Tokens, Label: bytes, Dimension: int) -> int:
     Count = ReadCount(TokensA, Label, KMaxGeometry)
-    for ValueName in range(Count):
+    for _ in range(Count):
         CurveGeometry(TokensA, Dimension)
     return Count
 
@@ -895,7 +902,7 @@ def ReadCurves(TokensA: Tokens, Label: bytes, Dimension: int) -> int:
 # this definition exists because focused parser behavior needs one stable owner
 def PolygonThree(TokensA: Tokens) -> int:
     Count = ReadCount(TokensA, b"Polygon3D", KMaxGeometry)
-    for ValueName in range(Count):
+    for _ in range(Count):
         Nodes = TokensA.ReadInteger(1, KMaxGeometry)
         Parameters = IsBoolean(TokensA)
         if TokensA.ReadNumber() < 0.0:
@@ -909,11 +916,11 @@ def PolygonThree(TokensA: Tokens) -> int:
 # this definition exists because focused parser behavior needs one stable owner
 def TriPolygons(TokensA: Tokens) -> tuple[int, ...]:
     Count = ReadCount(TokensA, b"PolygonOnTriangulations", KMaxGeometry)
-    MaximumNodes = []
-    for ValueName in range(Count):
+    MaximumNodes: list[int] = []
+    for _ in range(Count):
         Nodes = TokensA.ReadInteger(1, KMaxGeometry)
         MaximumNode = 0
-        for ValueName in range(Nodes):
+        for _ in range(Nodes):
             MaximumNode = max(MaximumNode, TokensA.ReadInteger(1, KMaxGeometry))
         MaximumNodes.append(MaximumNode)
         TokensA.ExpectToken(b"p")
@@ -927,7 +934,7 @@ def TriPolygons(TokensA: Tokens) -> tuple[int, ...]:
 # this definition exists because focused parser behavior needs one stable owner
 def ReadSurfaces(TokensA: Tokens) -> int:
     Count = ReadCount(TokensA, b"Surfaces", KMaxGeometry)
-    for ValueName in range(Count):
+    for _ in range(Count):
         SurfaceGeometry(TokensA)
     return Count
 
@@ -935,8 +942,8 @@ def ReadSurfaces(TokensA: Tokens) -> int:
 # this definition exists because focused parser behavior needs one stable owner
 def Triangulations(TokensA: Tokens) -> tuple[int, ...]:
     Count = ReadCount(TokensA, b"Triangulations", KMaxGeometry)
-    NodeCounts = []
-    for ValueName in range(Count):
+    NodeCounts: list[int] = []
+    for _ in range(Count):
         Nodes = TokensA.ReadInteger(1, KMaxGeometry)
         NodeCounts.append(Nodes)
         Triangles = TokensA.ReadInteger(1, KMaxGeometry)
@@ -946,7 +953,7 @@ def Triangulations(TokensA: Tokens) -> tuple[int, ...]:
         ReadNumbers(TokensA, BoundedProduct(Nodes, 3))
         if Parameters:
             ReadNumbers(TokensA, BoundedProduct(Nodes, 2))
-        for ValueName in range(BoundedProduct(Triangles, 3)):
+        for _ in range(BoundedProduct(Triangles, 3)):
             TokensA.ReadInteger(1, Nodes)
     return tuple(NodeCounts)
 
@@ -1174,12 +1181,12 @@ def ReadStructKids(
     KindValue: bytes,
     Kinds: Mapping[int, bytes],
 ) -> tuple[int, ...]:
-    ChildRecords = []
+    ChildRecords: list[int] = []
     while True:
         Child = StructureRef(TokensA, Count, LocationsA)
         if Child is None:
             return tuple(ChildRecords)
-        ReferenceA, LocationA = Child
+        ReferenceA, _ = Child
         if ReferenceA.RecordA <= RecordA:
             raise DecodeFailure("BRep topology is not ordered bottom-up")
         ChildKind = Kinds.get(ReferenceA.RecordA)
@@ -1194,7 +1201,7 @@ def AssertReachable(
     Children: Mapping[int, tuple[int, ...]],
     Kinds: Mapping[int, bytes],
 ) -> None:
-    Reachable = set()
+    Reachable: set[int] = set()
     Pending = [RootRecord]
     while Pending:
         RecordA = Pending.pop()
@@ -1508,7 +1515,7 @@ def PlaceSurfaceMut(
 def PlaceChildren(
     State: PlacementState, SourceRecord: ShapeRecord, Location: tuple[float, ...]
 ) -> tuple[Reference, ...]:
-    ChildRefs = []
+    ChildRefs: list[Reference] = []
     for ChildRef in SourceRecord.Children:
         ChildLoc = (
             KIdentityLocation
@@ -1661,9 +1668,10 @@ def CanonicalVerts(
         if not isinstance(GeometryData, VertexData):
             raise DecodeFailure("invalid BRep vertex topology")
         PointData = GeometryData.Point
-        BucketKey = tuple(
-            format(ItemData, f".{KVertexDigits}g")
-            for ItemData in (PointData.x, PointData.y, PointData.z)
+        BucketKey = (
+            format(PointData.x, f".{KVertexDigits}g"),
+            format(PointData.y, f".{KVertexDigits}g"),
+            format(PointData.z, f".{KVertexDigits}g"),
         )
         CandidateData = BucketData.setdefault(BucketKey, [])
         RepresentativeValue = NumberValue
@@ -2047,16 +2055,16 @@ def CollectShapeMut(State: RootState, ReferenceA: Reference) -> None:
 
 # this definition exists because model assembly and validation need one owner
 def AssembleModel(
-    CurvesA,
-    SurfacesA,
-    Vertices,
-    Edges,
-    Coedges,
-    Loops,
-    Faces,
+    CurvesA: tuple[BrepCurve, ...],
+    SurfacesA: tuple[BrepSurface, ...],
+    Vertices: list[BrepVertex],
+    Edges: list[BrepEdge],
+    Coedges: list[BrepCoedge],
+    Loops: list[BrepLoop],
+    Faces: list[BrepFace],
     State: RootState,
-    DesignBodyId,
-    Attributes,
+    DesignBodyId: str,
+    Attributes: Mapping[str, object],
 ) -> BrepModel:
     BodyValue = BrepBody(
         f"{State.IdPrefix}:body:1",
@@ -2079,7 +2087,7 @@ def AssembleModel(
         regions=tuple(State.Regions),
         bodies=(BodyValue,),
     )
-    BodyIds = frozenset({DesignBodyId}) if DesignBodyId else frozenset()
+    BodyIds: frozenset[str] = frozenset({DesignBodyId}) if DesignBodyId else frozenset()
     if Result.validate(BodyIds):
         raise DecodeFailure("decoded BRep model is invalid")
     return Result
@@ -2093,7 +2101,7 @@ def BuildModel(
     RootValue: Reference,
     IdPrefix: str,
     DesignBodyId: str,
-    Attributes: Mapping[str, AnyValue],
+    Attributes: Mapping[str, object],
 ) -> BrepModel:
     Vertices, VertexIds, CanonicalVertexData = BuildVertices(RecordsA, IdPrefix)
     Edges, EdgeIds, EdgeVertices = BuildEdges(
@@ -2238,7 +2246,7 @@ def DecodePayload(
     DataValue: bytes,
     IdPrefix: str,
     DesignBodyId: str,
-    Attributes: Mapping[str, AnyValue],
+    Attributes: Mapping[str, object],
 ) -> BrepModel:
     TokensA = Tokens(DataValue)
     ExpectHeader(TokensA)
@@ -2286,19 +2294,18 @@ def DecodeAsciiBrep(
     *,
     IdPrefix: str = "occ",
     DesignBodyId: str = "",
-    Attributes: Mapping[str, AnyValue] | None = None,
+    Attributes: Mapping[str, object] | None = None,
 ) -> BrepModel | None:
     if (
         type(DataValue) is not bytes
         or not DataValue
         or len(DataValue) > KMaxBytes
-        or not isinstance(IdPrefix, str)
+        or type(IdPrefix) is not str
         or not IdPrefix
         or IdPrefix != IdPrefix.strip()
         or len(IdPrefix) > 256
-        or not isinstance(DesignBodyId, str)
+        or type(DesignBodyId) is not str
         or len(DesignBodyId) > 512
-        or (Attributes is not None and not isinstance(Attributes, Mapping))
     ):
         return None
     try:
@@ -2368,144 +2375,123 @@ def IsValidBrep(DataValue: bytes) -> bool:
 
 
 # this definition exists because legacy callers need their keyword contract preserved
-def DecodeLegacy(DataValue: bytes, **LegacyValues: AnyValue) -> BrepModel | None:
+def DecodeLegacy(DataValue: bytes, **LegacyValues: object) -> BrepModel | None:
     Options = dict(LegacyValues)
-    IdPrefix = Options.pop("id_prefix", "occ")
-    DesignBodyId = Options.pop("design_body_id", "")
-    Attributes = Options.pop("attributes", None)
+    PrefixValue = Options.pop("id_prefix", "occ")
+    BodyIdValue = Options.pop("design_body_id", "")
+    AttributeValue = Options.pop("attributes", None)
     if Options:
         Unexpected = next(iter(Options))
         raise TypeError(f"decode_ascii_brep got unexpected keyword {Unexpected!r}")
+    if not isinstance(PrefixValue, str) or not isinstance(BodyIdValue, str):
+        return None
+    if AttributeValue is None:
+        Attributes: Mapping[str, object] | None = None
+    elif isinstance(AttributeValue, Mapping):
+        SourceAttributes = Cast(Mapping[object, object], AttributeValue)
+        if not all(isinstance(KeyValue, str) for KeyValue in SourceAttributes):
+            return None
+        Attributes = {
+            KeyValue: ItemValue
+            for KeyValue, ItemValue in SourceAttributes.items()
+            if isinstance(KeyValue, str)
+        }
+    else:
+        return None
     return DecodeAsciiBrep(
         DataValue,
-        IdPrefix=IdPrefix,
-        DesignBodyId=DesignBodyId,
+        IdPrefix=PrefixValue,
+        DesignBodyId=BodyIdValue,
         Attributes=Attributes,
     )
 
 
-# this definition exists because parser constants and records need compatibility
-def InstallLimits() -> None:
-    globals().update(
-        {
-            "_MAX_BYTES": KMaxBytes,
-            "_MAX_GEOMETRY": KMaxGeometry,
-            "_MAX_SHAPES": KMaxShapes,
-            "_MAX_TOKENS": KMaxTokens,
-            "_MIN_INT32": KMinIntThreeTwo,
-            "_MAX_INT32": KMaxIntThreeTwo,
-            "_TOKEN_PATTERN": KTokenPattern,
-            "_INTEGER_PATTERN": KIntegerPattern,
-            "_FLAGS_PATTERN": KFlagsPattern,
-            "_CONTINUITY_PATTERN": KContinuityPattern,
-            "_INDEXED_CONTINUITY_PATTERN": KIndexedPattern,
-            "_VERSION_LINE": KVersionLine,
-            "_VERSION_LINES": KVersionLines,
-            "_SHAPE_TYPES": KShapeTypes,
-            "_SHAPE_CHILD_TYPES": KShapeChildTypes,
-            "_MAX_RECURSION": KMaxRecursion,
-            "_MAX_VERTEX_EQUIVALENCE_BUCKET": KMaxVertexBucket,
-            "_VERTEX_EQUIVALENCE_DIGITS": KVertexDigits,
-            "_IDENTITY_LOCATION": KIdentityLocation,
-            "_DecodeFailure": DecodeFailure,
-            "_Tokens": Tokens,
-            "_Reference": Reference,
-            "_VertexData": VertexData,
-            "_EdgeData": EdgeData,
-            "_FaceData": FaceData,
-            "_ShapeRecord": ShapeRecord,
-        }
-    )
+# legacy parser names remain available to established compatibility consumers
+_MAX_BYTES = KMaxBytes
+_MAX_GEOMETRY = KMaxGeometry
+_MAX_SHAPES = KMaxShapes
+_MAX_TOKENS = KMaxTokens
+_MIN_INT32 = KMinIntThreeTwo
+_MAX_INT32 = KMaxIntThreeTwo
+_TOKEN_PATTERN = KTokenPattern
+_INTEGER_PATTERN = KIntegerPattern
+_FLAGS_PATTERN = KFlagsPattern
+_CONTINUITY_PATTERN = KContinuityPattern
+_INDEXED_CONTINUITY_PATTERN = KIndexedPattern
+_VERSION_LINE = KVersionLine
+_VERSION_LINES = KVersionLines
+_SHAPE_TYPES = KShapeTypes
+_SHAPE_CHILD_TYPES = KShapeChildTypes
+_MAX_RECURSION = KMaxRecursion
+_MAX_VERTEX_EQUIVALENCE_BUCKET = KMaxVertexBucket
+_VERTEX_EQUIVALENCE_DIGITS = KVertexDigits
+_IDENTITY_LOCATION = KIdentityLocation
+_DecodeFailure = DecodeFailure
+_Tokens = Tokens
+_Reference = Reference
+_VertexData = VertexData
+_EdgeData = EdgeData
+_FaceData = FaceData
+_ShapeRecord = ShapeRecord
 
+# legacy parser names remain available to established compatibility consumers
+_vector = VectorValue
+_dot = DotValue
+_length = LengthValue
+_cross = CrossValue
+_unit = IsUnit
+_IsFrame = IsFrame
+_count = ReadCount
+_zero_table = ZeroTable
+_reference = ReadReference
+_boolean = IsBoolean
+_numbers = ReadNumbers
+_bounded_product = BoundedProduct
+_positive_index = PositiveIndex
+_location_index = LocationIndex
+_continuity = Continuity
+_curve_geometry = CurveGeometry
+_surface_geometry = SurfaceGeometry
+_curves = ReadCurves
+_polygon3d = PolygonThree
+_polygons_on_triangulations = TriPolygons
+_surfaces = ReadSurfaces
+_triangulations = Triangulations
+_vertex_structure = VertexStructure
+_indexed_continuity = IndexContinuity
 
-# this definition exists because primitive parser helpers need compatibility
-def InstallParser() -> None:
-    globals().update(
-        {
-            "_vector": VectorValue,
-            "_dot": DotValue,
-            "_length": LengthValue,
-            "_cross": CrossValue,
-            "_unit": IsUnit,
-            "_IsFrame": IsFrame,
-            "_count": ReadCount,
-            "_zero_table": ZeroTable,
-            "_reference": ReadReference,
-            "_boolean": IsBoolean,
-            "_numbers": ReadNumbers,
-            "_bounded_product": BoundedProduct,
-            "_positive_index": PositiveIndex,
-            "_location_index": LocationIndex,
-            "_continuity": Continuity,
-            "_curve_geometry": CurveGeometry,
-            "_surface_geometry": SurfaceGeometry,
-            "_curves": ReadCurves,
-            "_polygon3d": PolygonThree,
-            "_polygons_on_triangulations": TriPolygons,
-            "_surfaces": ReadSurfaces,
-            "_triangulations": Triangulations,
-            "_vertex_structure": VertexStructure,
-            "_indexed_continuity": IndexContinuity,
-        }
-    )
+# legacy parser names remain available to established compatibility consumers
+_location_multiply = LocationProduct
+_location_power = LocationPower
+_normalized_vector = NormalizeVector
+_orthogonalized_vectors = OrthoVectors
+_location_transform = ParseTransform
+_location_product = ProductLocation
+_location_inverse = InverseLocation
+_location_matrix_power = MatrixPower
+_model_locations = ModelLocations
+_location_scale = LocationScale
+_location_point = LocationPoint
+_location_direction = ApplyDirection
+_located_model_inputs = LocatedInputs
+_locations = ReadLocations
 
+# legacy parser names remain available to established compatibility consumers
+_edge_structure = EdgeStructure
+_face_structure = FaceStructure
+_structural_reference = StructureRef
+_shape_structure = ShapeStructure
+_vertex_geometry = VertexGeometry
+_edge_geometry = EdgeGeometry
+_face_geometry = FaceGeometry
+_shape_records = ShapeRecords
+_ApplyLocations = ApplyLocations
+_CanonicalVertexRecords = CanonicalVerts
+_OrderWireUses = OrderWireUses
 
-# this definition exists because location parser helpers need compatibility
-def InstallLocals() -> None:
-    globals().update(
-        {
-            "_location_multiply": LocationProduct,
-            "_location_power": LocationPower,
-            "_normalized_vector": NormalizeVector,
-            "_orthogonalized_vectors": OrthoVectors,
-            "_location_transform": ParseTransform,
-            "_location_product": ProductLocation,
-            "_location_inverse": InverseLocation,
-            "_location_matrix_power": MatrixPower,
-            "_model_locations": ModelLocations,
-            "_location_scale": LocationScale,
-            "_location_point": LocationPoint,
-            "_location_direction": ApplyDirection,
-            "_located_model_inputs": LocatedInputs,
-            "_locations": ReadLocations,
-        }
-    )
-
-
-# this definition exists because topology parser helpers need compatibility
-def InstallShapes() -> None:
-    globals().update(
-        {
-            "_edge_structure": EdgeStructure,
-            "_face_structure": FaceStructure,
-            "_structural_reference": StructureRef,
-            "_shape_structure": ShapeStructure,
-            "_vertex_geometry": VertexGeometry,
-            "_edge_geometry": EdgeGeometry,
-            "_face_geometry": FaceGeometry,
-            "_shape_records": ShapeRecords,
-            "_ApplyLocations": ApplyLocations,
-            "_CanonicalVertexRecords": CanonicalVerts,
-            "_OrderWireUses": OrderWireUses,
-        }
-    )
-
-
-# this definition exists because model entry points need compatibility
-def InstallModels() -> None:
-    globals().update(
-        {
-            "_opposite": Opposite,
-            "_compose": Compose,
-            "_model": BuildModel,
-            "decode_ascii_brep": DecodeLegacy,
-            "is_structurally_valid_ascii_brep": IsValidBrep,
-        }
-    )
-
-
-InstallLimits()
-InstallParser()
-InstallLocals()
-InstallShapes()
-InstallModels()
+# legacy parser names remain available to established compatibility consumers
+_opposite = Opposite
+_compose = Compose
+_model = BuildModel
+decode_ascii_brep = DecodeLegacy
+is_structurally_valid_ascii_brep = IsValidBrep

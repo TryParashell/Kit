@@ -7,12 +7,14 @@
 # to you under it immediately and permanently.
 
 from dataclasses import asdict as AsDict
-from dataclasses import fields as GetFields
+from dataclasses import is_dataclass as IsDataclass
 from enum import Enum as EnumBase
 from importlib import import_module as ImportModule
 from inspect import getattr_static as GetStaticAttr
 from inspect import signature as GetSignature
 import pickle as PickleCodec
+from types import FunctionType as FuncType
+from typing import Protocol, cast as TypeCast, runtime_checkable
 
 import interchange as InterchangeApi
 from interchange.serialization import KTypeRegistry
@@ -44,6 +46,27 @@ KPythonCompatFields = (
 )
 
 
+# reflection assertions require the narrow dataclass field surface shared by supported records
+class CompatField(Protocol):
+    name: str
+    kw_only: bool
+
+
+# reflection assertions require the dataclass metadata exposed by every supported compatibility record
+class CompatDataclass(Protocol):
+    __match_args__: tuple[str, ...]
+    __annotations__: dict[str, object]
+    __dataclass_fields__: dict[str, CompatField]
+
+
+# descriptor checks need a runtime structural contract for wrapped class and static methods
+@runtime_checkable
+class MethodDescriptor(Protocol):
+
+    @property
+    def __func__(self) -> FuncType: ...
+
+
 # top level names are contractual because adapters historically imported them without module qualification
 def CheckTopLevel() -> None:
     assert set(InterchangeApi.__all__) == set(KPythonCompatTopNames)
@@ -66,22 +89,28 @@ def CheckExports() -> None:
 def CheckClasses() -> None:
     for QualifiedName, FieldNames in KPythonCompatFields:
         ModuleName, ClassName = QualifiedName.rsplit(".", 1)
-        ClassType = getattr(ImportModule(ModuleName), ClassName)
+        ClassType = TypeCast(type[object], getattr(ImportModule(ModuleName), ClassName))
+        assert IsDataclass(ClassType)
+        DataclassType = TypeCast(type[CompatDataclass], ClassType)
         assert ClassType.__name__ == ClassName
         assert ClassType.__qualname__ == ClassName
         assert ClassType.__module__ == ModuleName
         assert (
-            tuple(FieldValue.name for FieldValue in GetFields(ClassType)) == FieldNames
+            tuple(
+                FieldValue.name
+                for FieldValue in DataclassType.__dataclass_fields__.values()
+            )
+            == FieldNames
         )
-        assert ClassType.__match_args__ == tuple(
+        assert DataclassType.__match_args__ == tuple(
             FieldValue.name
-            for FieldValue in GetFields(ClassType)
+            for FieldValue in DataclassType.__dataclass_fields__.values()
             if not FieldValue.kw_only
         )
-        assert tuple(ClassType.__annotations__) == tuple(
+        assert tuple(DataclassType.__annotations__) == tuple(
             FieldValue.name
-            for FieldValue in GetFields(ClassType)
-            if FieldValue.name in ClassType.__annotations__
+            for FieldValue in DataclassType.__dataclass_fields__.values()
+            if FieldValue.name in DataclassType.__annotations__
         )
 
 
@@ -103,10 +132,10 @@ def CheckMethods() -> None:
         ClassType = getattr(ImportModule(ModuleName), ClassName)
         for MethodName in MethodNames:
             DescriptorValue = GetStaticAttr(ClassType, MethodName)
-            MethodValue = (
+            MethodValue: FuncType = (
                 DescriptorValue.__func__
-                if isinstance(DescriptorValue, (classmethod, staticmethod))
-                else DescriptorValue
+                if isinstance(DescriptorValue, MethodDescriptor)
+                else TypeCast(FuncType, DescriptorValue)
             )
             assert MethodValue.__name__ == MethodName
             assert MethodValue.__qualname__ == f"{ClassName}.{MethodName}"

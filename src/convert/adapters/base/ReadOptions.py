@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass as DataClass
 from dataclasses import field as DataField
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+from typing import TYPE_CHECKING as IsTypeCheck
+from typing import overload as Overload
 
 from interchange import frozen_mapping as FreezeMapping
 
@@ -25,4 +26,56 @@ class ReadOptions(ContractBase):
     IncludeBrep: bool = True
     IncludeMesh: bool = True
     StrictMode: bool = True
-    OptionValues: TypeMap[str, AnyValue] = DataField(default_factory=FreezeMapping)
+    OptionValues: TypeMap[str, object] = DataField(default_factory=FreezeMapping)
+
+    if IsTypeCheck:
+
+        # historical keywords remain typed because adapter consumers construct this public policy directly
+        @Overload
+        def __init__(
+            self,
+            configuration: str | None = None,
+            include_brep: bool = True,
+            include_tessellation: bool = True,
+            strict: bool = True,
+            values: TypeMap[str, object] = FreezeMapping(),
+        ) -> None: ...
+
+        # canonical keywords remain typed because dataclass replacement reconstructs policies from storage fields
+        @Overload
+        def __init__(
+            self,
+            ConfigName: str | None = None,
+            IncludeBrep: bool = True,
+            IncludeMesh: bool = True,
+            StrictMode: bool = True,
+            OptionValues: TypeMap[str, object] = FreezeMapping(),
+        ) -> None: ...
+
+        # broad implementation parameters exist only to connect both statically checked constructor forms
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+
+    # historical configuration access remains typed because readers consume this public selection field
+    @property
+    def configuration(self) -> str | None:
+        return self.ConfigName
+
+    # historical brep access remains typed because readers consume this public filtering field
+    @property
+    def include_brep(self) -> bool:
+        return self.IncludeBrep
+
+    # historical tessellation access remains typed because readers consume this public filtering field
+    @property
+    def include_tessellation(self) -> bool:
+        return self.IncludeMesh
+
+    # historical strictness access remains typed because readers consume this public validation field
+    @property
+    def strict(self) -> bool:
+        return self.StrictMode
+
+    # historical option access remains typed because adapters consume this public extension field
+    @property
+    def values(self) -> TypeMap[str, object]:
+        return self.OptionValues

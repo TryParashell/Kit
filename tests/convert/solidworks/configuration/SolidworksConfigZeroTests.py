@@ -87,7 +87,7 @@ def TestRFRTSBI() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestERBHEOTO() -> None:
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in ConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in ConfigOps:
         assert StartPos == SourceCursor
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(FieldOwners)
@@ -123,7 +123,7 @@ def TestRPCNEVB() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestDBCIET() -> None:
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in BoxConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in BoxConfigOps:
         assert StartPos == SourceCursor
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(BoxFieldOwners)

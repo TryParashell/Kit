@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path as FilePath
+import sys as SysModule
 
 import pytest as Pytest
 
@@ -28,7 +30,10 @@ from tests.convert.registry.RegistryTestSupport import (
 
 
 # nested module discovery must not depend on packages reexporting their adapter class
-def CheckNestedPack(TmpPath, MonkeyPatch) -> None:
+def CheckNestedPack(
+    TmpPath: FilePath,
+    MonkeyPatch: Pytest.MonkeyPatch,
+) -> None:
     PackageName = f"kitnested{TmpPath.name.replace('-', '')}"
     PackagePath = TmpPath / PackageName
     FormatPath = PackagePath / "nested"
@@ -40,7 +45,7 @@ def CheckNestedPack(TmpPath, MonkeyPatch) -> None:
         "class NestedAdapter(JsonAdapter):\n    Discovered = True\n",
         encoding="utf-8",
     )
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     RegistryData = AdapterRegistry()
     assert RegistryData.introspect(PackageName) == ("interchange.json",)
     assert type(RegistryData.reader("interchange.json")).__name__ == "NestedAdapter"

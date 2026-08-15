@@ -63,8 +63,6 @@ class FeatureStep(FeatureHintBase):
     Attributes: TypeMap[str, AnyValue]
 
     # invalid definitions must fail before corrupt feature records propagate
-    def __post_init__(SelfValue) -> None:
-        if SelfValue.Definition is not None and not isinstance(
-            SelfValue.Definition, FeatureDef
-        ):
+    def __post_init__(self) -> None:
+        if self.Definition is not None and not isinstance(self.Definition, FeatureDef):
             raise TypeError("feature definition must implement FeatureDefinition")

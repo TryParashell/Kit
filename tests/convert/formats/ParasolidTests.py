@@ -13,6 +13,7 @@ from hashlib import sha256 as ShaTwoFiveSix
 from pathlib import Path as PathValue
 import math as MathValue
 import struct as Struct
+from typing import Mapping, TypeAlias, cast as CastValue
 
 import pytest as Pytest
 
@@ -23,38 +24,38 @@ from convert.adapters.solidworks.container.Format import (
 )
 from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
 from convert.geometry.Parasolid import (
-    _ENTITY_MAGIC as EntityMagic,
-    _RecordTables as RecordTables,
-    _TopologyRecord as TopologyRecord,
-    _array_record_fields as ArrayRecordFields,
-    _curve_parameter_domain as CurveParameterDomain,
-    _curve_point_at_parameter as CurvePointAtParameter,
-    _linked_subset_order as LinkedSubsetOrder,
-    _nurbs_curve_point as NurbsCurvePoint,
-    _nurbs_surface_point as NurbsSurfacePoint,
-    _parasolid_header as ParasolidHeader,
-    _parse_b_curve_record as ParseItemBCurveRecord,
-    _parse_chart_record as ParseChartRecord,
-    _parse_coedge as ParseCoedge,
-    _parse_intersection_data_record as ParseIDR,
-    _parse_intersection_record as ParseIntersectionRecord,
-    _parse_nurbs_curve_record as ParseNurbsCurveRecord,
-    _parse_nurbs_surface_record as ParseNurbsSurfaceRecord,
-    _parse_trimmed_curve_record as ParseTrimmedCurveRecord,
-    _record_start as RecordStart,
-    _resolve_trimmed_curve as ResolveTrimmedCurve,
-    _scan_partition_records as ScanPartitionRecords,
-    _solidworks_face_data as SolidworksFaceData,
-    _u16 as UOneSix,
-    _walk_coedge_ring as WalkCoedgeRing,
-    _write_nurbs_curve as WriteNurbsCurve,
-    _write_nurbs_surface as WriteNurbsSurface,
-    _xmt as XmtValue,
-    decode_brep_model as DecodeBrepModel,
-    decode_partition_stream as DecodePartitionStream,
-    encode_blank_partition_stream as EncodeBPS,
-    encode_brep_model as EncodeBrepModel,
-    encode_partition_stream as EncodePartitionStream,
+    ArrayFields as ArrayRecordFields,
+    CurveParamRange as CurveParameterDomain,
+    CurvePoint as CurvePointAtParameter,
+    DecodeBrepMut as DecodeBrepModel,
+    DecodePartMut as DecodePartitionStream,
+    EncodeBlankApi as EncodeBPS,
+    EncodeBrepMut as EncodeBrepModel,
+    EncodePartMut as EncodePartitionStream,
+    KEntityMagic as EntityMagic,
+    LinkedOrder as LinkedSubsetOrder,
+    NurbsCurvePoint,
+    NurbsSurfPoint as NurbsSurfacePoint,
+    ParaHeaderData as ParasolidHeader,
+    ParseBCurve as ParseItemBCurveRecord,
+    ParseChart as ParseChartRecord,
+    ParseCoedge,
+    ParseInterData as ParseIDR,
+    ParseInterRec as ParseIntersectionRecord,
+    ParseNurbsCurve as ParseNurbsCurveRecord,
+    ParseNurbsSurf as ParseNurbsSurfaceRecord,
+    ParseTrimCurve as ParseTrimmedCurveRecord,
+    RecordStart,
+    RecordTables,
+    ReadShort as UOneSix,
+    ResolveTrimCurv as ResolveTrimmedCurve,
+    ScanPartRecords as ScanPartitionRecords,
+    SolidFaceData as SolidworksFaceData,
+    TopologyRecord,
+    WalkCoedgeRing,
+    WriteNurbsMut as WriteNurbsCurve,
+    WriteNurbsSMut as WriteNurbsSurface,
+    XmtData as XmtValue,
 )
 from interchange import (
     CircleCurve,
@@ -66,7 +67,16 @@ from interchange import (
     Vector3 as VectorThree,
     frozen_mapping as FrozenMapping,
 )
+from interchange.brep.curves.BrepCurves import BrepEntity
+from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.topology.BrepTopology import BrepEdge, BrepVertex
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
+
+# fin descriptors need one concrete signature across topology order assertions
+KFinDescriptor: TypeAlias = tuple[str, str]
+
+# face metadata needs one stable typed comparison contract across round trips
+KFaceOrders: TypeAlias = dict[int, tuple[int, int, int]]
 
 # this binding exists because shared behavior needs one stable value
 KRootValue = PathValue(__file__).parents[3]
@@ -217,7 +227,7 @@ def Coordinates(Value: VectorThree) -> tuple[float, float, float]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SolidT():
+def SolidT() -> BrepModel:
     Model = DecodeAsciiBrep(
         TriangleMeshBrep(
             (
@@ -422,8 +432,50 @@ def TestLSOFLWRO() -> None:
     assert LinkedSubsetOrder((30, 10), Links) == (10, 30)
 
 
+# metadata integers need validation before binary order assertions consume them
+def AttributeInt(EntityValue: BrepEntity, NameValue: str) -> int:
+    ValueData = EntityValue.attributes.get(NameValue)
+    if type(ValueData) is not int:
+        raise AssertionError(f"{NameValue} must contain an integer")
+    return ValueData
+
+
+# metadata byte records need validation before parser helpers consume them
+def AttributeBytes(EntityValue: BrepEntity, NameValue: str) -> bytes:
+    ValueData = EntityValue.attributes.get(NameValue)
+    if not isinstance(ValueData, bytes):
+        raise AssertionError(f"{NameValue} must contain bytes")
+    return ValueData
+
+
+# fin metadata needs validation before identifiers are mapped to topology positions
+def FinDescriptor(ValueData: object) -> KFinDescriptor:
+    if not isinstance(ValueData, tuple):
+        raise AssertionError("fin descriptor must be a tuple")
+    Descriptor = CastValue(tuple[object, ...], ValueData)
+    if len(Descriptor) != 2:
+        raise AssertionError("fin descriptor must contain two values")
+    KindValue, Identifier = Descriptor
+    if not isinstance(KindValue, str) or not isinstance(Identifier, str):
+        raise AssertionError("fin descriptor values must be strings")
+    return KindValue, Identifier
+
+
+# vertex fin metadata needs validation before stable signatures are compared
+def FinDescriptors(
+    EntityValue: BrepEntity, NameValue: str
+) -> tuple[KFinDescriptor, ...]:
+    ValueData = EntityValue.attributes.get(NameValue)
+    if not isinstance(ValueData, tuple):
+        raise AssertionError(f"{NameValue} must contain a tuple")
+    Descriptors = CastValue(tuple[object, ...], ValueData)
+    return tuple(FinDescriptor(ItemValue) for ItemValue in Descriptors)
+
+
 # this helper assigns deliberately reversed topology and face order metadata
-def BuildOrdered(Decoded):
+def BuildOrdered(
+    Decoded: BrepModel,
+) -> tuple[BrepModel, KFaceOrders, int, int]:
     VertexCount = len(Decoded.vertices)
     FaceCount = len(Decoded.faces)
     Vertices = tuple(
@@ -452,11 +504,11 @@ def BuildOrdered(Decoded):
         )
         for Position, FaceValue in enumerate(Decoded.faces)
     )
-    ExpectedFaceOrders = {
-        FaceValue.attributes["solidworks.unchanged_id"]: (
-            FaceValue.attributes["solidworks.unchanged_order"],
-            FaceValue.attributes["solidworks.downstream_order"],
-            FaceValue.attributes["solidworks.colour_order"],
+    ExpectedFaceOrders: KFaceOrders = {
+        AttributeInt(FaceValue, "solidworks.unchanged_id"): (
+            AttributeInt(FaceValue, "solidworks.unchanged_order"),
+            AttributeInt(FaceValue, "solidworks.downstream_order"),
+            AttributeInt(FaceValue, "solidworks.colour_order"),
         )
         for FaceValue in Faces
     }
@@ -469,7 +521,7 @@ def BuildOrdered(Decoded):
 
 
 # this helper serializes and restores the reordered model for inspection
-def EncodeOrdered(Changed):
+def EncodeOrdered(Changed: BrepModel) -> tuple[bytes, RecordTables, BrepModel]:
     Encoded = EncodeBrepModel(
         Changed,
         partition=False,
@@ -486,7 +538,12 @@ def EncodeOrdered(Changed):
 
 
 # this helper normalizes fin identifiers into stable positional signatures
-def NormalizedFins(Value):
+def NormalizedFins(
+    Value: BrepModel,
+) -> tuple[
+    tuple[tuple[tuple[str, int], ...], ...],
+    tuple[tuple[str, int], ...],
+]:
     CoedgePositions = {
         Coedge.id: Position for Position, Coedge in enumerate(Value.coedges)
     }
@@ -495,7 +552,7 @@ def NormalizedFins(Value):
     }
 
     # this helper maps a typed identifier to its stable collection position
-    def Normalize(Descriptor):
+    def Normalize(Descriptor: KFinDescriptor) -> tuple[str, int]:
         KindValue, Identifier = Descriptor
         return (
             (KindValue, CoedgePositions[Identifier])
@@ -507,12 +564,12 @@ def NormalizedFins(Value):
         tuple(
             tuple(
                 Normalize(ItemValue)
-                for ItemValue in VertexA.attributes["parasolid.vertex_fins"]
+                for ItemValue in FinDescriptors(VertexA, "parasolid.vertex_fins")
             )
             for VertexA in Value.vertices
         ),
         tuple(
-            Normalize(EdgeValue.attributes["parasolid.first_fin"])
+            Normalize(FinDescriptor(EdgeValue.attributes["parasolid.first_fin"]))
             for EdgeValue in Value.edges
         ),
     )
@@ -522,7 +579,7 @@ def NormalizedFins(Value):
 def RecordChain(
     HeadValue: int, Records: dict[int, TopologyRecord], LinkValue: int
 ) -> tuple[int, ...]:
-    Result = []
+    Result: list[int] = []
     Attribute = HeadValue
     while Attribute > 1:
         assert Attribute not in Result
@@ -532,7 +589,12 @@ def RecordChain(
 
 
 # this helper verifies point vertex and edge ordering in topology chains
-def AssertTopoOrder(BodyValue, TablesA, Restored, VertexCount) -> None:
+def AssertTopoOrder(
+    BodyValue: bytes,
+    TablesA: RecordTables,
+    Restored: BrepModel,
+    VertexCount: int,
+) -> None:
     VertexByAttribute = {
         int(VertexA.id.rsplit(":", 1)[1]): VertexA for VertexA in Restored.vertices
     }
@@ -540,11 +602,15 @@ def AssertTopoOrder(BodyValue, TablesA, Restored, VertexCount) -> None:
         int(EdgeValue.id.rsplit(":", 1)[1]): EdgeValue for EdgeValue in Restored.edges
     }
     BodyOffset = BodyValue.index(b"\x00\x0c")
-    PointChain = RecordChain(UOneSix(BodyValue, BodyOffset + 53), TablesA.points, 2)
-    VertexChain = RecordChain(
-        UOneSix(BodyValue, BodyOffset + 59), TablesA.vertex_uses, 3
-    )
-    EdgeChain = RecordChain(UOneSix(BodyValue, BodyOffset + 57), TablesA.edge_uses, 2)
+    PointHead = UOneSix(BodyValue, BodyOffset + 53)
+    VertexHead = UOneSix(BodyValue, BodyOffset + 59)
+    EdgeHead = UOneSix(BodyValue, BodyOffset + 57)
+    assert PointHead is not None
+    assert VertexHead is not None
+    assert EdgeHead is not None
+    PointChain = RecordChain(PointHead, TablesA.points, 2)
+    VertexChain = RecordChain(VertexHead, TablesA.vertex_uses, 3)
+    EdgeChain = RecordChain(EdgeHead, TablesA.edge_uses, 2)
     assert [
         VertexByAttribute[TablesA.points[Attribute].references[1]].attributes[
             "parasolid.point_order"
@@ -552,18 +618,18 @@ def AssertTopoOrder(BodyValue, TablesA, Restored, VertexCount) -> None:
         for Attribute in PointChain
     ] == list(range(VertexCount))
     assert [
-        VertexByAttribute[Attribute].attributes["parasolid.vertex_order"]
+        AttributeInt(VertexByAttribute[Attribute], "parasolid.vertex_order")
         for Attribute in VertexChain
     ] == list(range(VertexCount))
     assert [
-        EdgeByAttribute[Attribute].attributes["parasolid.edge_order"]
+        AttributeInt(EdgeByAttribute[Attribute], "parasolid.edge_order")
         for Attribute in EdgeChain
     ] == list(range(len(Restored.edges)))
 
 
 # this helper follows a geometry link chain while rejecting cycles
 def LinkChain(HeadValue: int, Links: dict[int, tuple[int | None]]) -> tuple[int, ...]:
-    Result = []
+    Result: list[int] = []
     Attribute = HeadValue
     while Attribute > 1:
         assert Attribute not in Result
@@ -575,7 +641,7 @@ def LinkChain(HeadValue: int, Links: dict[int, tuple[int | None]]) -> tuple[int,
 
 
 # this helper verifies curve and surface ordering in geometry chains
-def AssertGeomOrder(BodyValue, Restored) -> None:
+def AssertGeomOrder(BodyValue: bytes, Restored: BrepModel) -> None:
     CurveByAttribute = {
         int(Curve.id.rsplit(":", 1)[1]): Curve for Curve in Restored.curves
     }
@@ -588,30 +654,35 @@ def AssertGeomOrder(BodyValue, Restored) -> None:
     assert CurveHead is not None
     assert SurfaceHead is not None
     CurveLinks = {
-        Attribute: (UOneSix(Curve.attributes["carrier_record"], 12),)
+        Attribute: (UOneSix(AttributeBytes(Curve, "carrier_record"), 12),)
         for Attribute, Curve in CurveByAttribute.items()
     }
     SurfaceLinks = {
-        Attribute: (UOneSix(Surface.attributes["carrier_record"], 12),)
+        Attribute: (UOneSix(AttributeBytes(Surface, "carrier_record"), 12),)
         for Attribute, Surface in SurfaceByAttribute.items()
     }
     assert [
-        CurveByAttribute[Attribute].attributes["parasolid.curve_order"]
+        AttributeInt(CurveByAttribute[Attribute], "parasolid.curve_order")
         for Attribute in LinkChain(CurveHead, CurveLinks)
     ] == list(range(len(Restored.curves)))
     assert [
-        SurfaceByAttribute[Attribute].attributes["parasolid.surface_order"]
+        AttributeInt(SurfaceByAttribute[Attribute], "parasolid.surface_order")
         for Attribute in LinkChain(SurfaceHead, SurfaceLinks)
     ] == list(range(len(Restored.surfaces)))
 
 
 # this helper verifies native face order metadata and encoded order tables
-def AssertFaceOrder(BodyValue, Restored, ExpectedFaceOrders, FaceCount) -> None:
-    ActualFaceOrders = {
-        FaceValue.attributes["solidworks.unchanged_id"]: (
-            FaceValue.attributes["solidworks.unchanged_order"],
-            FaceValue.attributes["solidworks.downstream_order"],
-            FaceValue.attributes["solidworks.colour_order"],
+def AssertFaceOrder(
+    BodyValue: bytes,
+    Restored: BrepModel,
+    ExpectedFaceOrders: KFaceOrders,
+    FaceCount: int,
+) -> None:
+    ActualFaceOrders: KFaceOrders = {
+        AttributeInt(FaceValue, "solidworks.unchanged_id"): (
+            AttributeInt(FaceValue, "solidworks.unchanged_order"),
+            AttributeInt(FaceValue, "solidworks.downstream_order"),
+            AttributeInt(FaceValue, "solidworks.colour_order"),
         )
         for FaceValue in Restored.faces
     }
@@ -661,7 +732,7 @@ def TestVONFRDTRD() -> None:
         for FaceValue in TablesA.bridges.values():
             LoopAttribute = FaceValue.references[2]
             FirstAttribute = TablesA.loops[LoopAttribute].references[1]
-            Expected = []
+            Expected: list[int] = []
             Attribute = FirstAttribute
             while Attribute not in Expected:
                 Expected.append(Attribute)
@@ -806,18 +877,18 @@ def TestCIVFADFC(PathValueA: PathValue, Expected: int) -> None:
 # this definition exists because focused behavior needs one stable owner
 def TestCIVFRTET() -> None:
     Attribute = 7
-    References = (1, 8, Attribute, Attribute, 9, 1, 1, 1, 1)
+    References: tuple[int, ...] = (1, 8, Attribute, Attribute, 9, 1, 1, 1, 1)
     Encoded = b"\x00\x11" + Struct.pack(">H9HB", Attribute, *References, 0x3F)
     Decoded = ParseCoedge(Encoded, 0)
     assert Decoded is not None
     assert Decoded.isolated is True
     for Index in (0, 5, 6, 7, 8):
-        Broken = list(References)
+        Broken: list[int] = list(References)
         Broken[Index] = 2
         Candidate = b"\x00\x11" + Struct.pack(">H9HB", Attribute, *Broken, 0x3F)
         assert ParseCoedge(Candidate, 0) is None
     for Index in (2, 3):
-        Broken = list(References)
+        Broken = list[int](References)
         Broken[Index] = Attribute + 1
         Candidate = b"\x00\x11" + Struct.pack(">H9HB", Attribute, *Broken, 0x3F)
         assert ParseCoedge(Candidate, 0) is None
@@ -877,20 +948,21 @@ def TestIRCDADF() -> None:
     assert Header is not None
     BodyValue = Payload[Header.body_offset :]
     Direct = tuple(
-        Record
+        DirectRecord
         for Offset in range(len(BodyValue) - 1)
         if BodyValue[Offset : Offset + 2] == b"\x00\x26"
-        and (Record := ParseIntersectionRecord(BodyValue, Offset)) is not None
+        and (DirectRecord := ParseIntersectionRecord(BodyValue, Offset)) is not None
     )
     Descriptor = tuple(
-        Record
+        DescriptorRecord
         for Offset, Value in enumerate(BodyValue)
-        if Value == 0x5A and (Record := ParseIDR(BodyValue, Offset)) is not None
+        if Value == 0x5A
+        and (DescriptorRecord := ParseIDR(BodyValue, Offset)) is not None
     )
     assert Direct
     assert Descriptor
     assert not set(Record.attribute for Record in Direct).intersection(
-        Record.attribute for Record in Descriptor
+        DescriptorRecord.attribute for DescriptorRecord in Descriptor
     )
 
 
@@ -968,7 +1040,11 @@ def AssertCurveData(Curve: NurbsCurve) -> None:
 
 
 # this helper verifies a rational curve meets its referenced edge vertices
-def AssertCurveEnds(Curve: NurbsCurve, EdgeValue, Vertices) -> None:
+def AssertCurveEnds(
+    Curve: NurbsCurve,
+    EdgeValue: BrepEdge,
+    Vertices: Mapping[str, BrepVertex],
+) -> None:
     Start = NurbsCurvePoint(Curve, EdgeValue.start_parameter)
     EndValue = NurbsCurvePoint(Curve, EdgeValue.end_parameter)
     assert Start is not None

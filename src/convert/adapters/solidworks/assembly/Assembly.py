@@ -175,52 +175,38 @@ KMateLossReasons = (
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["code"] = "int | None"
-    __annotations__["api_name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["class_names"] = "tuple[str, ...]"
-    locals()["class_names"] = ()
-    __annotations__["name_prefixes"] = "tuple[str, ...]"
-    locals()["name_prefixes"] = ()
-    __annotations__["value_semantic"] = "str"
-    locals()["value_semantic"] = ""
-    __annotations__["neutral_kind"] = "str"
-    locals()["neutral_kind"] = ""
+    code: int | None
+    api_name: str
+    kind: str
+    class_names: tuple[str, ...] = ()
+    name_prefixes: tuple[str, ...] = ()
+    value_semantic: str = ""
+    neutral_kind: str = ""
 
 
 # this definition exists because focused behavior needs one stable owner
 class NativeMateCode(IntEnum):
-    KAnyValue = 0
-    KAligned = 1
-    KAntiAligned = 2
-    KClosest = 3
-
-
-setattr(NativeMateCode, "ANY", NativeMateCode.KAnyValue)
-setattr(NativeMateCode, "ALIGNED", NativeMateCode.KAligned)
-setattr(NativeMateCode, "ANTI_ALIGNED", NativeMateCode.KAntiAligned)
-setattr(NativeMateCode, "CLOSEST", NativeMateCode.KClosest)
+    ANY = 0
+    ALIGNED = 1
+    ANTI_ALIGNED = 2
+    CLOSEST = 3
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["code"] = "NativeMateAlignmentCode"
-    __annotations__["api_name"] = "str"
-    __annotations__["kind"] = "str"
+    code: NativeMateCode
+    api_name: str
+    kind: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateTypeA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["code"] = "int | None"
-    __annotations__["api_name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["markers"] = "tuple[str, ...]"
-    locals()["markers"] = ()
+    code: int | None
+    api_name: str
+    kind: str
+    markers: tuple[str, ...] = ()
 
 
 # this binding exists because shared behavior needs one stable value
@@ -347,121 +333,111 @@ KNativeMateEntityMarkers = tuple(
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsmFile:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["document_type"] = "str"
-    __annotations__["creation_time"] = "int"
-    __annotations__["source_path"] = "str"
+    object_id: int
+    document_type: str
+    creation_time: int
+    source_path: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsmA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["document_type"] = "str"
-    __annotations__["file_id"] = "int"
-    __annotations__["source_path"] = "str"
-    __annotations__["configuration_name"] = "str"
-    __annotations__["configuration_id"] = "int"
-    __annotations__["alternate_configuration_name"] = "str"
-    __annotations__["last_modified_stamp"] = "int"
-    __annotations__["configuration_flags"] = "int"
-    __annotations__["bounding_box_m"] = (
-        "tuple[float, float, float, float, float, float] | None"
-    )
-    __annotations__["child_occurrence_ids"] = "tuple[int, ...]"
-    __annotations__["attributes"] = "tuple[tuple[str, str], ...]"
+    object_id: int
+    name: str
+    document_type: str
+    file_id: int
+    source_path: str
+    configuration_name: str
+    configuration_id: int
+    alternate_configuration_name: str
+    last_modified_stamp: int
+    configuration_flags: int
+    bounding_box_m: tuple[float, float, float, float, float, float] | None
+    child_occurrence_ids: tuple[int, ...]
+    attributes: tuple[tuple[str, str], ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsmItem:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["feature_id"] = "int"
-    __annotations__["owner_definition_id"] = "int"
-    __annotations__["definition_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["reference_number"] = "int"
-    __annotations__["component_reference"] = "str"
-    __annotations__["configuration_name"] = "str"
-    __annotations__["configuration_id"] = "int"
-    __annotations__["transform"] = "tuple[float, ...]"
-    __annotations__["transform_stamp"] = "int"
-    __annotations__["suppressed"] = "bool"
-    __annotations__["hidden"] = "bool"
-    __annotations__["flexible"] = "bool"
-    __annotations__["virtual"] = "bool"
-    __annotations__["exclude_from_bom"] = "bool"
-    __annotations__["zone"] = "bool"
-    __annotations__["display_mode"] = "int"
-    __annotations__["display_quality"] = "int"
-    __annotations__["edges_in_shaded_mode"] = "bool"
-    __annotations__["order"] = "int"
-    __annotations__["attributes"] = "tuple[tuple[str, str], ...]"
+    object_id: int
+    feature_id: int
+    owner_definition_id: int
+    definition_id: int
+    name: str
+    reference_number: int
+    component_reference: str
+    configuration_name: str
+    configuration_id: int
+    transform: tuple[float, ...]
+    transform_stamp: int
+    suppressed: bool
+    hidden: bool
+    flexible: bool
+    virtual: bool
+    exclude_from_bom: bool
+    zone: bool
+    display_mode: int
+    display_quality: int
+    edges_in_shaded_mode: bool
+    order: int
+    attributes: tuple[tuple[str, str], ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsmConfig:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["configuration_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["reference"] = "str"
-    __annotations__["model_id"] = "int"
-    __annotations__["most_recent"] = "bool"
-    __annotations__["needs_update"] = "bool"
-    __annotations__["attributes"] = "tuple[tuple[str, str], ...]"
+    object_id: int
+    configuration_id: int
+    name: str
+    reference: str
+    model_id: int
+    most_recent: bool
+    needs_update: bool
+    attributes: tuple[tuple[str, str], ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeDisplay:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["configuration_id"] = "int | None"
-    __annotations__["attributes"] = "tuple[tuple[str, str], ...]"
+    object_id: int
+    name: str
+    configuration_id: int | None
+    attributes: tuple[tuple[str, str], ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateC:
-    locals().setdefault("__annotations__", {})
-    __annotations__["component_path"] = "str"
-    __annotations__["persistent_references"] = "tuple[str, ...]"
-    __annotations__["source_path"] = "str"
-    __annotations__["configuration_name"] = "str"
+    component_path: str
+    persistent_references: tuple[str, ...]
+    source_path: str
+    configuration_name: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateB:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["value"] = "float"
-    __annotations__["value_offset"] = "int"
+    name: str
+    value: float
+    value_offset: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMate:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["owner_definition_id"] = "int"
-    __annotations__["order"] = "int"
-    __annotations__["entities"] = "tuple[NativeMateEntity, ...]"
-    __annotations__["record_offset"] = "int"
-    __annotations__["record_length"] = "int"
-    __annotations__["class_name"] = "str"
-    __annotations__["class_token"] = "int | None"
-    __annotations__["serialized_strings"] = "tuple[str, ...]"
-    __annotations__["alignment_code"] = "int | None"
-    __annotations__["dimensions"] = "tuple[NativeMateDimension, ...]"
+    name: str
+    kind: str
+    owner_definition_id: int
+    order: int
+    entities: tuple[NativeMateC, ...]
+    record_offset: int
+    record_length: int
+    class_name: str
+    class_token: int | None
+    serialized_strings: tuple[str, ...]
+    alignment_code: int | None
+    dimensions: tuple[NativeMateB, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -488,54 +464,50 @@ class NativeMate:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateList:
-    locals().setdefault("__annotations__", {})
-    __annotations__["native_id"] = "int"
-    __annotations__["declared_count"] = "int"
-    __annotations__["owner_definition_id"] = "int"
-    __annotations__["mates"] = "tuple[NativeMate, ...]"
-    __annotations__["stream"] = "str"
+    native_id: int
+    declared_count: int
+    owner_definition_id: int
+    mates: tuple[NativeMate, ...]
+    stream: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class MateRecord:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["name_end"] = "int"
-    __annotations__["start"] = "int"
-    __annotations__["end"] = "int"
-    __annotations__["class_name"] = "str"
-    __annotations__["class_token"] = "int | None"
-    __annotations__["strings"] = "tuple[str, ...]"
-    __annotations__["alignment_code"] = "int | None"
-    __annotations__["dimensions"] = "tuple[NativeMateDimension, ...]"
+    name: str
+    name_end: int
+    start: int
+    end: int
+    class_name: str
+    class_token: int | None
+    strings: tuple[str, ...]
+    alignment_code: int | None
+    dimensions: tuple[NativeMateB, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeItemPath:
-    locals().setdefault("__annotations__", {})
-    __annotations__["occurrence_id"] = "int"
-    __annotations__["definition_id"] = "int"
-    __annotations__["path"] = "str"
-    __annotations__["depth"] = "int"
+    occurrence_id: int
+    definition_id: int
+    path: str
+    depth: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsm:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["root_definition_id"] = "int"
-    __annotations__["files"] = "tuple[NativeAssemblyFile, ...]"
-    __annotations__["definitions"] = "tuple[NativeAssemblyDefinition, ...]"
-    __annotations__["occurrences"] = "tuple[NativeAssemblyOccurrence, ...]"
-    __annotations__["configurations"] = "tuple[NativeAssemblyConfiguration, ...]"
-    __annotations__["display_states"] = "tuple[NativeDisplayState, ...]"
-    __annotations__["occurrence_paths"] = "tuple[NativeOccurrencePath, ...]"
-    __annotations__["mate_lists"] = "tuple[NativeMateList, ...]"
-    __annotations__["display_components"] = "tuple[NativeDisplayComponent, ...]"
-    __annotations__["application_version"] = "int"
+    name: str
+    root_definition_id: int
+    files: tuple[NativeAsmFile, ...]
+    definitions: tuple[NativeAsmA, ...]
+    occurrences: tuple[NativeAsmItem, ...]
+    configurations: tuple[NativeAsmConfig, ...]
+    display_states: tuple[NativeDisplay, ...]
+    occurrence_paths: tuple[NativeItemPath, ...]
+    mate_lists: tuple[NativeMateList, ...]
+    display_components: tuple[NativeDisplayComponent, ...]
+    application_version: int
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -546,33 +518,33 @@ def EmptyTupleMap() -> Mapping[str, tuple[str, ...]]:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateD:
-    locals().setdefault("__annotations__", {})
-    __annotations__["streams"] = "Mapping[str, bytes]"
-    __annotations__["complete"] = "bool"
-    __annotations__["encoded_mate_ids"] = "tuple[str, ...]"
-    __annotations__["unsupported_mate_ids"] = "tuple[str, ...]"
-    __annotations__["losses"] = "Mapping[str, tuple[str, ...]]"
-    __annotations__["unsupported_reasons"] = "Mapping[str, tuple[str, ...]]"
-    locals()["unsupported_reasons"] = Field(default_factory=EmptyTupleMap)
+    streams: Mapping[str, bytes]
+    complete: bool
+    encoded_mate_ids: tuple[str, ...]
+    unsupported_mate_ids: tuple[str, ...]
+    losses: Mapping[str, tuple[str, ...]]
+    unsupported_reasons: Mapping[str, tuple[str, ...]] = Field(
+        default_factory=EmptyTupleMap
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsmB:
-    locals().setdefault("__annotations__", {})
-    __annotations__["component_tree"] = "bytes"
-    __annotations__["mate_streams"] = "Mapping[str, bytes]"
-    __annotations__["definition_ids"] = "Mapping[str, int]"
-    __annotations__["occurrence_ids"] = "Mapping[str, int]"
-    __annotations__["structure_complete"] = "bool"
-    __annotations__["mates_complete"] = "bool"
-    __annotations__["unsupported_mate_ids"] = "tuple[str, ...]"
-    __annotations__["generated_mate_ids"] = "tuple[str, ...]"
-    locals()["generated_mate_ids"] = ()
-    __annotations__["generated_mate_losses"] = "Mapping[str, tuple[str, ...]]"
-    locals()["generated_mate_losses"] = Field(default_factory=EmptyTupleMap)
-    __annotations__["unsupported_mate_reasons"] = "Mapping[str, tuple[str, ...]]"
-    locals()["unsupported_mate_reasons"] = Field(default_factory=EmptyTupleMap)
+    component_tree: bytes
+    mate_streams: Mapping[str, bytes]
+    definition_ids: Mapping[str, int]
+    occurrence_ids: Mapping[str, int]
+    structure_complete: bool
+    mates_complete: bool
+    unsupported_mate_ids: tuple[str, ...]
+    generated_mate_ids: tuple[str, ...] = ()
+    generated_mate_losses: Mapping[str, tuple[str, ...]] = Field(
+        default_factory=EmptyTupleMap
+    )
+    unsupported_mate_reasons: Mapping[str, tuple[str, ...]] = Field(
+        default_factory=EmptyTupleMap
+    )
 
 
 # assembly encoding needs one immutable plan so xml phases share consistent identifiers
@@ -2639,478 +2611,478 @@ def IsYesAction(Value: str | None) -> bool:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["AssemblyData"] = AsmData
+AssemblyData = AsmData
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_MARKER"] = ClassMarker
+CLASS_MARKER = ClassMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["COMPONENT_TREE_STREAM"] = ComponentTreeStream
+COMPONENT_TREE_STREAM = ComponentTreeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["Configuration"] = Config
+Configuration = Config
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIMENSION_SCALAR_HEADERS"] = DimensionScalarHeaders
+DIMENSION_SCALAR_HEADERS = DimensionScalarHeaders
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_LISTS_STREAM"] = DisplayListsStream
+DISPLAY_LISTS_STREAM = DisplayListsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
+ET = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_NAME"] = MatesStreamName
+MATES_STREAM_NAME = MatesStreamName
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_SUFFIX"] = MatesStreamSuffix
+MATES_STREAM_SUFFIX = MatesStreamSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_ADVISORY_LOSS_REASONS"] = KMateAdvisoryLossReasons
+MATE_ADVISORY_LOSS_REASONS = KMateAdvisoryLossReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_BLOCKING_LOSS_REASONS"] = KMateBlockingLossReasons
+MATE_BLOCKING_LOSS_REASONS = KMateBlockingLossReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ALIGNMENT"] = KMateLossAlignment
+MATE_LOSS_ALIGNMENT = KMateLossAlignment
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ENTITY_COMPONENT_PATH"] = KMateLossEntityComponent
+MATE_LOSS_ENTITY_COMPONENT_PATH = KMateLossEntityComponent
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ENTITY_FRAME"] = KMateLossEntityFrame
+MATE_LOSS_ENTITY_FRAME = KMateLossEntityFrame
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ENTITY_MISSING"] = KMateLossEntityMissing
+MATE_LOSS_ENTITY_MISSING = KMateLossEntityMissing
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ENTITY_RADIUS"] = KMateLossEntityRadius
+MATE_LOSS_ENTITY_RADIUS = KMateLossEntityRadius
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ENTITY_REFERENCE"] = KMateLossEntityRef
+MATE_LOSS_ENTITY_REFERENCE = KMateLossEntityRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ENTITY_SELECTION"] = KMateLossEntitySelection
+MATE_LOSS_ENTITY_SELECTION = KMateLossEntitySelection
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_EXPRESSION"] = KMateLossExpression
+MATE_LOSS_EXPRESSION = KMateLossExpression
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_GROUP_MEMBERSHIP"] = KMateLossGroupMembership
+MATE_LOSS_GROUP_MEMBERSHIP = KMateLossGroupMembership
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_GROUP_NESTING"] = KMateLossGroupNesting
+MATE_LOSS_GROUP_NESTING = KMateLossGroupNesting
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_KIND"] = KMateLossKind
+MATE_LOSS_KIND = KMateLossKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_LANE_CAPACITY"] = KMateLossLaneCapacity
+MATE_LOSS_LANE_CAPACITY = KMateLossLaneCapacity
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_NAME"] = KMateLossName
+MATE_LOSS_NAME = KMateLossName
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_NOT_DRIVING"] = KMateLossNotDriving
+MATE_LOSS_NOT_DRIVING = KMateLossNotDriving
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_ORPHAN_ENTITY"] = KMateLossOrphanEntity
+MATE_LOSS_ORPHAN_ENTITY = KMateLossOrphanEntity
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_REASONS"] = KMateLossReasons
+MATE_LOSS_REASONS = KMateLossReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_RECORD_VERIFICATION"] = KMateLossRecord
+MATE_LOSS_RECORD_VERIFICATION = KMateLossRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_SUPPRESSED"] = KMateLossSuppressed
+MATE_LOSS_SUPPRESSED = KMateLossSuppressed
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_VALUE"] = KMateLossValue
+MATE_LOSS_VALUE = KMateLossValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_LOSS_VALUE_MISSING"] = KMateLossValueMissing
+MATE_LOSS_VALUE_MISSING = KMateLossValueMissing
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_REJECTION_REASONS"] = KMateRejectionReasons
+MATE_REJECTION_REASONS = KMateRejectionReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_VALUE_SEMANTICS"] = KMateValueSemantics
+MATE_VALUE_SEMANTICS = KMateValueSemantics
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateConstraint"] = MateRule
+MateConstraint = MateRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["Matrix4"] = MatrixFour
+Matrix4 = MatrixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ALIGNMENTS"] = KNativeMateAlignments
+NATIVE_MATE_ALIGNMENTS = KNativeMateAlignments
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ALIGNMENT_BY_CODE"] = KNativeMateAlignmentByCoA
+NATIVE_MATE_ALIGNMENT_BY_CODE = KNativeMateAlignmentByCoA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_GEOMETRY_TYPES"] = KNativeMateEntityGeomTypA
+NATIVE_MATE_ENTITY_GEOMETRY_TYPES = KNativeMateEntityGeomTypA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_KIND_BY_MARKER"] = KNativeMateEntityKindBy
+NATIVE_MATE_ENTITY_KIND_BY_MARKER = KNativeMateEntityKindBy
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_MARKERS"] = KNativeMateEntityMarkers
+NATIVE_MATE_ENTITY_MARKERS = KNativeMateEntityMarkers
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_REFERENCE_TYPES"] = KNativeMateEntityRefTypes
+NATIVE_MATE_ENTITY_REFERENCE_TYPES = KNativeMateEntityRefTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_TYPE_EXTENSIONS"] = KNativeMateEntityType
+NATIVE_MATE_ENTITY_TYPE_EXTENSIONS = KNativeMateEntityType
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_TYPE_RECORDS"] = KNativeMateEntityTypeA
+NATIVE_MATE_ENTITY_TYPE_RECORDS = KNativeMateEntityTypeA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_NEUTRAL_KIND_ALIASES"] = KNativeMateNeutralKind
+NATIVE_MATE_NEUTRAL_KIND_ALIASES = KNativeMateNeutralKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_TYPES"] = KNativeMateTypes
+NATIVE_MATE_TYPES = KNativeMateTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_TYPE_EXTENSIONS"] = KNativeMateTypeExtensions
+NATIVE_MATE_TYPE_EXTENSIONS = KNativeMateTypeExtensions
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_TYPE_RECORDS"] = KNativeMateTypeRecords
+NATIVE_MATE_TYPE_RECORDS = KNativeMateTypeRecords
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssembly"] = NativeAsm
+NativeAssembly = NativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyConfiguration"] = NativeAsmConfig
+NativeAssemblyConfiguration = NativeAsmConfig
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyDefinition"] = NativeAsmA
+NativeAssemblyDefinition = NativeAsmA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyEncoding"] = NativeAsmB
+NativeAssemblyEncoding = NativeAsmB
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyFile"] = NativeAsmFile
+NativeAssemblyFile = NativeAsmFile
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyOccurrence"] = NativeAsmItem
+NativeAssemblyOccurrence = NativeAsmItem
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeDisplayState"] = NativeDisplay
+NativeDisplayState = NativeDisplay
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeMateAlignment"] = NativeMateA
+NativeMateAlignment = NativeMateA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeMateAlignmentCode"] = NativeMateCode
+NativeMateAlignmentCode = NativeMateCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeMateDimension"] = NativeMateB
+NativeMateDimension = NativeMateB
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeMateEntity"] = NativeMateC
+NativeMateEntity = NativeMateC
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeMateEntityType"] = NativeMateTypeA
+NativeMateEntityType = NativeMateTypeA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeMateStreamReport"] = NativeMateD
+NativeMateStreamReport = NativeMateD
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeOccurrencePath"] = NativeItemPath
+NativeOccurrencePath = NativeItemPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["SERIALIZED_STRING_MARKER"] = SerializedStringMarker
+SERIALIZED_STRING_MARKER = SerializedStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_ALIGNMENT_OFFSET"] = KMateAlignmentOffset
+_MATE_ALIGNMENT_OFFSET = KMateAlignmentOffset
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_ENTITY_COUNT_OFFSET"] = KMateEntityCountOffset
+_MATE_ENTITY_COUNT_OFFSET = KMateEntityCountOffset
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_GROUP_END_SUFFIX"] = KMateGroupEndSuffix
+_MATE_GROUP_END_SUFFIX = KMateGroupEndSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_KIND_BY_CLASS"] = KMateKindByClass
+_MATE_KIND_BY_CLASS = KMateKindByClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_KIND_BY_NAME"] = KMateKindByName
+_MATE_KIND_BY_NAME = KMateKindByName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_LIST_NATIVE_ID_FLAG"] = KMateListNativeIdFlag
+_MATE_LIST_NATIVE_ID_FLAG = KMateListNativeIdFlag
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_OBJECT_PREFIX"] = KMateObjectPrefix
+_MATE_OBJECT_PREFIX = KMateObjectPrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_RECORD_BODY_SIZE"] = KMateRecordBodySize
+_MATE_RECORD_BODY_SIZE = KMateRecordBodySize
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MateRecord"] = MateRecord
+_MateRecord = MateRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()["_WIDE_TEXT"] = KWideText
+_WIDE_TEXT = KWideText
 
 # this binding exists because shared behavior needs one stable value
-globals()["_allocate_object_ids"] = AllocateObject
+_allocate_object_ids = AllocateObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bounding_box"] = BoundingBox
+_bounding_box = BoundingBox
 
 # this binding exists because shared behavior needs one stable value
-globals()["_class_reference_token"] = ClassRefToken
+_class_reference_token = ClassRefToken
 
 # this binding exists because shared behavior needs one stable value
-globals()["_classifier_map"] = ClassifierMap
+_classifier_map = ClassifierMap
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_integer"] = ConfigInteger
+_configuration_integer = ConfigInteger
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configurations"] = Configurations
+_configurations = Configurations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decoded_group_members"] = DecodedGroup
+_decoded_group_members = DecodedGroup
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_document_type"] = DefinitionDoc
+_definition_document_type = DefinitionDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_file_key"] = DefinitionFile
+_definition_file_key = DefinitionFile
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_source_path"] = DefinitionPath
+_definition_source_path = DefinitionPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_supported"] = IsDefinition
+_definition_supported = IsDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["_display_states"] = DisplayStates
+_display_states = DisplayStates
 
 # this binding exists because shared behavior needs one stable value
-globals()["_elements"] = Elements
+_elements = Elements
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encode_group_records"] = EncodeGroup
+_encode_group_records = EncodeGroup
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encode_mate_record"] = EncodeMate
+_encode_mate_record = EncodeMate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encode_mate_streams"] = EncodeMateA
+_encode_mate_streams = EncodeMateA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encode_record_body"] = EncodeRecord
+_encode_record_body = EncodeRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()["_encoded_mate_matches"] = IsEncodedMate
+_encoded_mate_matches = IsEncodedMate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_expected_group_members"] = ExpectedGroup
+_expected_group_members = ExpectedGroup
 
 # this binding exists because shared behavior needs one stable value
-globals()["_file_stem"] = FileStem
+_file_stem = FileStem
 
 # this binding exists because shared behavior needs one stable value
-globals()["_files"] = Files
+_files = Files
 
 # this binding exists because shared behavior needs one stable value
-globals()["_float_tuple"] = FloatTuple
+_float_tuple = FloatTuple
 
 # this binding exists because shared behavior needs one stable value
-globals()["_inline_class_name"] = InlineClassName
+_inline_class_name = InlineClassName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_instance_base_name"] = InstanceBase
+_instance_base_name = InstanceBase
 
 # this binding exists because shared behavior needs one stable value
-globals()["_integer"] = Integer
+_integer = Integer
 
 # this binding exists because shared behavior needs one stable value
-globals()["_integer_attribute"] = IntegerAttr
+_integer_attribute = IntegerAttr
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_identity_matrix"] = IsIdentity
+_is_identity_matrix = IsIdentity
 
 # this binding exists because shared behavior needs one stable value
-globals()["_local_name"] = LocalName
+_local_name = LocalName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_alignment"] = MateAlignmentA
+_mate_alignment = MateAlignmentA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_alignment_code"] = MateAlignmentB
+_mate_alignment_code = MateAlignmentB
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_dimension_values"] = MateDimension
+_mate_dimension_values = MateDimension
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_dimensions"] = MateDimensions
+_mate_dimensions = MateDimensions
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_entities"] = MateEntities
+_mate_entities = MateEntities
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_entity_strings"] = MateEntityA
+_mate_entity_strings = MateEntityA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_kind"] = MateKind
+_mate_kind = MateKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_lists"] = MateLists
+_mate_lists = MateLists
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_owner_plan"] = MateOwnerPlaMut
+_mate_owner_plan = MateOwnerPlaMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_record_start"] = MateRecordStart
+_mate_record_start = MateRecordStart
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_stream_lanes"] = MateStreamLanes
+_mate_stream_lanes = MateStreamLanes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_stream_name"] = IsMateStreamNam
+_mate_stream_name = IsMateStreamNam
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_stream_structure"] = IsMateStream
+_mate_stream_structure = IsMateStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_token_kinds"] = MateTokenKinds
+_mate_token_kinds = MateTokenKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["_merged_reasons"] = MergedReasons
+_merged_reasons = MergedReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["_models"] = Models
+_models = Models
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_bounding_box"] = NativeBounding
+_native_bounding_box = NativeBounding
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_component_path"] = NativeComponent
+_native_component_path = NativeComponent
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_feature_id"] = NativeFeatureId
+_native_feature_id = NativeFeatureId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_group_class"] = NativeGroup
+_native_group_class = NativeGroup
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_mate_class"] = NativeMateClass
+_native_mate_class = NativeMateClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_matrix"] = NativeMatrix
+_native_matrix = NativeMatrix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_positive_integer"] = PositiveInteger
+_positive_integer = PositiveInteger
 
 # this binding exists because shared behavior needs one stable value
-globals()["_preferred_native_id"] = PreferredNative
+_preferred_native_id = PreferredNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_prefixed_strings"] = PrefixedStrings
+_prefixed_strings = PrefixedStrings
 
 # this binding exists because shared behavior needs one stable value
-globals()["_record_strings"] = RecordStrings
+_record_strings = RecordStrings
 
 # this binding exists because shared behavior needs one stable value
-globals()["_reference_number"] = RefNumber
+_reference_number = RefNumber
 
 # this binding exists because shared behavior needs one stable value
-globals()["_resolved_mate_dimensions"] = ResolvedMate
+_resolved_mate_dimensions = ResolvedMate
 
 # this binding exists because shared behavior needs one stable value
-globals()["_serialized_string"] = Serialized
+_serialized_string = Serialized
 
 # this binding exists because shared behavior needs one stable value
-globals()["_serialized_strings"] = SerializedA
+_serialized_strings = SerializedA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_utf16_string"] = UtfOneSixString
+_utf16_string = UtfOneSixString
 
 # this binding exists because shared behavior needs one stable value
-globals()["_verify_mate_stream"] = IsVerifyMateMut
+_verify_mate_stream = IsVerifyMateMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_with_reason"] = WithReason
+_with_reason = WithReason
 
 # this binding exists because shared behavior needs one stable value
-globals()["_xml_root"] = XmlRoot
+_xml_root = XmlRoot
 
 # this binding exists because shared behavior needs one stable value
-globals()["_yes"] = IsYesAction
+_yes = IsYesAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["_yes_text"] = YesText
+_yes_text = YesText
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_display_lists"] = DecodeDisplayLists
+decode_display_lists = DecodeDisplayLists
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_mate_list"] = DecodeMateList
+decode_mate_list = DecodeMateList
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_native_assembly"] = DecodeNativeAsm
+decode_native_assembly = DecodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_tessellation_faces"] = DecodeTessellationFaces
+decode_tessellation_faces = DecodeTessellationFaces
 
 # this binding exists because shared behavior needs one stable value
-globals()["dimension_scalar_value_offset"] = DimensionScalarValue
+dimension_scalar_value_offset = DimensionScalarValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_native_assembly"] = EncodeNativeAsm
+encode_native_assembly = EncodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["expand_occurrence_paths"] = ExpandItemPaths
+expand_occurrence_paths = ExpandItemPaths
 
 # this binding exists because shared behavior needs one stable value
-globals()["field"] = Field
+field = Field
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_cad_path"] = IsCadPath
+is_cad_path = IsCadPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_component_path"] = IsComponentPath
+is_component_path = IsComponentPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["Definition"] = IsDefinition
+Definition = IsDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodedMate"] = IsEncodedMate
+EncodedMate = IsEncodedMate
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateOwnerPlan"] = MateOwnerPlaMut
+MateOwnerPlan = MateOwnerPlaMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateStream"] = IsMateStream
+MateStream = IsMateStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateStreamName"] = IsMateStreamNam
+MateStreamName = IsMateStreamNam
 
 # this binding exists because shared behavior needs one stable value
-globals()["VerifyMate"] = IsVerifyMateMut
+VerifyMate = IsVerifyMateMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["YesAction"] = IsYesAction
+YesAction = IsYesAction

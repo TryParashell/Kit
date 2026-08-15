@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import replace as ReplaceValue
 from io import BytesIO
-from typing import Any as AnyValue
 
 import pytest as Pytest
 
@@ -20,7 +19,9 @@ from convert.adapters import (
     ApplicationUsabilityError,
     CarrierReason,
     CapabilityTransfer,
+    Destination,
     TransferMode,
+    WriteOptions,
     WriteResult,
 )
 from interchange import CadDocument, Capability, InferCaps
@@ -42,13 +43,13 @@ def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
 class MixedAdapter(ResultAdapter):
 
     # one native transfer plus writer gaps exercises mixed preservation without capability loss
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().WriteData(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(DocumentData, TargetData, OptionsData)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
@@ -62,9 +63,6 @@ class MixedAdapter(ResultAdapter):
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(MixedAdapter, "write", MixedAdapter.WriteData)
 
 
 # default policy rejects writer gaps even when resulting bytes are vendor loadable
@@ -92,13 +90,13 @@ def CheckWriterGap() -> None:
 class TargetAdapter(ResultAdapter):
 
     # native seed plus intrinsic carriers proves near losslessness accepts target limitations
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().WriteData(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(DocumentData, TargetData, OptionsData)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
@@ -113,9 +111,6 @@ class TargetAdapter(ResultAdapter):
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(TargetAdapter, "write", TargetAdapter.WriteData)
 
 
 # intrinsic target limitations remain acceptable when output is usable and reversible
@@ -151,13 +146,13 @@ def CheckTargetGap() -> None:
 class OnlyCarrier(ResultAdapter):
 
     # every intrinsic carrier proves native emptiness alone does not make usable output invalid
-    def WriteData(
-        SelfValue,
+    def write(
+        self,
         DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+        TargetData: Destination,
+        OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().WriteData(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(DocumentData, TargetData, OptionsData)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
@@ -172,9 +167,6 @@ class OnlyCarrier(ResultAdapter):
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(OnlyCarrier, "write", OnlyCarrier.WriteData)
 
 
 # usable carrier only documents remain near lossless when every carrier is intrinsic

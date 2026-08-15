@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import struct as StructLib
-from typing import Any as AnyValue
 
 from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
@@ -19,6 +18,11 @@ from convert.adapters.solidworks.container.Archive import (
     encode_string as EncodeString,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldOp,
+    FieldOverrides,
+    FieldValue,
+)
 
 
 # primitive format mapping preserves signed and floating field widths
@@ -37,56 +41,86 @@ KPrimitiveFormats = {
 }
 
 
+# reference arithmetic needs validated integers instead of unchecked recursive field values
+def RequireInt(FieldData: FieldValue, ErrorScope: str) -> int:
+    if not isinstance(FieldData, int):
+        raise SldprtFormatError(f"{ErrorScope} requires an integer field value")
+    return FieldData
+
+
 # archive field encoding centralizes the recovered structural value grammar
-def EncodeArchive(KindName: str, FieldValue: AnyValue) -> bytes | None:
+def EncodeArchive(KindName: str, FieldData: FieldValue) -> bytes | None:
     if KindName == "definition":
-        ClassName, SchemaCode = FieldValue
+        if not isinstance(FieldData, tuple) or len(FieldData) != 2:
+            raise SldprtFormatError("archive class definition value is invalid")
+        ClassName, SchemaCode = FieldData
+        if not isinstance(ClassName, str) or not isinstance(SchemaCode, int):
+            raise SldprtFormatError("archive class definition types are invalid")
         return EncodeClassDefinition(ClassName, SchemaCode)
     if KindName == "classref":
-        return EncodeClassReference(FieldValue)
+        if not isinstance(FieldData, int):
+            raise SldprtFormatError("archive class reference value is invalid")
+        return EncodeClassReference(FieldData)
     if KindName == "objectref":
-        return EncodeObjectReference(FieldValue)
+        if not isinstance(FieldData, int):
+            raise SldprtFormatError("archive object reference value is invalid")
+        return EncodeObjectReference(FieldData)
     if KindName == "null":
         return StructLib.pack("<H", 0)
     if KindName == "string":
-        return EncodeString(FieldValue)
+        if not isinstance(FieldData, str):
+            raise SldprtFormatError("archive string value is invalid")
+        return EncodeString(FieldData)
     if KindName == "stringlist":
-        return StructLib.pack("<H", len(FieldValue)) + b"".join(
-            EncodeString(ItemText) for ItemText in FieldValue
-        )
+        if not isinstance(FieldData, tuple):
+            raise SldprtFormatError("archive string list value is invalid")
+        EncodedItems: list[bytes] = []
+        for ItemText in FieldData:
+            if not isinstance(ItemText, str):
+                raise SldprtFormatError("archive string list item is invalid")
+            EncodedItems.append(EncodeString(ItemText))
+        return StructLib.pack("<H", len(FieldData)) + b"".join(EncodedItems)
     return None
 
 
 # typed field encoding preserves every recovered primitive and archive contract
 def EncodeValue(
     KindName: str,
-    FieldValue: AnyValue,
+    FieldData: FieldValue,
     ErrorScope: str,
     FormatMap: Mapping[str, str] = KPrimitiveFormats,
 ) -> bytes:
-    ArchiveData = EncodeArchive(KindName, FieldValue)
+    ArchiveData = EncodeArchive(KindName, FieldData)
     if ArchiveData is not None:
         return ArchiveData
     if KindName.startswith("primitive:"):
+        if not isinstance(FieldData, int | float):
+            raise SldprtFormatError(f"invalid {ErrorScope} primitive value")
         TypeName = KindName.split(":", 1)[1]
-        return StructLib.pack("<" + FormatMap[TypeName], FieldValue)
+        return StructLib.pack("<" + FormatMap[TypeName], FieldData)
     if KindName.startswith("direct:"):
+        if isinstance(FieldData, str):
+            raise SldprtFormatError(f"invalid {ErrorScope} direct value")
         FormatText = KindName.split(":", 1)[1]
-        ValuesData = FieldValue if isinstance(FieldValue, tuple) else (FieldValue,)
+        ValuesData: tuple[FieldValue, ...] = (
+            FieldData if isinstance(FieldData, tuple) else (FieldData,)
+        )
+        if any(not isinstance(ItemValue, int | float) for ItemValue in ValuesData):
+            raise SldprtFormatError(f"invalid {ErrorScope} direct values")
         return StructLib.pack("<" + FormatText, *ValuesData)
     raise SldprtFormatError(f"unknown {ErrorScope} operation {KindName!r}")
 
 
 # resolved replay validates contiguous offsets field widths and final closure
 def ReplayResolved(
-    Operations: tuple[AnyValue, ...],
+    Operations: tuple[FieldOp, ...],
     ExpectedLength: int,
-    Overrides: Mapping[int, AnyValue] | None = None,
+    Overrides: FieldOverrides | None = None,
     FormatMap: Mapping[str, str] = KPrimitiveFormats,
 ) -> bytes:
     FieldOverrides = Overrides or {}
     OutputData = bytearray()
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         if len(OutputData) != StartPos:
             raise SldprtFormatError(f"resolved field program drifted at {StartPos}")
         FieldValue = FieldOverrides.get(StartPos, DefaultValue)
@@ -101,15 +135,15 @@ def ReplayResolved(
 
 # fixed replay validates source ordering encoded widths and exact source closure
 def ReplayFixed(
-    Operations: tuple[AnyValue, ...],
+    Operations: tuple[FieldOp, ...],
     ExpectedLength: int,
     ScopeName: str,
-    Overrides: Mapping[int, AnyValue] | None = None,
+    Overrides: FieldOverrides | None = None,
 ) -> bytes:
     FieldOverrides = Overrides or {}
     OutputData = bytearray()
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"{ScopeName} field program drifted at {StartPos}")
         FieldData = EncodeValue(
@@ -126,13 +160,13 @@ def ReplayFixed(
 
 # assembly replay permits only the recovered variable width string operations
 def ReplayAssembly(
-    Operations: tuple[AnyValue, ...],
-    Overrides: Mapping[int, AnyValue] | None = None,
+    Operations: tuple[FieldOp, ...],
+    Overrides: FieldOverrides | None = None,
 ) -> bytes:
     FieldOverrides = Overrides or {}
     OutputData = bytearray()
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"assembly field program drifted at {StartPos}")
         SourceCursor += FieldWidth

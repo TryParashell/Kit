@@ -45,13 +45,14 @@ from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
 )
 from convert.adapters.solidworks.container.Container import (
+    SldprtArchive as SldprtArchiveContract,
     container_signatures as ContainerSignatures,
 )
 from convert.adapters.solidworks.core.Adapter import (
-    _ASSEMBLY_DONOR_CARRIED_STREAMS as Streams,
-    _document_without_source as DocumentWithoutSource,
-    _native_stream_sha256 as NativeStreamShaTwoFiveSix,
-    _semantic_sha256 as SemanticShaTwoFiveSix,
+    DocWithout as DocumentWithoutSource,
+    KAsmDonorCarriedStreams as Streams,
+    NativeStreamSha as NativeStreamShaTwoFiveSix,
+    SemanticShaTwo as SemanticShaTwoFiveSix,
 )
 from convert.adapters.solidworks.container.Cmgr import (
     CONFIGURATION_MANAGER_STREAM as StreamA,
@@ -71,6 +72,7 @@ from convert.adapters.solidworks.container.Format import (
 )
 from convert.adapters.solidworks.core.Native import (
     HasVendorPartEncoding,
+    NativeModel,
     VENDOR_UNLOADABLE_NOTES as Notes,
     decode_native_model_header as DecodeNativeModelHeader,
     encode_native_part as EncodeNativePart,
@@ -78,6 +80,7 @@ from convert.adapters.solidworks.core.Native import (
 )
 from convert.adapters.solidworks.resolved.Core import (
     BLIND_END_CONDITION as Condition,
+    FeatureLayout,
     locate_features as LocateFeatures,
 )
 from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program import (
@@ -88,10 +91,12 @@ from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program i
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
     BuildEnvelope as BuildRevolvePinEnvelope,
     KPinPointsMm,
+    PinEnvelope,
 )
+from convert.adapters.base.WriteResult import WriteResult
 from convert.geometry.Parasolid import (
-    _parasolid_header as ParasolidHeader,
-    _scan_partition_records as ScanPartitionRecords,
+    ParaHeaderData as ParasolidHeader,
+    ScanPartRecords as ScanPartitionRecords,
 )
 from interchange import (
     BooleanOperation,
@@ -857,7 +862,7 @@ def TestPPFSCRPS() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSSREAFR(TmpPath) -> None:
+def TestSSREAFR(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Fcstd = TmpPath / "source.FCStd"
     Output = TmpPath / "source.SLDPRT"
@@ -874,7 +879,7 @@ def TestSSREAFR(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSSREACC(TmpPath) -> None:
+def TestSSREACC(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Catpart = TmpPath / "source.CATPart"
     Output = TmpPath / "source.SLDPRT"
@@ -887,7 +892,7 @@ def TestSSREACC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPSADACCE(TmpPath) -> None:
+def TestPSADACCE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Catproduct = TmpPath / "source.CATProduct"
     Output = TmpPath / "source.SLDASM"
@@ -967,7 +972,7 @@ def TestRSSDCFNER() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertNeutral(Archive) -> None:
+def AssertNeutral(Archive: SldprtArchiveContract) -> None:
     assert Archive.format_version == 4
     assert Archive.require("Kit/Interchange")
     assert StreamK not in Archive.streams
@@ -983,7 +988,9 @@ def AssertNeutral(Archive) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertNeutDoc(SourceDoc, Output, ResultInfo) -> None:
+def AssertNeutDoc(
+    SourceDoc: CadDocument, Output: FilePath, ResultInfo: WriteResult
+) -> None:
     Reread = ReadSldprt(Output)
     assert Reread.configurations == SourceDoc.configurations
     assert Reread.support_planes == SourceDoc.support_planes
@@ -1020,7 +1027,7 @@ def AssertNeutDoc(SourceDoc, Output, ResultInfo) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestFDWSSC(TmpPath) -> None:
+def TestFDWSSC(TmpPath: FilePath) -> None:
     SourceDoc = Document()
     Fcstd = TmpPath / "neutral.FCStd"
     Output = TmpPath / "neutral.SLDPRT"
@@ -1055,7 +1062,7 @@ def TestFDWSSC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def BuildStablePart():
+def BuildStablePart() -> SldprtArchiveContract:
     First = BytesIO()
     Second = BytesIO()
     WriteSldprt(Document(), First)
@@ -1065,7 +1072,7 @@ def BuildStablePart():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPartRels(Archive) -> None:
+def AssertPartRels(Archive: SldprtArchiveContract) -> None:
     ContentTypes = Archive.require(StreamC)
     Relationships = Archive.require(StreamJ)
     assert len(ContentTypes) == 556
@@ -1086,7 +1093,7 @@ def AssertPartRels(Archive) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPartXml(Archive) -> None:
+def AssertPartXml(Archive: SldprtArchiveContract) -> None:
     Keywords = Archive.require(StreamE)
     Features = Archive.require(StreamD)
     assert Keywords.startswith(
@@ -1124,7 +1131,7 @@ def AssertPartXml(Archive) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertDefaults(Archive) -> None:
+def AssertDefaults(Archive: SldprtArchiveContract) -> None:
     assert Archive.require("Contents/CnfgObjs") == bytes.fromhex(
         "00000000fffeff00fffeff00"
     )
@@ -1437,7 +1444,7 @@ def TestSLNRBRAP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRectData(Archive, ResultInfo) -> None:
+def AssertRectData(Archive: SldprtArchiveContract, ResultInfo: WriteResult) -> None:
     assert StreamK in Archive.streams
     assert StreamH not in Archive.streams
     assert Archive.require(StreamA)
@@ -1471,7 +1478,9 @@ def AssertRectData(Archive, ResultInfo) -> None:
         Capability.ROUNDTRIP_METADATA,
     ):
         assert Transfers[CapabilityA].mode.value == "carrier"
-        assert Transfers[CapabilityA].carrier_reason.value == "target_unsupported"
+        CarrierCause = Transfers[CapabilityA].carrier_reason
+        assert CarrierCause is not None
+        assert CarrierCause.value == "target_unsupported"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -2091,7 +2100,12 @@ def TestFPTPWFENF() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
+def AssertRevCore(
+    ResultData: WriteResult,
+    ArchiveData: SldprtArchiveContract,
+    FeatureData: tuple[FeatureLayout, ...],
+    NativeData: NativeModel,
+) -> None:
     assert ResultData.vendor_loadable is True
     assert ResultData.application_usable is True
     assert ResultData.metadata["native_brep"] == "feature-rebuilt"
@@ -2114,7 +2128,7 @@ def AssertRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRevHead(ArchiveData, NativeData) -> None:
+def AssertRevHead(ArchiveData: SldprtArchiveContract, NativeData: NativeModel) -> None:
     HeaderData = ArchiveData.require("Contents/Config-0-ModelHeader")
     assert DecodeNativeModelHeader(HeaderData).objects[-2:] == (
         (26, "Sketch1"),
@@ -2156,7 +2170,7 @@ def AssertRevHead(ArchiveData, NativeData) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRevCfg(ArchiveData, ResultData) -> None:
+def AssertRevCfg(ArchiveData: SldprtArchiveContract, ResultData: WriteResult) -> None:
     ConfigurationData = ArchiveData.require(StreamB)
     AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
     AtomPos = ConfigurationData.index(AtomDefinition)
@@ -2195,7 +2209,11 @@ def TestFFRWENRB() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def AssertPinProg(
-    SourceData, ResultData, ArchiveData, ProgramData, EnvelopeData
+    SourceData: CadDocument,
+    ResultData: WriteResult,
+    ArchiveData: SldprtArchiveContract,
+    ProgramData: bytes,
+    EnvelopeData: PinEnvelope,
 ) -> None:
     assert len(ProgramData) == 12337
     assert (
@@ -2220,7 +2238,9 @@ def AssertPinProg(
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
+def AssertPinNative(
+    ArchiveData: SldprtArchiveContract, ProgramData: bytes, EnvelopeData: PinEnvelope
+) -> None:
     NativeData = DecodeNativeModel(
         ArchiveData.require(StreamE),
         ProgramData,
@@ -2242,7 +2262,7 @@ def AssertPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPinModes(ResultData) -> None:
+def AssertPinModes(ResultData: WriteResult) -> None:
     TransferData = {
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
@@ -2790,6 +2810,7 @@ def TestSLBOWNIFM() -> None:
     Classes = {ItemValue.offset: ItemValue.name for ItemValue in Native.classes}
     assert Imported.name == "Imported1"
     assert Imported.kind == "Imported"
+    assert Imported.native_offset is not None
     assert Classes[Imported.native_offset - 18] == "moBaseBody_c"
     assert Native.diagnostics == ()
     assert Imported.native_end == len(Resolved)
@@ -2797,7 +2818,7 @@ def TestSLBOWNIFM() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestGPPINB(TmpPath) -> None:
+def TestGPPINB(TmpPath: FilePath) -> None:
     BaseInfo = Document()
     SourceDoc = ReplaceData(
         BaseInfo,
@@ -2921,14 +2942,16 @@ def TestUNBRAHC() -> None:
     assert Archive.get(StreamI) is None
     assert Restored.brep == SourceDoc.brep
     assert ResultInfo.metadata["native_content"] == "native-metadata"
-    assert ResultInfo.metadata["native_brep"].startswith("unsupported:")
+    NativeBrepValue = ResultInfo.metadata["native_brep"]
+    assert isinstance(NativeBrepValue, str)
+    assert NativeBrepValue.startswith("unsupported:")
     assert ResultInfo.metadata["native_geometry"] is False
     assert ResultInfo.metadata["vendor_loadable"] is False
     assert ResultInfo.diagnostics[-1].code == "sldprt.native_brep_unsupported"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestGCIBFRNGP(TmpPath) -> None:
+def TestGCIBFRNGP(TmpPath: FilePath) -> None:
     BaseInfo = Document()
     SourceDoc = ReplaceData(
         BaseInfo,
@@ -2969,7 +2992,7 @@ def TestGCIBFRNGP(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.mark.parametrize("SourceDoc", (Document(), AssemblyDocument()))
-def TestGCPDSC(SourceDoc) -> None:
+def TestGCPDSC(SourceDoc: CadDocument) -> None:
     Output = BytesIO()
     WriteSldprt(SourceDoc, Output)
     Restored = ReadSldprt(Output.getvalue())
@@ -3045,7 +3068,7 @@ def TestFDPMIOR(PayloadIndex: int, Changes: dict[str, bytes | str]) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSEUNTWCNE(TmpPath) -> None:
+def TestSEUNTWCNE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     EditedFeature = ReplaceData(SourceDoc.feature_timeline[0], name="Edited in Kit")
     Edited = ReplaceData(
@@ -3069,7 +3092,7 @@ def TestSEUNTWCNE(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestNTPDDWCOI(TmpPath) -> None:
+def TestNTPDDWCOI(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     TargetValue = float(ParameterA.value.value) + 1.25
@@ -3112,7 +3135,7 @@ def TestNTPDDWCOI(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def ForgeAttest(TmpPath) -> tuple[bytes, float]:
+def ForgeAttest(TmpPath: FilePath) -> tuple[bytes, float]:
     SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     NativeValue = float(ParameterA.value.value) + 1.25
@@ -3164,7 +3187,7 @@ def ForgeAttest(TmpPath) -> tuple[bytes, float]:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestRACFNTC(TmpPath) -> None:
+def TestRACFNTC(TmpPath: FilePath) -> None:
     Forged, ForgedValue = ForgeAttest(TmpPath)
     Restored = ReadSldprt(Forged)
     assert Restored.parameters[0].value.value == PytestLib.approx(ForgedValue)
@@ -3182,7 +3205,7 @@ def TestRACFNTC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestACPKSTNE(TmpPath) -> None:
+def TestACPKSTNE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     Edited = ReplaceData(
@@ -3228,7 +3251,7 @@ def TestACPKSTNE(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestNTPSWFN(TmpPath) -> None:
+def TestNTPSWFN(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Feature = SourceDoc.feature_timeline[0]
     TargetName = "X" * len(Feature.name)
@@ -3258,7 +3281,7 @@ def TestNTPSWFN(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSAEDK(TmpPath) -> None:
+def TestSAEDK(TmpPath: FilePath) -> None:
     Adapter = Registry.writer("solidworks.sldprt")
     assert Registry.reader("solidworks.sldasm") is Registry.reader("solidworks.sldprt")
     assert Registry.writer("solidworks.sldasm") is Adapter
@@ -3305,7 +3328,7 @@ def TestSAEDK(TmpPath) -> None:
 @PytestLib.mark.parametrize(
     ("SourceDoc", "WrongSuffix"), ((KSample, ".SLDASM"), (KAssembly, ".SLDPRT"))
 )
-def TestSRRNSKM(SourceDoc, WrongSuffix, TmpPath) -> None:
+def TestSRRNSKM(SourceDoc: FilePath, WrongSuffix: str, TmpPath: FilePath) -> None:
     Renamed = TmpPath / f"renamed{WrongSuffix}"
     Renamed.write_bytes(SourceDoc.read_bytes())
     with PytestLib.raises(SldprtFormatError, match="content requires"):
@@ -3313,7 +3336,7 @@ def TestSRRNSKM(SourceDoc, WrongSuffix, TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSRRCSKM(TmpPath) -> None:
+def TestSRRCSKM(TmpPath: FilePath) -> None:
     Valid = TmpPath / "valid.SLDPRT"
     WriteSldprt(Document(), Valid)
     Renamed = TmpPath / "renamed.SLDASM"
@@ -3443,7 +3466,7 @@ def TestSLNMPIRWT() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPSRECOI(TmpPath) -> None:
+def TestPSRECOI(TmpPath: FilePath) -> None:
     SourceDoc = Document()
     Direct = TmpPath / "direct.SLDPRT"
     Blocked = TmpPath / "blocked.SLDPRT"
@@ -3468,7 +3491,7 @@ def TestPSRECOI(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestANTSWMR(TmpPath) -> None:
+def TestANTSWMR(TmpPath: FilePath) -> None:
     Original = OpenDocument(KSample)
     Changed = ReplaceData(
         Original, metadata=FrozenMapping({**Original.metadata, "audit_change": True})
@@ -3492,7 +3515,7 @@ def TestANTSWMR(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPSDTPAW(TmpPath) -> None:
+def TestPSDTPAW(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Portable = TmpPath / "portable.SLDASM"
     PortableResult = WriteDocument(SourceDoc, Portable)
@@ -3524,7 +3547,7 @@ def TestPSDTPAW(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestIPADTRC(TmpPath) -> None:
+def TestIPADTRC(TmpPath: FilePath) -> None:
     Isolated = TmpPath / "isolated" / KAssembly.name
     Isolated.parent.mkdir()
     Isolated.write_bytes(KAssembly.read_bytes())
@@ -3557,7 +3580,7 @@ def TestIPADTRC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestCDTRSRC(TmpPath) -> None:
+def TestCDTRSRC(TmpPath: FilePath) -> None:
     SourceDoc = OpenDocument(KCatproduct)
     Output = TmpPath / "converted" / "Tilton_Set.SLDASM"
     ResultInfo = Convert(KCatproduct, Output)
@@ -3591,7 +3614,7 @@ def TestCDTRSRC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPAPTMALP(TmpPath) -> None:
+def TestPAPTMALP(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Assembly = SourceDoc.assembly
     Instance = Assembly.instances[0]
@@ -3656,7 +3679,7 @@ def TestPAPTMALP(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPACTLCDS(TmpPath) -> None:
+def TestPACTLCDS(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Output = TmpPath / "carried.SLDASM"
     ResultInfo = WriteDocument(SourceDoc, Output)
@@ -3675,7 +3698,7 @@ def TestPACTLCDS(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPADWACIR(TmpPath) -> None:
+def TestPADWACIR(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Assembly = SourceDoc.assembly
     Removed = Assembly.instances[-1]

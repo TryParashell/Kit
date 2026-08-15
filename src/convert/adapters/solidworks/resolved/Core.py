@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass as Dataclass
 import math as MathValue
 import struct as Struct
@@ -279,64 +279,58 @@ KMinimumRadiusMm = 1e-09
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ClassRecord:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["data_offset"] = "int"
+    offset: int
+    name: str
+    data_offset: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NameRecord:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["text_end"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["flags"] = "int"
-    __annotations__["feature_id"] = "int"
+    offset: int
+    text_end: int
+    name: str
+    flags: int
+    feature_id: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class DimensionScalar:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["name_offset"] = "int"
-    __annotations__["value_offset"] = "int"
-    __annotations__["value_mm"] = "float"
+    name: str
+    name_offset: int
+    value_offset: int
+    value_mm: float
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SketchPoint:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["x_mm"] = "float"
-    __annotations__["y_mm"] = "float"
+    offset: int
+    x_mm: float
+    y_mm: float
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class Sketch:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["x_mm"] = "float"
-    __annotations__["y_mm"] = "float"
-    __annotations__["role"] = "int"
-    __annotations__["geometry_class"] = "int"
+    offset: int
+    x_mm: float
+    y_mm: float
+    role: int
+    geometry_class: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SketchArc:
-    locals().setdefault("__annotations__", {})
-    __annotations__["centre_offset"] = "int"
-    __annotations__["point_offset"] = "int"
-    __annotations__["centre_x_mm"] = "float"
-    __annotations__["centre_y_mm"] = "float"
-    __annotations__["radius_mm"] = "float"
-    __annotations__["start_angle_degrees"] = "float"
-    __annotations__["sweep_angle_degrees"] = "float"
+    centre_offset: int
+    point_offset: int
+    centre_x_mm: float
+    centre_y_mm: float
+    radius_mm: float
+    start_angle_degrees: float
+    sweep_angle_degrees: float
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -348,28 +342,49 @@ class SketchArc:
     def IsFullCircle(Instance) -> bool:
         return Instance.sweep_angle_degrees == KFullCircleDegrees
 
-    locals()["centre_mm"] = CentreMm
-    locals()["full_circle"] = IsFullCircle
-    locals()["FullCircle"] = IsFullCircle
+    centre_mm = CentreMm
+    full_circle = IsFullCircle
+    FullCircle = IsFullCircle
 
 
 # this definition exists because swept arc coordinate properties form one geometric interface
 class ArcGeometry:
+    centre_x_mm: float
+    centre_y_mm: float
+    start_x_mm: float
+    start_y_mm: float
+    end_x_mm: float
+    end_y_mm: float
 
     # this definition exists because focused behavior needs one stable owner
     @property
     def CentreMm(Instance) -> tuple[float, float]:
         return (Instance.centre_x_mm, Instance.centre_y_mm)
 
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def centre_mm(Instance) -> tuple[float, float]:
+        return Instance.CentreMm
+
     # this definition exists because focused behavior needs one stable owner
     @property
     def StartMm(Instance) -> tuple[float, float]:
         return (Instance.start_x_mm, Instance.start_y_mm)
 
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def start_mm(Instance) -> tuple[float, float]:
+        return Instance.StartMm
+
     # this definition exists because focused behavior needs one stable owner
     @property
     def EndMm(Instance) -> tuple[float, float]:
         return (Instance.end_x_mm, Instance.end_y_mm)
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def end_mm(Instance) -> tuple[float, float]:
+        return Instance.EndMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -379,6 +394,11 @@ class ArcGeometry:
             Instance.start_y_mm - Instance.centre_y_mm,
         )
 
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def radius_mm(Instance) -> float:
+        return Instance.RadiusMm
+
     # this definition exists because focused behavior needs one stable owner
     @property
     def EndRadiusMm(Instance) -> float:
@@ -386,6 +406,11 @@ class ArcGeometry:
             Instance.end_x_mm - Instance.centre_x_mm,
             Instance.end_y_mm - Instance.centre_y_mm,
         )
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def end_radius_mm(Instance) -> float:
+        return Instance.EndRadiusMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -397,17 +422,22 @@ class ArcGeometry:
             KArcRadiusToleranceMm, Radius * 1e-09
         )
 
-    locals()["centre_mm"] = CentreMm
-    locals()["consistent"] = IsConsistent
-    locals()["end_mm"] = EndMm
-    locals()["end_radius_mm"] = EndRadiusMm
-    locals()["radius_mm"] = RadiusMm
-    locals()["start_mm"] = StartMm
-    locals()["Consistent"] = IsConsistent
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def consistent(Instance) -> bool:
+        return Instance.IsConsistent
+
+    Consistent = IsConsistent
 
 
 # this definition exists because swept arc angular properties form one directional interface
 class ArcAngles:
+    centre_x_mm: float
+    centre_y_mm: float
+    start_x_mm: float
+    start_y_mm: float
+    end_x_mm: float
+    end_y_mm: float
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -419,6 +449,11 @@ class ArcAngles:
             )
         )
 
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def start_angle_degrees(Instance) -> float:
+        return Instance.StartAngle
+
     # this definition exists because focused behavior needs one stable owner
     @property
     def EndAngleDegrees(Instance) -> float:
@@ -429,9 +464,14 @@ class ArcAngles:
             )
         )
 
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def end_angle_degrees(Instance) -> float:
+        return Instance.EndAngleDegrees
+
     # this definition exists because focused behavior needs one stable owner
-    def SweepAngle(Instance, Counterclockwise: bool) -> float:
-        SpanValue = Instance.end_angle_degrees - Instance.start_angle_degrees
+    def SweepAngle(self, Counterclockwise: bool) -> float:
+        SpanValue = self.end_angle_degrees - self.start_angle_degrees
         if not Counterclockwise:
             SpanValue = -SpanValue
         while SpanValue <= 0.0:
@@ -440,49 +480,55 @@ class ArcAngles:
             SpanValue -= KFullCircleDegrees
         return SpanValue
 
-    locals()["end_angle_degrees"] = EndAngleDegrees
-    locals()["start_angle_degrees"] = StartAngle
-    locals()["sweep_angle_degrees"] = SweepAngle
+    def sweep_angle_degrees(self, Counterclockwise: bool) -> float:
+        return self.SweepAngle(Counterclockwise)
 
 
 # this definition exists because swept arc storage composes geometric and angular behavior
 @Dataclass(frozen=True, slots=True)
 class SweptArc(ArcGeometry, ArcAngles):
-    locals().setdefault("__annotations__", {})
-    __annotations__["centre_offset"] = "int"
-    __annotations__["start_offset"] = "int"
-    __annotations__["end_offset"] = "int"
-    __annotations__["centre_x_mm"] = "float"
-    __annotations__["centre_y_mm"] = "float"
-    __annotations__["start_x_mm"] = "float"
-    __annotations__["start_y_mm"] = "float"
-    __annotations__["end_x_mm"] = "float"
-    __annotations__["end_y_mm"] = "float"
+    centre_offset: int
+    start_offset: int
+    end_offset: int
+    centre_x_mm: float
+    centre_y_mm: float
+    start_x_mm: float
+    start_y_mm: float
+    end_x_mm: float
+    end_y_mm: float
 
 
 # this definition exists because core feature identity fields share one immutable record
 @Dataclass(frozen=True, slots=True)
 class FeatureCore:
-    locals().setdefault("__annotations__", {})
-    __annotations__["ordinal"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["feature_id"] = "int"
-    __annotations__["flags"] = "int"
-    __annotations__["flags_offset"] = "int"
-    __annotations__["sketch_name"] = "str | None"
-    __annotations__["sketch_id"] = "int | None"
-    __annotations__["points"] = "tuple[SketchPoint, ...]"
-    __annotations__["arcs"] = "tuple[SketchArc, ...]"
+    ordinal: int
+    name: str
+    kind: str
+    feature_id: int
+    flags: int
+    flags_offset: int
+    sketch_name: str | None
+    sketch_id: int | None
+    points: tuple[SketchPoint, ...]
+    arcs: tuple[SketchArc, ...]
 
 
 # this definition exists because derived feature geometry belongs outside immutable field storage
 class LayoutMath:
+    kind: str
+    angle_radians: float | None
+    points: tuple[SketchPoint, ...]
+    arcs: tuple[SketchArc, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @property
     def IsRevolution(Instance) -> bool:
         return Instance.kind in KRevolveKinds
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def is_revolution(Instance) -> bool:
+        return Instance.IsRevolution
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -491,24 +537,36 @@ class LayoutMath:
             return None
         return Instance.angle_radians * KRadiansToDegrees
 
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def angle_degrees(Instance) -> float | None:
+        return Instance.AngleDegrees
+
     # this definition exists because focused behavior needs one stable owner
     @property
     def CornersMm(Instance) -> tuple[tuple[float, float], ...]:
         return tuple(((Point.x_mm, Point.y_mm) for Point in Instance.points))
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def corners_mm(Instance) -> tuple[tuple[float, float], ...]:
+        return Instance.CornersMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
     def RadiiMm(Instance) -> tuple[float, ...]:
         return tuple((ArcValue.radius_mm for ArcValue in Instance.arcs))
 
-    locals()["angle_degrees"] = AngleDegrees
-    locals()["corners_mm"] = CornersMm
-    locals()["is_revolution"] = IsRevolution
-    locals()["radii_mm"] = RadiiMm
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def radii_mm(Instance) -> tuple[float, ...]:
+        return Instance.RadiiMm
 
 
 # this definition exists because feature bounds derive independently from other layout properties
 class LayoutBounds:
+    points: tuple[SketchPoint, ...]
+    arcs: tuple[SketchArc, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -541,82 +599,58 @@ class LayoutBounds:
             return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
         return None
 
-    locals()["bounds_mm"] = BoundsMm
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def bounds_mm(Instance) -> tuple[float, float, float, float] | None:
+        return Instance.BoundsMm
 
 
 # this definition exists because required depth metadata extends stable feature identity fields
 @Dataclass(frozen=True, slots=True)
 class FeatureDepth(FeatureCore):
-    locals().setdefault("__annotations__", {})
-    __annotations__["depth_offset"] = "int | None"
-    __annotations__["depth_mm"] = "float | None"
-    __annotations__["depth_copy_offsets"] = "tuple[int, ...]"
-    __annotations__["reverse_offset"] = "int | None"
-    __annotations__["end_condition_offset"] = "int | None"
-    __annotations__["reversed"] = "bool | None"
-    __annotations__["end_condition_code"] = "int | None"
+    depth_offset: int | None
+    depth_mm: float | None
+    depth_copy_offsets: tuple[int, ...]
+    reverse_offset: int | None
+    end_condition_offset: int | None
+    reversed: bool | None
+    end_condition_code: int | None
 
 
 # this definition exists because optional feature geometry extends the stable identity record
 @Dataclass(frozen=True, slots=True)
 class FeatureLayout(LayoutMath, LayoutBounds, FeatureDepth):
-    locals().setdefault("__annotations__", {})
-    __annotations__["from_reverse_offset"] = "int | None"
-    locals()["from_reverse_offset"] = None
-    __annotations__["angle_offset"] = "int | None"
-    locals()["angle_offset"] = None
-    __annotations__["angle_radians"] = "float | None"
-    locals()["angle_radians"] = None
-    __annotations__["angle_copy_offsets"] = "tuple[int, ...]"
-    locals()["angle_copy_offsets"] = ()
-    __annotations__["end_spec_offset"] = "int | None"
-    locals()["end_spec_offset"] = None
-    __annotations__["axis_kind"] = "str | None"
-    locals()["axis_kind"] = None
-    __annotations__["axis_offset"] = "int | None"
-    locals()["axis_offset"] = None
-    __annotations__["axis_feature_id"] = "int | None"
-    locals()["axis_feature_id"] = None
-    __annotations__["swept_arcs"] = "tuple[SweptArc, ...]"
-    locals()["swept_arcs"] = ()
-    __annotations__["SketchDimensionOffsets"] = "tuple[int, ...]"
-    locals()["SketchDimensionOffsets"] = ()
-    __annotations__["SketchDimensionsMm"] = "tuple[float, ...]"
-    locals()["SketchDimensionsMm"] = ()
+    from_reverse_offset: int | None = None
+    angle_offset: int | None = None
+    angle_radians: float | None = None
+    angle_copy_offsets: tuple[int, ...] = ()
+    end_spec_offset: int | None = None
+    axis_kind: str | None = None
+    axis_offset: int | None = None
+    axis_feature_id: int | None = None
+    swept_arcs: tuple[SweptArc, ...] = ()
+    SketchDimensionOffsets: tuple[int, ...] = ()
+    SketchDimensionsMm: tuple[float, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class FeatureEdit:
-    locals().setdefault("__annotations__", {})
-    __annotations__["corners_mm"] = "Sequence[tuple[float, float]] | None"
-    locals()["corners_mm"] = None
-    __annotations__["depth_mm"] = "float | None"
-    locals()["depth_mm"] = None
-    __annotations__["reversed"] = "bool | None"
-    locals()["reversed"] = None
-    __annotations__["end_condition_code"] = "int | None"
-    locals()["end_condition_code"] = None
-    __annotations__["update_depth_copies"] = "bool"
-    locals()["update_depth_copies"] = False
-    __annotations__["radii_mm"] = "Sequence[float] | None"
-    locals()["radii_mm"] = None
-    __annotations__["arc_centres_mm"] = "Sequence[tuple[float, float]] | None"
-    locals()["arc_centres_mm"] = None
-    __annotations__["angle_radians"] = "float | None"
-    locals()["angle_radians"] = None
-    __annotations__["swept_arc_centres_mm"] = "Sequence[tuple[float, float]] | None"
-    locals()["swept_arc_centres_mm"] = None
-    __annotations__["SketchDimensionsMm"] = "Sequence[float] | None"
-    locals()["SketchDimensionsMm"] = None
-    __annotations__["sketch_dimensions_mm"] = "Sequence[float] | None"
-    locals()["sketch_dimensions_mm"] = None
+    corners_mm: Sequence[tuple[float, float]] | None = None
+    depth_mm: float | None = None
+    reversed: bool | None = None
+    end_condition_code: int | None = None
+    update_depth_copies: bool = False
+    radii_mm: Sequence[float] | None = None
+    arc_centres_mm: Sequence[tuple[float, float]] | None = None
+    angle_radians: float | None = None
+    swept_arc_centres_mm: Sequence[tuple[float, float]] | None = None
+    SketchDimensionsMm: Sequence[float] | None = None
+    sketch_dimensions_mm: Sequence[float] | None = None
 
     # this definition exists because legacy and current sketch dimension names must stay synchronized
-    def PostInit(Instance) -> None:
-        SyncEditMut(Instance)
-
-    locals()["__post_init__"] = PostInit
+    def __post_init__(self) -> None:
+        SyncEditMut(self)
 
 
 # this definition exists because feature edit aliases must resolve before patch validation
@@ -641,25 +675,24 @@ def SyncEditMut(EditValue: FeatureEdit) -> None:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RectanglePad:
-    locals().setdefault("__annotations__", {})
-    __annotations__["point_offsets"] = "tuple[tuple[int, int], ...]"
-    __annotations__["depth_offset"] = "int"
-    __annotations__["reverse_offset"] = "int"
-    __annotations__["end_condition_offset"] = "int"
-    __annotations__["from_reverse_offset"] = "int | None"
-    __annotations__["corners_mm"] = "tuple[tuple[float, float], ...]"
-    __annotations__["depth_mm"] = "float"
-    __annotations__["reversed"] = "bool"
-    __annotations__["end_condition_code"] = "int"
+    point_offsets: tuple[tuple[int, int], ...]
+    depth_offset: int
+    reverse_offset: int
+    end_condition_offset: int
+    from_reverse_offset: int | None
+    corners_mm: tuple[tuple[float, float], ...]
+    depth_mm: float
+    reversed: bool
+    end_condition_code: int
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def BoundsMm(Instance) -> tuple[float, float, float, float]:
-        XsValue = tuple((Point[0] for Point in Instance.corners_mm))
-        YsValue = tuple((Point[1] for Point in Instance.corners_mm))
+    def BoundsMm(self) -> tuple[float, float, float, float]:
+        XsValue = tuple((Point[0] for Point in self.corners_mm))
+        YsValue = tuple((Point[1] for Point in self.corners_mm))
         return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
 
-    locals()["bounds_mm"] = BoundsMm
+    bounds_mm = BoundsMm
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1150,13 +1183,22 @@ def PatchScalarsMut(
         ):
             Struct.pack_into("<d", Output, DimensionOffset, DimensionValue / KMetres)
     if EditValue.angle_radians is not None:
+        if Feature.angle_offset is None:
+            raise SldprtFormatError(
+                f"feature {Feature.ordinal} has no dimension scalar to hold an angle"
+            )
         Struct.pack_into("<d", Output, Feature.angle_offset, EditValue.angle_radians)
     if EditValue.depth_mm is None:
         return
-    Struct.pack_into("<d", Output, Feature.depth_offset, EditValue.depth_mm / KMetres)
+    if Feature.depth_offset is None:
+        raise SldprtFormatError(
+            f"feature {Feature.ordinal} has no dimension scalar to hold a depth"
+        )
+    DepthOffset = Feature.depth_offset
+    Struct.pack_into("<d", Output, DepthOffset, EditValue.depth_mm / KMetres)
     if EditValue.update_depth_copies:
         for Delta, SignValue in zip(KDepthCopyDeltas, KDepthCopySigns, strict=True):
-            Target = Feature.depth_offset + Delta
+            Target = DepthOffset + Delta
             if Target + 8 <= len(Output):
                 Struct.pack_into(
                     "<d", Output, Target, SignValue * EditValue.depth_mm / KMetres
@@ -1168,10 +1210,18 @@ def PatchFlagsMut(
     Output: bytearray, Feature: FeatureLayout, EditValue: FeatureEdit
 ) -> None:
     if EditValue.reversed is not None:
+        if Feature.reverse_offset is None:
+            raise SldprtFormatError(
+                f"feature {Feature.ordinal} has no locatable direction flag"
+            )
         Output[Feature.reverse_offset] = 1 if EditValue.reversed else 0
         if Feature.from_reverse_offset is not None:
             Output[Feature.from_reverse_offset] = 1 if EditValue.reversed else 0
     if EditValue.end_condition_code is not None:
+        if Feature.end_condition_offset is None:
+            raise SldprtFormatError(
+                f"feature {Feature.ordinal} has no locatable end condition"
+            )
         Output[Feature.end_condition_offset] = EditValue.end_condition_code
 
 
@@ -2018,406 +2068,406 @@ def IsMatches(
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["ANGLE_COPY_DELTAS"] = KAngleCopyDeltas
+ANGLE_COPY_DELTAS = KAngleCopyDeltas
 
 # this binding exists because shared behavior needs one stable value
-globals()["ANGLE_PARAMETER_CLASS"] = KAngleParamClass
+ANGLE_PARAMETER_CLASS = KAngleParamClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["BLIND_END_CONDITION"] = KBlindEndCondition
+BLIND_END_CONDITION = KBlindEndCondition
 
 # this binding exists because shared behavior needs one stable value
-globals()["BOSS_FLAGS"] = KBossFlags
+BOSS_FLAGS = KBossFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["BOSS_KIND"] = KBossKind
+BOSS_KIND = KBossKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["CIRCLE_POINT_ANGLE_DEGREES"] = KCirclePointAngleDegrees
+CIRCLE_POINT_ANGLE_DEGREES = KCirclePointAngleDegrees
 
 # this binding exists because shared behavior needs one stable value
-globals()["CIRCLE_POINT_ANGLE_TOLERANCE_DEGREES"] = KCirclePointAngleToleranA
+CIRCLE_POINT_ANGLE_TOLERANCE_DEGREES = KCirclePointAngleToleranA
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_MARKER"] = ClassMarker
+CLASS_MARKER = ClassMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["CUT_FLAGS"] = KCutFlags
+CUT_FLAGS = KCutFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["CUT_KIND"] = KCutKind
+CUT_KIND = KCutKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEPTH_COPY_DELTAS"] = KDepthCopyDeltas
+DEPTH_COPY_DELTAS = KDepthCopyDeltas
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEPTH_COPY_SIGNS"] = KDepthCopySigns
+DEPTH_COPY_SIGNS = KDepthCopySigns
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEPTH_RELATIVE"] = KDepthRelative
+DEPTH_RELATIVE = KDepthRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEPTH_SCALAR_NAME_PREFIX"] = KDepthScalarNamePrefix
+DEPTH_SCALAR_NAME_PREFIX = KDepthScalarNamePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["END_CONDITION_RELATIVE"] = KEndConditionRelative
+END_CONDITION_RELATIVE = KEndConditionRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["END_SPEC_CLASS"] = KEndSpecClass
+END_SPEC_CLASS = KEndSpecClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_FLAGS_MASK"] = KFeatureFlagsMask
+FEATURE_FLAGS_MASK = KFeatureFlagsMask
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_KIND_BY_FLAGS"] = KFeatureKindByFlags
+FEATURE_KIND_BY_FLAGS = KFeatureKindByFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["FIRST_FEATURE_END_CONDITION_DISTANCE"] = KFirstFeatureEndCondition
+FIRST_FEATURE_END_CONDITION_DISTANCE = KFirstFeatureEndCondition
 
 # this binding exists because shared behavior needs one stable value
-globals()["FIRST_FEATURE_REVERSE_DISTANCE"] = KFirstFeatureReverse
+FIRST_FEATURE_REVERSE_DISTANCE = KFirstFeatureReverse
 
 # this binding exists because shared behavior needs one stable value
-globals()["FROM_END_SPEC_CLASS"] = KFromEndSpecClass
+FROM_END_SPEC_CLASS = KFromEndSpecClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["FROM_REVERSE_RELATIVE"] = KFromReverseRelative
+FROM_REVERSE_RELATIVE = KFromReverseRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["FULL_CIRCLE_DEGREES"] = KFullCircleDegrees
+FULL_CIRCLE_DEGREES = KFullCircleDegrees
 
 # this binding exists because shared behavior needs one stable value
-globals()["FULL_REVOLUTION_RADIANS"] = KFullRevolutionRadians
+FULL_REVOLUTION_RADIANS = KFullRevolutionRadians
 
 # this binding exists because shared behavior needs one stable value
-globals()["LATER_FEATURE_END_CONDITION_DISTANCE"] = KLaterFeatureEndCondition
+LATER_FEATURE_END_CONDITION_DISTANCE = KLaterFeatureEndCondition
 
 # this binding exists because shared behavior needs one stable value
-globals()["LATER_FEATURE_REVERSE_DISTANCE"] = KLaterFeatureReverse
+LATER_FEATURE_REVERSE_DISTANCE = KLaterFeatureReverse
 
 # this binding exists because shared behavior needs one stable value
-globals()["LENGTH_PARAMETER_CLASS"] = KLengthParamClass
+LENGTH_PARAMETER_CLASS = KLengthParamClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["LOFT_FLAGS"] = KLoftFlags
+LOFT_FLAGS = KLoftFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["LOFT_KIND"] = KLoftKind
+LOFT_KIND = KLoftKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["MID_PLANE_END_CONDITION"] = KMidPlaneEndCondition
+MID_PLANE_END_CONDITION = KMidPlaneEndCondition
 
 # this binding exists because shared behavior needs one stable value
-globals()["PLANE_FLAGS"] = KPlaneFlags
+PLANE_FLAGS = KPlaneFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["PROFILE_CLASS"] = KProfileClass
+PROFILE_CLASS = KProfileClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["PatchSketchPlane"] = PatchSketch
+PatchSketchPlane = PatchSketch
 
 # this binding exists because shared behavior needs one stable value
-globals()["RECTANGLE_POINT_RELATIVE"] = KRectanglePointRelative
+RECTANGLE_POINT_RELATIVE = KRectanglePointRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVERSE_RELATIVE"] = KReverseRelative
+REVERSE_RELATIVE = KReverseRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_AXIS_REFERENCE"] = KRevolutionAxisRef
+REVOLUTION_AXIS_REFERENCE = KRevolutionAxisRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_AXIS_REFERENCE_RELATIVE"] = KRevolutionAxisRefRelatiA
+REVOLUTION_AXIS_REFERENCE_RELATIVE = KRevolutionAxisRefRelatiA
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_AXIS_SKETCH"] = KRevolutionAxisSketch
+REVOLUTION_AXIS_SKETCH = KRevolutionAxisSketch
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_AXIS_SKETCH_RELATIVE"] = KRevolutionAxisSketchA
+REVOLUTION_AXIS_SKETCH_RELATIVE = KRevolutionAxisSketchA
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_CLASS"] = KRevolutionClass
+REVOLUTION_CLASS = KRevolutionClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_CLASS_REFERENCE_BYTES"] = KRevolutionClassRefBytes
+REVOLUTION_CLASS_REFERENCE_BYTES = KRevolutionClassRefBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_CUT_CLASS"] = KRevolutionCutClass
+REVOLUTION_CUT_CLASS = KRevolutionCutClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_END_SPEC_CLASS"] = KRevolutionEndSpecClass
+REVOLUTION_END_SPEC_CLASS = KRevolutionEndSpecClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_END_SPEC_CLASS_BYTES"] = KRevolutionEndSpecClassA
+REVOLUTION_END_SPEC_CLASS_BYTES = KRevolutionEndSpecClassA
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_END_SPEC_DATA"] = KRevolutionEndSpecData
+REVOLUTION_END_SPEC_DATA = KRevolutionEndSpecData
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_END_SPEC_HEADER"] = KRevolutionEndSpecHeader
+REVOLUTION_END_SPEC_HEADER = KRevolutionEndSpecHeader
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_STAMP_HIGH"] = KRevolutionStampHigh
+REVOLUTION_STAMP_HIGH = KRevolutionStampHigh
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_STAMP_LOW"] = KRevolutionStampLow
+REVOLUTION_STAMP_LOW = KRevolutionStampLow
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLVE_CUT_KIND"] = KRevolveCutKind
+REVOLVE_CUT_KIND = KRevolveCutKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLVE_CUT_NAME_STEMS"] = KRevolveCutNameStems
+REVOLVE_CUT_NAME_STEMS = KRevolveCutNameStems
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLVE_KIND"] = KRevolveKind
+REVOLVE_KIND = KRevolveKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLVE_KINDS"] = KRevolveKinds
+REVOLVE_KINDS = KRevolveKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLVE_NAME_STEMS"] = KRevolveNameStems
+REVOLVE_NAME_STEMS = KRevolveNameStems
 
 # this binding exists because shared behavior needs one stable value
-globals()["ROUND_FLAGS"] = KRoundFlags
+ROUND_FLAGS = KRoundFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["ROUND_KIND"] = KRoundKind
+ROUND_KIND = KRoundKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["RectanglePadLayout"] = RectanglePad
+RectanglePadLayout = RectanglePad
 
 # this binding exists because shared behavior needs one stable value
-globals()["SERIALIZED_STRING_MARKER"] = SerializedStringMarker
+SERIALIZED_STRING_MARKER = SerializedStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_ARC_CENTRE_CLASS"] = KSketchArcCentreClass
+SKETCH_ARC_CENTRE_CLASS = KSketchArcCentreClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_CHAIN_CLASS"] = KSketchChainClass
+SKETCH_CHAIN_CLASS = KSketchChainClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_COORDINATE_PREFIX"] = KSketchCoordinatePrefix
+SKETCH_COORDINATE_PREFIX = KSketchCoordinatePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_FLAGS"] = KSketchFlags
+SKETCH_FLAGS = KSketchFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_FREE_ROLE"] = KSketchFreeRole
+SKETCH_FREE_ROLE = KSketchFreeRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_NAME_PREFIX"] = KSketchNamePrefix
+SKETCH_NAME_PREFIX = KSketchNamePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_ON_CURVE_ROLE"] = KSketchOnCurveRole
+SKETCH_ON_CURVE_ROLE = KSketchOnCurveRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_POINT_CLASS"] = KSketchPointClass
+SKETCH_POINT_CLASS = KSketchPointClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_POINT_PREFIX"] = KSketchPointPrefix
+SKETCH_POINT_PREFIX = KSketchPointPrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_POINT_SUFFIX"] = KSketchPointSuffix
+SKETCH_POINT_SUFFIX = KSketchPointSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUPPORTED_END_CONDITIONS"] = KSupportedEndConditions
+SUPPORTED_END_CONDITIONS = KSupportedEndConditions
 
 # this binding exists because shared behavior needs one stable value
-globals()["SWEEP_FLAGS"] = KSweepFlags
+SWEEP_FLAGS = KSweepFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["SWEEP_KIND"] = KSweepKind
+SWEEP_KIND = KSweepKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["SWEEP_SINGLE_PROFILE_FLAGS"] = KSweepSingleProfileFlags
+SWEEP_SINGLE_PROFILE_FLAGS = KSweepSingleProfileFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["SketchCoordinate"] = Sketch
+SketchCoordinate = Sketch
 
 # this binding exists because shared behavior needs one stable value
-globals()["TREE_NODE_FLAGS"] = KTreeNodeFlags
+TREE_NODE_FLAGS = KTreeNodeFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ANGLE_TOLERANCE_RADIANS"] = KAngleToleranceRadians
+_ANGLE_TOLERANCE_RADIANS = KAngleToleranceRadians
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ARC_RADIUS_TOLERANCE_MM"] = KArcRadiusToleranceMm
+_ARC_RADIUS_TOLERANCE_MM = KArcRadiusToleranceMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_COORDINATE_TRAILER_BYTES"] = KCoordinateTrailerBytes
+_COORDINATE_TRAILER_BYTES = KCoordinateTrailerBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_CLASS_NAME"] = KMaxClassName
+_MAX_CLASS_NAME = KMaxClassName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_FEATURE_ID"] = KMaxFeatureId
+_MAX_FEATURE_ID = KMaxFeatureId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_NAME_UNITS"] = KMaxNameUnits
+_MAX_NAME_UNITS = KMaxNameUnits
 
 # this binding exists because shared behavior needs one stable value
-globals()["_METRES"] = KMetres
+_METRES = KMetres
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MINIMUM_RADIUS_MM"] = KMinimumRadiusMm
+_MINIMUM_RADIUS_MM = KMinimumRadiusMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NAME_MARKER_CLASS_TOKEN"] = KNameMarkerClassToken
+_NAME_MARKER_CLASS_TOKEN = KNameMarkerClassToken
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NAME_TRAILER_BYTES"] = KNameTrailerBytes
+_NAME_TRAILER_BYTES = KNameTrailerBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RADIANS_TO_DEGREES"] = KRadiansToDegrees
+_RADIANS_TO_DEGREES = KRadiansToDegrees
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SketchScalarsInRange"] = SketchScalarsIn
+_SketchScalarsInRange = SketchScalarsIn
 
 # this binding exists because shared behavior needs one stable value
-globals()["_arcs_in_range"] = ArcsInRange
+_arcs_in_range = ArcsInRange
 
 # this binding exists because shared behavior needs one stable value
-globals()["_depth_copies_verify"] = IsDepthCopies
+_depth_copies_verify = IsDepthCopies
 
 # this binding exists because shared behavior needs one stable value
-globals()["_dimension_scalars"] = Dimension
+_dimension_scalars = Dimension
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_layout"] = FeatureLayoutA
+_feature_layout = FeatureLayoutA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_flag_offset"] = FlagOffset
+_flag_offset = FlagOffset
 
 # this binding exists because shared behavior needs one stable value
-globals()["_last_node_in_range"] = LastNodeInRange
+_last_node_in_range = LastNodeInRange
 
 # this binding exists because shared behavior needs one stable value
-globals()["_matches"] = IsMatches
+_matches = IsMatches
 
 # this binding exists because shared behavior needs one stable value
-globals()["_name_records"] = NameRecords
+_name_records = NameRecords
 
 # this binding exists because shared behavior needs one stable value
-globals()["_points_in_range"] = PointsInRange
+_points_in_range = PointsInRange
 
 # this binding exists because shared behavior needs one stable value
-globals()["_read_double"] = ReadDouble
+_read_double = ReadDouble
 
 # this binding exists because shared behavior needs one stable value
-globals()["_revolution_layout"] = Revolution
+_revolution_layout = Revolution
 
 # this binding exists because shared behavior needs one stable value
-globals()["_revolution_nodes"] = RevolutionNodes
+_revolution_nodes = RevolutionNodes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketch_arc"] = SketchArcA
+_sketch_arc = SketchArcA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_swept_in_range"] = SweptInRange
+_swept_in_range = SweptInRange
 
 # this binding exists because shared behavior needs one stable value
-globals()["_tree_nodes"] = TreeNodes
+_tree_nodes = TreeNodes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validate_edit"] = ValidateEdit
+_validate_edit = ValidateEdit
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validate_revolution_edit"] = ValidateEditA
+_validate_revolution_edit = ValidateEditA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_verify_arc"] = VerifyArc
+_verify_arc = VerifyArc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_verify_features"] = VerifyFeatures
+_verify_features = VerifyFeatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["_write_arc_radius"] = WriteArcRadius
+_write_arc_radius = WriteArcRadius
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["circle_circumference_point_mm"] = CirclePointMm
+circle_circumference_point_mm = CirclePointMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["circle_radius_mm"] = CircleRadiusMm
+circle_radius_mm = CircleRadiusMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["class_records"] = ClassRecords
+class_records = ClassRecords
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["dimension_scalar_value_offset"] = DimensionScalarValue
+dimension_scalar_value_offset = DimensionScalarValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["dimension_scalars"] = DimensionA
+dimension_scalars = DimensionA
 
 # this binding exists because shared behavior needs one stable value
-globals()["feature_kind"] = FeatureKind
+feature_kind = FeatureKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["first_class_offset"] = FirstClass
+first_class_offset = FirstClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["is_tree_node_flags"] = IsTreeNodeFlags
+is_tree_node_flags = IsTreeNodeFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["locate_features"] = LocateFeatures
+locate_features = LocateFeatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["locate_rectangle_pad"] = LocateRectangle
+locate_rectangle_pad = LocateRectangle
 
 # this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["name_marker"] = NameMarker
+name_marker = NameMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["name_records"] = NameRecordsA
+name_records = NameRecordsA
 
 # this binding exists because shared behavior needs one stable value
-globals()["patch_features"] = PatchFeatures
+patch_features = PatchFeatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["patch_sketch_arcs"] = PatchSketchArcs
+patch_sketch_arcs = PatchSketchArcs
 
 # this binding exists because shared behavior needs one stable value
-globals()["rectangle_corners_mm"] = RectangleMm
+rectangle_corners_mm = RectangleMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["revolution_axis_source"] = RevolutionAxis
+revolution_axis_source = RevolutionAxis
 
 # this binding exists because shared behavior needs one stable value
-globals()["revolution_end_spec_objects"] = RevolutionEnd
+revolution_end_spec_objects = RevolutionEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()["revolution_kind_by_name"] = RevolutionKind
+revolution_kind_by_name = RevolutionKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["sketch_arcs"] = SketchArcs
+sketch_arcs = SketchArcs
 
 # this binding exists because shared behavior needs one stable value
-globals()["sketch_coordinates"] = SketchA
+sketch_coordinates = SketchA
 
 # this binding exists because shared behavior needs one stable value
-globals()["sketch_plane_object_id"] = SketchPlaneId
+sketch_plane_object_id = SketchPlaneId
 
 # this binding exists because shared behavior needs one stable value
-globals()["sketch_points"] = SketchPoints
+sketch_points = SketchPoints
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["swept_arcs"] = SweptArcs
+swept_arcs = SweptArcs
 
 # this binding exists because shared behavior needs one stable value
-globals()["tree_nodes"] = TreeNodesA
+tree_nodes = TreeNodesA
 
 # this binding exists because shared behavior needs one stable value
-globals()["DepthCopies"] = IsDepthCopies
+DepthCopies = IsDepthCopies
 
 # this binding exists because shared behavior needs one stable value
-globals()["Matches"] = IsMatches
+Matches = IsMatches

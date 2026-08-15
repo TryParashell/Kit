@@ -36,7 +36,7 @@ def CloneMethod(
     LegacyFunc.__annotations__ = dict(AnnotationMap)
     LegacyFunc.__qualname__ = f"{ClassType.__name__}.{LegacyName}"
     LegacyFunc.__module__ = ClassType.__module__
-    LegacyFunc.__signature__ = SignatureInfo
+    setattr(LegacyFunc, "__signature__", SignatureInfo)
     return LegacyFunc
 
 

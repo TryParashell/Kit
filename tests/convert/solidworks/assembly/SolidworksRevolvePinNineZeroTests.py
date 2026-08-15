@@ -90,10 +90,10 @@ def TestPNZPWSCE(TmpPath: FilePath) -> None:
     ResultData = WriteDocument(SourceData, TargetPath, allow_carrier=False)
     ArchiveData = SldprtArchive.open(TargetPath)
     EnvelopeData = BuildEnvelope()
-    assert ResultData.vendor_loadable is True
-    assert ResultData.application_usable is True
-    assert ResultData.near_lossless is True
-    assert ResultData.metadata["runtime"] == "python-stdlib"
+    assert ResultData.IsVendorLoadable is True
+    assert ResultData.IsAppUsable is True
+    assert ResultData.IsNearLossless is True
+    assert ResultData.MetadataMap["runtime"] == "python-stdlib"
     assert StreamA not in ArchiveData.streams
     assert ArchiveData.require(StreamB) == EncodeFeatures()
     assert ArchiveData.require(Stream) == EnvelopeData.Config0Payload
@@ -125,7 +125,7 @@ def TestPNZCPHETC() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPNZCOTWG() -> None:
     CursorValue = 0
-    for StartPos, FieldWidth, OwnerIndex, KindNameA, DefaultValue in KConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, _, _ in KConfigOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KConfigOwners)
@@ -187,7 +187,7 @@ def TestPNZPHETC() -> None:
 def TestPNZPOTWG() -> None:
     CursorValue = 0
     AllowedKinds = {"definition", "classref", "objectref", "null", "string"}
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in KResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in KResolvedOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KFieldOwners)

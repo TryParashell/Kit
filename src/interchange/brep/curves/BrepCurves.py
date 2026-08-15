@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -26,7 +26,10 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 class BrepEntity(ModelBase):
     EntityId: str
     Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    Attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        id: ClassVar[str]
+        attributes: ClassVar[TypeMap[str, object]]
 
 
 # curve identity checks reject malformed records before topology validation
@@ -34,8 +37,8 @@ class BrepEntity(ModelBase):
 class BrepCurve(BrepEntity):
 
     # invalid identifiers must fail before curves enter topology collections
-    def __post_init__(SelfValue) -> None:
-        if not isinstance(SelfValue.EntityId, str):
+    def __post_init__(self) -> None:
+        if not isinstance(self.EntityId, str):
             raise TypeError("B-rep curve id must be a string")
 
 
@@ -44,6 +47,9 @@ class BrepCurve(BrepEntity):
 class LineCurve(BrepCurve):
     Origin: SpaceVector
     Direction: SpaceVector
+    if TYPE_CHECKING:
+        origin: ClassVar[SpaceVector]
+        direction: ClassVar[SpaceVector]
 
 
 # circle curves preserve exact spatial frames and radii across kernels
@@ -53,6 +59,11 @@ class CircleCurve(BrepCurve):
     AxisVector: SpaceVector
     RefDirection: SpaceVector
     Radius: float
+    if TYPE_CHECKING:
+        center: ClassVar[SpaceVector]
+        axis: ClassVar[SpaceVector]
+        reference_direction: ClassVar[SpaceVector]
+        radius: ClassVar[float]
 
 
 # ellipse curves preserve exact spatial frames and both principal radii
@@ -63,6 +74,12 @@ class EllipseCurve(BrepCurve):
     RefDirection: SpaceVector
     MajorRadius: float
     MinorRadius: float
+    if TYPE_CHECKING:
+        center: ClassVar[SpaceVector]
+        axis: ClassVar[SpaceVector]
+        reference_direction: ClassVar[SpaceVector]
+        major_radius: ClassVar[float]
+        minor_radius: ClassVar[float]
 
 
 # spline curves retain full basis data needed for exact reconstruction
@@ -74,6 +91,13 @@ class NurbsCurve(BrepCurve):
     Multiplicities: tuple[int, ...]
     Weights: tuple[float, ...]
     IsPeriodic: bool
+    if TYPE_CHECKING:
+        degree: ClassVar[int]
+        control_points: ClassVar[tuple[SpaceVector, ...]]
+        knots: ClassVar[tuple[float, ...]]
+        multiplicities: ClassVar[tuple[int, ...]]
+        weights: ClassVar[tuple[float, ...]]
+        periodic: ClassVar[bool]
 
 
 # intersection curves preserve supporting surfaces and sampled verification evidence
@@ -83,6 +107,11 @@ class IntersectCurve(BrepCurve):
     SecondSurfaceId: str
     Samples: tuple[SpaceVector, ...]
     Tolerance: float
+    if TYPE_CHECKING:
+        first_surface_id: ClassVar[str]
+        second_surface_id: ClassVar[str]
+        samples: ClassVar[tuple[SpaceVector, ...]]
+        tolerance: ClassVar[float]
 
 
 # native curves retain unsupported kernel data without claiming portable semantics
@@ -90,4 +119,8 @@ class IntersectCurve(BrepCurve):
 class NativeCurve(BrepCurve):
     FormatId: str
     EntityType: str
-    PayloadData: TypeMap[str, AnyValue]
+    PayloadData: TypeMap[str, object]
+    if TYPE_CHECKING:
+        format_id: ClassVar[str]
+        entity_type: ClassVar[str]
+        payload: ClassVar[TypeMap[str, object]]

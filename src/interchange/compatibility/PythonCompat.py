@@ -11,6 +11,7 @@ from __future__ import annotations
 from copy import copy as CopyValue
 from dataclasses import fields as GetFields
 from inspect import signature as GetSignature
+from types import ModuleType
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
@@ -174,7 +175,7 @@ def BindCompatMut(
 
 # historical annotations need their public type names available in every defining facade
 def BindTypeGlobals(
-    ModuleScopes: tuple[dict[str, AnyValue], ...],
+    ModuleScopes: tuple[ModuleType, ...],
     ClassTypes: tuple[type, ...],
 ) -> None:
     SharedValues: dict[str, AnyValue] = {
@@ -183,4 +184,5 @@ def BindTypeGlobals(
     }
     SharedValues.update({ClassType.__name__: ClassType for ClassType in ClassTypes})
     for ModuleScope in ModuleScopes:
-        ModuleScope.update(SharedValues)
+        for ValueName, ValueType in SharedValues.items():
+            setattr(ModuleScope, ValueName, ValueType)

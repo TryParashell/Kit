@@ -13,5 +13,5 @@ from __future__ import annotations
 class GitFailure(RuntimeError):
 
     # callers need useful git context without depending on subprocess implementation details
-    def __init__(CaseSelf, MessageText: str) -> None:
+    def __init__(self, MessageText: str) -> None:
         super().__init__(MessageText)

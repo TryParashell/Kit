@@ -18,21 +18,21 @@ class DocumentIo:
     locals()["__slots__"] = ()
 
     # mapping output remains a method so historical document callers need no codec knowledge
-    def ToMapping(SelfValue) -> dict[str, AnyValue]:
+    def ToMapping(self) -> dict[str, AnyValue]:
         from interchange.document.behavior.DocumentIo import ToMapping
 
-        return ToMapping(SelfValue)
+        return ToMapping(self)
 
     # mapping construction remains typed so incompatible root records fail immediately
     @classmethod
-    def FromMapping(ClassType, SourceValues: TypeMap[str, AnyValue]) -> DocumentIo:
+    def FromMapping(cls, SourceValues: TypeMap[str, AnyValue]) -> DocumentIo:
         from interchange.document.behavior.DocumentIo import FromMapping
 
-        return FromMapping(ClassType, SourceValues)
+        return FromMapping(cls, SourceValues)
 
     # json output remains a method so stable options stay consistent for callers
     def ToJson(
-        SelfValue,
+        self,
         *,
         IndentSize: int | None = 2,
         **LegacyValues: int | None,
@@ -47,24 +47,24 @@ class DocumentIo:
             raise TypeError(
                 f"ToJson got an unexpected keyword argument {UnknownName!r}"
             )
-        return ToJson(SelfValue, IndentSize=IndentSize)
+        return ToJson(self, IndentSize=IndentSize)
 
     # json construction remains typed so incompatible root records fail immediately
     @classmethod
-    def FromJson(ClassType, SourceValue: str) -> DocumentIo:
+    def FromJson(cls, SourceValue: str) -> DocumentIo:
         from interchange.document.behavior.DocumentIo import FromJson
 
-        return FromJson(ClassType, SourceValue)
+        return FromJson(cls, SourceValue)
 
     # file output remains discoverable on documents while path logic stays focused elsewhere
-    def WriteJson(SelfValue, PathValue: str | FilePath) -> FilePath:
+    def WriteJson(self, PathValue: str | FilePath) -> FilePath:
         from interchange.document.behavior.DocumentIo import WriteJson
 
-        return WriteJson(SelfValue, PathValue)
+        return WriteJson(self, PathValue)
 
     # file input remains discoverable on document types while decoding stays focused elsewhere
     @classmethod
-    def ReadJson(ClassType, PathValue: str | FilePath) -> DocumentIo:
+    def ReadJson(cls, PathValue: str | FilePath) -> DocumentIo:
         from interchange.document.behavior.DocumentIo import ReadJson
 
-        return ReadJson(ClassType, PathValue)
+        return ReadJson(cls, PathValue)
