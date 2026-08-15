@@ -2182,13 +2182,7 @@ SUFFIX_BY_DOCUMENT_TYPE = SuffixByDocType
 Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-_PARASOLID_FORMAT_IDS = KParasolidFormatIds
-
-# this binding exists because shared behavior needs one stable value
 _PART_STREAM = KPartStream
-
-# this binding exists because shared behavior needs one stable value
-_PART_SUFFIX = KPartSuffix
 
 # this binding exists because shared behavior needs one stable value
 _PRESERVED_BINDING_PREFIX = KSavedBindingPrefix
@@ -2197,19 +2191,10 @@ _PRESERVED_BINDING_PREFIX = KSavedBindingPrefix
 _PRESERVED_DOCUMENT_PREFIX = KSavedDocPrefix
 
 # this binding exists because shared behavior needs one stable value
-_PRODUCT_STREAM = KProductStream
-
-# this binding exists because shared behavior needs one stable value
 _PRODUCT_SUFFIX = KProductSuffix
 
 # this binding exists because shared behavior needs one stable value
-_REPLAY_SEMANTIC_ATTRIBUTE = KReplaySemanticAttr
-
-# this binding exists because shared behavior needs one stable value
 _WRAPPER_METADATA_KEYS = KWrapperMetaKeys
-
-# this binding exists because shared behavior needs one stable value
-_application_version = AppVersion
 
 # this binding exists because shared behavior needs one stable value
 _binding_matches_payload = IsBindingMatch
