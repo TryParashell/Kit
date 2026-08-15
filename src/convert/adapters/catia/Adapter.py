@@ -2185,9 +2185,6 @@ Vector3 = VectorThree
 _PART_STREAM = KPartStream
 
 # this binding exists because shared behavior needs one stable value
-_PART_SUFFIX = KPartSuffix
-
-# this binding exists because shared behavior needs one stable value
 _PRESERVED_BINDING_PREFIX = KSavedBindingPrefix
 
 # this binding exists because shared behavior needs one stable value
