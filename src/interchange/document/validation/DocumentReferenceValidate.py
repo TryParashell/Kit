@@ -16,16 +16,16 @@ def GetConfigErrs(
     DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for ConfigValue in DocumentValue.Configurations:
+    for ConfigValue in DocumentValue.configurations:
         if (
             ConfigValue.ParentId
-            and ConfigValue.ParentId not in IdentitySets["Configurations"]
+            and ConfigValue.ParentId not in IdentitySets["configurations"]
         ):
             ErrorValues.append(
                 f"configuration {ConfigValue.EntityId} has missing parent"
             )
         for OverrideValue in ConfigValue.Overrides:
-            if OverrideValue.ParameterId not in IdentitySets["Parameters"]:
+            if OverrideValue.ParameterId not in IdentitySets["parameters"]:
                 ErrorValues.append(
                     f"configuration {ConfigValue.EntityId} references missing parameter {OverrideValue.ParameterId}"
                 )
@@ -37,10 +37,10 @@ def GetParamErrs(
     DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for ParamValue in DocumentValue.Parameters:
+    for ParamValue in DocumentValue.parameters:
         if ParamValue.Expression:
             for ReferenceValue in ParamValue.Expression.ParameterIds:
-                if ReferenceValue not in IdentitySets["Parameters"]:
+                if ReferenceValue not in IdentitySets["parameters"]:
                     ErrorValues.append(
                         f"parameter {ParamValue.EntityId} references missing parameter {ReferenceValue}"
                     )
@@ -52,17 +52,17 @@ def GetPlaneErrs(
     DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for PlaneValue in DocumentValue.SupportPlanes:
+    for PlaneValue in DocumentValue.support_planes:
         if (
             PlaneValue.SupportSelectionId
-            and PlaneValue.SupportSelectionId not in IdentitySets["Selections"]
+            and PlaneValue.SupportSelectionId not in IdentitySets["selections"]
         ):
             ErrorValues.append(
                 f"plane {PlaneValue.EntityId} references missing selection"
             )
         if (
             PlaneValue.OffsetParameterId
-            and PlaneValue.OffsetParameterId not in IdentitySets["Parameters"]
+            and PlaneValue.OffsetParameterId not in IdentitySets["parameters"]
         ):
             ErrorValues.append(
                 f"plane {PlaneValue.EntityId} references missing offset parameter"
@@ -75,8 +75,8 @@ def GetSketchErrs(
     DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for SketchValue in DocumentValue.Sketches:
-        if SketchValue.SupportPlaneId not in IdentitySets["SupportPlanes"]:
+    for SketchValue in DocumentValue.sketches:
+        if SketchValue.SupportPlaneId not in IdentitySets["support_planes"]:
             ErrorValues.append(
                 f"sketch {SketchValue.EntityId} references missing plane"
             )
@@ -89,7 +89,7 @@ def GetSketchErrs(
                     )
             if (
                 RelationValue.ParameterId
-                and RelationValue.ParameterId not in IdentitySets["Parameters"]
+                and RelationValue.ParameterId not in IdentitySets["parameters"]
             ):
                 ErrorValues.append(
                     f"constraint {RelationValue.EntityId} references missing parameter"

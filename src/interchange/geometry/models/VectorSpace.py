@@ -14,10 +14,10 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 # spatial vectors give every geometry subsystem one coordinate contract
 @ModelDataMut
 class SpaceVector(ModelBase):
-    XCoord: float
-    YCoord: float
-    ZCoord: float
+    x: float
+    y: float
+    z: float
     if TYPE_CHECKING:
-        x: ClassVar[float]
-        y: ClassVar[float]
-        z: ClassVar[float]
+        XCoord: ClassVar[float]
+        YCoord: ClassVar[float]
+        ZCoord: ClassVar[float]

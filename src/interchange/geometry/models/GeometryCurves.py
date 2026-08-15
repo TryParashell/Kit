@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -19,53 +19,77 @@ from interchange.geometry.models.VectorPlane import PlaneVector
 # point geometry represents isolated sketch locations without degenerate curves
 @ModelDataMut
 class PointGeometry(ModelBase):
-    Point: PlaneVector
+    point: PlaneVector
+    if TYPE_CHECKING:
+        Point: ClassVar[PlaneVector]
 
 
 # line geometry preserves finite sketch segments independently from support lines
 @ModelDataMut
 class LineGeometry(ModelBase):
-    Start: PlaneVector
-    EndPoint: PlaneVector
+    start: PlaneVector
+    end: PlaneVector
+    if TYPE_CHECKING:
+        Start: ClassVar[PlaneVector]
+        EndPoint: ClassVar[PlaneVector]
 
 
 # circle geometry retains exact centers and radii instead of sampled approximations
 @ModelDataMut
 class CircleGeometry(ModelBase):
-    Center: PlaneVector
-    Radius: float
+    center: PlaneVector
+    radius: float
+    if TYPE_CHECKING:
+        Center: ClassVar[PlaneVector]
+        Radius: ClassVar[float]
 
 
 # arc geometry preserves angular trimming on an exact circular support curve
 @ModelDataMut
 class ArcGeometry(ModelBase):
-    Center: PlaneVector
-    Radius: float
-    StartAngle: float
-    EndAngle: float
+    center: PlaneVector
+    radius: float
+    start_angle: float
+    end_angle: float
+    if TYPE_CHECKING:
+        Center: ClassVar[PlaneVector]
+        Radius: ClassVar[float]
+        StartAngle: ClassVar[float]
+        EndAngle: ClassVar[float]
 
 
 # splines retain control data needed for editable and exact reconstruction
 @ModelDataMut(
     DefaultMap={
-        "KnotValues": (),
-        "Multiplicities": (),
-        "Weights": (),
-        "IsPeriodic": False,
+        "knots": (),
+        "multiplicities": (),
+        "weights": (),
+        "periodic": False,
     }
 )
 class SplineGeometry(ModelBase):
-    ControlPoints: tuple[PlaneVector, ...]
-    Degree: int
-    KnotValues: tuple[float, ...]
-    Multiplicities: tuple[int, ...]
-    Weights: tuple[float, ...]
-    IsPeriodic: bool
+    control_points: tuple[PlaneVector, ...]
+    degree: int
+    knots: tuple[float, ...]
+    multiplicities: tuple[int, ...]
+    weights: tuple[float, ...]
+    periodic: bool
+    if TYPE_CHECKING:
+        ControlPoints: ClassVar[tuple[PlaneVector, ...]]
+        Degree: ClassVar[int]
+        KnotValues: ClassVar[tuple[float, ...]]
+        Multiplicities: ClassVar[tuple[int, ...]]
+        Weights: ClassVar[tuple[float, ...]]
+        IsPeriodic: ClassVar[bool]
 
 
 # native geometry preserves unsupported entities without pretending they are portable
-@ModelDataMut(FactoryMap={"PayloadData": FreezeMapping})
+@ModelDataMut(FactoryMap={"data": FreezeMapping})
 class NativeGeometry(ModelBase):
-    FormatId: str
-    EntityType: str
-    PayloadData: TypeMap[str, AnyValue]
+    format_id: str
+    entity_type: str
+    data: TypeMap[str, object]
+    if TYPE_CHECKING:
+        FormatId: ClassVar[str]
+        EntityType: ClassVar[str]
+        PayloadData: ClassVar[TypeMap[str, object]]

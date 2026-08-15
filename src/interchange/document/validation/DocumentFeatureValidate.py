@@ -18,18 +18,18 @@ def GetFeatureErrs(
     ErrorValues: list[str] = []
     FeatureOrders = {
         FeatureValue.EntityId: FeatureValue.Order
-        for FeatureValue in DocumentValue.FeatureTimeline
+        for FeatureValue in DocumentValue.feature_timeline
     }
-    if len(FeatureOrders) != len(DocumentValue.FeatureTimeline):
+    if len(FeatureOrders) != len(DocumentValue.feature_timeline):
         ErrorValues.append("feature ids are not unique")
     if len(
-        {FeatureValue.Order for FeatureValue in DocumentValue.FeatureTimeline}
-    ) != len(DocumentValue.FeatureTimeline):
+        {FeatureValue.Order for FeatureValue in DocumentValue.feature_timeline}
+    ) != len(DocumentValue.feature_timeline):
         ErrorValues.append("feature order values are not unique")
-    for FeatureValue in DocumentValue.FeatureTimeline:
+    for FeatureValue in DocumentValue.feature_timeline:
         if (
             FeatureValue.SketchId
-            and FeatureValue.SketchId not in IdentitySets["Sketches"]
+            and FeatureValue.SketchId not in IdentitySets["sketches"]
         ):
             ErrorValues.append(
                 f"feature {FeatureValue.EntityId} references missing sketch"
@@ -44,17 +44,17 @@ def GetFeatureErrs(
                     f"feature {FeatureValue.EntityId} has a forward dependency"
                 )
         for ParameterId in FeatureValue.ParameterIds:
-            if ParameterId not in IdentitySets["Parameters"]:
+            if ParameterId not in IdentitySets["parameters"]:
                 ErrorValues.append(
                     f"feature {FeatureValue.EntityId} references missing parameter"
                 )
         for SelectionId in FeatureValue.SelectionIds:
-            if SelectionId not in IdentitySets["Selections"]:
+            if SelectionId not in IdentitySets["selections"]:
                 ErrorValues.append(
                     f"feature {FeatureValue.EntityId} references missing selection"
                 )
-    for BodyValue in DocumentValue.Bodies:
-        if BodyValue.FinalFeatureId not in IdentitySets["FeatureTimeline"]:
+    for BodyValue in DocumentValue.bodies:
+        if BodyValue.FinalFeatureId not in IdentitySets["feature_timeline"]:
             ErrorValues.append(
                 f"body {BodyValue.EntityId} references missing final feature"
             )

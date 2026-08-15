@@ -35,21 +35,21 @@ assembly_document = BuildAssembly
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckRoundtrip() -> None:
     SourceValue = BuildAssembly()
-    SourceValue.AssertValid()
-    RestoredValue = CadDocument.FromJson(SourceValue.ToJson())
+    SourceValue.assert_valid()
+    RestoredValue = CadDocument.from_json(SourceValue.to_json())
     assert RestoredValue == SourceValue
-    assert RestoredValue.Assembly is not None
-    EmbeddedValue = RestoredValue.Assembly.GetDocument("document:part")
+    assert RestoredValue.assembly is not None
+    EmbeddedValue = RestoredValue.assembly.GetDocument("document:part")
     assert isinstance(EmbeddedValue, CadDocument)
     assert EmbeddedValue == BuildDocument()
-    assert RestoredValue.Assembly.GetChildren("definition:root") == (
-        RestoredValue.Assembly.Instances[0],
+    assert RestoredValue.assembly.GetChildren("definition:root") == (
+        RestoredValue.assembly.Instances[0],
     )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckTransform() -> None:
-    AssemblyValue = BuildAssembly().Assembly
+    AssemblyValue = BuildAssembly().assembly
     assert AssemblyValue is not None
     TransformValue = AssemblyValue.Instances[0].Transform
     assert TransformValue.TransformPoint((1.0, 2.0, 3.0)) == (101.0, 22.0, 33.0)
@@ -60,7 +60,7 @@ def CheckTransform() -> None:
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckCycle() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     CycleValue = ComponentInst(
         "instance:cycle",
@@ -70,18 +70,18 @@ def CheckCycle() -> None:
     )
     InvalidValue = ReplaceValue(
         SourceValue,
-        Assembly=ReplaceValue(
+        assembly=ReplaceValue(
             AssemblyValue, Instances=(*AssemblyValue.Instances, CycleValue)
         ),
     )
     with PytestLib.raises(DocumentError, match="contains a cycle"):
-        InvalidValue.AssertValid()
+        InvalidValue.assert_valid()
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckBadLinks() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     InvalidInst = ReplaceValue(
         AssemblyValue.Instances[0], Transform=TransformMatrix((1.0,) * 15)
@@ -91,13 +91,13 @@ def CheckBadLinks() -> None:
     )
     InvalidValue = ReplaceValue(
         SourceValue,
-        Assembly=ReplaceValue(
+        assembly=ReplaceValue(
             AssemblyValue,
             Instances=(InvalidInst, *AssemblyValue.Instances[1:]),
             MateEntities=(AssemblyValue.MateEntities[0], InvalidEntity),
         ),
     )
-    ErrorValues = InvalidValue.GetErrors()
+    ErrorValues = InvalidValue.validate()
     assert (
         "component instance instance:subassembly has an invalid transform"
         in ErrorValues
@@ -110,7 +110,7 @@ def CheckBadLinks() -> None:
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckMeshRound() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     MeshValue = SurfaceMesh(
         "mesh:1",
@@ -135,18 +135,18 @@ def CheckMeshRound() -> None:
     )
     ExtendedValue = ReplaceValue(
         SourceValue,
-        Meshes=(MeshValue,),
-        Assembly=ReplaceValue(AssemblyValue, Definitions=Definitions),
+        meshes=(MeshValue,),
+        assembly=ReplaceValue(AssemblyValue, Definitions=Definitions),
     )
-    ExtendedValue.AssertValid()
-    RestoredValue = CadDocument.FromJson(ExtendedValue.ToJson())
+    ExtendedValue.assert_valid()
+    RestoredValue = CadDocument.from_json(ExtendedValue.to_json())
     assert RestoredValue == ExtendedValue
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckMeshErrors() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     MeshValue = SurfaceMesh(
         "mesh:invalid",
@@ -155,8 +155,8 @@ def CheckMeshErrors() -> None:
         ((0, 1, 2),),
         Normals=(SpaceVector(0.0, 0.0, 1.0), SpaceVector(0.0, 0.0, 1.0)),
     )
-    InvalidValue = ReplaceValue(SourceValue, Meshes=(MeshValue,))
-    ErrorValues = InvalidValue.GetErrors()
+    InvalidValue = ReplaceValue(SourceValue, meshes=(MeshValue,))
+    ErrorValues = InvalidValue.validate()
     assert "mesh mesh:invalid contains a non-finite vertex" in ErrorValues
     assert "mesh mesh:invalid has a mismatched normal count" in ErrorValues
     assert "mesh mesh:invalid contains an invalid triangle" in ErrorValues
@@ -165,18 +165,18 @@ def CheckMeshErrors() -> None:
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckChildError() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     LinkedValue = AssemblyValue.Documents[0]
-    InvalidLinked = ReplaceValue(LinkedValue.Document, Configurations=())
+    InvalidLinked = ReplaceValue(LinkedValue.Document, configurations=())
     InvalidValue = ReplaceValue(
         SourceValue,
-        Assembly=ReplaceValue(
+        assembly=ReplaceValue(
             AssemblyValue,
             Documents=(ReplaceValue(LinkedValue, Document=InvalidLinked),),
         ),
     )
     assert (
         "component document document:part: document has no configuration"
-        in InvalidValue.GetErrors()
+        in InvalidValue.validate()
     )

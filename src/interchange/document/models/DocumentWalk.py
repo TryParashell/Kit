@@ -28,9 +28,9 @@ def WalkDocuments(DocumentValue: CadDocument) -> ValueIterator[CadDocument]:
             continue
         SeenValues.add(IdentityValue)
         yield ItemValue
-        if ItemValue.Assembly is None:
+        if ItemValue.assembly is None:
             continue
-        for ComponentValue in reversed(ItemValue.Assembly.Documents):
+        for ComponentValue in reversed(ItemValue.assembly.Documents):
             NestedValue = GetDocument(ComponentValue.Document)
             if NestedValue is not None:
                 PendingValues.append(NestedValue)

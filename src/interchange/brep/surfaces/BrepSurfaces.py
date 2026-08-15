@@ -23,124 +23,124 @@ class BrepSurface(BrepEntity):
 
     # invalid identifiers must fail before surfaces enter topology collections
     def __post_init__(self) -> None:
-        ValidateBrepId(self.EntityId)
+        ValidateBrepId(self.id)
 
 
 # planes retain exact spatial frames for analytic reconstruction
 @ModelDataMut
 class PlaneSurface(BrepSurface):
-    Origin: SpaceVector
-    Normal: SpaceVector
-    RefDirection: SpaceVector
+    origin: SpaceVector
+    normal: SpaceVector
+    reference_direction: SpaceVector
     if TYPE_CHECKING:
-        origin: ClassVar[SpaceVector]
-        normal: ClassVar[SpaceVector]
-        reference_direction: ClassVar[SpaceVector]
+        Origin: ClassVar[SpaceVector]
+        Normal: ClassVar[SpaceVector]
+        RefDirection: ClassVar[SpaceVector]
 
 
 # cylinders retain exact axes reference directions and radii
 @ModelDataMut
 class CylinderSurface(BrepSurface):
-    Origin: SpaceVector
-    AxisVector: SpaceVector
-    RefDirection: SpaceVector
-    Radius: float
+    origin: SpaceVector
+    axis: SpaceVector
+    reference_direction: SpaceVector
+    radius: float
     if TYPE_CHECKING:
-        origin: ClassVar[SpaceVector]
-        axis: ClassVar[SpaceVector]
-        reference_direction: ClassVar[SpaceVector]
-        radius: ClassVar[float]
+        Origin: ClassVar[SpaceVector]
+        AxisVector: ClassVar[SpaceVector]
+        RefDirection: ClassVar[SpaceVector]
+        Radius: ClassVar[float]
 
 
 # cones retain exact axes base radii and half angles
 @ModelDataMut
 class ConeSurface(BrepSurface):
-    Origin: SpaceVector
-    AxisVector: SpaceVector
-    RefDirection: SpaceVector
-    Radius: float
-    HalfAngle: float
+    origin: SpaceVector
+    axis: SpaceVector
+    reference_direction: SpaceVector
+    radius: float
+    half_angle: float
     if TYPE_CHECKING:
-        origin: ClassVar[SpaceVector]
-        axis: ClassVar[SpaceVector]
-        reference_direction: ClassVar[SpaceVector]
-        radius: ClassVar[float]
-        half_angle: ClassVar[float]
+        Origin: ClassVar[SpaceVector]
+        AxisVector: ClassVar[SpaceVector]
+        RefDirection: ClassVar[SpaceVector]
+        Radius: ClassVar[float]
+        HalfAngle: ClassVar[float]
 
 
 # spheres retain exact centers orientation frames and radii
 @ModelDataMut
 class SphereSurface(BrepSurface):
-    Center: SpaceVector
-    AxisVector: SpaceVector
-    RefDirection: SpaceVector
-    Radius: float
+    center: SpaceVector
+    axis: SpaceVector
+    reference_direction: SpaceVector
+    radius: float
     if TYPE_CHECKING:
-        center: ClassVar[SpaceVector]
-        axis: ClassVar[SpaceVector]
-        reference_direction: ClassVar[SpaceVector]
-        radius: ClassVar[float]
+        Center: ClassVar[SpaceVector]
+        AxisVector: ClassVar[SpaceVector]
+        RefDirection: ClassVar[SpaceVector]
+        Radius: ClassVar[float]
 
 
 # tori retain exact centers orientation frames and both radii
 @ModelDataMut
 class TorusSurface(BrepSurface):
-    Center: SpaceVector
-    AxisVector: SpaceVector
-    RefDirection: SpaceVector
-    MajorRadius: float
-    MinorRadius: float
+    center: SpaceVector
+    axis: SpaceVector
+    reference_direction: SpaceVector
+    major_radius: float
+    minor_radius: float
     if TYPE_CHECKING:
-        center: ClassVar[SpaceVector]
-        axis: ClassVar[SpaceVector]
-        reference_direction: ClassVar[SpaceVector]
-        major_radius: ClassVar[float]
-        minor_radius: ClassVar[float]
+        Center: ClassVar[SpaceVector]
+        AxisVector: ClassVar[SpaceVector]
+        RefDirection: ClassVar[SpaceVector]
+        MajorRadius: ClassVar[float]
+        MinorRadius: ClassVar[float]
 
 
 # spline surfaces retain complete tensor basis data for exact reconstruction
-@ModelDataMut(DefaultMap={"Weights": (), "IsPeriodicU": False, "IsPeriodicV": False})
+@ModelDataMut(DefaultMap={"weights": (), "periodic_u": False, "periodic_v": False})
 class NurbsSurface(BrepSurface):
-    DegreeU: int
-    DegreeV: int
-    ControlPoints: tuple[tuple[SpaceVector, ...], ...]
-    KnotValuesU: tuple[float, ...]
-    KnotValuesV: tuple[float, ...]
-    MultiplicitiesU: tuple[int, ...]
-    MultiplicitiesV: tuple[int, ...]
-    Weights: tuple[tuple[float, ...], ...]
-    IsPeriodicU: bool
-    IsPeriodicV: bool
+    degree_u: int
+    degree_v: int
+    control_points: tuple[tuple[SpaceVector, ...], ...]
+    knots_u: tuple[float, ...]
+    knots_v: tuple[float, ...]
+    multiplicities_u: tuple[int, ...]
+    multiplicities_v: tuple[int, ...]
+    weights: tuple[tuple[float, ...], ...]
+    periodic_u: bool
+    periodic_v: bool
     if TYPE_CHECKING:
-        degree_u: ClassVar[int]
-        degree_v: ClassVar[int]
-        control_points: ClassVar[tuple[tuple[SpaceVector, ...], ...]]
-        knots_u: ClassVar[tuple[float, ...]]
-        knots_v: ClassVar[tuple[float, ...]]
-        multiplicities_u: ClassVar[tuple[int, ...]]
-        multiplicities_v: ClassVar[tuple[int, ...]]
-        weights: ClassVar[tuple[tuple[float, ...], ...]]
-        periodic_u: ClassVar[bool]
-        periodic_v: ClassVar[bool]
+        DegreeU: ClassVar[int]
+        DegreeV: ClassVar[int]
+        ControlPoints: ClassVar[tuple[tuple[SpaceVector, ...], ...]]
+        KnotValuesU: ClassVar[tuple[float, ...]]
+        KnotValuesV: ClassVar[tuple[float, ...]]
+        MultiplicitiesU: ClassVar[tuple[int, ...]]
+        MultiplicitiesV: ClassVar[tuple[int, ...]]
+        Weights: ClassVar[tuple[tuple[float, ...], ...]]
+        IsPeriodicU: ClassVar[bool]
+        IsPeriodicV: ClassVar[bool]
 
 
 # offset surfaces preserve analytic relationships instead of flattening to splines
 @ModelDataMut
 class OffsetSurface(BrepSurface):
-    BaseSurfaceId: str
-    Distance: float
+    base_surface_id: str
+    distance: float
     if TYPE_CHECKING:
-        base_surface_id: ClassVar[str]
-        distance: ClassVar[float]
+        BaseSurfaceId: ClassVar[str]
+        Distance: ClassVar[float]
 
 
 # native surfaces preserve unsupported kernel data without false portable semantics
-@ModelDataMut(FactoryMap={"PayloadData": FreezeMapping})
+@ModelDataMut(FactoryMap={"data": FreezeMapping})
 class NativeSurface(BrepSurface):
-    FormatId: str
-    EntityType: str
-    PayloadData: TypeMap[str, object]
+    format_id: str
+    entity_type: str
+    data: TypeMap[str, object]
     if TYPE_CHECKING:
-        format_id: ClassVar[str]
-        entity_type: ClassVar[str]
-        payload: ClassVar[TypeMap[str, object]]
+        FormatId: ClassVar[str]
+        EntityType: ClassVar[str]
+        PayloadData: ClassVar[TypeMap[str, object]]

@@ -106,11 +106,11 @@ triangle_brep = BuildTriangle
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckRoundtrip() -> None:
     SourceValue = ReplaceValue(
-        BuildDocument(), BrepModel=BuildTriangle(), Capabilities=frozenset()
+        BuildDocument(), brep=BuildTriangle(), capabilities=frozenset()
     )
-    SourceValue.AssertValid()
+    SourceValue.assert_valid()
     assert Capability.KBrep in InferCaps(SourceValue)
-    RestoredValue = CadDocument.FromJson(SourceValue.ToJson())
+    RestoredValue = CadDocument.from_json(SourceValue.to_json())
     assert RestoredValue == SourceValue
 
 
@@ -118,15 +118,15 @@ def CheckRoundtrip() -> None:
 def CheckBaseTypes() -> None:
     SourceValue = ReplaceValue(
         BuildDocument(),
-        BrepModel=BuildTriangle(),
-        Capabilities=frozenset({Capability.KBrep, Capability.KParamHistory}),
+        brep=BuildTriangle(),
+        capabilities=frozenset({Capability.KBrep, Capability.KParamHistory}),
     )
     FilteredValue = FilterDocument(
         SourceValue, IncludeBrep=False, IncludeMesh=True, KeepPayloads=True
     )
-    assert FilteredValue.BrepModel is None
-    assert Capability.KBrep not in FilteredValue.Capabilities
-    assert Capability.KParamHistory in FilteredValue.Capabilities
+    assert FilteredValue.brep is None
+    assert Capability.KBrep not in FilteredValue.capabilities
+    assert Capability.KParamHistory in FilteredValue.capabilities
 
 
 # behavior coverage protects portable interchange semantics during structural refactors

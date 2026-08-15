@@ -20,6 +20,12 @@ class DataField(TypeProtocol):
     kw_only: bool
 
 
+# compatibility renames runtime classes so wire identity needs the preserved source name
+def GetCanonicalName(ClassType: type[object]) -> str:
+    CanonicalValue: object = vars(ClassType).get("__canonical_name__")
+    return CanonicalValue if isinstance(CanonicalValue, str) else ClassType.__name__
+
+
 # dynamic dataclass metadata must be validated before reflection code relies on its shape
 def GetFieldMap(SourceValue: object) -> dict[str, DataField]:
     ClassType = SourceValue if isinstance(SourceValue, type) else type(SourceValue)

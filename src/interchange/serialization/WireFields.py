@@ -65,9 +65,11 @@ KWireFields: TypeMap[str, str] = {
 
 # record specific names resolve collisions without weakening the historical wire contract
 KTypeWireFields: TypeMap[str, TypeMap[str, str]] = {
+    "CadSource": {"FilePath": "path"},
     "ComponentDef": {"SourceDigest": "source_sha256"},
     "ConstraintRef": {"EntityId": "entity_id"},
     "Diagnostic": {"EntityId": "entity_id"},
+    "Selection": {"SelectionPath": "path"},
     "SelectPathElem": {
         "EntityId": "entity_id",
         "EntityKind": "entity_kind",

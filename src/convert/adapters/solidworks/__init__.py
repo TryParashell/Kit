@@ -31,8 +31,8 @@ from convert.adapters.solidworks.assembly.Assembly import (
     expand_occurrence_paths as ExpandItemPaths,
 )
 from convert.adapters.solidworks.container.Container import (
-    SldprtArchive,
-    SldprtFormatError,
+    SldprtArchive as SldprtArchive,
+    SldprtFormatError as SldprtFormatError,
     StreamRecord,
     build_sldprt as BuildSldprt,
 )

@@ -35,15 +35,15 @@ def BuildDocument() -> CadDocument:
     )
     BodyValue = DesignBody("body:1", "Body", FeatureValue.EntityId)
     return CadDocument(
-        Source=CadSource("test", "memory", "0" * 64),
-        Configurations=(Configuration("config:default", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(PlaneValue,),
-        Sketches=(SketchValue,),
-        Selections=(),
-        FeatureTimeline=(FeatureValue,),
-        Bodies=(BodyValue,),
-        Capabilities=frozenset(
+        source=CadSource("test", "memory", "0" * 64),
+        configurations=(Configuration("config:default", "Default", True),),
+        parameters=(),
+        support_planes=(PlaneValue,),
+        sketches=(SketchValue,),
+        selections=(),
+        feature_timeline=(FeatureValue,),
+        bodies=(BodyValue,),
+        capabilities=frozenset(
             {Capability.KParamHistory, Capability.KEditableSketches}
         ),
     )

@@ -14,7 +14,7 @@ from interchange.document.models.DocumentModel import CadDocument
 # mesh validation protects assembly geometry consumers from malformed numeric topology
 def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for MeshValue in DocumentValue.Meshes:
+    for MeshValue in DocumentValue.meshes:
         if any(
             not all(
                 IsFiniteNum(SourceValue)

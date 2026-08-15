@@ -23,7 +23,7 @@ from interchange.serialization.WireData import WireData
 # decoded documents must expose validation before they cross the public construction boundary
 @RuntimeCheck
 class ValidDocument(TypeProtocol):
-    AssertValid: ValueFactory[[], None]
+    assert_valid: ValueFactory[[], None]
 
 
 # generic decoding preserves the concrete document subtype requested by each class method
@@ -47,7 +47,7 @@ def FromMapping(
         ResultValue, ValidDocument
     ):
         raise TypeError("data does not describe a CadDocument")
-    ResultValue.AssertValid()
+    ResultValue.assert_valid()
     return CastValue(DocumentType, ResultValue)
 
 
@@ -63,7 +63,7 @@ def FromJson(ClassType: type[DocumentType], SourceValue: str) -> DocumentType:
         ResultValue, ValidDocument
     ):
         raise TypeError("JSON does not describe a CadDocument")
-    ResultValue.AssertValid()
+    ResultValue.assert_valid()
     return CastValue(DocumentType, ResultValue)
 
 

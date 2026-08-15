@@ -6,11 +6,16 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from typing import ClassVar, TYPE_CHECKING
+
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
 # planar vectors keep sketch coordinates distinct from spatial geometry
 @ModelDataMut
 class PlaneVector(ModelBase):
-    XCoord: float
-    YCoord: float
+    x: float
+    y: float
+    if TYPE_CHECKING:
+        XCoord: ClassVar[float]
+        YCoord: ClassVar[float]

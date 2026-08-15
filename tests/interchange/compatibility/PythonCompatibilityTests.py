@@ -34,7 +34,6 @@ from tests.interchange.compatibility.CompatFieldsMesh import KCompatFieldsMesh
 from tests.interchange.compatibility.CompatFieldsTypes import KCompatFieldsTypes
 from tests.interchange.compatibility.PythonCompatTopNames import KPythonCompatTopNames
 
-
 # compatibility construction must validate dynamic calls before tests trust their concrete result
 CompatType = TypeVar("CompatType")
 
@@ -52,14 +51,6 @@ def CallLegacy(
     if not isinstance(ResultValue, ClassType):
         raise TypeError("compatibility constructor returned the wrong model")
     return ResultValue
-
-
-# historical method lookup narrows dynamic aliases before invoking them in reflection tests
-def CallCompat(SourceValue: object, MethodName: str, *ArgValues: object) -> object:
-    MethodValue: object = getattr(SourceValue, MethodName, None)
-    if not callable(MethodValue):
-        raise TypeError(f"compatibility method {MethodName} is not callable")
-    return MethodValue(*ArgValues)
 
 
 # split field expectations combine here so reflection checks use one immutable sequence
@@ -160,11 +151,14 @@ def CheckMethods() -> None:
         ClassType = getattr(ImportModule(ModuleName), ClassName)
         for MethodName in MethodNames:
             DescriptorValue = GetStaticAttr(ClassType, MethodName)
-            MethodValue: FuncType = (
+            RawMethod: object = (
                 DescriptorValue.__func__
                 if isinstance(DescriptorValue, MethodDescriptor)
-                else TypeCast(FuncType, DescriptorValue)
+                else DescriptorValue
             )
+            if not isinstance(RawMethod, FuncType):
+                raise TypeError(f"compatibility method {MethodName} is not a function")
+            MethodValue = RawMethod
             assert MethodValue.__name__ == MethodName
             assert MethodValue.__qualname__ == f"{ClassName}.{MethodName}"
             assert MethodValue.__module__ == ModuleName
@@ -190,10 +184,9 @@ def CheckEnumNames() -> None:
 def CheckAdapters() -> None:
     ValuesSet = frozenset({InterchangeApi.Capability.KParameters})
     AdapterValue = CallLegacy(InterchangeApi.AdapterCapabilities, values=ValuesSet)
-    LegacyValues: object = getattr(AdapterValue, "values")
-    assert LegacyValues == ValuesSet
-    assert CallCompat(AdapterValue, "supports", InterchangeApi.Capability.KParameters)
-    assert not CallCompat(AdapterValue, "supports", InterchangeApi.Capability.KBrep)
+    assert AdapterValue.values == ValuesSet
+    assert AdapterValue.supports(InterchangeApi.Capability.KParameters)
+    assert not AdapterValue.supports(InterchangeApi.Capability.KBrep)
     assert (
         str(GetSignature(InterchangeApi.AdapterCapabilities))
         == "(values: 'frozenset[Capability]' = frozenset()) -> None"

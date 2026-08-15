@@ -34,7 +34,7 @@ def GetAssemblyErrs(
     from interchange.document.validation.DocumentMateValidate import GetMateErrors
     from interchange.document.validation.DocumentMeshValidate import GetMeshErrors
 
-    AssemblyValue = DocumentValue.Assembly
+    AssemblyValue = DocumentValue.assembly
     if AssemblyValue is None:
         return ()
     ErrorValues: list[str] = []

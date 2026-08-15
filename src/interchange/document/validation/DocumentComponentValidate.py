@@ -43,7 +43,7 @@ def GetDefLinkErrs(
     DocumentValues: TypeMap[str, CadDocument],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    MeshById = {ItemValue.EntityId: ItemValue for ItemValue in DocumentValue.Meshes}
+    MeshById = {ItemValue.EntityId: ItemValue for ItemValue in DocumentValue.meshes}
     for DefinitionValue in AssemblyValue.Definitions:
         for MeshEntityId in DefinitionValue.MeshIds:
             if MeshEntityId not in MeshById:
@@ -59,7 +59,7 @@ def GetDefLinkErrs(
             )
             continue
         TargetDocument = DocumentValues.get(DefinitionValue.DocumentId, DocumentValue)
-        TargetBodyIds = {BodyValue.EntityId for BodyValue in TargetDocument.Bodies}
+        TargetBodyIds = {BodyValue.EntityId for BodyValue in TargetDocument.bodies}
         for BodyId in DefinitionValue.BodyIds:
             if BodyId not in TargetBodyIds:
                 ErrorValues.append(

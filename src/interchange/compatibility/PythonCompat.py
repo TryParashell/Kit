@@ -9,16 +9,23 @@
 from __future__ import annotations
 
 from copy import copy as CopyValue
+from collections.abc import Mapping as MappingBase
 from inspect import Parameter as FuncParam
 from inspect import Signature as FuncSig
 from inspect import signature as GetSignature
 from types import ModuleType
 import typing as TypingTypes
 from typing import Mapping as TypeMap
+from typing import cast as CastValue
 
 from interchange.compatibility.PythonCompatData import KLegacyAnnots, KLegacyModels
-from interchange.core.Reflection import DataField, GetDataFields, GetFieldMap
-from interchange.serialization.Wire import GetSlotNames, GetWireField
+from interchange.core.Reflection import (
+    DataField,
+    GetCanonicalName,
+    GetDataFields,
+    GetFieldMap,
+)
+from interchange.serialization.Wire import GetModelField, GetSlotNames, GetWireField
 
 
 # annotation rendering keeps historical source names independent from compliant implementation hints
@@ -138,18 +145,46 @@ def GetModelRepr(SelfValue: object) -> str:
     return f"{ClassType.__qualname__}({', '.join(FieldTexts)})"
 
 
+# installed properties preserve historical fields without making every unknown attribute valid
+def BindFieldMut(ClassType: type[object], ModelName: str, LegacyName: str) -> None:
+    if ModelName == LegacyName:
+        return
+
+    # direct slot access avoids recursion while each alias keeps its canonical storage owner
+    def GetLegacyValue(SelfValue: object) -> object:
+        return object.__getattribute__(SelfValue, ModelName)
+
+    setattr(ClassType, LegacyName, property(GetLegacyValue))
+
+
+# declared compatibility members need concrete runtime properties before annotations are normalized
+def BindTypedFields(ClassType: type[object]) -> None:
+    RawAnnots: object = vars(ClassType).get("__annotations__", {})
+    if not isinstance(RawAnnots, MappingBase):
+        raise TypeError(f"{ClassType.__name__} annotations must form a mapping")
+    AnnotMap = CastValue(MappingBase[object, object], RawAnnots)
+    FieldMap = GetFieldMap(ClassType)
+    for CompatName in AnnotMap:
+        if not isinstance(CompatName, str) or not CompatName[:1].isupper():
+            continue
+        try:
+            StoredField = GetStoredField(ClassType, CompatName)
+        except KeyError:
+            continue
+        if StoredField.name in FieldMap:
+            BindFieldMut(ClassType, StoredField.name, CompatName)
+
+
 # one installer synchronizes historical identity signatures annotations and module globals
 def BindCompatMut(
     ClassTypes: tuple[type[object], ...],
     ModuleScopes: TypeMap[str, dict[str, object]],
 ) -> None:
     for ClassType in ClassTypes:
-        CanonicalValue: object = vars(ClassType).get("__canonical_name__")
-        ModelName = (
-            CanonicalValue if isinstance(CanonicalValue, str) else ClassType.__name__
-        )
+        ModelName = GetCanonicalName(ClassType)
         LegacyName, ModuleName = KLegacyModels[ModelName]
         setattr(ClassType, "__canonical_name__", ModelName)
+        BindTypedFields(ClassType)
         LocalFields = GetSlotNames(ClassType)
         LegacyFieldsList = KLegacyAnnots.get(
             ModelName,
@@ -159,6 +194,13 @@ def BindCompatMut(
             LegacyField: GetLegacyAnnot(GetStoredField(ClassType, ModelField))
             for ModelField, LegacyField in zip(LocalFields, LegacyFieldsList)
         }
+        for ModelField, LegacyField in zip(LocalFields, LegacyFieldsList):
+            BindFieldMut(ClassType, ModelField, LegacyField)
+            BindFieldMut(
+                ClassType,
+                ModelField,
+                GetModelField(LegacyField, ClassType),
+            )
         setattr(ClassType, "__annotations__", LegacyAnnots)
         MatchArgs = tuple(
             GetWireField(FieldValue.name, ClassType)

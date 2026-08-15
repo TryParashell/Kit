@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
+from typing import ClassVar
 from typing import Mapping as TypeMap
+from typing import TYPE_CHECKING
 
 from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
@@ -29,6 +31,8 @@ def ValidateFeature(SourceValue: object) -> FeatureDef | None:
 # canonical typing needs an inherited key while public reflection exposes historical fields
 class FeatureHintBase(ModelBase):
     Definition: FeatureDef | None
+    if TYPE_CHECKING:
+        definition: ClassVar[FeatureDef | None]
 
 
 # configuration state retains suppression and parameter changes without duplicate features

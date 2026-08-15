@@ -119,7 +119,7 @@ def CheckFeatures() -> None:
     }
     assert Definitions
     StepValue = ReplaceValue(
-        BuildDocument().FeatureTimeline[0], Definition=FutureFeature("future")
+        BuildDocument().feature_timeline[0], Definition=FutureFeature("future")
     )
     assert isinstance(StepValue.Definition, FeatureDefinition)
     with PytestLib.raises(TypeError, match="feature definition"):
@@ -174,12 +174,12 @@ def CheckNestedCaps() -> None:
     )
     ChildValue = ReplaceValue(
         BaseValue,
-        Parameters=(ParamValue,),
-        Selections=(Selection("selection:child", "Child selection", ()),),
-        Bodies=(ReplaceValue(BaseValue.Bodies[0], MaterialId="material:child"),),
-        Meshes=(MeshValue,),
-        BrepPayloads=(PayloadValue,),
-        Capabilities=frozenset(),
+        parameters=(ParamValue,),
+        selections=(Selection("selection:child", "Child selection", ()),),
+        bodies=(ReplaceValue(BaseValue.bodies[0], MaterialId="material:child"),),
+        meshes=(MeshValue,),
+        brep_payloads=(PayloadValue,),
+        capabilities=frozenset(),
     )
     RootDef = ComponentDef("definition:root", "Root", ComponentKind.KAssembly)
     ChildDef = ComponentDef(
@@ -211,21 +211,21 @@ def CheckNestedCaps() -> None:
         Mates=(MateValue,),
     )
     RootValue = CadDocument(
-        Source=CadSource("test.assembly", "Root", "1" * 64),
-        Configurations=(Configuration("configuration:root", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(),
-        Sketches=(),
-        Selections=(),
-        FeatureTimeline=(),
-        Bodies=(),
-        Capabilities=frozenset(Capability),
-        Assembly=AssemblyValue,
+        source=CadSource("test.assembly", "Root", "1" * 64),
+        configurations=(Configuration("configuration:root", "Default", True),),
+        parameters=(),
+        support_planes=(),
+        sketches=(),
+        selections=(),
+        feature_timeline=(),
+        bodies=(),
+        capabilities=frozenset(Capability),
+        assembly=AssemblyValue,
     )
-    RootValue.AssertValid()
+    RootValue.assert_valid()
     assert InferCaps(RootValue) == frozenset(Capability) - {Capability.KRoundtripMeta}
     assert InferCaps(RootValue, RoundtripMeta=True) == frozenset(Capability)
-    StaleChild = ReplaceValue(BaseValue, Capabilities=frozenset(Capability))
+    StaleChild = ReplaceValue(BaseValue, capabilities=frozenset(Capability))
     StaleAssembly = ReplaceValue(
         AssemblyValue,
         Definitions=(RootDef, ReplaceValue(ChildDef, SourcePath="")),
@@ -234,7 +234,7 @@ def CheckNestedCaps() -> None:
         Mates=(),
     )
     StaleRoot = ReplaceValue(
-        RootValue, Assembly=StaleAssembly, Capabilities=frozenset()
+        RootValue, assembly=StaleAssembly, capabilities=frozenset()
     )
     assert not InferCaps(StaleRoot) & {
         Capability.KAssemblyMates,
@@ -275,7 +275,7 @@ def CheckLegacyKeys() -> None:
     ReplacedSource = ReplaceValue(SourceValue, path="updated.FCStd")
     assert ReplacedSource.FilePath == "updated.FCStd"
     ReplacedDoc = ReplaceValue(BuildDocument(), metadata={"compatibility": "preserved"})
-    assert ReplacedDoc.Metadata == {"compatibility": "preserved"}
+    assert ReplacedDoc.metadata == {"compatibility": "preserved"}
 
 
 # serialization keys stay byte compatible so stored interchange documents remain readable
@@ -318,11 +318,11 @@ def CheckLegacyJson() -> None:
     SourceValue = BuildDocument()
     LegacyJson = SourceValue.to_json
     assert callable(LegacyJson)
-    assert LegacyJson(indent=None) == SourceValue.ToJson(IndentSize=None)
+    assert LegacyJson(indent=None) == SourceValue.to_json(indent=None)
 
 
 # historical field access takes precedence over similarly named document lookup methods
 def CheckFieldAlias() -> None:
     SourceValue = BuildDocument()
-    FeatureValue = SourceValue.FeatureTimeline[0]
+    FeatureValue = SourceValue.feature_timeline[0]
     assert FeatureValue.definition is FeatureValue.Definition

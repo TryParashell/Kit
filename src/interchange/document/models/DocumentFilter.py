@@ -27,7 +27,7 @@ def FilterPayloads(
     KeepPayloads: bool,
 ) -> tuple[BrepPayload, ...]:
     PayloadValues: list[BrepPayload] = []
-    for PayloadValue in DocumentValue.BrepPayloads:
+    for PayloadValue in DocumentValue.brep_payloads:
         IsExcluded = (
             PayloadValue.ValueRole == PayloadRole.KBrep and not IncludeBrep
         ) or (PayloadValue.ValueRole == PayloadRole.KTessellation and not IncludeMesh)
@@ -62,7 +62,7 @@ def FilterDocument(
         raise TypeError(
             f"FilterDocument got an unexpected keyword argument {UnknownName!r}"
         )
-    AssemblyValue = DocumentValue.Assembly
+    AssemblyValue = DocumentValue.assembly
     if AssemblyValue is not None:
         AssemblyValue = ReplaceValue(
             AssemblyValue,
@@ -86,21 +86,21 @@ def FilterDocument(
         )
     FilteredDoc = ReplaceValue(
         DocumentValue,
-        Meshes=DocumentValue.Meshes if IncludeMesh else (),
-        BrepPayloads=FilterPayloads(
+        meshes=DocumentValue.meshes if IncludeMesh else (),
+        brep_payloads=FilterPayloads(
             DocumentValue,
             IncludeBrep=IncludeBrep,
             IncludeMesh=IncludeMesh,
             KeepPayloads=KeepPayloads,
         ),
-        Assembly=AssemblyValue,
-        BrepModel=DocumentValue.BrepModel if IncludeBrep else None,
+        assembly=AssemblyValue,
+        brep=DocumentValue.brep if IncludeBrep else None,
     )
     return ReplaceValue(
         FilteredDoc,
-        Capabilities=GetRetainedCaps(
+        capabilities=GetRetainedCaps(
             FilteredDoc,
-            DocumentValue.Capabilities,
+            DocumentValue.capabilities,
             IncludeBrep=IncludeBrep,
             IncludeMesh=IncludeMesh,
         ),

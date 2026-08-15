@@ -47,9 +47,9 @@ def GetMateErrors(
             TargetDocument = DocumentValues.get(OwnerDef.DocumentId)
         if TargetDocument is not None:
             TargetParamIds = (
-                IdentitySets["Parameters"]
+                IdentitySets["parameters"]
                 if TargetDocument is DocumentValue
-                else {ParamValue.EntityId for ParamValue in TargetDocument.Parameters}
+                else {ParamValue.EntityId for ParamValue in TargetDocument.parameters}
             )
             for ParameterId in MateValue.ParameterIds:
                 if ParameterId not in TargetParamIds:

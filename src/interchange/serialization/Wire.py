@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import fields as GetFields
 
+from interchange.core.Reflection import GetCanonicalName
 from interchange.serialization.RecordType import DataRecord
 from interchange.serialization.WireFields import KTypeWireFields, KWireFields
 from interchange.serialization.WireTypes import KWireTypes
@@ -30,7 +31,7 @@ def GetSlotNames(ClassType: type[object]) -> tuple[str, ...]:
 
 # type registration needs stable names independent of internal model naming
 def GetWireType(ClassType: type[object]) -> str:
-    CanonicalName = getattr(ClassType, "__canonical_name__", ClassType.__name__)
+    CanonicalName = GetCanonicalName(ClassType)
     return KWireTypes.get(CanonicalName, ClassType.__name__)
 
 
@@ -63,9 +64,14 @@ def GetWireField(FieldName: str, ClassType: type[object] | None = None) -> str:
 
 
 # deserialization needs the compliant field name corresponding to each historical wire key
-def GetModelField(WireName: str) -> str:
+def GetModelField(WireName: str, ClassType: type[object] | None = None) -> str:
     if WireName and WireName[0].isupper() and "_" not in WireName:
         return WireName
+    if ClassType is not None:
+        TypeFields = KTypeWireFields.get(GetCanonicalName(ClassType), {})
+        for ModelField, WireField in TypeFields.items():
+            if WireField == WireName:
+                return ModelField
     ExplicitNames = {
         WireField: ModelField for ModelField, WireField in KWireFields.items()
     }
@@ -79,13 +85,15 @@ def GetModelField(WireName: str) -> str:
 def ResolveField(ClassType: type[DataRecord], WireName: str) -> str:
     FieldNames = GetSlotNames(ClassType)
     TypeFields = KTypeWireFields.get(
-        getattr(ClassType, "__canonical_name__", ClassType.__name__),
+        GetCanonicalName(ClassType),
         {},
     )
     for FieldName in FieldNames:
         if TypeFields.get(FieldName, GetWireField(FieldName)) == WireName:
             return FieldName
+        if GetWireField(WireName, ClassType) == FieldName:
+            return FieldName
     ReflectedNames = {FieldValue.name for FieldValue in GetFields(ClassType)}
     if WireName in ReflectedNames:
         return WireName
-    return GetModelField(WireName)
+    return GetModelField(WireName, ClassType)

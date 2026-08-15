@@ -11,8 +11,8 @@
 class DocumentValid:
     locals()["__slots__"] = ()
 
-    # validation remains a model method while independent rules stay in focused modules
-    def GetErrors(self) -> tuple[str, ...]:
+    # validation remains concrete so callers receive the runtime tuple contract directly
+    def validate(self) -> tuple[str, ...]:
         from interchange.document.validation.DocumentValidate import GetDocErrors
         from interchange.document.validation.DocumentBoundary import GetDocument
 
@@ -21,8 +21,8 @@ class DocumentValid:
             raise TypeError("validation requires a CadDocument")
         return GetDocErrors(DocumentValue)
 
-    # explicit assertion gives model callers the established aggregate exception behavior
-    def AssertValid(self) -> None:
+    # assertion remains concrete so callers avoid object returning compatibility lookup
+    def assert_valid(self) -> None:
         from interchange.document.validation.DocumentValidate import AssertValid
         from interchange.document.validation.DocumentBoundary import GetDocument
 
@@ -30,3 +30,11 @@ class DocumentValid:
         if DocumentValue is None:
             raise TypeError("validation requires a CadDocument")
         AssertValid(DocumentValue)
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def GetErrors(self) -> tuple[str, ...]:
+        return self.validate()
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def AssertValid(self) -> None:
+        self.assert_valid()

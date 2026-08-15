@@ -23,54 +23,54 @@ class BrepPcurve(BrepEntity):
 
     # invalid identifiers must fail before parameter curves enter collections
     def __post_init__(self) -> None:
-        ValidateBrepId(self.EntityId)
+        ValidateBrepId(self.id)
 
 
 # planar line curves retain exact parameter space origin and direction
 @ModelDataMut
 class LinePcurve(BrepPcurve):
-    Origin: PlaneVector
-    Direction: PlaneVector
+    origin: PlaneVector
+    direction: PlaneVector
     if TYPE_CHECKING:
-        origin: ClassVar[PlaneVector]
-        direction: ClassVar[PlaneVector]
+        Origin: ClassVar[PlaneVector]
+        Direction: ClassVar[PlaneVector]
 
 
 # planar circle curves preserve exact parameter space centers and radii
 @ModelDataMut
 class CirclePcurve(BrepPcurve):
-    Center: PlaneVector
-    Radius: float
+    center: PlaneVector
+    radius: float
     if TYPE_CHECKING:
-        center: ClassVar[PlaneVector]
-        radius: ClassVar[float]
+        Center: ClassVar[PlaneVector]
+        Radius: ClassVar[float]
 
 
 # planar spline curves retain full basis data required for trimming
-@ModelDataMut(DefaultMap={"Weights": (), "IsPeriodic": False})
+@ModelDataMut(DefaultMap={"weights": (), "periodic": False})
 class NurbsPcurve(BrepPcurve):
-    Degree: int
-    ControlPoints: tuple[PlaneVector, ...]
-    KnotValues: tuple[float, ...]
-    Multiplicities: tuple[int, ...]
-    Weights: tuple[float, ...]
-    IsPeriodic: bool
+    degree: int
+    control_points: tuple[PlaneVector, ...]
+    knots: tuple[float, ...]
+    multiplicities: tuple[int, ...]
+    weights: tuple[float, ...]
+    periodic: bool
     if TYPE_CHECKING:
-        degree: ClassVar[int]
-        control_points: ClassVar[tuple[PlaneVector, ...]]
-        knots: ClassVar[tuple[float, ...]]
-        multiplicities: ClassVar[tuple[int, ...]]
-        weights: ClassVar[tuple[float, ...]]
-        periodic: ClassVar[bool]
+        Degree: ClassVar[int]
+        ControlPoints: ClassVar[tuple[PlaneVector, ...]]
+        KnotValues: ClassVar[tuple[float, ...]]
+        Multiplicities: ClassVar[tuple[int, ...]]
+        Weights: ClassVar[tuple[float, ...]]
+        IsPeriodic: ClassVar[bool]
 
 
 # native parameter curves preserve unsupported kernel specific trimming data
-@ModelDataMut(FactoryMap={"PayloadData": FreezeMapping})
+@ModelDataMut(FactoryMap={"data": FreezeMapping})
 class NativePcurve(BrepPcurve):
-    FormatId: str
-    EntityType: str
-    PayloadData: TypeMap[str, object]
+    format_id: str
+    entity_type: str
+    data: TypeMap[str, object]
     if TYPE_CHECKING:
-        format_id: ClassVar[str]
-        entity_type: ClassVar[str]
-        payload: ClassVar[TypeMap[str, object]]
+        FormatId: ClassVar[str]
+        EntityType: ClassVar[str]
+        PayloadData: ClassVar[TypeMap[str, object]]

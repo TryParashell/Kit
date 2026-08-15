@@ -8,6 +8,8 @@
 
 from dataclasses import dataclass as DataClass
 from inspect import Signature as FuncSig
+from typing import ClassVar
+from typing import TYPE_CHECKING
 
 from interchange.enums.EnumDocument import Capability
 from interchange.features.FeatureBody import DesignBody
@@ -52,6 +54,10 @@ class AdapterCaps(ModelBase):
     # callers need one consistent containment check for adapter support declarations
     def HasCapability(self, CapabilityValue: Capability) -> bool:
         return CapabilityValue in self.Values
+
+    if TYPE_CHECKING:
+        values: ClassVar[frozenset[Capability]]
+        supports = HasCapability
 
 
 BindCompatMut(

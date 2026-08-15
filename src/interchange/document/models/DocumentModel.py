@@ -36,20 +36,105 @@ from interchange.records.RecordParameter import Parameter
 # portable cad exchange needs one immutable root connecting every neutral model domain
 @MakeDataClass(frozen=True, slots=True)
 class CadDocument(DocumentRoot, DocumentApi, ModelBase):
-    Source: CadSource
-    Configurations: tuple[Configuration, ...]
-    Parameters: tuple[Parameter, ...]
-    SupportPlanes: tuple[SupportPlane, ...]
-    Sketches: tuple[Sketch, ...]
-    Selections: tuple[Selection, ...]
-    FeatureTimeline: tuple[FeatureStep, ...]
-    Bodies: tuple[DesignBody, ...]
-    Meshes: tuple[SurfaceMesh, ...] = ()
-    BrepPayloads: tuple[BrepPayload, ...] = ()
-    Diagnostics: tuple[Diagnostic, ...] = ()
-    Capabilities: frozenset[Capability] = frozenset()
-    Metadata: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    Units: UnitSystem = UnitSystem.KMillimeter
-    SchemaVersion: str = "1.0"
-    Assembly: AssemblyData | None = None
-    BrepModel: BrepModel | None = None
+    source: CadSource
+    configurations: tuple[Configuration, ...]
+    parameters: tuple[Parameter, ...]
+    support_planes: tuple[SupportPlane, ...]
+    sketches: tuple[Sketch, ...]
+    selections: tuple[Selection, ...]
+    feature_timeline: tuple[FeatureStep, ...]
+    bodies: tuple[DesignBody, ...]
+    meshes: tuple[SurfaceMesh, ...] = ()
+    brep_payloads: tuple[BrepPayload, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+    capabilities: frozenset[Capability] = frozenset()
+    metadata: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    units: UnitSystem = UnitSystem.KMillimeter
+    schema_version: str = "1.0"
+    assembly: AssemblyData | None = None
+    brep: BrepModel | None = None
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Source(self) -> CadSource:
+        return self.source
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Configurations(self) -> tuple[Configuration, ...]:
+        return self.configurations
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Parameters(self) -> tuple[Parameter, ...]:
+        return self.parameters
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def SupportPlanes(self) -> tuple[SupportPlane, ...]:
+        return self.support_planes
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Sketches(self) -> tuple[Sketch, ...]:
+        return self.sketches
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Selections(self) -> tuple[Selection, ...]:
+        return self.selections
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def FeatureTimeline(self) -> tuple[FeatureStep, ...]:
+        return self.feature_timeline
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Bodies(self) -> tuple[DesignBody, ...]:
+        return self.bodies
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Meshes(self) -> tuple[SurfaceMesh, ...]:
+        return self.meshes
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def BrepPayloads(self) -> tuple[BrepPayload, ...]:
+        return self.brep_payloads
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Diagnostics(self) -> tuple[Diagnostic, ...]:
+        return self.diagnostics
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Capabilities(self) -> frozenset[Capability]:
+        return self.capabilities
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Metadata(self) -> TypeMap[str, object]:
+        return self.metadata
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Units(self) -> UnitSystem:
+        return self.units
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def SchemaVersion(self) -> str:
+        return self.schema_version
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def Assembly(self) -> AssemblyData | None:
+        return self.assembly
+
+    # pascal compatibility keeps existing adapters typed during lowercase contract migration
+    @property
+    def BrepModel(self) -> BrepModel | None:
+        return self.brep

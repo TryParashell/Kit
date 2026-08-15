@@ -99,9 +99,9 @@ def GetSelectErrors(
     if TargetDocument is None:
         return ()
     TargetSelectIds = (
-        IdentitySets["Selections"]
+        IdentitySets["selections"]
         if TargetDocument is DocumentValue
-        else {SelectionValue.EntityId for SelectionValue in TargetDocument.Selections}
+        else {SelectionValue.EntityId for SelectionValue in TargetDocument.selections}
     )
     if EntityValue.SelectionId not in TargetSelectIds:
         return (f"mate entity {EntityValue.EntityId} references missing selection",)

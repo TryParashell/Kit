@@ -15,7 +15,6 @@ from interchange.document.models.DocumentError import DocumentError
 from interchange.document.models.DocumentIdentity import GetIdGroups
 from interchange.document.models.DocumentModel import CadDocument
 from interchange.enums.EnumDocument import Capability
-from interchange.serialization.Wire import GetModelField
 
 
 # decoded capability collections need runtime checks before validation trusts their members
@@ -38,36 +37,36 @@ def GetDocErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
     from interchange.document.validation.DocumentReferenceValidate import GetRefErrors
 
     ErrorValues: list[str] = []
-    if not HasValidCaps(DocumentValue.Capabilities):
+    if not HasValidCaps(DocumentValue.capabilities):
         ErrorValues.append("document capabilities must be Capability values")
     IdentitySets: dict[str, set[str]] = {}
     for NameValue, LabelText, ItemValues in GetIdGroups(DocumentValue):
         IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
-        IdentitySets[GetModelField(NameValue)] = set(IdValues)
+        IdentitySets[NameValue] = set(IdValues)
     ErrorValues.extend(GetRefErrors(DocumentValue, IdentitySets))
     ErrorValues.extend(GetFeatureErrs(DocumentValue, IdentitySets))
-    BrepValue: object = DocumentValue.BrepModel
+    BrepValue: object = DocumentValue.brep
     if BrepValue is not None:
         if not IsBrepModel(BrepValue):
             ErrorValues.append("document B-rep must be a BrepModel")
         else:
             ErrorValues.extend(
                 BrepValue.GetErrors(
-                    frozenset(BodyValue.EntityId for BodyValue in DocumentValue.Bodies)
+                    frozenset(BodyValue.EntityId for BodyValue in DocumentValue.bodies)
                 )
             )
-    if DocumentValue.Assembly is not None:
+    if DocumentValue.assembly is not None:
         ErrorValues.extend(GetAssemblyErrs(DocumentValue, IdentitySets))
-    if not DocumentValue.Configurations:
+    if not DocumentValue.configurations:
         ErrorValues.append("document has no configuration")
     if (
-        not DocumentValue.FeatureTimeline
-        and DocumentValue.BrepModel is None
-        and not DocumentValue.BrepPayloads
-        and not DocumentValue.Meshes
-        and DocumentValue.Assembly is None
+        not DocumentValue.feature_timeline
+        and DocumentValue.brep is None
+        and not DocumentValue.brep_payloads
+        and not DocumentValue.meshes
+        and DocumentValue.assembly is None
     ):
         ErrorValues.append(
             "document has neither feature history, B-rep, mesh, nor assembly data"

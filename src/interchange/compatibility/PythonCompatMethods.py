@@ -16,7 +16,6 @@ from typing import cast as CastValue
 from typing import Mapping as TypeMap
 from typing import TypeAlias
 
-
 # historical signature rows accept only the four parameter shapes used by public facades
 CompatParam: TypeAlias = (
     tuple[str]
@@ -58,6 +57,14 @@ def CloneMethod(
     return LegacyFunc
 
 
+# concrete compatibility methods take precedence because their signatures remain statically visible
+def GetAliasSource(ClassType: type[object], SourceName: str, LegacyName: str) -> object:
+    try:
+        return GetStaticAttr(ClassType, LegacyName)
+    except AttributeError:
+        return GetStaticAttr(ClassType, SourceName)
+
+
 # existing descriptors need matching aliases because class and static binding affect call semantics
 def BindAliasMut(
     ClassType: type[object],
@@ -66,7 +73,7 @@ def BindAliasMut(
     AnnotationMap: TypeMap[str, str],
     SignatureInfo: FuncSig,
 ) -> None:
-    DescriptorValue: object = GetStaticAttr(ClassType, SourceName)
+    DescriptorValue = GetAliasSource(ClassType, SourceName, LegacyName)
     if isinstance(DescriptorValue, classmethod):
         MethodValue = GetMethodFunc(CastValue(object, DescriptorValue), SourceName)
         LegacyValue = classmethod(

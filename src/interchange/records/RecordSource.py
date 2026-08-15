@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 from typing import Any as AnyValue
+from typing import ClassVar
 from typing import Mapping as TypeMap
+from typing import TYPE_CHECKING
 
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
@@ -27,3 +29,5 @@ class CadSource(ModelBase):
     ContainerVersion: str
     ApplicationVersion: str
     Attributes: TypeMap[str, AnyValue]
+    if TYPE_CHECKING:
+        path: ClassVar[str]
