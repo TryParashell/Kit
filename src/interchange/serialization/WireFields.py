@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # renamed fields retain historical keys so serialized documents remain byte compatible
 KWireFields: TypeMap[str, str] = {
     "AxisVector": "axis",

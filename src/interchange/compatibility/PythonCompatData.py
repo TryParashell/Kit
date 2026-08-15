@@ -13,7 +13,6 @@ from interchange.compatibility.PythonCompatModelsBrepOne import KLegacyBrepOne
 from interchange.compatibility.PythonCompatModelsBrepTwo import KLegacyBrepTwo
 from interchange.compatibility.PythonCompatModelsCore import KLegacyCore
 
-
 # split identity registries combine here so installers consume one immutable contract
 KLegacyModels = {
     **KLegacyCore,

@@ -16,7 +16,6 @@ from pathlib import Path as FilePath
 
 from tools.steering.SteeringCompliance import CheckPaths
 
-
 # fixtures reuse the production notice so tests isolate every other compliance rule
 KPythonHeader = """# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
 # SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin

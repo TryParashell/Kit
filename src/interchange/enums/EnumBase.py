@@ -10,7 +10,6 @@ from enum import EnumMeta as BaseEnumMeta
 from enum import StrEnum as StringEnum
 from typing import Any as AnyValue
 
-
 # historical names differ where compact canonical identifiers cannot mirror wire vocabulary
 KLegacyEnums: dict[str, dict[str, str]] = {
     "BooleanOp": {"cut": "CUT", "intersect": "INTERSECT"},

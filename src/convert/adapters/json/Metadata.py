@@ -16,7 +16,6 @@ from convert.adapters.json.StreamIo import ReadPrefixMut
 from interchange import CadDocument
 from interchange import Capability
 
-
 # this suffix is shared by probing registry metadata and path support checks
 KSuffix = ".json"
 

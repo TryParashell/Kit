@@ -9,7 +9,6 @@
 from interchange.payloads.PayloadRoles import PayloadRole
 from interchange.payloads.PayloadRuleModel import PayloadRule
 
-
 # direct format evidence preserves exact roles before generic semantic fallbacks
 KDirectPayloadRules = (
     PayloadRule(

@@ -19,7 +19,6 @@ from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.registry.RegistryErrors import DiscoveryError
 
-
 # infrastructure package names stay centralized so discovery only visits concrete format integrations
 KInternalPackages = frozenset({"base", "registry", "staging"})
 

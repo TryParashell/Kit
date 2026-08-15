@@ -11,7 +11,6 @@ from __future__ import annotations
 import sys as System
 from pathlib import Path as FilePath
 
-
 # repository insertion keeps package imports available when this file runs directly
 KEntryRoot = FilePath(__file__).resolve().parents[2]
 

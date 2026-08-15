@@ -17,7 +17,6 @@ import tokenize as Tokenize
 from dataclasses import dataclass as DataClass
 from pathlib import Path as FilePath
 
-
 # exact notice stays embedded so checks remain independent from local repository state
 KPythonHeader = """# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
 # SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin

@@ -16,7 +16,6 @@ from tools.audit.FcstdCli import MainRun
 from tools.audit.FcstdDiscovery import DiscoverSources
 from tools.audit.FcstdFeatures import FeatureTypes
 
-
 # legacy lookups preserve programmatic consumers while compliant focused modules own behavior
 KLegacyApi = {
     "REPOSITORY_ROOT": ("tools.audit.FcstdContext", "KRepositoryRoot"),

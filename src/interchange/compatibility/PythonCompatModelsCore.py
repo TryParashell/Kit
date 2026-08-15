@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # historical core model identity keeps pickle globals stable across internal splits
 KLegacyCore: TypeMap[str, tuple[str, str]] = {
     "TransformMatrix": ("Matrix4", "interchange.assembly"),

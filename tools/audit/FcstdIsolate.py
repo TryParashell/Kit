@@ -17,7 +17,6 @@ from typing import Any as AnyValue
 from tools.audit.FcstdContext import KRepositoryRoot
 from tools.audit.FcstdResult import MakeFailure
 
-
 # bounded diagnostics keep failed workers useful without flooding recursive audit output
 KErrorLimit = 1000
 

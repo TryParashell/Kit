@@ -14,7 +14,6 @@ from pathlib import Path as FilePath
 from tools.skills.Descriptions import KDescriptions
 from tools.skills.SkillNames import GetSourceStem
 
-
 # repository location anchors generation so copied tools resolve their local assets
 KRootPath = FilePath(__file__).resolve().parents[2]
 

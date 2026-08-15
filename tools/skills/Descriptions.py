@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-
 # task triggers stay centralized because generated frontmatter must remain deterministic across runtimes
 KDescriptions = {
     "chats": "Apply the concise chat-response policy. Use when preparing any user-facing response, progress update, or completion summary.",

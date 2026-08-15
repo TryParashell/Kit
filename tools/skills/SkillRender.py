@@ -14,7 +14,6 @@ from tools.skills.SkillPaths import KRootPath, GetSourcePath
 from tools.skills.SkillSource import StripSource
 from tools.skills.YamlScalar import QuoteYaml
 
-
 # shared license identity keeps every generated skill compatible with agent discovery
 KLicenseName = "LicenseRef-PolyForm-Strict-1.0.0"
 

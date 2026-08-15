@@ -25,7 +25,6 @@ from convert.adapters import WriteResult
 from interchange import CadDocument
 from interchange import PayloadRole
 
-
 # api signatures stay explicit because generated wrappers must match every historical parameter exactly
 KApiSigns = {
     "available_adapters": "() -> 'tuple[AdapterInfo, ...]'",

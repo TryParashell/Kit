@@ -32,7 +32,6 @@ from tests.interchange.compatibility.CompatFieldsMesh import KCompatFieldsMesh
 from tests.interchange.compatibility.CompatFieldsTypes import KCompatFieldsTypes
 from tests.interchange.compatibility.PythonCompatTopNames import KPythonCompatTopNames
 
-
 # split field expectations combine here so reflection checks use one immutable sequence
 KPythonCompatFields = (
     *KCompatFieldsAssembly,

@@ -22,7 +22,6 @@ from tools.skills.SkillSpecs import ValidateSpecs
 from tools.skills.SkillWriter import WriteSkills
 from tools.skills.YamlScalar import QuoteYaml
 
-
 # legacy lookups preserve downstream imports while compliant names own current implementations
 KLegacyApi = {
     "ROOT": ("tools.skills.SkillPaths", "KRootPath"),

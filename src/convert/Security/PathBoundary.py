@@ -12,7 +12,6 @@ import os as OsLayer
 from pathlib import Path as PathInfo
 import tempfile as Tempfile
 
-
 # command argument paths permit only inert characters after fixed root resolution
 KCommandPathCharacters = frozenset(" ._-/\\:")
 

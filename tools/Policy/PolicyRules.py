@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-
 # large directories become hard to navigate so direct ownership stays intentionally bounded
 KMaxDirectFiles = 32
 

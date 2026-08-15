@@ -26,7 +26,6 @@ from interchange.geometry.models.GeometryCurves import (
     SplineGeometry,
 )
 
-
 # exhaustive geometry typing prevents new classes from escaping sketch validation
 KGeometryTypes = ReduceValues(
     UnionValues,

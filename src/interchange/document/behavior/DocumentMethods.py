@@ -17,7 +17,6 @@ from interchange.compatibility.PythonCompatMethods import (
     MakeLegacySig,
 )
 
-
 # method contracts stay declarative because exact historical reflection spans several split behaviors
 KDocumentMethods = (
     ("ToMapping", "to_dict", {}, (), "dict[str, Any]"),

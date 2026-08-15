@@ -12,7 +12,6 @@ from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
 
-
 # wrapper metadata needs one reserved key shared by semantic filtering paths
 KWrapperMetaKey = "kit.wrapper_metadata_keys"
 

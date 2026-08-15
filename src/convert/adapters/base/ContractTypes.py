@@ -11,7 +11,6 @@ from pathlib import Path as FilePath
 from typing import BinaryIO as BinaryStream
 from typing import TextIO as TypeTextStream
 
-
 # reader contracts accept paths memory payloads and caller owned streams
 KSourceType = str | FilePath | bytes | bytearray | BinaryStream | TypeTextStream
 

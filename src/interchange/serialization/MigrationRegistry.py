@@ -14,7 +14,6 @@ from typing import Mapping as TypeMap
 
 from interchange.serialization.Wire import GetWireType
 
-
 # migrations preserve old documents when record schemas evolve compatibly
 KMigrationRegistry: dict[
     type, CallableType[[TypeMap[str, AnyValue]], TypeMap[str, AnyValue]]

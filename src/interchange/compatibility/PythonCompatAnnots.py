@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # exceptional legacy fields stay explicit because three names differ from their wire spellings
 KPythonCompatAnnots: TypeMap[str, tuple[str, ...]] = {
     "ComponentDef": (

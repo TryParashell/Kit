@@ -8,7 +8,6 @@
 
 from interchange.serialization.Wire import GetWireType
 
-
 # registered types allow wire data to reconstruct concrete immutable records safely
 KTypeRegistry: dict[str, type] = {}
 

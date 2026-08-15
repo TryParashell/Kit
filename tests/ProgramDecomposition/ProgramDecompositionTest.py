@@ -18,7 +18,6 @@ import sys as SysModule
 from types import ModuleType
 import unittest as UnitTest
 
-
 # repository anchoring keeps tests independent from the current working directory
 KRepoRoot = FilePath(__file__).resolve().parents[2]
 

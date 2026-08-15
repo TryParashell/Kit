@@ -9,7 +9,6 @@
 from interchange.payloads.PayloadRoles import PayloadRole
 from interchange.payloads.PayloadRuleModel import PayloadRule
 
-
 # suffix evidence remains explicit because unknown formats still expose useful filenames
 KSuffixPayloadRules = (
     PayloadRule(PayloadRole.KBrep, ".brep", SourceSuffixes=frozenset({".brep"})),
@@ -41,7 +40,6 @@ KSuffixPayloadRules = (
 
 
 from interchange.payloads.PayloadRuleData import KFormatPayloadRules
-
 
 # legacy payload recovery needs ordered evidence matching historical output
 KLegacyPayloadRules = KFormatPayloadRules + KSuffixPayloadRules
