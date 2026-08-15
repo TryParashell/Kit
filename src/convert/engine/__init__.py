@@ -16,7 +16,6 @@ from interchange import CadDocument
 from convert.adapters.base.ContractTypes import KSourceType as Source
 from convert.adapters.base.ContractTypes import KTargetType as Destination
 from convert.adapters.base.ReadOptions import ReadOptions
-from convert.adapters.base.TransferContract import CapTransfer as CapabilityTransfer
 from convert.adapters.base.WriteOptions import WriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 from convert.adapters.registry import AdapterRegistry

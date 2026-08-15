@@ -10,6 +10,7 @@ from io import TextIOBase as TextStream
 from pathlib import Path as FilePath
 from typing import Protocol
 from typing import TypeAlias
+from typing import TypeGuard
 
 
 # binary sources need only the operation consumed by adapters rather than full seekable io
@@ -65,7 +66,7 @@ def IsDeviceName(ValueText: str) -> bool:
 
 
 # stream staging needs a reliable distinction between binary and text destinations
-def IsBinaryTarget(TargetValue: KTargetType) -> bool:
+def IsBinaryTarget(TargetValue: KTargetType) -> TypeGuard[BinaryWriter]:
     if isinstance(TargetValue, (str, FilePath, TextStream)):
         return False
     WriterValue = getattr(TargetValue, "write", None)

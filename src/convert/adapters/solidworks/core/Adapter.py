@@ -276,19 +276,17 @@ class Generated:
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class AsmTemplate:
-    locals().setdefault("__annotations__", {})
-    __annotations__["capabilities"] = "frozenset[Capability]"
-    __annotations__["divergences"] = "tuple[str, ...]"
+    capabilities: frozenset[Capability]
+    divergences: tuple[str, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class AsmBundle:
-    locals().setdefault("__annotations__", {})
-    __annotations__["names"] = "Mapping[str, str]"
-    __annotations__["payloads"] = "Mapping[Path, bytes]"
+    names: Mapping[str, str]
+    payloads: Mapping[Path, bytes]
     StampValues: Mapping[str, int]
-    __annotations__["complete"] = "bool"
+    complete: bool
     NativeCaps: frozenset[Capability] = frozenset()
 
 

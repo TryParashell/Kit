@@ -579,7 +579,7 @@ def ParseTransform(TokensA: Tokens) -> tuple[float, ...]:
         (Values[4] / Scale, Values[5] / Scale, Values[6] / Scale),
         (Values[8] / Scale, Values[9] / Scale, Values[10] / Scale),
     )
-    Columns = (
+    Columns: tuple[tuple[float, float, float], ...] = (
         (RowsValue[0][0], RowsValue[1][0], RowsValue[2][0]),
         (RowsValue[0][1], RowsValue[1][1], RowsValue[2][1]),
         (RowsValue[0][2], RowsValue[1][2], RowsValue[2][2]),
@@ -691,7 +691,7 @@ def MatrixPower(Value: tuple[float, ...], Power: int) -> tuple[float, ...]:
     if Power < 0:
         Value = InverseLocation(Value)
         Power = -Power
-    Result = KIdentityLocation
+    Result: tuple[float, ...] = KIdentityLocation
     Factor = Value
     while Power:
         if Power & 1:
@@ -710,6 +710,7 @@ def ModelLocations(TokensA: Tokens) -> tuple[tuple[float, ...], ...]:
     Matrices: list[tuple[float, ...]] = []
     UniqueLocations: set[tuple[tuple[int, int], ...]] = set()
     for IndexA in range(1, Count + 1):
+        LocationA: tuple[tuple[int, int], ...]
         KindValue = TokensA.ReadInteger(1, 2)
         if KindValue == 1:
             Direct[IndexA] = ParseTransform(TokensA)
@@ -725,7 +726,7 @@ def ModelLocations(TokensA: Tokens) -> tuple[tuple[float, ...], ...]:
                 ReferenceA = TokensA.ReadInteger(0, len(Chains))
         if not LocationA or LocationA in UniqueLocations:
             raise DecodeFailure("invalid BRep location record")
-        Matrix = KIdentityLocation
+        Matrix: tuple[float, ...] = KIdentityLocation
         for Datum, Power in LocationA:
             BaseValue = Direct.get(Datum)
             if BaseValue is None:
@@ -871,6 +872,7 @@ def ReadLocations(TokensA: Tokens) -> int:
     LocationsA: list[tuple[tuple[int, int], ...]] = []
     UniqueLocations: set[tuple[tuple[int, int], ...]] = set()
     for IndexA in range(1, Count + 1):
+        LocationA: tuple[tuple[int, int], ...]
         KindValue = TokensA.ReadInteger(1, 2)
         if KindValue == 1:
             ParseTransform(TokensA)

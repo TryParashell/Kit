@@ -439,26 +439,33 @@ class NativeMate:
     alignment_code: int | None
     dimensions: tuple[NativeMateB, ...]
 
-    # this definition exists because focused behavior needs one stable owner
+    # lowercase value access keeps neutral mate metadata statically typed
     @property
-    def ValueM(Instance) -> float | None:
+    def value_m(self) -> float | None:
         return (
-            Instance.dimensions[0].value
-            if Instance.kind == "distance" and Instance.dimensions
+            self.dimensions[0].value
+            if self.kind == "distance" and self.dimensions
             else None
         )
 
-    # this definition exists because focused behavior needs one stable owner
+    # lowercase offset access keeps source record locations statically typed
     @property
-    def ValueOffset(Instance) -> int | None:
+    def value_offset(self) -> int | None:
         return (
-            Instance.dimensions[0].value_offset
-            if Instance.kind == "distance" and Instance.dimensions
+            self.dimensions[0].value_offset
+            if self.kind == "distance" and self.dimensions
             else None
         )
 
-    locals()["value_m"] = ValueM
-    locals()["value_offset"] = ValueOffset
+    # pascal compatibility preserves historical native mate consumers during migration
+    @property
+    def ValueM(self) -> float | None:
+        return self.value_m
+
+    # pascal compatibility preserves historical native mate consumers during migration
+    @property
+    def ValueOffset(self) -> int | None:
+        return self.value_offset
 
 
 # this definition exists because focused behavior needs one stable owner

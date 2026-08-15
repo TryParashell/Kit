@@ -135,9 +135,9 @@ class FeatureTopology:
     support: str
     end_condition: str
 
-    # this definition exists because focused behavior needs one stable owner
+    # lowercase access preserves the public topology tuple contract for callers
     @property
-    def KeyAction(self) -> tuple[str, str, str, str]:
+    def key(self) -> tuple[str, str, str, str]:
         return (
             self.operation,
             self.profile,
@@ -145,57 +145,42 @@ class FeatureTopology:
             self.end_condition,
         )
 
-    key = property(KeyAction)
-
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TargetFeature:
-    __annotations__ = {
-        "operation": "str",
-        "profile": "str",
-        "support": "str",
-        "end_condition": "str",
-        "points_mm": "tuple[tuple[float, float], ...]",
-        "radii_mm": "tuple[float, ...]",
-        "arc_centres_mm": "tuple[tuple[float, float], ...]",
-        "swept_arc_centres_mm": "tuple[tuple[float, float], ...]",
-        "depth_mm": "float | None",
-        "reversed": "bool | None",
-        "angle_degrees": "float | None",
-        "axis_direction": "tuple[float, float] | None",
-    }
-    locals().update(
-        {
-            "points_mm": (),
-            "radii_mm": (),
-            "arc_centres_mm": (),
-            "swept_arc_centres_mm": (),
-            "depth_mm": None,
-            "reversed": None,
-            "angle_degrees": None,
-            "axis_direction": None,
-        }
-    )
+    operation: str
+    profile: str
+    support: str
+    end_condition: str
+    points_mm: tuple[tuple[float, float], ...] = ()
+    radii_mm: tuple[float, ...] = ()
+    arc_centres_mm: tuple[tuple[float, float], ...] = ()
+    swept_arc_centres_mm: tuple[tuple[float, float], ...] = ()
+    depth_mm: float | None = None
+    reversed: bool | None = None
+    angle_degrees: float | None = None
+    axis_direction: tuple[float, float] | None = None
 
-    # this definition exists because focused behavior needs one stable owner
+    # lowercase access exposes revolution classification without analyzer opaque aliases
     @property
-    def IsRevolve(Instance) -> bool:
-        return Instance.operation in KRevolveOperations
+    def revolve(self) -> bool:
+        return self.operation in KRevolveOperations
 
-    # this definition exists because focused behavior needs one stable owner
+    # lowercase access exposes the normalized topology without analyzer opaque aliases
     @property
-    def Topology(Instance) -> FeatureTopology:
+    def topology(self) -> FeatureTopology:
         return FeatureTopology(
-            Instance.operation,
-            Instance.profile,
-            Instance.support,
-            Instance.end_condition,
+            self.operation,
+            self.profile,
+            self.support,
+            self.end_condition,
         )
 
-    locals()["revolve"] = IsRevolve
-    locals()["topology"] = Topology
-    locals()["Revolve"] = IsRevolve
+    # pascal compatibility preserves historical callers during lowercase model restoration
+    @property
+    def Revolve(self) -> bool:
+        return self.revolve
 
 
 # this binding exists because shared behavior needs one stable value

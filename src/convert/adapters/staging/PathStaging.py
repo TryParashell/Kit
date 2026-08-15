@@ -96,10 +96,11 @@ def BackupTargets(
     BackupPath: FilePath,
 ) -> list[tuple[FilePath, FilePath]]:
     ReplacedValues: list[tuple[FilePath, FilePath]] = []
-    if not any(HasPath(TargetPath) for SourcePath, TargetPath in TargetValues):
+    if not any(HasPath(TargetPair[1]) for TargetPair in TargetValues):
         return ReplacedValues
     BackupPath.mkdir()
-    for SourcePath, TargetPath in TargetValues:
+    for TargetPair in TargetValues:
+        TargetPath = TargetPair[1]
         if not HasPath(TargetPath):
             continue
         SavedPath = BackupPath / TargetPath.name
@@ -130,11 +131,7 @@ def CommitOutputs(
     TargetValues = GetOutputPaths(StagingPath, TargetPath)
     if not Overwrite:
         ConflictPath = next(
-            (
-                OutputPath
-                for SourcePath, OutputPath in TargetValues
-                if HasPath(OutputPath)
-            ),
+            (OutputPair[1] for OutputPair in TargetValues if HasPath(OutputPair[1])),
             None,
         )
         if ConflictPath is not None:

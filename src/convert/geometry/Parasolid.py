@@ -1872,6 +1872,19 @@ def EmitSurfacesMut(
             raise ParaWriteError(
                 f"Parasolid V12 writer does not support NURBS surface {SurfValue.id}"
             )
+        if not isinstance(
+            SurfValue,
+            (
+                PlaneSurface,
+                CylinderSurface,
+                ConeSurface,
+                SphereSurface,
+                TorusSurface,
+                OffsetSurface,
+                NativeSurface,
+            ),
+        ):
+            raise ParaWriteError("Parasolid B-rep contains an unsupported surface")
         KindValueData, Values = SurfValues(SurfValue)
         FaceIds = Owners.KSurfFaces[SurfValue.id]
         BodyId = Owners.KFaceBody[FaceIds[0]]
@@ -1903,6 +1916,17 @@ def EmitCurvesMut(
             raise ParaWriteError(
                 f"Parasolid V12 writer does not support NURBS curve {Curve.id}"
             )
+        if not isinstance(
+            Curve,
+            (
+                LineCurve,
+                CircleCurve,
+                EllipseCurve,
+                IntersectionCurve,
+                NativeCurve,
+            ),
+        ):
+            raise ParaWriteError("Parasolid B-rep contains an unsupported curve")
         KindValueData, Values = CurveValues(Curve)
         EdgeIds = Owners.KCurveEdges[Curve.id]
         BodyId = Owners.KEdgeBody[EdgeIds[0]]
@@ -2273,19 +2297,21 @@ def EmitVendorMut(
         if AttrBase is None or FirstFaceId is None:
             continue
         if Config.KSolidSolid:
-            Faces: tuple[FaceAttribute, ...] = tuple(
-                (
+            FaceValues: list[FaceAttribute] = []
+            for FaceData in Model.faces:
+                UnchangedValue = FaceData.attributes.get("solidworks.unchanged_id")
+                UnchangedId = UnchangedValue if type(UnchangedValue) is int else None
+                FaceValues.append(
                     (
                         FaceData.id,
                         Indices.KFaces[FaceData.id],
                         Indices.KSolidFaceAttrs[FaceData.id],
                         Indices.KSolidFaceValues[FaceData.id],
-                        FaceData.attributes.get("solidworks.unchanged_id"),
+                        UnchangedId,
                         FaceData.attributes,
                     )
-                    for FaceData in Model.faces
                 )
-            )
+            Faces = tuple(FaceValues)
             WriteSolidAttrs(
                 Output,
                 AttrBase,
@@ -4535,35 +4561,39 @@ def ScanChartMut(
     Ambiguous: ScanAmbiguous,
     Budget: ScanBudget,
 ) -> None:
-    Record = ParseCompactUv(BodyData, OffsetData)
-    if Record is not None:
+    CompactRecord = ParseCompactUv(BodyData, OffsetData)
+    if CompactRecord is not None:
         StoreUniqueMut(
             Records.KCompactSupportUv,
             Ambiguous.KCompactSupportUv,
-            Record.attribute,
-            Record,
+            CompactRecord.attribute,
+            CompactRecord,
         )
     if KindValueData == 38:
-        Record = ParseInterRec(BodyData, OffsetData)
-        if Record is not None:
+        InterRecord = ParseInterRec(BodyData, OffsetData)
+        if InterRecord is not None:
             StoreUniqueMut(
                 Records.KIntersections,
                 Ambiguous.KIntersections,
-                Record.attribute,
-                Record,
+                InterRecord.attribute,
+                InterRecord,
             )
     if KindValueData == 40:
-        Record = ParseChart(BodyData, OffsetData)
-        if Record is not None:
-            Budget.KChartPointCount += len(Record.points)
+        ChartValue = ParseChart(BodyData, OffsetData)
+        if ChartValue is not None:
+            Budget.KChartPointCount += len(ChartValue.points)
             if Budget.KChartPointCount > 4000000:
                 Budget.KIsValid = False
                 return
-            StoreUniqueMut(Records.KCharts, Ambiguous.KCharts, Record.attribute, Record)
+            StoreUniqueMut(
+                Records.KCharts, Ambiguous.KCharts, ChartValue.attribute, ChartValue
+            )
     if KindValueData == 41:
-        Record = ParseTermRecord(BodyData, OffsetData)
-        if Record is not None:
-            StoreUniqueMut(Records.KTerms, Ambiguous.KTerms, Record.attribute, Record)
+        TermValue = ParseTermRecord(BodyData, OffsetData)
+        if TermValue is not None:
+            StoreUniqueMut(
+                Records.KTerms, Ambiguous.KTerms, TermValue.attribute, TermValue
+            )
 
 
 # analytic carrier scanning restores direct curves surfaces and entity hierarchy records
@@ -4573,8 +4603,33 @@ def ScanCarrierMut(
     if KindValueData in {30, 31, 32, 50, 51, 52, 53, 54}:
         Carrier = ParseCarrier(BodyData, OffsetData)
         if Carrier is not None:
-            Target = Tables.curves if KindValueData < 50 else Tables.surfaces
-            Target[Carrier[0]] = Carrier[1]
+            CarrierId, CarrierValue = Carrier
+            if KindValueData < 50 and isinstance(
+                CarrierValue,
+                (
+                    LineCurve,
+                    CircleCurve,
+                    EllipseCurve,
+                    IntersectionCurve,
+                    NurbsCurve,
+                    NativeCurve,
+                ),
+            ):
+                Tables.curves[CarrierId] = CarrierValue
+            elif isinstance(
+                CarrierValue,
+                (
+                    PlaneSurface,
+                    CylinderSurface,
+                    ConeSurface,
+                    SphereSurface,
+                    TorusSurface,
+                    NurbsSurface,
+                    OffsetSurface,
+                    NativeSurface,
+                ),
+            ):
+                Tables.surfaces[CarrierId] = CarrierValue
     if KindValueData == 81:
         Entity = ParseEntity(BodyData, OffsetData)
         if Entity is not None:
@@ -4590,31 +4645,40 @@ def ScanSurfMut(
     Ambiguous: ScanAmbiguous,
 ) -> None:
     if KindValueData == 204:
-        Record = ParseSupportRec(BodyData, OffsetData)
-        if Record is not None:
+        SupportRecord = ParseSupportRec(BodyData, OffsetData)
+        if SupportRecord is not None:
             StoreUniqueMut(
-                Records.KSupportUv, Ambiguous.KSupportUv, Record.attribute, Record
+                Records.KSupportUv,
+                Ambiguous.KSupportUv,
+                SupportRecord.attribute,
+                SupportRecord,
             )
     if KindValueData == 124:
-        Record = ParseBSurface(BodyData, OffsetData)
-        if Record is not None:
+        BaseSurface = ParseBSurface(BodyData, OffsetData)
+        if BaseSurface is not None:
             StoreUniqueMut(
-                Records.KBSurfaces, Ambiguous.KBSurfaces, Record.attribute, Record
+                Records.KBSurfaces,
+                Ambiguous.KBSurfaces,
+                BaseSurface.attribute,
+                BaseSurface,
             )
     if KindValueData == 126:
-        Record = ParseNurbsSurf(BodyData, OffsetData)
-        if Record is not None:
+        NurbsSurfaceData = ParseNurbsSurf(BodyData, OffsetData)
+        if NurbsSurfaceData is not None:
             StoreUniqueMut(
                 Records.KNurbsSurfaces,
                 Ambiguous.KNurbsSurfaces,
-                Record.attribute,
-                Record,
+                NurbsSurfaceData.attribute,
+                NurbsSurfaceData,
             )
     if KindValueData == 125:
-        Record = ParseSurfaceDat(BodyData, OffsetData)
-        if Record is not None:
+        SurfaceData = ParseSurfaceDat(BodyData, OffsetData)
+        if SurfaceData is not None:
             StoreUniqueMut(
-                Records.KSurfData, Ambiguous.KSurfData, Record.attribute, Record
+                Records.KSurfData,
+                Ambiguous.KSurfData,
+                SurfaceData.attribute,
+                SurfaceData,
             )
 
 
@@ -4627,31 +4691,40 @@ def ScanCurveMut(
     Ambiguous: ScanAmbiguous,
 ) -> None:
     if KindValueData == 134:
-        Record = ParseBCurve(BodyData, OffsetData)
-        if Record is not None:
+        BaseCurve = ParseBCurve(BodyData, OffsetData)
+        if BaseCurve is not None:
             StoreUniqueMut(
-                Records.KBCurves, Ambiguous.KBCurves, Record.attribute, Record
+                Records.KBCurves,
+                Ambiguous.KBCurves,
+                BaseCurve.attribute,
+                BaseCurve,
             )
     if KindValueData == 136:
-        Record = ParseNurbsCurve(BodyData, OffsetData)
-        if Record is not None:
+        NurbsCurveData = ParseNurbsCurve(BodyData, OffsetData)
+        if NurbsCurveData is not None:
             StoreUniqueMut(
-                Records.KNurbsCurves, Ambiguous.KNurbsCurves, Record.attribute, Record
+                Records.KNurbsCurves,
+                Ambiguous.KNurbsCurves,
+                NurbsCurveData.attribute,
+                NurbsCurveData,
             )
     if KindValueData == 135:
-        Record = ParseCurveData(BodyData, OffsetData)
-        if Record is not None:
+        CurveData = ParseCurveData(BodyData, OffsetData)
+        if CurveData is not None:
             StoreUniqueMut(
-                Records.KCurveData, Ambiguous.KCurveData, Record.attribute, Record
+                Records.KCurveData,
+                Ambiguous.KCurveData,
+                CurveData.attribute,
+                CurveData,
             )
     if KindValueData == 133:
-        Record = ParseTrimCurve(BodyData, OffsetData)
-        if Record is not None:
+        TrimRecord = ParseTrimCurve(BodyData, OffsetData)
+        if TrimRecord is not None:
             StoreUniqueMut(
                 Records.KTrimmedCurves,
                 Ambiguous.KTrimmedCurves,
-                Record.attribute,
-                Record,
+                TrimRecord.attribute,
+                TrimRecord,
             )
 
 
@@ -4665,24 +4738,30 @@ def ScanArrayMut(
     Budget: ScanBudget,
 ) -> None:
     if KindValueData in {45, 128}:
-        Record = ParseFloatArray(BodyData, OffsetData, KindValueData)
-        if Record is not None:
-            Budget.KSplineScalarCount += len(Record.values)
+        FloatValues = ParseFloatArray(BodyData, OffsetData, KindValueData)
+        if FloatValues is not None:
+            Budget.KSplineScalarCount += len(FloatValues.values)
             if Budget.KSplineScalarCount > 8000000:
                 Budget.KIsValid = False
                 return
             StoreUniqueMut(
-                Records.KFloatArrays, Ambiguous.KFloatArrays, Record.attribute, Record
+                Records.KFloatArrays,
+                Ambiguous.KFloatArrays,
+                FloatValues.attribute,
+                FloatValues,
             )
     if KindValueData == 127:
-        Record = ParseShortArray(BodyData, OffsetData)
-        if Record is not None:
-            Budget.KSplineScalarCount += len(Record.values)
+        ShortValues = ParseShortArray(BodyData, OffsetData)
+        if ShortValues is not None:
+            Budget.KSplineScalarCount += len(ShortValues.values)
             if Budget.KSplineScalarCount > 8000000:
                 Budget.KIsValid = False
                 return
             StoreUniqueMut(
-                Records.KShortArrays, Ambiguous.KShortArrays, Record.attribute, Record
+                Records.KShortArrays,
+                Ambiguous.KShortArrays,
+                ShortValues.attribute,
+                ShortValues,
             )
 
 
@@ -4724,29 +4803,34 @@ def ScanInlineMut(
     TermDescriptor = b"term_use" + KInlineTermTail
     while (Position := BodyData.find(TermDescriptor, Cursor)) >= 0:
         BaseValue = Position + len(TermDescriptor)
-        Record = ParseTermPayloa(BodyData, BaseValue, BaseValue)
-        if Record is not None:
-            StoreUniqueMut(Records.KTerms, Ambiguous.KTerms, Record.attribute, Record)
+        TermValue = ParseTermPayloa(BodyData, BaseValue, BaseValue)
+        if TermValue is not None:
+            StoreUniqueMut(
+                Records.KTerms, Ambiguous.KTerms, TermValue.attribute, TermValue
+            )
         Cursor = Position + 1
     Cursor = 0
     UvDescriptor = b"values" + KInlineUvTail
     while (Position := BodyData.find(UvDescriptor, Cursor)) >= 0:
         BaseValue = Position + len(UvDescriptor)
-        Record = ParseSupportUv(BodyData, BaseValue, BaseValue)
-        if Record is not None:
+        SupportValue = ParseSupportUv(BodyData, BaseValue, BaseValue)
+        if SupportValue is not None:
             StoreUniqueMut(
-                Records.KSupportUv, Ambiguous.KSupportUv, Record.attribute, Record
+                Records.KSupportUv,
+                Ambiguous.KSupportUv,
+                SupportValue.attribute,
+                SupportValue,
             )
         Cursor = Position + 1
     Cursor = 0
     while (Position := BodyData.find(b"Z", Cursor)) >= 0:
-        Record = ParseInterData(BodyData, Position)
-        if Record is not None:
+        InterValue = ParseInterData(BodyData, Position)
+        if InterValue is not None:
             StoreUniqueMut(
                 Records.KIntersections,
                 Ambiguous.KIntersections,
-                Record.attribute,
-                Record,
+                InterValue.attribute,
+                InterValue,
             )
         Cursor = Position + 1
 
@@ -4755,11 +4839,11 @@ def ScanInlineMut(
 def ResolveScansMut(
     BodyData: bytes, Tables: RecordTables, Records: ScanRecords
 ) -> None:
-    for AttrValue, Record in Records.KBSurfaces.items():
+    for AttrValue, SurfaceRecordData in Records.KBSurfaces.items():
         if AttrValue in Tables.surfaces:
             continue
         SurfValue = ResolveNurbSurf(
-            Record,
+            SurfaceRecordData,
             Records.KNurbsSurfaces,
             Records.KSurfData,
             Records.KFloatArrays,
@@ -4767,38 +4851,38 @@ def ResolveScansMut(
         )
         if SurfValue is not None:
             Tables.surfaces[AttrValue] = SurfValue
-    for AttrValue, Record in Records.KBCurves.items():
+    for AttrValue, CurveRecordData in Records.KBCurves.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveNurbCurv(
-            Record,
+        CurveValue = ResolveNurbCurv(
+            CurveRecordData,
             Records.KNurbsCurves,
             Records.KCurveData,
             Records.KFloatArrays,
             Records.KShortArrays,
         )
-        if Curve is not None:
-            Tables.curves[AttrValue] = Curve
-    for AttrValue, Record in Records.KIntersections.items():
+        if CurveValue is not None:
+            Tables.curves[AttrValue] = CurveValue
+    for AttrValue, InterRecordData in Records.KIntersections.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveInter(
+        InterCurveValue = ResolveInter(
             BodyData,
-            Record,
+            InterRecordData,
             Records.KCharts,
             Records.KTerms,
             Records.KSupportUv,
             Records.KCompactSupportUv,
             Tables.surfaces,
         )
-        if Curve is not None:
-            Tables.curves[AttrValue] = Curve
-    for AttrValue, Record in Records.KTrimmedCurves.items():
+        if InterCurveValue is not None:
+            Tables.curves[AttrValue] = InterCurveValue
+    for AttrValue, TrimRecordData in Records.KTrimmedCurves.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveTrimCurv(Record, Tables.curves)
-        if Curve is not None:
-            Tables.curves[AttrValue] = Curve
+        TrimCurveValue = ResolveTrimCurv(TrimRecordData, Tables.curves)
+        if TrimCurveValue is not None:
+            Tables.curves[AttrValue] = TrimCurveValue
 
 
 # this declaration exists because focused behavior needs one stable owner
@@ -4833,14 +4917,16 @@ def RecordStart(
 def ReadShort(DataValue: KReadBuffer, OffsetData: int) -> int | None:
     if OffsetData < 0 or OffsetData + 2 > len(DataValue):
         return None
-    return Struct.unpack_from(">H", DataValue, OffsetData)[0]
+    ValueData = Struct.unpack_from(">H", DataValue, OffsetData)[0]
+    return ValueData if isinstance(ValueData, int) else None
 
 
 # this declaration exists because focused behavior needs one stable owner
 def ReadUnsigned(DataValue: KReadBuffer, OffsetData: int) -> int | None:
     if OffsetData < 0 or OffsetData + 4 > len(DataValue):
         return None
-    return Struct.unpack_from(">I", DataValue, OffsetData)[0]
+    ValueData = Struct.unpack_from(">I", DataValue, OffsetData)[0]
+    return ValueData if isinstance(ValueData, int) else None
 
 
 # this declaration exists because focused behavior needs one stable owner
@@ -5754,7 +5840,7 @@ def ResolveTrimCurv(
 
 # trimmed curve domain validation isolates periodic and bounded parameter rules
 def TrimCurveDomain(
-    Basis: object, ParamOne: float, ParamTwo: float
+    Basis: ParaCurve, ParamOne: float, ParamTwo: float
 ) -> tuple[bool, bool] | None:
     if isinstance(Basis, LineCurve):
         return False, False
@@ -6614,18 +6700,22 @@ def ParseBridge(
     Owner = ReadShort(DataValue, Start + 6)
     Tolerance = 0.0
     DirectTolerance = False
+    ParsedTolerance = ReadTolerance(DataValue, Start + 8)
+    HasDirectTolerance = (
+        AllowTolerance and ParsedTolerance is not None and ParsedTolerance > 0.0
+    )
     if (
         DataValue[Start + 8 : Start + 9] == b"\x01"
         and DataValue[Start + 9 : Start + 17] == KEntityMagic
     ):
         RefsValueData = TripledRefs(DataValue, Start + 17, 5)
         MarkerOffset = Start + 32
-    elif DataValue[Start + 8 : Start + 16] == KEntityMagic or (
-        AllowTolerance
-        and (Tolerance := ReadTolerance(DataValue, Start + 8)) is not None
-        and (Tolerance > 0.0)
-    ):
+    elif DataValue[Start + 8 : Start + 16] == KEntityMagic or HasDirectTolerance:
         DirectTolerance = DataValue[Start + 8 : Start + 16] != KEntityMagic
+        if DirectTolerance:
+            if ParsedTolerance is None:
+                return None
+            Tolerance = ParsedTolerance
         Tripled = all(
             (
                 DataValue[Start + 18 + Index * 3 : Start + 19 + Index * 3] == b"\x01"
@@ -6806,6 +6896,8 @@ def ReadTolerance(DataValueData: bytes, Offset: int) -> float | None:
     if Offset < 0 or Offset + 8 > len(DataValueData):
         return None
     Value = Struct.unpack_from(">d", DataValueData, Offset)[0]
+    if not isinstance(Value, float):
+        return None
     if (
         not MathValue.isfinite(Value)
         or Value < 0.0
@@ -6867,6 +6959,7 @@ def PointRecoFiel(
     if Start is None or Start + 38 > len(DataValue):
         return None
     AttrValue = ReadShort(DataValue, Start)
+    RefsValueData: tuple[int, ...] | None
     if Prefixed:
         Values: list[int] = []
         Cursor = Start + 6
@@ -7772,20 +7865,20 @@ def MakeVertices(
     Vertices: list[BrepVertex] = []
     for VertexAttr in VertexOrder:
         if VertexAttr in SyntheticVertices:
-            Attrs: dict[str, object] = {
+            SyntheticAttrs: dict[str, object] = {
                 "parasolid.vertex_order": VertexRanks[VertexAttr]
             }
             Vertices.append(
                 BrepVertex(
                     NativeId("vertex", VertexAttr),
                     PointsByVertex[VertexAttr],
-                    attributes=Attrs,
+                    attributes=SyntheticAttrs,
                 )
             )
             continue
         VertexUse = Tables.vertex_uses[VertexAttr]
         PointAttr = PointAttrs[VertexAttr]
-        Attrs: dict[str, object] = {
+        VertexAttrs: dict[str, object] = {
             "parasolid.vertex_order": VertexRanks[VertexAttr],
             "parasolid.point_order": PointRanks[PointAttr],
         }
@@ -7793,13 +7886,13 @@ def MakeVertices(
             VertexAttr, VertexUse.references[1], UsedCoedges, UsedEdges, Tables
         )
         if FinOrder:
-            Attrs["parasolid.vertex_fins"] = FinOrder
+            VertexAttrs["parasolid.vertex_fins"] = FinOrder
         Vertices.append(
             BrepVertex(
                 NativeId("vertex", VertexAttr),
                 PointsByVertex[VertexAttr],
                 tolerance=VertexUse.tolerance,
-                attributes=FrozenMapping(Attrs),
+                attributes=FrozenMapping(VertexAttrs),
             )
         )
     return tuple(Vertices)
