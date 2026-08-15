@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from dataclasses import fields as GetFields
 
+from interchange.serialization.RecordType import DataRecord
 from interchange.serialization.WireFields import KTypeWireFields, KWireFields
 from interchange.serialization.WireTypes import KWireTypes
 
 
 # canonical slots across inheritance preserve storage access after historical reflection mutation
-def GetSlotNames(ClassType: type) -> tuple[str, ...]:
+def GetSlotNames(ClassType: type[object]) -> tuple[str, ...]:
     SlotNames: list[str] = []
     for BaseType in reversed(ClassType.__mro__):
         BaseSlots = BaseType.__dict__.get("__slots__", ())
@@ -28,7 +29,7 @@ def GetSlotNames(ClassType: type) -> tuple[str, ...]:
 
 
 # type registration needs stable names independent of internal model naming
-def GetWireType(ClassType: type) -> str:
+def GetWireType(ClassType: type[object]) -> str:
     CanonicalName = getattr(ClassType, "__canonical_name__", ClassType.__name__)
     return KWireTypes.get(CanonicalName, ClassType.__name__)
 
@@ -50,7 +51,7 @@ def FormatWireName(FieldName: str) -> str:
 
 
 # boolean model fields omit their source marker on the historical wire format
-def GetWireField(FieldName: str, ClassType: type | None = None) -> str:
+def GetWireField(FieldName: str, ClassType: type[object] | None = None) -> str:
     if ClassType is not None:
         TypeFields = KTypeWireFields.get(ClassType.__name__, {})
         if FieldName in TypeFields:
@@ -75,7 +76,7 @@ def GetModelField(WireName: str) -> str:
 
 
 # target records disambiguate shared wire keys by their actual dataclass fields
-def ResolveField(ClassType: type, WireName: str) -> str:
+def ResolveField(ClassType: type[DataRecord], WireName: str) -> str:
     FieldNames = GetSlotNames(ClassType)
     TypeFields = KTypeWireFields.get(
         getattr(ClassType, "__canonical_name__", ClassType.__name__),

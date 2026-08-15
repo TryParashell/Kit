@@ -6,9 +6,10 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.AssemblyEnums import ComponentKind
 
 
@@ -33,7 +34,7 @@ def HasGraphCycle(DefinitionGraph: TypeMap[str, set[str]]) -> bool:
 
 # component graph checks protect roots definitions owners transforms and acyclic nesting
 def GetGraphErrors(
-    AssemblyValue: AnyValue, Definitions: TypeMap[str, AnyValue]
+    AssemblyValue: AssemblyData, Definitions: TypeMap[str, ComponentDef]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     if AssemblyValue.RootDefinitionId not in Definitions:
@@ -43,7 +44,9 @@ def GetGraphErrors(
         != ComponentKind.KAssembly
     ):
         ErrorValues.append("assembly root component definition is not an assembly")
-    DefinitionGraph = {DefinitionId: set() for DefinitionId in Definitions}
+    DefinitionGraph: dict[str, set[str]] = {
+        DefinitionId: set() for DefinitionId in Definitions
+    }
     for InstanceValue in AssemblyValue.Instances:
         if InstanceValue.DefinitionId not in Definitions:
             ErrorValues.append(

@@ -23,9 +23,11 @@ from .Registry import (
     ResolvedOps,
 )
 
+from .Registry import (
+    FieldOwners,
+    ResolvedOps,
+)
 
-# compatibility binding preserves the generated owner catalog facade
-FieldOwners = KFieldOwners
 
 # legacy format access remains available while shared encoding owns the mapping
 PrimitiveFormats = KPrimitiveFormats

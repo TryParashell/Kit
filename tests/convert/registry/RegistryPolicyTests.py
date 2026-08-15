@@ -32,12 +32,12 @@ class NeedAdapter(ResultAdapter):
     # external dependency evidence exercises default and self contained rejection gates
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
         return ReplaceValue(
-            super().write(DocumentData, TargetData, OptionsData),
+            super().write(document, destination, options),
             requirements=("external application",),
         )
 
@@ -101,21 +101,21 @@ class BundleAdapter(ResultAdapter):
     # path restriction forces bundle rollback through transactional filesystem staging
     def supports(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
+        document: CadDocument,
+        destination: Destination,
     ) -> bool:
-        return isinstance(TargetData, (str, FilePath))
+        return isinstance(destination, (str, FilePath))
 
     # generated companions prove rejection restores both destination and neighboring files
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        if not isinstance(TargetData, (str, FilePath)):
+        if not isinstance(destination, (str, FilePath)):
             raise TypeError("bundle adapter requires a filesystem destination")
-        OutputPath = FilePath(TargetData).expanduser().resolve()
+        OutputPath = FilePath(destination).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
         OutputPath.write_bytes(b"generated")
         (OutputPath.parent / "component.bin").write_bytes(b"generated component")

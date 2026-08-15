@@ -7,11 +7,12 @@
 # to you under it immediately and permanently.
 
 from math import isfinite as IsFiniteNum
-from typing import Any as AnyValue
+
+from interchange.document.models.DocumentModel import CadDocument
 
 
 # mesh validation protects assembly geometry consumers from malformed numeric topology
-def GetMeshErrors(DocumentValue: AnyValue) -> tuple[str, ...]:
+def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for MeshValue in DocumentValue.Meshes:
         if any(

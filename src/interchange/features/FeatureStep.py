@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -16,6 +15,13 @@ from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
 from interchange.features.FeatureContract import FeatureDef
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.records.RecordProvenance import Provenance
+
+
+# runtime construction accepts untrusted values so feature definitions need one checked boundary
+def ValidateFeature(SourceValue: object) -> FeatureDef | None:
+    if SourceValue is None or isinstance(SourceValue, FeatureDef):
+        return SourceValue
+    raise TypeError("feature definition must implement FeatureDefinition")
 
 
 # canonical typing needs an inherited key while public reflection exposes historical fields
@@ -60,9 +66,8 @@ class FeatureStep(FeatureHintBase):
     IsSuppressed: bool
     ConfigStates: tuple[FeatureCfgState, ...]
     Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    Attributes: TypeMap[str, object]
 
     # invalid definitions must fail before corrupt feature records propagate
     def __post_init__(self) -> None:
-        if self.Definition is not None and not isinstance(self.Definition, FeatureDef):
-            raise TypeError("feature definition must implement FeatureDefinition")
+        ValidateFeature(self.Definition)

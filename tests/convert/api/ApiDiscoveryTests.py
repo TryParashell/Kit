@@ -8,6 +8,7 @@
 
 from dataclasses import replace as ReplaceData
 from pathlib import Path as FilePath
+import sys as SysModule
 
 import pytest as Pytest
 
@@ -24,7 +25,7 @@ def CheckEmptyPack(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     FormatPath.mkdir(parents=True)
     (PackagePath / "__init__.py").write_text("", encoding="utf-8")
     (FormatPath / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     with Pytest.raises(AdapterDiscoveryError, match="contains no adapter"):
         AdapterRegistry().introspect(PackageName)
 
@@ -42,7 +43,7 @@ def CheckHiddenPack(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
         "__all__ = []\n",
         encoding="utf-8",
     )
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     RegistryData = AdapterRegistry()
     assert RegistryData.introspect(PackageName) == ("interchange.json",)
 
@@ -58,7 +59,7 @@ def CheckSingleMod(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
         "class SingleAdapter(_JsonAdapter):\n    discovered = True\n",
         encoding="utf-8",
     )
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     RegistryData = AdapterRegistry()
     assert RegistryData.introspect(PackageName) == ("interchange.json",)
 

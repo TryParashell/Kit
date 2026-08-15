@@ -38,7 +38,7 @@ from interchange.records.RecordParameter import Parameter
         "Meshes": (),
         "BrepPayloads": (),
         "Diagnostics": (),
-        "Capabilities": frozenset(),
+        "Capabilities": frozenset[Capability](),
         "Units": UnitSystem.KMillimeter,
         "SchemaVersion": "1.0",
         "Assembly": None,

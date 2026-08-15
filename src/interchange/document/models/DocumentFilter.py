@@ -48,7 +48,7 @@ def FilterDocument(
     **LegacyValues: bool,
 ) -> CadDocument:
     from interchange.document.models.DocumentCaps import GetRetainedCaps
-    from interchange.document.models.DocumentModel import CadDocument
+    from interchange.document.validation.DocumentBoundary import GetDocument
 
     RemainingValues = dict(LegacyValues)
     if "include_brep" in RemainingValues:
@@ -71,12 +71,13 @@ def FilterDocument(
                     ComponentValue,
                     Document=(
                         FilterDocument(
-                            ComponentValue.Document,
+                            NestedValue,
                             IncludeBrep=IncludeBrep,
                             IncludeMesh=IncludeMesh,
                             KeepPayloads=KeepPayloads,
                         )
-                        if isinstance(ComponentValue.Document, CadDocument)
+                        if (NestedValue := GetDocument(ComponentValue.Document))
+                        is not None
                         else ComponentValue.Document
                     ),
                 )

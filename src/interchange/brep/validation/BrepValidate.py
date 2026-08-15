@@ -24,8 +24,7 @@ def GetBrepErrors(
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     if (
-        not isinstance(ModelValue.SchemaVersion, str)
-        or not ModelValue.SchemaVersion.strip()
+        not ModelValue.SchemaVersion.strip()
         or ModelValue.SchemaVersion != ModelValue.SchemaVersion.strip()
     ):
         ErrorValues.append("B-rep schema version must be a non-empty string")

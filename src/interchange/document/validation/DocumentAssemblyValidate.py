@@ -6,15 +6,21 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.MateGroup import MateGroup
 from interchange.document.models.DocumentIdentity import GetIdGroups
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.validation.DocumentBoundary import GetDocument
 
 
 # assembly validation composes focused graph link mesh and mate checks deterministically
 def GetAssemblyErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     from interchange.document.validation.DocumentComponentValidate import (
         GetDefLinkErrs,
@@ -32,22 +38,30 @@ def GetAssemblyErrs(
     if AssemblyValue is None:
         return ()
     ErrorValues: list[str] = []
-    for UnusedName, LabelText, ItemValues in GetIdGroups(AssemblyValue):
+    for GroupValue in GetIdGroups(AssemblyValue):
+        LabelText = GroupValue[1]
+        ItemValues = GroupValue[2]
         IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
-    Definitions = {
+    Definitions: dict[str, ComponentDef] = {
         ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Definitions
     }
-    Instances = {ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Instances}
-    DocumentValues = {
-        ItemValue.EntityId: ItemValue.Document for ItemValue in AssemblyValue.Documents
+    Instances: dict[str, ComponentInst] = {
+        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Instances
     }
-    Entities = {
+    DocumentValues = {
+        ItemValue.EntityId: NestedValue
+        for ItemValue in AssemblyValue.Documents
+        if (NestedValue := GetDocument(ItemValue.Document)) is not None
+    }
+    Entities: dict[str, MateEntity] = {
         ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.MateEntities
     }
-    MateValues = {ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Mates}
-    GroupById = {
+    MateValues: dict[str, MateConstraint] = {
+        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Mates
+    }
+    GroupById: dict[str, MateGroup] = {
         ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.MateGroups
     }
     ErrorValues.extend(GetGraphErrors(AssemblyValue, Definitions))

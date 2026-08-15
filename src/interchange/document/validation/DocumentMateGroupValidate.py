@@ -6,16 +6,20 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateGroup import MateGroup
 
 
 # group link checks protect assembly ownership parent hierarchy and mate membership
 def GetGroupLinks(
-    AssemblyValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    MateValues: TypeMap[str, AnyValue],
-    GroupById: TypeMap[str, AnyValue],
+    AssemblyValue: AssemblyData,
+    Definitions: TypeMap[str, ComponentDef],
+    MateValues: TypeMap[str, MateConstraint],
+    GroupById: TypeMap[str, MateGroup],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for GroupValue in AssemblyValue.MateGroups:
@@ -48,7 +52,7 @@ def GetGroupLinks(
 
 # group cycle checks prevent recursive organization from becoming unbounded
 def GetGroupCycles(
-    AssemblyValue: AnyValue, GroupById: TypeMap[str, AnyValue]
+    AssemblyValue: AssemblyData, GroupById: TypeMap[str, MateGroup]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for GroupValue in AssemblyValue.MateGroups:
@@ -68,10 +72,10 @@ def GetGroupCycles(
 
 # group validation preserves historical ordering across link and cycle diagnostics
 def GetMateGroups(
-    AssemblyValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    MateValues: TypeMap[str, AnyValue],
-    GroupById: TypeMap[str, AnyValue],
+    AssemblyValue: AssemblyData,
+    Definitions: TypeMap[str, ComponentDef],
+    MateValues: TypeMap[str, MateConstraint],
+    GroupById: TypeMap[str, MateGroup],
 ) -> tuple[str, ...]:
     return (
         *GetGroupLinks(

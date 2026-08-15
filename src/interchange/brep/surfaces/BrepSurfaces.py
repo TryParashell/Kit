@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
-from interchange.brep.curves.BrepCurves import BrepEntity
+from interchange.brep.curves.BrepCurves import BrepEntity, ValidateBrepId
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelDataMut
 from interchange.geometry.models.VectorSpace import SpaceVector
@@ -23,8 +23,7 @@ class BrepSurface(BrepEntity):
 
     # invalid identifiers must fail before surfaces enter topology collections
     def __post_init__(self) -> None:
-        if not isinstance(self.EntityId, str):
-            raise TypeError("B-rep surface id must be a string")
+        ValidateBrepId(self.EntityId)
 
 
 # planes retain exact spatial frames for analytic reconstruction

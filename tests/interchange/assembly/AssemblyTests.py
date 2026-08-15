@@ -39,7 +39,7 @@ def CheckRoundtrip() -> None:
     RestoredValue = CadDocument.FromJson(SourceValue.ToJson())
     assert RestoredValue == SourceValue
     assert RestoredValue.Assembly is not None
-    EmbeddedValue = RestoredValue.Assembly.Document("document:part")
+    EmbeddedValue = RestoredValue.Assembly.GetDocument("document:part")
     assert isinstance(EmbeddedValue, CadDocument)
     assert EmbeddedValue == BuildDocument()
     assert RestoredValue.Assembly.GetChildren("definition:root") == (
@@ -49,10 +49,12 @@ def CheckRoundtrip() -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckTransform() -> None:
-    TransformValue = BuildAssembly().Assembly.Instances[0].Transform
+    AssemblyValue = BuildAssembly().Assembly
+    assert AssemblyValue is not None
+    TransformValue = AssemblyValue.Instances[0].Transform
     assert TransformValue.TransformPoint((1.0, 2.0, 3.0)) == (101.0, 22.0, 33.0)
     assert TransformValue.GetRows()[0] == (1.0, 0.0, 0.0, 100.0)
-    assert TransformValue.rows() == TransformValue.GetRows()
+    assert TransformValue.GetRows() == TransformValue.GetRows()
 
 
 # behavior coverage protects portable interchange semantics during structural refactors

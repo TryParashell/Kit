@@ -14,11 +14,19 @@ class DocumentValid:
     # validation remains a model method while independent rules stay in focused modules
     def GetErrors(self) -> tuple[str, ...]:
         from interchange.document.validation.DocumentValidate import GetDocErrors
+        from interchange.document.validation.DocumentBoundary import GetDocument
 
-        return GetDocErrors(self)
+        DocumentValue = GetDocument(self)
+        if DocumentValue is None:
+            raise TypeError("validation requires a CadDocument")
+        return GetDocErrors(DocumentValue)
 
     # explicit assertion gives model callers the established aggregate exception behavior
     def AssertValid(self) -> None:
         from interchange.document.validation.DocumentValidate import AssertValid
+        from interchange.document.validation.DocumentBoundary import GetDocument
 
-        AssertValid(self)
+        DocumentValue = GetDocument(self)
+        if DocumentValue is None:
+            raise TypeError("validation requires a CadDocument")
+        AssertValid(DocumentValue)

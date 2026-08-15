@@ -176,12 +176,12 @@ class LoadableAdapter(ResultAdapter):
     # partial usability evidence exercises the registrys independent field preservation
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
         return ReplaceValue(
-            super().write(DocumentData, TargetData, OptionsData),
+            super().write(document, destination, options),
             application_usable=False,
             vendor_loadable=True,
         )

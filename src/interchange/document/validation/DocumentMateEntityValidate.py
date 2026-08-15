@@ -7,19 +7,31 @@
 # to you under it immediately and permanently.
 
 from math import isfinite as IsFiniteNum
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
-from interchange.document.models.DocumentRoot import DocumentRoot
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateEntity import MateEntity
+from interchange.document.models.DocumentModel import CadDocument
+
+
+# runtime model construction can bypass annotations so radii need an explicit numeric boundary
+def IsValidRadius(SourceValue: object) -> bool:
+    return (
+        isinstance(SourceValue, (int, float))
+        and IsFiniteNum(SourceValue)
+        and SourceValue >= 0.0
+    )
 
 
 # mate entity checks protect occurrence paths frames radii and selection ownership
 def GetMateEntErrs(
-    DocumentValue: AnyValue,
-    AssemblyValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    Instances: TypeMap[str, AnyValue],
-    DocumentValues: TypeMap[str, AnyValue],
+    DocumentValue: CadDocument,
+    AssemblyValue: AssemblyData,
+    Definitions: TypeMap[str, ComponentDef],
+    Instances: TypeMap[str, ComponentInst],
+    DocumentValues: TypeMap[str, CadDocument],
     IdentitySets: TypeMap[str, set[str]],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
@@ -50,11 +62,7 @@ def GetMateEntErrs(
             ErrorValues.append(
                 f"mate entity {EntityValue.EntityId} has an invalid frame"
             )
-        if EntityValue.Radius is not None and (
-            not isinstance(EntityValue.Radius, (int, float))
-            or not IsFiniteNum(EntityValue.Radius)
-            or EntityValue.Radius < 0.0
-        ):
+        if EntityValue.Radius is not None and not IsValidRadius(EntityValue.Radius):
             ErrorValues.append(
                 f"mate entity {EntityValue.EntityId} has an invalid radius"
             )
@@ -74,10 +82,10 @@ def GetMateEntErrs(
 
 # selection checks protect resolved mate geometry from dangling document references
 def GetSelectErrors(
-    DocumentValue: AnyValue,
-    EntityValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    DocumentValues: TypeMap[str, AnyValue],
+    DocumentValue: CadDocument,
+    EntityValue: MateEntity,
+    Definitions: TypeMap[str, ComponentDef],
+    DocumentValues: TypeMap[str, CadDocument],
     IdentitySets: TypeMap[str, set[str]],
     CurrentDefId: str,
     IsValidPath: bool,
@@ -88,17 +96,13 @@ def GetSelectErrors(
     TargetDocument = DocumentValue
     if TargetDef is not None and TargetDef.DocumentId:
         TargetDocument = DocumentValues.get(TargetDef.DocumentId)
+    if TargetDocument is None:
+        return ()
     TargetSelectIds = (
         IdentitySets["Selections"]
         if TargetDocument is DocumentValue
-        else {
-            SelectionValue.EntityId
-            for SelectionValue in getattr(TargetDocument, "Selections", ())
-        }
+        else {SelectionValue.EntityId for SelectionValue in TargetDocument.Selections}
     )
-    if (
-        isinstance(TargetDocument, DocumentRoot)
-        and EntityValue.SelectionId not in TargetSelectIds
-    ):
+    if EntityValue.SelectionId not in TargetSelectIds:
         return (f"mate entity {EntityValue.EntityId} references missing selection",)
     return ()

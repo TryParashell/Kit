@@ -6,13 +6,14 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+
+from interchange.document.models.DocumentModel import CadDocument
 
 
 # configuration checks protect inheritance and override links from dangling identifiers
 def GetConfigErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for ConfigValue in DocumentValue.Configurations:
@@ -33,7 +34,7 @@ def GetConfigErrs(
 
 # parameter checks protect expression dependency links from dangling identifiers
 def GetParamErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for ParamValue in DocumentValue.Parameters:
@@ -48,7 +49,7 @@ def GetParamErrs(
 
 # plane checks protect geometric support and offset links from dangling identifiers
 def GetPlaneErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for PlaneValue in DocumentValue.SupportPlanes:
@@ -71,7 +72,7 @@ def GetPlaneErrs(
 
 # sketch checks protect support constraint and parameter links from dangling identifiers
 def GetSketchErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for SketchValue in DocumentValue.Sketches:
@@ -98,7 +99,7 @@ def GetSketchErrs(
 
 # reference validation preserves historical diagnostic ordering across focused checks
 def GetRefErrors(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     return (
         *GetConfigErrs(DocumentValue, IdentitySets),

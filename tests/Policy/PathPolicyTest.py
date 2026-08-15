@@ -19,7 +19,7 @@ from tools.Policy.PathFinding import PathFinding
 class TestPathPolicy(UnitTest.TestCase):
 
     # ordinary violations remain visible while every deliberately narrow exception stays accepted
-    def CheckNameRules(CaseSelf) -> None:
+    def CheckNameRules(self) -> None:
         TrackedPaths = (
             "Source/Alpha.py",
             "Source/bad_name.py",
@@ -34,10 +34,10 @@ class TestPathPolicy(UnitTest.TestCase):
             for FindingInfo in FindingList
             if FindingInfo.RuleCode == "PTH001"
         }
-        CaseSelf.assertEqual(FailedPaths, {"Source/Thing2.py", "Source/bad_name.py"})
+        self.assertEqual(FailedPaths, {"Source/Thing2.py", "Source/bad_name.py"})
 
     # the first file beyond the boundary must force a focused subfolder decision
-    def CheckCountCap(CaseSelf) -> None:
+    def CheckCountCap(self) -> None:
         TrackedPaths = tuple(
             f"Crowded/File{chr(65 + IndexValue // 26)}"
             f"{chr(65 + IndexValue % 26)}.py"
@@ -49,12 +49,12 @@ class TestPathPolicy(UnitTest.TestCase):
             for FindingInfo in FindingList
             if FindingInfo.RuleCode == "PTH002"
         ]
-        CaseSelf.assertEqual(len(CountFindings), 1)
-        CaseSelf.assertEqual(CountFindings[0].RepoPath, "Crowded")
-        CaseSelf.assertIn("33 direct tracked files", CountFindings[0].MessageText)
+        self.assertEqual(len(CountFindings), 1)
+        self.assertEqual(CountFindings[0].RepoPath, "Crowded")
+        self.assertIn("33 direct tracked files", CountFindings[0].MessageText)
 
     # changed mode judges only destination names and directories directly touched by the diff
-    def CheckTargetDirs(CaseSelf) -> None:
+    def CheckTargetDirs(self) -> None:
         CrowdedPaths = tuple(
             f"Crowded/File{chr(65 + IndexValue // 26)}"
             f"{chr(65 + IndexValue % 26)}.py"
@@ -62,22 +62,22 @@ class TestPathPolicy(UnitTest.TestCase):
         )
         TrackedPaths = (*CrowdedPaths, "Other/Alpha.py", "Legacy/bad_name.py")
         OtherFindings = CheckPathPolicy(TrackedPaths, ("Other/Alpha.py",))
-        CaseSelf.assertEqual(OtherFindings, [])
+        self.assertEqual(OtherFindings, [])
         CrowdedFindings = CheckPathPolicy(TrackedPaths, (CrowdedPaths[0],))
-        CaseSelf.assertEqual(
+        self.assertEqual(
             [FindingInfo.RuleCode for FindingInfo in CrowdedFindings],
             ["PTH002"],
         )
 
     # stable ordering and escaped paths keep automation output comparable and line oriented
-    def CheckOrdering(CaseSelf) -> None:
+    def CheckOrdering(self) -> None:
         TrackedPaths = ("Zulu/bad_two.py", "Alpha/bad_one.py")
         FindingList = CheckPathPolicy(TrackedPaths)
-        CaseSelf.assertEqual(
+        self.assertEqual(
             [FindingInfo.RepoPath for FindingInfo in FindingList],
             ["Alpha/bad_one.py", "Zulu/bad_two.py"],
         )
         FindingInfo = PathFinding("Line\nBreak.py", "PTH001", "invalid stem")
         RenderedText = FormatFinding(FindingInfo)
-        CaseSelf.assertNotIn("\n", RenderedText)
-        CaseSelf.assertIn("\\n", RenderedText)
+        self.assertNotIn("\n", RenderedText)
+        self.assertIn("\\n", RenderedText)

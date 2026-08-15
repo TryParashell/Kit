@@ -6,19 +6,21 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
-from interchange.document.models.DocumentRoot import DocumentRoot
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.MateEntity import MateEntity
+from interchange.document.models.DocumentModel import CadDocument
 
 
 # mate checks protect entity ownership and parameter references across component documents
 def GetMateErrors(
-    DocumentValue: AnyValue,
-    AssemblyValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    Entities: TypeMap[str, AnyValue],
-    DocumentValues: TypeMap[str, AnyValue],
+    DocumentValue: CadDocument,
+    AssemblyValue: AssemblyData,
+    Definitions: TypeMap[str, ComponentDef],
+    Entities: TypeMap[str, MateEntity],
+    DocumentValues: TypeMap[str, CadDocument],
     IdentitySets: TypeMap[str, set[str]],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
@@ -43,7 +45,7 @@ def GetMateErrors(
         TargetDocument = DocumentValue
         if OwnerDef is not None and OwnerDef.DocumentId:
             TargetDocument = DocumentValues.get(OwnerDef.DocumentId)
-        if isinstance(TargetDocument, DocumentRoot):
+        if TargetDocument is not None:
             TargetParamIds = (
                 IdentitySets["Parameters"]
                 if TargetDocument is DocumentValue

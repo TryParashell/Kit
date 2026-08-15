@@ -30,9 +30,11 @@ from .Registry import (
     ConfigOps,
 )
 
+from .Registry import (
+    FieldOwners,
+    ConfigOps,
+)
 
-# compatibility binding preserves the generated owner catalog facade
-FieldOwners = KFieldOwners
 
 # recovered stream length detects accidental configuration grammar drift
 KReferenceLength = 25214

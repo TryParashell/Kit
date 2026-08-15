@@ -283,9 +283,15 @@ def CheckWireFields() -> None:
     PathValue = SelectionPathElement("feature", "feature:one", "Face1")
     SelectionValue = Selection("selection:one", "Selection", (PathValue,))
     RawValue = ToData(SelectionValue)
+    assert isinstance(RawValue, dict)
     assert "path" in RawValue
     assert "selection_path" not in RawValue
-    PathData = RawValue["path"]["$tuple"][0]
+    PathTuple = RawValue["path"]
+    assert isinstance(PathTuple, dict)
+    PathItems = PathTuple["$tuple"]
+    assert isinstance(PathItems, list)
+    PathData = PathItems[0]
+    assert isinstance(PathData, dict)
     assert PathData["entity_kind"] == "feature"
     assert PathData["entity_id"] == "feature:one"
     assert FromData(RawValue) == SelectionValue
@@ -310,7 +316,9 @@ def CheckOldEnums() -> None:
 # historical json options remain accepted because document consumers upgrade independently
 def CheckLegacyJson() -> None:
     SourceValue = BuildDocument()
-    assert SourceValue.to_json(indent=None) == SourceValue.ToJson(IndentSize=None)
+    LegacyJson = SourceValue.to_json
+    assert callable(LegacyJson)
+    assert LegacyJson(indent=None) == SourceValue.ToJson(IndentSize=None)
 
 
 # historical field access takes precedence over similarly named document lookup methods

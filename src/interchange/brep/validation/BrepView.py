@@ -6,24 +6,40 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Protocol as TypeProtocol
+
+from interchange.brep.curves.BrepCurves import BrepCurve
+from interchange.brep.curves.BrepPcurves import BrepPcurve
+from interchange.brep.surfaces.BrepSurfaces import BrepSurface
+from interchange.brep.topology.BrepTopology import (
+    BrepBody,
+    BrepCoedge,
+    BrepEdge,
+    BrepFace,
+    BrepFaceUse,
+    BrepLoop,
+    BrepRegion,
+    BrepShell,
+    BrepShellUse,
+    BrepVertex,
+    BrepWire,
+)
 
 
 # the validation view decouples topology storage from independent diagnostic passes
 class BrepView(TypeProtocol):
-    Curves: tuple[AnyValue, ...]
-    Pcurves: tuple[AnyValue, ...]
-    Surfaces: tuple[AnyValue, ...]
-    Vertices: tuple[AnyValue, ...]
-    Edges: tuple[AnyValue, ...]
-    Coedges: tuple[AnyValue, ...]
-    Loops: tuple[AnyValue, ...]
-    Wires: tuple[AnyValue, ...]
-    Faces: tuple[AnyValue, ...]
-    FaceUses: tuple[AnyValue, ...]
-    Shells: tuple[AnyValue, ...]
-    ShellUses: tuple[AnyValue, ...]
-    Regions: tuple[AnyValue, ...]
-    Bodies: tuple[AnyValue, ...]
+    Curves: tuple[BrepCurve, ...]
+    Pcurves: tuple[BrepPcurve, ...]
+    Surfaces: tuple[BrepSurface, ...]
+    Vertices: tuple[BrepVertex, ...]
+    Edges: tuple[BrepEdge, ...]
+    Coedges: tuple[BrepCoedge, ...]
+    Loops: tuple[BrepLoop, ...]
+    Wires: tuple[BrepWire, ...]
+    Faces: tuple[BrepFace, ...]
+    FaceUses: tuple[BrepFaceUse, ...]
+    Shells: tuple[BrepShell, ...]
+    ShellUses: tuple[BrepShellUse, ...]
+    Regions: tuple[BrepRegion, ...]
+    Bodies: tuple[BrepBody, ...]
     SchemaVersion: str

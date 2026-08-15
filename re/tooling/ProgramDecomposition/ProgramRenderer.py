@@ -82,11 +82,12 @@ def RenderMethod(OwnerModule: str, MethodData: MethodData) -> str:
         "",
         "from __future__ import annotations",
         "",
+        "from convert.adapters.solidworks.programs.Common.ProgramContract import MethodProgram",
         f"from {OwnerModule} import KOwnerSites",
         "",
         "",
         "# isolated method data lets new reverse engineered serializers compose independently",
-        "KMethodProgram = (",
+        "KMethodProgram: MethodProgram = (",
         "    KOwnerSites,",
         "    {",
     ]
@@ -139,7 +140,7 @@ def AddAliasesMut(
             (
                 "",
                 "# compatibility binding preserves its established public import after decomposition",
-                f"globals()[{OriginalName!r}] = {ConstName}",
+                f"{OriginalName} = {ConstName}",
             )
         )
 

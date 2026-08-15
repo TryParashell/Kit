@@ -6,7 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
+from collections.abc import Iterable as IterableBase
+from typing import cast as CastValue
 from typing import Iterable as ValueIterable
 from typing import Mapping as TypeMap
 
@@ -16,19 +17,21 @@ from interchange.core.Common import FreezeMapping
 KWrapperMetaKey = "kit.wrapper_metadata_keys"
 
 
+# metadata markers cross untyped wrappers so their collection shape must be narrowed once
+def GetMetaNames(SourceValue: object) -> set[str]:
+    if not isinstance(SourceValue, (tuple, list, set, frozenset)):
+        return set()
+    ItemValues = CastValue(IterableBase[object], SourceValue)
+    return {ItemValue for ItemValue in ItemValues if isinstance(ItemValue, str)}
+
+
 # wrapper annotations must remain distinguishable from source semantic metadata
 def AddWrapperMeta(
-    MetaValues: TypeMap[str, AnyValue], KeyValues: ValueIterable[str]
-) -> TypeMap[str, AnyValue]:
+    MetaValues: TypeMap[str, object], KeyValues: ValueIterable[str]
+) -> TypeMap[str, object]:
     ExistingValue = MetaValues.get(KWrapperMetaKey, ())
-    NameValues = (
-        {SourceValue for SourceValue in ExistingValue if isinstance(SourceValue, str)}
-        if isinstance(ExistingValue, (tuple, list, set, frozenset))
-        else set()
-    )
-    NameValues.update(
-        SourceValue for SourceValue in KeyValues if isinstance(SourceValue, str)
-    )
+    NameValues = GetMetaNames(ExistingValue)
+    NameValues.update(KeyValues)
     ResultValue = dict(MetaValues)
     ResultValue[KWrapperMetaKey] = tuple(sorted(NameValues))
     return FreezeMapping(ResultValue)
@@ -36,16 +39,10 @@ def AddWrapperMeta(
 
 # semantic comparisons must ignore metadata introduced only by transport wrappers
 def GetSemanticMeta(
-    MetaValues: TypeMap[str, AnyValue],
-) -> TypeMap[str, AnyValue]:
+    MetaValues: TypeMap[str, object],
+) -> TypeMap[str, object]:
     WrappedValues = MetaValues.get(KWrapperMetaKey, ())
-    NameValues = (
-        frozenset(
-            SourceValue for SourceValue in WrappedValues if isinstance(SourceValue, str)
-        )
-        if isinstance(WrappedValues, (tuple, list, set, frozenset))
-        else frozenset()
-    )
+    NameValues = GetMetaNames(WrappedValues)
     return FreezeMapping(
         {
             KeyValue: SourceValue

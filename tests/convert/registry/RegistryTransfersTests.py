@@ -45,17 +45,17 @@ class MixedAdapter(ResultAdapter):
     # one native transfer plus writer gaps exercises mixed preservation without capability loss
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().write(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
                 TransferMode.NATIVE if IndexValue == 0 else TransferMode.CARRIER,
             )
-            for IndexValue, CapabilityData in enumerate(GetCapabilities(DocumentData))
+            for IndexValue, CapabilityData in enumerate(GetCapabilities(document))
         )
         return ReplaceValue(
             ResultData,
@@ -92,18 +92,18 @@ class TargetAdapter(ResultAdapter):
     # native seed plus intrinsic carriers proves near losslessness accepts target limitations
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().write(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
                 TransferMode.NATIVE if IndexValue == 0 else TransferMode.CARRIER,
                 None if IndexValue == 0 else CarrierReason.TARGET_UNSUPPORTED,
             )
-            for IndexValue, CapabilityData in enumerate(GetCapabilities(DocumentData))
+            for IndexValue, CapabilityData in enumerate(GetCapabilities(document))
         )
         return ReplaceValue(
             ResultData,
@@ -148,18 +148,18 @@ class OnlyCarrier(ResultAdapter):
     # every intrinsic carrier proves native emptiness alone does not make usable output invalid
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().write(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
                 TransferMode.CARRIER,
                 CarrierReason.TARGET_UNSUPPORTED,
             )
-            for CapabilityData in GetCapabilities(DocumentData)
+            for CapabilityData in GetCapabilities(document)
         )
         return ReplaceValue(
             ResultData,

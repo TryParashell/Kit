@@ -18,17 +18,17 @@ from tools.Policy.ParseGitPaths import ParseGitPaths
 class TestGitPaths(UnitTest.TestCase):
 
     # unusual legal whitespace must survive because line parsing would silently split filenames
-    def CheckNullPaths(CaseSelf) -> None:
+    def CheckNullPaths(self) -> None:
         PathData = b"Alpha.py\0Line\nBreak.py\0Tab\tName.py\0"
-        CaseSelf.assertEqual(
+        self.assertEqual(
             ParseGitPaths(PathData),
             ("Alpha.py", "Line\nBreak.py", "Tab\tName.py"),
         )
 
     # malformed records must fail closed because partial path sets could approve violations
-    def CheckBadFraming(CaseSelf) -> None:
-        with CaseSelf.assertRaises(GitFailure):
+    def CheckBadFraming(self) -> None:
+        with self.assertRaises(GitFailure):
             ParseGitPaths(b"Alpha.py")
-        with CaseSelf.assertRaises(GitFailure):
+        with self.assertRaises(GitFailure):
             ParseGitPaths(b"Alpha.py\0\0")
-        CaseSelf.assertEqual(ParseGitPaths(b""), ())
+        self.assertEqual(ParseGitPaths(b""), ())

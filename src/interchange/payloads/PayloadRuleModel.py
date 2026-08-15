@@ -13,10 +13,10 @@ from interchange.payloads.PayloadRoles import PayloadRole
 # legacy payload inference needs declarative evidence that remains independently testable
 @ModelDataMut(
     DefaultMap={
-        "FormatIds": frozenset(),
-        "Kinds": frozenset(),
-        "Schemas": frozenset(),
-        "SourceSuffixes": frozenset(),
+        "FormatIds": frozenset[str](),
+        "Kinds": frozenset[str](),
+        "Schemas": frozenset[str](),
+        "SourceSuffixes": frozenset[str](),
     }
 )
 class PayloadRule(ModelBase):

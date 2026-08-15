@@ -25,9 +25,11 @@ from .Registry import (
     StreamPrograms,
 )
 
+from .Registry import (
+    FieldOwners,
+    StreamPrograms,
+)
 
-# compatibility binding preserves the generated owner catalog facade
-FieldOwners = KFieldOwners
 
 # legacy format access remains available while shared encoding owns the mapping
 PrimitiveFormats = KPrimitiveFormats

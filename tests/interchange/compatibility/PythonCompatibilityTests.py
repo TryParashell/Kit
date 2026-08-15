@@ -14,7 +14,7 @@ from inspect import getattr_static as GetStaticAttr
 from inspect import signature as GetSignature
 import pickle as PickleCodec
 from types import FunctionType as FuncType
-from typing import Protocol, cast as TypeCast, runtime_checkable
+from typing import Protocol, cast as TypeCast, runtime_checkable, TypeVar
 
 import interchange as InterchangeApi
 from interchange.serialization import KTypeRegistry
@@ -33,6 +33,34 @@ from tests.interchange.compatibility.CompatFieldsHistory import KCompatFieldsHis
 from tests.interchange.compatibility.CompatFieldsMesh import KCompatFieldsMesh
 from tests.interchange.compatibility.CompatFieldsTypes import KCompatFieldsTypes
 from tests.interchange.compatibility.PythonCompatTopNames import KPythonCompatTopNames
+
+
+# compatibility construction must validate dynamic calls before tests trust their concrete result
+CompatType = TypeVar("CompatType")
+
+
+# historical constructors remain callable even when reflected keywords differ from storage names
+def CallLegacy(
+    ClassType: type[CompatType],
+    *ArgValues: object,
+    **NamedValues: object,
+) -> CompatType:
+    FactoryValue: object = ClassType
+    if not callable(FactoryValue):
+        raise TypeError("compatibility constructor is not callable")
+    ResultValue: object = FactoryValue(*ArgValues, **NamedValues)
+    if not isinstance(ResultValue, ClassType):
+        raise TypeError("compatibility constructor returned the wrong model")
+    return ResultValue
+
+
+# historical method lookup narrows dynamic aliases before invoking them in reflection tests
+def CallCompat(SourceValue: object, MethodName: str, *ArgValues: object) -> object:
+    MethodValue: object = getattr(SourceValue, MethodName, None)
+    if not callable(MethodValue):
+        raise TypeError(f"compatibility method {MethodName} is not callable")
+    return MethodValue(*ArgValues)
+
 
 # split field expectations combine here so reflection checks use one immutable sequence
 KPythonCompatFields = (
@@ -160,11 +188,12 @@ def CheckEnumNames() -> None:
 
 # adapters require the exact historical constructor attribute and predicate contract
 def CheckAdapters() -> None:
-    ValuesSet = frozenset({InterchangeApi.Capability.PARAMETERS})
-    AdapterValue = InterchangeApi.AdapterCapabilities(values=ValuesSet)
-    assert AdapterValue.values == ValuesSet
-    assert AdapterValue.supports(InterchangeApi.Capability.PARAMETERS)
-    assert not AdapterValue.supports(InterchangeApi.Capability.BREP)
+    ValuesSet = frozenset({InterchangeApi.Capability.KParameters})
+    AdapterValue = CallLegacy(InterchangeApi.AdapterCapabilities, values=ValuesSet)
+    LegacyValues: object = getattr(AdapterValue, "values")
+    assert LegacyValues == ValuesSet
+    assert CallCompat(AdapterValue, "supports", InterchangeApi.Capability.KParameters)
+    assert not CallCompat(AdapterValue, "supports", InterchangeApi.Capability.KBrep)
     assert (
         str(GetSignature(InterchangeApi.AdapterCapabilities))
         == "(values: 'frozenset[Capability]' = frozenset()) -> None"
@@ -174,10 +203,10 @@ def CheckAdapters() -> None:
 
 # historical global identities ensure existing pickle streams resolve after internal module splits
 def CheckPickle() -> None:
-    ValuesSet = frozenset({InterchangeApi.Capability.PARAMETERS})
+    ValuesSet = frozenset({InterchangeApi.Capability.KParameters})
     SourceValues = (
         InterchangeApi.Vector2(1.0, 2.0),
-        InterchangeApi.AdapterCapabilities(values=ValuesSet),
+        CallLegacy(InterchangeApi.AdapterCapabilities, values=ValuesSet),
         InterchangeApi.FeatureConfigurationState("default"),
         InterchangeApi.Matrix4(),
     )
@@ -191,8 +220,9 @@ def CheckPickle() -> None:
 def CheckOldPickle() -> None:
     ExpectedValues = (
         InterchangeApi.Vector2(1, 2),
-        InterchangeApi.AdapterCapabilities(
-            frozenset({InterchangeApi.Capability.PARAMETERS})
+        CallLegacy(
+            InterchangeApi.AdapterCapabilities,
+            frozenset({InterchangeApi.Capability.KParameters}),
         ),
         InterchangeApi.FeatureConfigurationState("x"),
         InterchangeApi.Matrix4(),

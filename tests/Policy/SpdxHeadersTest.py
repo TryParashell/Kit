@@ -12,17 +12,39 @@ from pathlib import Path as FilePath
 from runpy import run_path as RunPath
 import sys as System
 import unittest as UnitTest
+from types import ModuleType as ModuleKind
+from typing import Callable as CallType
+from typing import TypedDict as TypeDict
+from typing import cast as TypeCast
+
+
+# dynamic guard loading needs concrete signatures so policy tests retain strict call validation
+class GuardApi(TypeDict):
+    CheckFile: CallType[[FilePath, list[str], FilePath], tuple[bool, str]]
+    CheckWorktree: CallType[[FilePath, str], tuple[FilePath | None, str]]
+    GetDiffFiles: CallType[[str, str, FilePath], list[str]]
+    IsCommit: CallType[[str, FilePath], bool]
+    IsPathExempt: CallType[[str], bool]
+    LoadCanon: CallType[[], list[str]]
+    ParseDiff: CallType[[bytes], list[str]]
+    RenderLines: CallType[[list[str], str], list[str]]
+    RepairHeadMut: CallType[[FilePath, list[str], FilePath], tuple[bool, str]]
+    ResolvePath: CallType[[FilePath, str], FilePath | None]
+    StatLib: ModuleKind
 
 
 # workflow code needs direct loading because its host directory is not a python package
-def LoadGuard() -> dict[str, object]:
+def LoadGuard() -> GuardApi:
     GuardPath = (
         FilePath(__file__).parents[2] / ".github" / "scripts" / "VerifySpdxHeaders.py"
     )
     OriginalPaths = System.path.copy()
     try:
         System.path.insert(0, str(GuardPath.parent))
-        return RunPath(str(GuardPath), run_name="SpdxGuardTest")
+        GuardValues: dict[str, object] = RunPath(
+            str(GuardPath), run_name="SpdxGuardTest"
+        )
+        return TypeCast(GuardApi, GuardValues)
     finally:
         System.path[:] = OriginalPaths
 
@@ -31,7 +53,7 @@ def LoadGuard() -> dict[str, object]:
 class TestSpdxGuard(UnitTest.TestCase):
 
     # raw artifacts need exact exemptions because their record grammar has no comments
-    def TestRawExempt(SelfValue) -> None:
+    def TestRawExempt(self) -> None:
         IsPathExempt = LoadGuard()["IsPathExempt"]
         RawPaths = (
             "re/data/Serialization/SldmfcuSigtableRefs.txt",
@@ -39,10 +61,10 @@ class TestSpdxGuard(UnitTest.TestCase):
             "re/data/vocabulary/Vocabulary.txt",
         )
         for RelPath in RawPaths:
-            SelfValue.assertTrue(IsPathExempt(RelPath))
+            self.assertTrue(IsPathExempt(RelPath))
 
     # neighboring documentation must remain governed despite the narrow data exemptions
-    def TestDocsInScope(SelfValue) -> None:
+    def TestDocsInScope(self) -> None:
         IsPathExempt = LoadGuard()["IsPathExempt"]
         GovernedPaths = (
             "re/Methodology.md",
@@ -50,12 +72,14 @@ class TestSpdxGuard(UnitTest.TestCase):
             "re/data/vocabulary/VocabularyNotes.txt",
         )
         for RelPath in GovernedPaths:
-            SelfValue.assertFalse(IsPathExempt(RelPath))
+            self.assertFalse(IsPathExempt(RelPath))
 
     # newly added guard tests need direct coverage before git revisions can include them
-    def TestOwnHeader(SelfValue) -> None:
+    def TestOwnHeader(self) -> None:
         GuardValues = LoadGuard()
         IsValid, ReasonText = GuardValues["CheckFile"](
-            FilePath(__file__), GuardValues["LoadCanon"]()
+            FilePath(__file__),
+            GuardValues["LoadCanon"](),
+            FilePath(__file__).parents[2],
         )
-        SelfValue.assertTrue(IsValid, ReasonText)
+        self.assertTrue(IsValid, ReasonText)

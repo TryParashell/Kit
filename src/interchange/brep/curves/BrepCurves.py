@@ -17,6 +17,12 @@ from interchange.records.RecordProvenance import Provenance
 from interchange.geometry.models.VectorSpace import SpaceVector
 
 
+# runtime construction can bypass annotations so topology identities need one checked boundary
+def ValidateBrepId(SourceValue: object) -> None:
+    if not isinstance(SourceValue, str):
+        raise TypeError("B-rep entity id must be a string")
+
+
 # shared topology identity avoids duplicated provenance fields across curve families
 @ModelDataMut(
     DefaultMap={"Provenance": None},
@@ -38,8 +44,7 @@ class BrepCurve(BrepEntity):
 
     # invalid identifiers must fail before curves enter topology collections
     def __post_init__(self) -> None:
-        if not isinstance(self.EntityId, str):
-            raise TypeError("B-rep curve id must be a string")
+        ValidateBrepId(self.EntityId)
 
 
 # line curves retain exact origin and direction without sampled approximation

@@ -12,18 +12,36 @@ from inspect import getattr_static as GetStaticAttr
 from inspect import Parameter as FuncParam
 from inspect import Signature as FuncSig
 from types import FunctionType as FuncType
-from typing import Any as AnyValue
+from typing import cast as CastValue
 from typing import Mapping as TypeMap
+from typing import TypeAlias
+
+
+# historical signature rows accept only the four parameter shapes used by public facades
+CompatParam: TypeAlias = (
+    tuple[str]
+    | tuple[str, str]
+    | tuple[str, str, object]
+    | tuple[str, str, object, object]
+)
+
+
+# descriptor internals cross generic stdlib types so their concrete function shape is checked once
+def GetMethodFunc(SourceValue: object, SourceName: str) -> FuncType:
+    MethodValue: object = getattr(SourceValue, "__func__", None)
+    if not isinstance(MethodValue, FuncType):
+        raise TypeError(f"{SourceName} is not a Python function")
+    return MethodValue
 
 
 # cloned functions preserve canonical methods while historical identities remain independently reflectable
 def CloneMethod(
-    MethodFunc: AnyValue,
-    ClassType: type,
+    MethodFunc: FuncType,
+    ClassType: type[object],
     LegacyName: str,
     AnnotationMap: TypeMap[str, str],
     SignatureInfo: FuncSig,
-) -> AnyValue:
+) -> FuncType:
     LegacyFunc = FuncType(
         MethodFunc.__code__,
         MethodFunc.__globals__,
@@ -42,24 +60,30 @@ def CloneMethod(
 
 # existing descriptors need matching aliases because class and static binding affect call semantics
 def BindAliasMut(
-    ClassType: type,
+    ClassType: type[object],
     SourceName: str,
     LegacyName: str,
     AnnotationMap: TypeMap[str, str],
     SignatureInfo: FuncSig,
 ) -> None:
-    DescriptorValue = GetStaticAttr(ClassType, SourceName)
+    DescriptorValue: object = GetStaticAttr(ClassType, SourceName)
     if isinstance(DescriptorValue, classmethod):
-        MethodFunc = DescriptorValue.__func__
+        MethodValue = GetMethodFunc(CastValue(object, DescriptorValue), SourceName)
         LegacyValue = classmethod(
-            CloneMethod(MethodFunc, ClassType, LegacyName, AnnotationMap, SignatureInfo)
+            CloneMethod(
+                MethodValue, ClassType, LegacyName, AnnotationMap, SignatureInfo
+            )
         )
     elif isinstance(DescriptorValue, staticmethod):
-        MethodFunc = DescriptorValue.__func__
+        MethodValue = GetMethodFunc(CastValue(object, DescriptorValue), SourceName)
         LegacyValue = staticmethod(
-            CloneMethod(MethodFunc, ClassType, LegacyName, AnnotationMap, SignatureInfo)
+            CloneMethod(
+                MethodValue, ClassType, LegacyName, AnnotationMap, SignatureInfo
+            )
         )
     else:
+        if not isinstance(DescriptorValue, FuncType):
+            raise TypeError(f"{SourceName} is not a Python function")
         LegacyValue = CloneMethod(
             DescriptorValue,
             ClassType,
@@ -72,12 +96,14 @@ def BindAliasMut(
 
 # split free functions need instance descriptors when historical classes owned their behavior
 def BindDirectMut(
-    ClassType: type,
-    MethodFunc: AnyValue,
+    ClassType: type[object],
+    MethodFunc: object,
     LegacyName: str,
     AnnotationMap: TypeMap[str, str],
     SignatureInfo: FuncSig,
 ) -> None:
+    if not isinstance(MethodFunc, FuncType):
+        raise TypeError(f"{LegacyName} is not a Python function")
     LegacyFunc = CloneMethod(
         MethodFunc,
         ClassType,
@@ -90,12 +116,14 @@ def BindDirectMut(
 
 # split lookup functions need static descriptors matching their historical class ownership
 def BindStaticMut(
-    ClassType: type,
-    MethodFunc: AnyValue,
+    ClassType: type[object],
+    MethodFunc: object,
     LegacyName: str,
     AnnotationMap: TypeMap[str, str],
     SignatureInfo: FuncSig,
 ) -> None:
+    if not isinstance(MethodFunc, FuncType):
+        raise TypeError(f"{LegacyName} is not a Python function")
     LegacyFunc = CloneMethod(
         MethodFunc,
         ClassType,
@@ -109,10 +137,12 @@ def BindStaticMut(
 # compact parameter creation keeps exact historical signatures declarative and consistent
 def MakeParam(
     ParamName: str,
-    ParamKind: AnyValue = FuncParam.POSITIONAL_OR_KEYWORD,
-    DefaultValue: AnyValue = FuncParam.empty,
-    AnnotValue: AnyValue = FuncParam.empty,
+    ParamKind: object = FuncParam.POSITIONAL_OR_KEYWORD,
+    DefaultValue: object = FuncParam.empty,
+    AnnotValue: object = FuncParam.empty,
 ) -> FuncParam:
+    if not isinstance(ParamKind, type(FuncParam.POSITIONAL_OR_KEYWORD)):
+        raise TypeError("parameter kind must be an inspect parameter kind")
     return FuncParam(
         ParamName,
         ParamKind,
@@ -123,14 +153,14 @@ def MakeParam(
 
 # compact signature data keeps historical method contracts readable in focused binders
 def MakeLegacySig(
-    ParamSpecs: tuple[tuple[AnyValue, ...], ...],
-    ReturnAnnot: AnyValue,
+    ParamSpecs: tuple[CompatParam, ...],
+    ReturnAnnot: str,
 ) -> FuncSig:
-    ParamValues = []
+    ParamValues: list[FuncParam] = []
     for SpecValue in ParamSpecs:
         ParamName = SpecValue[0]
-        AnnotValue = SpecValue[1] if len(SpecValue) > 1 else FuncParam.empty
-        DefaultValue = SpecValue[2] if len(SpecValue) > 2 else FuncParam.empty
+        AnnotValue: object = SpecValue[1] if len(SpecValue) > 1 else FuncParam.empty
+        DefaultValue: object = SpecValue[2] if len(SpecValue) > 2 else FuncParam.empty
         ParamKind = (
             SpecValue[3] if len(SpecValue) > 3 else FuncParam.POSITIONAL_OR_KEYWORD
         )

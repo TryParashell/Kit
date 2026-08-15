@@ -23,7 +23,7 @@ from tools.Policy.LoadTree import LoadTree
 class TestGitModes(UnitTest.TestCase):
 
     # rename detection must expose only the destination while full scans retain the complete head tree
-    def CheckGitModes(CaseSelf) -> None:
+    def CheckGitModes(self) -> None:
         with Tempfile.TemporaryDirectory() as TmpPath:
             RootPath = FilePath(TmpPath)
             FixtureInfo = RepoFixture(RootPath)
@@ -37,11 +37,11 @@ class TestGitModes(UnitTest.TestCase):
             TrackedPaths = LoadTracked(NestedPath)
             TreePaths = LoadTree(NestedPath, HeadRef)
             ChangedPaths = LoadChanged(NestedPath, BaseRef, HeadRef)
-        CaseSelf.assertEqual(set(TrackedPaths), {"Bravo.py", "bad_name.py"})
-        CaseSelf.assertEqual(set(TreePaths), {"Bravo.py", "bad_name.py"})
-        CaseSelf.assertEqual(set(ChangedPaths), {"Bravo.py", "bad_name.py"})
+        self.assertEqual(set(TrackedPaths), {"Bravo.py", "bad_name.py"})
+        self.assertEqual(set(TreePaths), {"Bravo.py", "bad_name.py"})
+        self.assertEqual(set(ChangedPaths), {"Bravo.py", "bad_name.py"})
         FindingList = CheckPathPolicy(TreePaths, ChangedPaths)
-        CaseSelf.assertEqual(
+        self.assertEqual(
             [FindingInfo.RepoPath for FindingInfo in FindingList],
             ["bad_name.py"],
         )

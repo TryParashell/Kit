@@ -15,9 +15,11 @@ from .Registry import (
     AnnotationOps,
 )
 
+from .Registry import (
+    FieldOwners,
+    AnnotationOps,
+)
 
-# compatibility binding preserves the generated owner catalog facade
-FieldOwners = KFieldOwners
 
 # the source interval records where the reusable manager was observed
 KSourceRange = (24240, 24822)

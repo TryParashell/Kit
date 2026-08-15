@@ -6,37 +6,41 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
-from interchange.document.models.DocumentRoot import DocumentRoot
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.validation.DocumentBoundary import GetDocument
 
 
 # embedded document checks prevent invalid recursive ownership and surface child failures
-def GetDocLinkErrs(DocumentValue: AnyValue, AssemblyValue: AnyValue) -> tuple[str, ...]:
+def GetDocLinkErrs(
+    DocumentValue: CadDocument, AssemblyValue: AssemblyData
+) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for ItemValue in AssemblyValue.Documents:
-        if not isinstance(ItemValue.Document, DocumentRoot):
+        NestedDocument = GetDocument(ItemValue.Document)
+        if NestedDocument is None:
             ErrorValues.append(
                 f"component document {ItemValue.EntityId} does not contain a CadDocument"
             )
-        elif ItemValue.Document is DocumentValue:
+        elif NestedDocument is DocumentValue:
             ErrorValues.append(
                 f"component document {ItemValue.EntityId} contains its owner"
             )
         else:
             ErrorValues.extend(
                 f"component document {ItemValue.EntityId}: {ErrorText}"
-                for ErrorText in ItemValue.Document.GetErrors()
+                for ErrorText in NestedDocument.GetErrors()
             )
     return tuple(ErrorValues)
 
 
 # definition checks protect mesh document and body references across component boundaries
 def GetDefLinkErrs(
-    DocumentValue: AnyValue,
-    AssemblyValue: AnyValue,
-    DocumentValues: TypeMap[str, AnyValue],
+    DocumentValue: CadDocument,
+    AssemblyValue: AssemblyData,
+    DocumentValues: TypeMap[str, CadDocument],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     MeshById = {ItemValue.EntityId: ItemValue for ItemValue in DocumentValue.Meshes}
@@ -55,11 +59,10 @@ def GetDefLinkErrs(
             )
             continue
         TargetDocument = DocumentValues.get(DefinitionValue.DocumentId, DocumentValue)
-        if isinstance(TargetDocument, DocumentRoot):
-            TargetBodyIds = {BodyValue.EntityId for BodyValue in TargetDocument.Bodies}
-            for BodyId in DefinitionValue.BodyIds:
-                if BodyId not in TargetBodyIds:
-                    ErrorValues.append(
-                        f"component definition {DefinitionValue.EntityId} references missing body {BodyId}"
-                    )
+        TargetBodyIds = {BodyValue.EntityId for BodyValue in TargetDocument.Bodies}
+        for BodyId in DefinitionValue.BodyIds:
+            if BodyId not in TargetBodyIds:
+                ErrorValues.append(
+                    f"component definition {DefinitionValue.EntityId} references missing body {BodyId}"
+                )
     return tuple(ErrorValues)

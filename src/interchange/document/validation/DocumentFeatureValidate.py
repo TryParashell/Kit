@@ -6,13 +6,14 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+
+from interchange.document.models.DocumentModel import CadDocument
 
 
 # timeline checks protect ordering and every feature dependency from invalid references
 def GetFeatureErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     FeatureOrders = {

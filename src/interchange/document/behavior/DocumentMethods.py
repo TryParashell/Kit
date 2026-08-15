@@ -7,6 +7,8 @@
 # to you under it immediately and permanently.
 
 from inspect import Parameter as FuncParam
+from typing import Mapping as TypeMap
+from typing import TypeAlias
 
 from interchange.document.validation.DocumentAssemblyValidate import GetAssemblyErrs
 from interchange.document.behavior.DocumentLookup import FindEntity
@@ -14,11 +16,22 @@ from interchange.compatibility.PythonCompatMethods import (
     BindAliasMut,
     BindDirectMut,
     BindStaticMut,
+    CompatParam,
     MakeLegacySig,
 )
 
+
+# document compatibility rows share one concrete shape so empty metadata remains typed
+CompatMethod: TypeAlias = tuple[
+    str,
+    str,
+    TypeMap[str, str],
+    tuple[CompatParam, ...],
+    str,
+]
+
 # method contracts stay declarative because exact historical reflection spans several split behaviors
-KDocumentMethods = (
+KDocumentMethods: tuple[CompatMethod, ...] = (
     ("ToMapping", "to_dict", {}, (), "dict[str, Any]"),
     (
         "FromMapping",

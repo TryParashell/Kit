@@ -17,7 +17,7 @@ if TypeChecking:
 
 # nested assembly documents need cycle safe traversal for aggregate operations
 def WalkDocuments(DocumentValue: CadDocument) -> ValueIterator[CadDocument]:
-    from interchange.document.models.DocumentModel import CadDocument
+    from interchange.document.validation.DocumentBoundary import GetDocument
 
     PendingValues = [DocumentValue]
     SeenValues: set[int] = set()
@@ -30,8 +30,7 @@ def WalkDocuments(DocumentValue: CadDocument) -> ValueIterator[CadDocument]:
         yield ItemValue
         if ItemValue.Assembly is None:
             continue
-        PendingValues.extend(
-            ComponentValue.Document
-            for ComponentValue in reversed(ItemValue.Assembly.Documents)
-            if isinstance(ComponentValue.Document, CadDocument)
-        )
+        for ComponentValue in reversed(ItemValue.Assembly.Documents):
+            NestedValue = GetDocument(ComponentValue.Document)
+            if NestedValue is not None:
+                PendingValues.append(NestedValue)

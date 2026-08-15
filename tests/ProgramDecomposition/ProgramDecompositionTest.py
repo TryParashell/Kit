@@ -11,12 +11,54 @@ from __future__ import annotations
 import ast as AstTree
 import hashlib as HashLib
 import importlib as ImportLib
+from importlib.util import module_from_spec as BuildModule
+from importlib.util import spec_from_file_location as BuildSpec
 from pathlib import Path as FilePath
 import re as RegexLib
 import subprocess as Subprocess
 import sys as SysModule
-from types import ModuleType
+from typing import Callable, cast, Protocol, TypeAlias
 import unittest as UnitTest
+
+
+# manifest digest entries need one exact shape so generated evidence remains statically checkable
+DigestStat: TypeAlias = tuple[str, int, str]
+
+
+# manifest program entries need a direct contract independent from generated module execution
+ProgramStat: TypeAlias = tuple[
+    str,
+    str,
+    str,
+    tuple[str, ...],
+    int,
+    str,
+    tuple[str, ...],
+    tuple[DigestStat, ...],
+    str,
+]
+
+
+# dynamic manifest loading needs a structural contract for immutable decomposition evidence
+class ManifestContract(Protocol):
+    KGlobalStats: tuple[int, int, int, int, int, int]
+    KProgramStats: tuple[ProgramStat, ...]
+
+
+# stream encoders need their argument contract separated from parameterless generated encoders
+class StreamProgram(Protocol):
+    EncodeProgram: Callable[[str], bytes]
+
+
+# ordinary generated programs need a direct contract for their parameterless encoder
+class DefaultProgram(Protocol):
+    EncodeProgram: Callable[[], bytes]
+
+
+# annotation programs need a direct contract for their specialized encoder
+class AnnotationProgram(Protocol):
+    EncodeTwoViewAnnotationManager: Callable[[], bytes]
+
 
 # repository anchoring keeps tests independent from the current working directory
 KRepoRoot = FilePath(__file__).resolve().parents[2]
@@ -45,38 +87,38 @@ KDigestPattern = RegexLib.compile(r"[a-f0-9]{64}")
 
 
 # manifest loading isolates generated evidence from reverse engineering package names
-def LoadManifest() -> ModuleType:
+def LoadManifest() -> ManifestContract:
     ManifestPath = KGeneratorPath.with_name("ProgramManifest.py")
-    ManifestSpec = ImportLib.util.spec_from_file_location(KManifestName, ManifestPath)
+    ManifestSpec = BuildSpec(KManifestName, ManifestPath)
     if ManifestSpec is None or ManifestSpec.loader is None:
         raise RuntimeError("program decomposition manifest cannot be loaded")
-    ManifestData = ImportLib.util.module_from_spec(ManifestSpec)
+    ManifestData = BuildModule(ManifestSpec)
     ManifestSpec.loader.exec_module(ManifestData)
-    return ManifestData
+    return cast(ManifestContract, ManifestData)
 
 
 # artifact tests keep the generated tree complete and explicitly imported
 class TestArtifacts(UnitTest.TestCase):
 
     # exact artifact counts expose missing catalogs methods registries or facades immediately
-    def TestCounts(Instance) -> None:
+    def TestCounts(self) -> None:
         OwnerPaths = tuple((KProgramRoot / "Owners").rglob("*.py"))
         MethodPaths = tuple(KProgramRoot.rglob("Methods/**/*.py"))
         RegistryPaths = tuple(KProgramRoot.rglob("Registry.py"))
         ProgramPaths = tuple(KProgramRoot.rglob("Program.py"))
-        Instance.assertEqual(len(OwnerPaths), 212)
-        Instance.assertEqual(len(MethodPaths), 3857)
-        Instance.assertEqual(len(RegistryPaths), 43)
-        Instance.assertEqual(len(ProgramPaths), 43)
+        self.assertEqual(len(OwnerPaths), 212)
+        self.assertEqual(len(MethodPaths), 3857)
+        self.assertEqual(len(RegistryPaths), 43)
+        self.assertEqual(len(ProgramPaths), 43)
 
     # every generated source path must remain pascal digit free and explicitly imported
-    def TestSources(Instance) -> None:
+    def TestSources(self) -> None:
         GeneratedPaths = tuple((KProgramRoot / "Owners").rglob("*.py")) + tuple(
             KProgramRoot.rglob("Methods/**/*.py")
         )
         GeneratedPaths += tuple(KProgramRoot.rglob("Registry.py"))
         for SourcePath in GeneratedPaths:
-            Instance.assertIsNotNone(KFilenamePattern.fullmatch(SourcePath.stem))
+            self.assertIsNotNone(KFilenamePattern.fullmatch(SourcePath.stem))
             SourceTree = AstTree.parse(
                 SourcePath.read_text(encoding="utf-8"), filename=str(SourcePath)
             )
@@ -87,57 +129,49 @@ class TestArtifacts(UnitTest.TestCase):
                 for AliasData in NodeData.names
                 if AliasData.name == "*"
             )
-            Instance.assertFalse(WildcardImports, SourcePath)
+            self.assertFalse(WildcardImports, SourcePath)
 
 
 # manifest tests preserve migration scale and permanent logical evidence
 class TestEvidence(UnitTest.TestCase):
 
     # compact manifest assertions preserve migration scale and permanent logical evidence
-    def TestManifest(Instance) -> None:
+    def TestManifest(self) -> None:
         ManifestData = LoadManifest()
-        Instance.assertEqual(
-            ManifestData.KGlobalStats, (43, 75, 212, 2078, 3857, 185090)
-        )
-        Instance.assertEqual(len(ManifestData.KProgramStats), 43)
-        Instance.assertEqual(
+        self.assertEqual(ManifestData.KGlobalStats, (43, 75, 212, 2078, 3857, 185090))
+        self.assertEqual(len(ManifestData.KProgramStats), 43)
+        self.assertEqual(
             sum(ItemData[4] for ItemData in ManifestData.KProgramStats), 185090
         )
-        Instance.assertEqual(
+        self.assertEqual(
             sum(len(ItemData[7]) for ItemData in ManifestData.KProgramStats), 75
         )
         for ItemData in ManifestData.KProgramStats:
-            Instance.assertIsNotNone(KDigestPattern.fullmatch(ItemData[5]))
-            Instance.assertIsNotNone(KDigestPattern.fullmatch(ItemData[8]))
-            for IgnoredOne, IgnoredTwo, DigestText in ItemData[7]:
-                Instance.assertIsNotNone(KDigestPattern.fullmatch(DigestText))
+            self.assertIsNotNone(KDigestPattern.fullmatch(ItemData[5]))
+            self.assertIsNotNone(KDigestPattern.fullmatch(ItemData[8]))
+            for DigestData in ItemData[7]:
+                self.assertIsNotNone(KDigestPattern.fullmatch(DigestData[2]))
 
 
 # encoder tests preserve public symbols and byte exact program output
 class TestEncoding(UnitTest.TestCase):
 
     # live encoders must retain every public symbol and byte digest from the oracle
-    def TestPublicBytes(Instance) -> None:
+    def TestPublicBytes(self) -> None:
         ManifestData = LoadManifest()
         for ItemData in ManifestData.KProgramStats:
-            (
-                VariantPath,
-                IgnoredOne,
-                OpsName,
-                StreamNames,
-                IgnoredTwo,
-                IgnoredThree,
-                PublicNames,
-                ByteStats,
-                IgnoredFour,
-            ) = ItemData
+            VariantPath = ItemData[0]
+            OpsName = ItemData[2]
+            StreamNames = ItemData[3]
+            PublicNames = ItemData[6]
+            ByteStats = ItemData[7]
             ModuleName = (
                 "convert.adapters.solidworks.programs."
                 + VariantPath.replace("/", ".")
                 + ".Program"
             )
             ModuleData = ImportLib.import_module(ModuleName)
-            Instance.assertFalse(
+            self.assertFalse(
                 tuple(
                     NameText
                     for NameText in PublicNames
@@ -145,16 +179,22 @@ class TestEncoding(UnitTest.TestCase):
                 )
             )
             if OpsName == "StreamPrograms":
+                StreamModule = cast(StreamProgram, ModuleData)
                 OutputPairs = tuple(
-                    (StreamName, ModuleData.EncodeProgram(StreamName))
+                    (StreamName, StreamModule.EncodeProgram(StreamName))
                     for StreamName in StreamNames
                 )
             elif OpsName == "AnnotationOps":
+                AnnotationModule = cast(AnnotationProgram, ModuleData)
                 OutputPairs = (
-                    (StreamNames[0], ModuleData.EncodeTwoViewAnnotationManager()),
+                    (
+                        StreamNames[0],
+                        AnnotationModule.EncodeTwoViewAnnotationManager(),
+                    ),
                 )
             else:
-                OutputPairs = ((StreamNames[0], ModuleData.EncodeProgram()),)
+                DefaultModule = cast(DefaultProgram, ModuleData)
+                OutputPairs = ((StreamNames[0], DefaultModule.EncodeProgram()),)
             ActualStats = tuple(
                 (
                     StreamName,
@@ -163,14 +203,14 @@ class TestEncoding(UnitTest.TestCase):
                 )
                 for StreamName, OutputData in OutputPairs
             )
-            Instance.assertEqual(ActualStats, ByteStats)
+            self.assertEqual(ActualStats, ByteStats)
 
 
 # generator tests keep checked output synchronized with canonical recovery data
 class TestGenerator(UnitTest.TestCase):
 
     # executable check proves catalogs registries facades hashes and bytes agree together
-    def TestGenCheck(Instance) -> None:
+    def TestGenCheck(self) -> None:
         CheckResult = Subprocess.run(
             [SysModule.executable, str(KGeneratorPath), "--check"],
             cwd=KRepoRoot,
@@ -179,7 +219,7 @@ class TestGenerator(UnitTest.TestCase):
             text=True,
             timeout=300,
         )
-        Instance.assertEqual(
+        self.assertEqual(
             CheckResult.returncode,
             0,
             CheckResult.stdout + CheckResult.stderr,

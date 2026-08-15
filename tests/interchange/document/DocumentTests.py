@@ -20,7 +20,6 @@ import pytest as PytestLib
 from interchange import (
     AssemblyData,
     DesignBody,
-    BrepPayload,
     CadDocument,
     Diagnostic,
     DocumentError,
@@ -36,6 +35,7 @@ from interchange import (
     InferCaps,
 )
 from interchange.payloads.PayloadMigrate import GetLegacyFields
+from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.payloads.PayloadRules import KLegacyPayloadRules
 from interchange.payloads.PayloadRuleModel import PayloadRule
 from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, ToData
@@ -214,14 +214,18 @@ def CheckOldPayload(
             SourceStream=SourceStream,
         )
     )
+    assert isinstance(RawValue, dict)
     RawValue.pop("role")
     RawValue.pop("file_extension")
     RestoredValue = FromData(RawValue)
     assert isinstance(RestoredValue, BrepPayload)
-    assert RestoredValue.ValueRole == RoleValue
-    assert RestoredValue.FileExtension == ExtensionText
-    assert RestoredValue.PayloadData == b"legacy payload"
-    assert RestoredValue.SourceDigest == HashCodec.sha256(b"legacy payload").hexdigest()
+    RestoredPayload = RestoredValue
+    assert RestoredPayload.ValueRole == RoleValue
+    assert RestoredPayload.FileExtension == ExtensionText
+    assert RestoredPayload.PayloadData == b"legacy payload"
+    assert (
+        RestoredPayload.SourceDigest == HashCodec.sha256(b"legacy payload").hexdigest()
+    )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -238,18 +242,26 @@ def CheckPartial() -> None:
             FileExtension=".custom",
         )
     )
+    assert isinstance(RawValue, dict)
     WithoutRole = dict(RawValue)
     WithoutRole.pop("role")
     RestoredRole = FromData(WithoutRole)
-    assert RestoredRole.ValueRole == PayloadRole.KBrep
-    assert RestoredRole.FileExtension == ".custom"
+    assert isinstance(RestoredRole, BrepPayload)
+    RolePayload = RestoredRole
+    assert RolePayload.ValueRole == PayloadRole.KBrep
+    assert RolePayload.FileExtension == ".custom"
     WithoutExt = dict(RawValue)
     WithoutExt.pop("file_extension")
     RestoredExt = FromData(WithoutExt)
-    assert RestoredExt.ValueRole == PayloadRole.KAuxiliary
-    assert RestoredExt.FileExtension == ".x_b"
-    assert FromData(RawValue).ValueRole == PayloadRole.KAuxiliary
-    assert FromData(RawValue).FileExtension == ".custom"
+    assert isinstance(RestoredExt, BrepPayload)
+    ExtPayload = RestoredExt
+    assert ExtPayload.ValueRole == PayloadRole.KAuxiliary
+    assert ExtPayload.FileExtension == ".x_b"
+    RestoredValue = FromData(RawValue)
+    assert isinstance(RestoredValue, BrepPayload)
+    RestoredPayload = RestoredValue
+    assert RestoredPayload.ValueRole == PayloadRole.KAuxiliary
+    assert RestoredPayload.FileExtension == ".custom"
     BindingValue = ToData(
         BrepPayload(
             "binding",
@@ -262,10 +274,13 @@ def CheckPartial() -> None:
             FileExtension=".bin",
         )
     )
+    assert isinstance(BindingValue, dict)
     BindingValue.pop("file_extension")
     RestoredBinding = FromData(BindingValue)
-    assert RestoredBinding.ValueRole == PayloadRole.KDocument
-    assert RestoredBinding.FileExtension == ".sha256"
+    assert isinstance(RestoredBinding, BrepPayload)
+    BindingPayload = RestoredBinding
+    assert BindingPayload.ValueRole == PayloadRole.KDocument
+    assert BindingPayload.FileExtension == ".sha256"
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -281,12 +296,27 @@ def CheckUnknown() -> None:
             SourceStream="Container/Opaque.future",
         )
     )
+    assert isinstance(RawValue, dict)
     RawValue.pop("role")
     RawValue.pop("file_extension")
     RestoredValue = FromData(RawValue)
-    assert RestoredValue.ValueRole == PayloadRole.KAuxiliary
-    assert RestoredValue.FileExtension == ".future"
-    assert RestoredValue.PayloadData == b"unknown"
+    assert isinstance(RestoredValue, BrepPayload)
+    RestoredPayload = RestoredValue
+    assert RestoredPayload.ValueRole == PayloadRole.KAuxiliary
+    assert RestoredPayload.FileExtension == ".future"
+    assert RestoredPayload.PayloadData == b"unknown"
+
+
+# malformed wire values must fail before they can reach model constructors
+def CheckWireData() -> None:
+    with PytestLib.raises(TypeError, match="wire object keys must be strings"):
+        ToData({1: "invalid"})
+    with PytestLib.raises(TypeError, match="wire object keys must be strings"):
+        FromData({1: "invalid"})
+    with PytestLib.raises(ValueError, match="value must be a list"):
+        FromData({"$tuple": "invalid"})
+    with PytestLib.raises(ValueError, match="type must be nonempty text"):
+        FromData({"$enum": 1, "value": "invalid"})
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -346,7 +376,9 @@ def CheckFiltering() -> None:
     )
     assert Capability.KBrep not in FilteredValue.Capabilities
     assert Capability.KTessellation not in FilteredValue.Capabilities
-    FilteredChild = FilteredValue.Assembly.Documents[0].Document
+    FilteredAssembly = FilteredValue.Assembly
+    assert FilteredAssembly is not None
+    FilteredChild = FilteredAssembly.Documents[0].Document
     assert isinstance(FilteredChild, CadDocument)
     assert tuple(
         (PayloadValue.ValueRole for PayloadValue in FilteredChild.BrepPayloads)
@@ -356,7 +388,9 @@ def CheckFiltering() -> None:
     DescribedValue = FilterDocument(
         SourceValue, IncludeBrep=False, IncludeMesh=False, KeepPayloads=True
     )
-    DescribedChild = DescribedValue.Assembly.Documents[0].Document
+    DescribedAssembly = DescribedValue.Assembly
+    assert DescribedAssembly is not None
+    DescribedChild = DescribedAssembly.Documents[0].Document
     assert isinstance(DescribedChild, CadDocument)
     assert tuple(
         (PayloadValue.ValueRole for PayloadValue in DescribedChild.BrepPayloads)

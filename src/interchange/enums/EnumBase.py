@@ -6,9 +6,10 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from collections.abc import Mapping as MappingBase
 from enum import EnumMeta as BaseEnumMeta
 from enum import StrEnum as StringEnum
-from typing import Any as AnyValue
+from typing import cast as CastValue
 
 # historical names differ where compact canonical identifiers cannot mirror wire vocabulary
 KLegacyEnums: dict[str, dict[str, str]] = {
@@ -27,52 +28,54 @@ KLegacyEnums: dict[str, dict[str, str]] = {
 
 
 # canonical member bindings stay reachable because implementation modules use steering compliant names
-KCanonicalEnums: dict[type, dict[str, AnyValue]] = {}
+KCanonicalEnums: dict[object, dict[str, object]] = {}
 
 
 # enum classes need historical member names while canonical declarations remain steering compliant
 class EnumAliasMeta(BaseEnumMeta):
 
-    # member construction translates canonical identifiers into their historical reflective names
-    def __new__(
-        MetaType, ClassName: str, BaseTypes: tuple[type, ...], ClassScope: AnyValue
-    ):
-        CanonicalNames = {
-            NameText: ValueText
-            for NameText, ValueText in ClassScope.items()
-            if NameText.startswith("K") and isinstance(ValueText, str)
-        }
-        EnumType = super().__new__(MetaType, ClassName, BaseTypes, ClassScope)
-        CanonicalMembers = {
-            CanonicalName: EnumType.__members__[CanonicalName]
-            for CanonicalName in CanonicalNames
-        }
-        LegacyMembers: dict[str, AnyValue] = {}
-        for CanonicalName, WireValue in CanonicalNames.items():
-            MemberValue = EnumType.__members__[CanonicalName]
-            LegacyName = KLegacyEnums.get(ClassName, {}).get(
-                WireValue,
-                WireValue.upper(),
-            )
-            setattr(MemberValue, "_name_", LegacyName)
-            LegacyMembers[LegacyName] = MemberValue
-        KCanonicalEnums[EnumType] = CanonicalMembers
-        if LegacyMembers:
-            setattr(EnumType, "_member_names_", list(LegacyMembers))
-            setattr(EnumType, "_member_map_", LegacyMembers)
-        return EnumType
-
     # historical uppercase and canonical pascal names both resolve during migration
-    def __getattr__(ClassType, NameText: str) -> AnyValue:
-        CanonicalMembers = KCanonicalEnums.get(ClassType, {})
+    def __getattr__(self, NameText: str) -> object:
+        CanonicalMembers = KCanonicalEnums.get(self, {})
         if NameText in CanonicalMembers:
             return CanonicalMembers[NameText]
-        MemberMap = type.__getattribute__(ClassType, "_member_map_")
-        if NameText in MemberMap:
-            return MemberMap[NameText]
+        MemberMap: object = type.__getattribute__(self, "_member_map_")
+        if not isinstance(MemberMap, dict):
+            raise AttributeError(NameText)
+        MemberValues = CastValue(dict[object, object], MemberMap)
+        if NameText in MemberValues:
+            return MemberValues[NameText]
         raise AttributeError(NameText)
 
 
 # shared enum behavior keeps compatibility handling consistent across every model category
 class WireEnum(StringEnum, metaclass=EnumAliasMeta):
     locals()["__slots__"] = ()
+
+    # completed enum classes can safely publish historical names without private namespace typing
+    def __init_subclass__(cls, **KeywordValues: object) -> None:
+        super().__init_subclass__(**KeywordValues)
+        RawMembers: object = type.__getattribute__(cls, "__members__")
+        if not isinstance(RawMembers, MappingBase):
+            raise TypeError("enum members must form a mapping")
+        EnumMembers = CastValue(MappingBase[str, object], RawMembers)
+        CanonicalMembers = {
+            MemberName: MemberValue
+            for MemberName, MemberValue in EnumMembers.items()
+            if MemberName.startswith("K")
+        }
+        LegacyMembers: dict[str, object] = {}
+        for MemberValue in CanonicalMembers.values():
+            WireValue: object = getattr(MemberValue, "value", None)
+            if not isinstance(WireValue, str):
+                raise TypeError("wire enum values must be strings")
+            LegacyName = KLegacyEnums.get(cls.__name__, {}).get(
+                WireValue,
+                WireValue.upper(),
+            )
+            setattr(MemberValue, "_name_", LegacyName)
+            LegacyMembers[LegacyName] = MemberValue
+        KCanonicalEnums[cls] = CanonicalMembers
+        if LegacyMembers:
+            setattr(cls, "_member_names_", list(LegacyMembers))
+            setattr(cls, "_member_map_", LegacyMembers)

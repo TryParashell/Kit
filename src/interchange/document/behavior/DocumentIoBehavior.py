@@ -9,8 +9,10 @@
 from __future__ import annotations
 
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+from typing import Self
+
+from interchange.serialization.WireData import WireData
 
 
 # document io methods preserve the historical codec surface without owning serialization
@@ -18,14 +20,14 @@ class DocumentIo:
     locals()["__slots__"] = ()
 
     # mapping output remains a method so historical document callers need no codec knowledge
-    def ToMapping(self) -> dict[str, AnyValue]:
+    def ToMapping(self) -> dict[str, WireData]:
         from interchange.document.behavior.DocumentIo import ToMapping
 
         return ToMapping(self)
 
     # mapping construction remains typed so incompatible root records fail immediately
     @classmethod
-    def FromMapping(cls, SourceValues: TypeMap[str, AnyValue]) -> DocumentIo:
+    def FromMapping(cls, SourceValues: TypeMap[str, WireData]) -> Self:
         from interchange.document.behavior.DocumentIo import FromMapping
 
         return FromMapping(cls, SourceValues)
@@ -51,7 +53,7 @@ class DocumentIo:
 
     # json construction remains typed so incompatible root records fail immediately
     @classmethod
-    def FromJson(cls, SourceValue: str) -> DocumentIo:
+    def FromJson(cls, SourceValue: str) -> Self:
         from interchange.document.behavior.DocumentIo import FromJson
 
         return FromJson(cls, SourceValue)
@@ -64,7 +66,7 @@ class DocumentIo:
 
     # file input remains discoverable on document types while decoding stays focused elsewhere
     @classmethod
-    def ReadJson(cls, PathValue: str | FilePath) -> DocumentIo:
+    def ReadJson(cls, PathValue: str | FilePath) -> Self:
         from interchange.document.behavior.DocumentIo import ReadJson
 
         return ReadJson(cls, PathValue)

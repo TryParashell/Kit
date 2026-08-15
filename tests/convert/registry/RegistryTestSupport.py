@@ -45,8 +45,8 @@ class ResultAdapter(JsonAdapter):
         return self.InfoData
 
     # probe rewriting exercises registry validation while retaining real json recognition
-    def probe(self, SourceData: Source) -> ProbeResult:
-        ResultData = super().probe(SourceData)
+    def probe(self, source: Source) -> ProbeResult:
+        ResultData = super().probe(source)
         return ReplaceValue(
             ResultData,
             format_id=self.ProbeFormat or self.info.format_id,
@@ -55,11 +55,11 @@ class ResultAdapter(JsonAdapter):
     # write rewriting exercises registry validation while retaining real output behavior
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().write(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         return ReplaceValue(
             ResultData,
             adapter=self.WriteFormat or self.info.format_id,
@@ -72,21 +72,21 @@ class CarrierAdapter(ResultAdapter):
     # path restriction forces registry staging through its transactional filesystem branch
     def supports(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
+        document: CadDocument,
+        destination: Destination,
     ) -> bool:
-        return isinstance(TargetData, (str, FilePath))
+        return isinstance(destination, (str, FilePath))
 
     # unusable output exercises rollback after a writer creates the staged artifact
     def write(
         self,
-        DocumentData: CadDocument,
-        TargetData: Destination,
-        OptionsData: WriteOptions | None = None,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        if not isinstance(TargetData, (str, FilePath)):
+        if not isinstance(destination, (str, FilePath)):
             raise TypeError("carrier adapter requires a filesystem destination")
-        OutputPath = FilePath(TargetData).expanduser().resolve()
+        OutputPath = FilePath(destination).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
         OutputPath.write_bytes(b"carrier")
         return WriteResult(
