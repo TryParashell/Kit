@@ -10,12 +10,28 @@ from dataclasses import replace as ReplaceData
 from pathlib import Path as FilePath
 import sys as SysModule
 from typing import cast as CastValue
+from typing import Protocol
 
 import pytest as Pytest
 
 from convert.adapters import AdapterDiscoveryError, AdapterInfo
 from convert.adapters import AdapterRegistry, AdapterRegistryError
 from convert.adapters.json import JsonAdapter
+
+
+# reflected replacement calls need a typed boundary for deliberately malformed metadata
+class InfoReplacer(Protocol):
+
+    # arbitrary values remain necessary because these tests exercise runtime contract rejection
+    def __call__(
+        self,
+        InfoData: AdapterInfo,
+        **NamedValues: object,
+    ) -> AdapterInfo: ...
+
+
+# the runtime dataclass helper retains legacy reflected names behind the typed test boundary
+KReplaceInfo = CastValue(InfoReplacer, ReplaceData)
 
 
 # empty format packages must fail because silent omission would make catalog coverage misleading
@@ -79,7 +95,7 @@ def CheckAliasCase() -> None:
         # altered metadata exists because registry conflicts need an independently constructed adapter
         @property
         def info(self) -> AdapterInfo:
-            return ReplaceData(super().info, FormatId="INTERCHANGE.JSON")
+            return KReplaceInfo(super().info, format_id="INTERCHANGE.JSON")
 
     with Pytest.raises(AdapterRegistryError, match="metadata differ"):
         RegistryData.register(ConflictJson())
@@ -94,7 +110,7 @@ def CheckAliasIds() -> None:
         # altered metadata exists because self alias rejection needs an independent adapter
         @property
         def info(self) -> AdapterInfo:
-            return ReplaceData(super().info, AliasNames=("INTERCHANGE.JSON",))
+            return KReplaceInfo(super().info, aliases=("INTERCHANGE.JSON",))
 
     with Pytest.raises(AdapterRegistryError, match="alias must differ"):
         AdapterRegistry().register(SelfAliasJson())
@@ -105,9 +121,9 @@ def CheckAliasIds() -> None:
         # altered metadata exists because duplicate alias rejection needs an independent adapter
         @property
         def info(self) -> AdapterInfo:
-            return ReplaceData(
+            return KReplaceInfo(
                 super().info,
-                AliasNames=("kit.json", "KIT.JSON"),
+                aliases=("kit.json", "KIT.JSON"),
             )
 
     with Pytest.raises(AdapterRegistryError, match="aliases must be unique"):
@@ -123,9 +139,9 @@ def CheckInfoTypes() -> None:
         # altered metadata exists because mutable extension rejection needs an independent adapter
         @property
         def info(self) -> AdapterInfo:
-            return ReplaceData(
+            return KReplaceInfo(
                 super().info,
-                Extensions=CastValue(tuple[str, ...], [".json"]),
+                extensions=CastValue(tuple[str, ...], [".json"]),
             )
 
     with Pytest.raises(AdapterRegistryError, match="extensions has an invalid type"):
@@ -137,7 +153,7 @@ def CheckInfoTypes() -> None:
         # altered metadata exists because numeric version rejection needs an independent adapter
         @property
         def info(self) -> AdapterInfo:
-            return ReplaceData(super().info, VersionText=CastValue(str, 1))
+            return KReplaceInfo(super().info, version=CastValue(str, 1))
 
     with Pytest.raises(AdapterRegistryError, match="version has an invalid type"):
         AdapterRegistry().register(NumericVerJson())
