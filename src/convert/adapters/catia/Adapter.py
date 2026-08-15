@@ -2197,9 +2197,6 @@ _PRESERVED_BINDING_PREFIX = KSavedBindingPrefix
 _PRESERVED_DOCUMENT_PREFIX = KSavedDocPrefix
 
 # this binding exists because shared behavior needs one stable value
-_PRODUCT_STREAM = KProductStream
-
-# this binding exists because shared behavior needs one stable value
 _PRODUCT_SUFFIX = KProductSuffix
 
 # this binding exists because shared behavior needs one stable value
