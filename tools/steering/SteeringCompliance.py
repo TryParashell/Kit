@@ -128,8 +128,9 @@ KPurposeWords = frozenset(
     }
 )
 
-# permitted type comments remain explicit because static typing metadata is not explanatory code commentary
+# permitted analyzer comments remain explicit because tooling metadata is not explanatory code commentary
 KPragmaPrefixes = (
+    "lgtm[",
     "mypy:",
     "pyre-ignore",
     "pyright:",
