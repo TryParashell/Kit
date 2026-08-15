@@ -80,6 +80,31 @@ jobs:
             jq -s '[.[].runs[]?.results[]?] | length' "${SarifFiles[@]}"
           )"
           if [ "$FindingCount" -ne 0 ]; then
+            jq -rs '
+              .[]
+              | .runs[]?
+              | .results[]?
+              | {
+                  Rule: (.ruleId // "unknown-rule"),
+                  Level: (.level // "warning"),
+                  Message: (
+                    (.message.text // .message.markdown // "No message")
+                    | gsub("[\\r\\n]+"; " ")
+                  ),
+                  Uri: (
+                    .locations[0].physicalLocation.artifactLocation.uri
+                    // "unknown-location"
+                  ),
+                  Line: (
+                    .locations[0].physicalLocation.region.startLine // 0
+                  ),
+                  Column: (
+                    .locations[0].physicalLocation.region.startColumn // 0
+                  )
+                }
+              | "\(.Uri):\(.Line):\(.Column): "
+                + "[\(.Level)] \(.Rule): \(.Message)"
+            ' "${SarifFiles[@]}"
             echo "::error::CodeQL reported $FindingCount blocking findings"
             exit 1
           fi
