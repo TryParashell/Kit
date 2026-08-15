@@ -614,7 +614,10 @@ class TestBaseline(Unittest.TestCase):
         ]
         NewFindings = GetNewFindings(FindingList, BaselineList)
         CaseSelf.assertEqual(
-            [(FindingInfo.RuleCode, FindingInfo.MsgText) for FindingInfo in NewFindings],
+            [
+                (FindingInfo.RuleCode, FindingInfo.MsgText)
+                for FindingInfo in NewFindings
+            ],
             [("NAM001", "same"), ("SPL001", "new")],
         )
 
