@@ -6155,9 +6155,7 @@ def SerializeObject(Parent: ET.Element, ObjValue: Object) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SanitizePayload(
-    Objects: list[Object], PayloadEntries: Mapping[str, bytes]
-) -> None:
+def SanitizePayload(Objects: list[Object], PayloadEntries: Mapping[str, bytes]) -> None:
     for ObjValue in Objects:
         for PropElem in ObjValue.properties:
             PartValue = PropElem.find("./Part")

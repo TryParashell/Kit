@@ -54,10 +54,8 @@ from interchange import (
     Vector3 as VectorThree,
 )
 from convert.adapters.freecad.BrepGraph import (
-    BindOnceMut,
     FreeCadBrep,
     ModelGraph,
-    RequireOwned,
     Unsupported,
 )
 
@@ -2256,9 +2254,7 @@ def CheckEdgeGeom(
 
 
 # coedge grouping stays isolated because wire and surface uses follow different native contracts
-def GroupCoedges(
-    EdgeValue: BrepEdge, Graph: ModelGraph
-) -> dict[str, list[BrepCoedge]]:
+def GroupCoedges(EdgeValue: BrepEdge, Graph: ModelGraph) -> dict[str, list[BrepCoedge]]:
     Grouped: dict[str, list[BrepCoedge]] = {}
     for CoedgeId in Graph.edge_uses[EdgeValue.id]:
         Coedge = Graph.coedges[CoedgeId]
