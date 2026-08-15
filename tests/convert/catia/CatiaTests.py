@@ -71,6 +71,7 @@ from interchange import (
 )
 from interchange.document.models.DocumentModel import CadDocument
 from interchange.payloads.PayloadRecord import BrepPayload
+from tests.convert.catia.MetadataAccess import GetObjectRows, GetStringTuple
 from tests.interchange.document.DocumentTests import document as DocValue
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
@@ -465,7 +466,7 @@ def VerifyPartDoc(
     assert len(DocValue.bodies) == 1
     assert DocValue.metadata["catia.product_name"]
     assert DocValue.metadata["catia.internal_part_name"]
-    assert len(DocValue.metadata["catia.container_declarations"]) == 8
+    assert len(GetObjectRows(DocValue.metadata["catia.container_declarations"])) == 8
     CgmPayload = next(
         (
             Payload
@@ -724,7 +725,9 @@ def VerifyCgmData(Archive: CfvTwoArchive, DocValue: CadDocument) -> None:
     CgmMeta = next(
         (
             ItemValue
-            for ItemValue in DocValue.metadata["catia.container_declarations"]
+            for ItemValue in GetObjectRows(
+                DocValue.metadata["catia.container_declarations"]
+            )
             if ItemValue["class_name"] == "CGMGeom"
         )
     )
@@ -937,7 +940,10 @@ def TestCatpartRoot() -> None:
     assert isinstance(Definition, NativeFeatureDefinition)
     assert Definition.type_id == "CompanyPartRoot"
     assert tuple(
-        (Stream["class_name"] for Stream in DocValue.metadata["catia.osmx_streams"])
+        (
+            Stream["class_name"]
+            for Stream in GetObjectRows(DocValue.metadata["catia.osmx_streams"])
+        )
     ) == ("CompanyProductRoot", "CompanyPartRoot")
     assert "CATPrtCont" not in DocValue.diagnostics[-1].message
     assert DocValue.validate() == ()
@@ -1041,14 +1047,18 @@ def TestCatpartC() -> None:
         )
     )
     DocValue = CatiaAdapter().read(Generated, ReadOptions(include_brep=False))
-    assert FeatureType.decode("ascii") in DocValue.metadata["catia.native_symbols"]
+    assert FeatureType.decode("ascii") in GetStringTuple(
+        DocValue.metadata["catia.native_symbols"]
+    )
     assert (
         DocValue.feature_timeline[0].attributes["native_symbols"]
         == DocValue.metadata["catia.native_symbols"]
     )
     Definition = DocValue.feature_timeline[0].definition
     assert isinstance(Definition, NativeFeatureDefinition)
-    assert FeatureType.decode("ascii") in Definition.object_data["symbols"]
+    assert FeatureType.decode("ascii") in GetStringTuple(
+        Definition.object_data["symbols"]
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1145,10 +1155,14 @@ def TestPedalBody() -> None:
     assert DocValue.metadata["catia.product_name"] == "Brake_pedal"
     assert DocValue.metadata["catia.internal_part_name"] == "Part2"
     assert DocValue.metadata["catia.body_name"] == "Brake_pedal"
-    NativeSymbols = DocValue.metadata["catia.native_symbols"]
+    NativeSymbols = GetStringTuple(DocValue.metadata["catia.native_symbols"])
     assert NativeSymbols == tuple(
         dict.fromkeys(
-            (Value for Value in DocValue.metadata["catia.part_symbols"] if Value)
+            (
+                Value
+                for Value in GetStringTuple(DocValue.metadata["catia.part_symbols"])
+                if Value
+            )
         )
     )
     assert {

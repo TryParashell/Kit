@@ -210,7 +210,7 @@ def BindCoedge(Instance: AnyInfo, CoedgeId: str, KindValue: str, OwnerId: str) -
 
 
 # face lookup remains a graph method because wire coedges intentionally have no owning face
-def GetFace(Instance: AnyInfo, CoedgeId: str) -> BrepFace | None:
+def GetFace(Instance: ModelGraph, CoedgeId: str) -> BrepFace | None:
     KindValue, OwnerId = Instance.coedge_owner[CoedgeId]
     if KindValue == "wire":
         return None

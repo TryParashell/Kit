@@ -24,6 +24,7 @@ import zipfile as Zipfile
 import zlib as ZlibValue
 from typing import Iterator, Mapping, TypeGuard
 from interchange import CadDocument as CadDoc
+from interchange.serialization.WireData import ValidateWireMap
 from convert.adapters.freecad.Brep import (
     FreeCADBrepWriteError as FreeCadBrepWriteError,
     brep_model_brep as BrepModelBrep,
@@ -3663,16 +3664,20 @@ def Tessellation(
 ) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]:
     if not IsPayloadMap(Value):
         return ([], [])
-    Vertices = Points(Value.get("vertices", Value.get("positions_mm", [])))
-    Triangles = [
+    DirectVertices = Points(Value.get("vertices", Value.get("positions_mm", [])))
+    DirectTriangles = [
         Triangle
         for ItemValue in Sequence(Value.get("triangles", []))
         if (Triangle := TriangleIndices(ItemValue)) is not None
     ]
-    if Vertices and Triangles:
+    if DirectVertices and DirectTriangles:
         return (
-            Vertices,
-            [Triangle for Triangle in Triangles if IsTriangleValid(Vertices, Triangle)],
+            DirectVertices,
+            [
+                Triangle
+                for Triangle in DirectTriangles
+                if IsTriangleValid(DirectVertices, Triangle)
+            ],
         )
     Vertices: list[tuple[float, float, float]] = []
     Triangles: list[tuple[int, int, int]] = []
@@ -6065,7 +6070,7 @@ def AddBrepMut(
     if Manifest.get("brep") is None:
         return ([], "")
     try:
-        DocValue = CadDoc.from_dict(Manifest)
+        DocValue = CadDoc.from_dict(ValidateWireMap(Manifest))
     except (KeyError, TypeError, ValueError, RecursionError) as ErrorInfo:
         raise ValueError("neutral B-rep manifest data is invalid") from ErrorInfo
     if DocValue.brep is None:
@@ -8006,7 +8011,9 @@ def SerializeDoc(Context: DocContext, Features: DocFeatures) -> bytes:
     AddObjectsMut(Context.Graph, Objects)
     AddDataMut(Context.Graph, RootValue)
     XmlTree.indent(RootValue, space="  ")
-    XmlValue = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
+    XmlValue: bytes = XmlTree.tostring(
+        RootValue, encoding="utf-8", xml_declaration=True
+    )
     return XmlValue + b"\n"
 
 

@@ -79,3 +79,26 @@ is_windows_device_name = IsDeviceName
 
 # binary helper name stays stable because existing writers use the historical spelling
 is_binary_destination = IsBinaryTarget
+
+# package exports stay explicit so strict consumers can use the stable adapter contract
+__all__ = (
+    "AdapterInfo",
+    "CadAdapter",
+    "CadReaderAdapter",
+    "CadWriterAdapter",
+    "Capability",
+    "CapabilityTransfer",
+    "CarrierReason",
+    "Destination",
+    "Diagnostic",
+    "Mapping",
+    "Path",
+    "ProbeResult",
+    "ReadOptions",
+    "Source",
+    "TransferMode",
+    "WriteOptions",
+    "WriteResult",
+    "is_binary_destination",
+    "is_windows_device_name",
+)

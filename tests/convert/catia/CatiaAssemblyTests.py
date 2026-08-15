@@ -37,6 +37,7 @@ from interchange import (
 )
 from interchange.document.models.DocumentModel import CadDocument
 from interchange.payloads.PayloadRecord import BrepPayload
+from tests.convert.catia.MetadataAccess import GetObjectRows, GetString
 
 # this binding exists because shared behavior needs one stable value
 KRootValue = FilePath(__file__).parents[3]
@@ -269,7 +270,9 @@ def TestCatproductI() -> None:
     assert DocValue.assembly is not None
     assert [
         ItemValue["root_name"]
-        for ItemValue in DocValue.assembly.attributes["native_table_candidates"]
+        for ItemValue in GetObjectRows(
+            DocValue.assembly.attributes["native_table_candidates"]
+        )
     ] == ["RootA", "RootB"]
     assert "catia.product.root_ambiguous" in {
         ItemValue.code for ItemValue in DocValue.diagnostics
@@ -317,8 +320,10 @@ def TestCatproductJ(TmpPath: FilePath) -> None:
     assert Definition.source_path == ""
     assert Definition.document_id == ""
     assert {
-        FilePath(ItemValue["path"]).name
-        for ItemValue in Definition.attributes["native_reference_candidates"]
+        FilePath(GetString(ItemValue["path"])).name
+        for ItemValue in GetObjectRows(
+            Definition.attributes["native_reference_candidates"]
+        )
     } == {"a.CATPart", "b.CATPart"}
     DiagValue = next(
         (
@@ -593,7 +598,12 @@ def TestCatproduct() -> None:
         Values = dict(Options.values)
         Values["resolve_components"] = False
         DocValue = Adapter.read(
-            Component, Replace(Options, strict=False, values=FrozenMapping(Values))
+            Component,
+            Replace(
+                Options,
+                StrictMode=False,
+                OptionValues=FrozenMapping(Values),
+            ),
         )
         return Replace(DocValue, source=Replace(DocValue.source, sha256="0" * 64))
 

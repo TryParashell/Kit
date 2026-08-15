@@ -902,6 +902,7 @@ def TestSSREACC(TmpPath: FilePath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
 def TestPSADACCE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Catproduct = TmpPath / "source.CATProduct"
@@ -1189,6 +1190,7 @@ def TestSLBPWNBP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KRingInfo.is_file(), reason="piston ring corpus unavailable")
 def TestSLNSFAEO() -> None:
     SourceDoc = DocumentWithoutSource(ReadSldprt(KRingInfo, include_brep=False))
     Output = BytesIO()
@@ -3267,6 +3269,8 @@ def TestSAEDK(TmpPath: FilePath) -> None:
     ("SourceDoc", "WrongSuffix"), ((KSample, ".SLDASM"), (KAssembly, ".SLDPRT"))
 )
 def TestSRRNSKM(SourceDoc: FilePath, WrongSuffix: str, TmpPath: FilePath) -> None:
+    if not SourceDoc.is_file():
+        PytestLib.skip("solidworks corpus unavailable")
     Renamed = TmpPath / f"renamed{WrongSuffix}"
     Renamed.write_bytes(SourceDoc.read_bytes())
     with PytestLib.raises(SldprtFormatError, match="content requires"):
@@ -3382,6 +3386,7 @@ def TestSLAEOERM() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KConrod.is_file(), reason="conrod corpus unavailable")
 def TestSLNMPIRWT() -> None:
     SourceDoc = DocumentWithoutSource(ReadSldprt(KConrod))
     Assembly = GetAssembly(SourceDoc)
@@ -3454,6 +3459,7 @@ def TestANTSWMR(TmpPath: FilePath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
 def TestPSDTPAW(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Assembly = GetAssembly(SourceDoc)
@@ -3487,6 +3493,7 @@ def TestPSDTPAW(TmpPath: FilePath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
 def TestIPADTRC(TmpPath: FilePath) -> None:
     Isolated = TmpPath / "isolated" / KAssembly.name
     Isolated.parent.mkdir()
@@ -3555,6 +3562,7 @@ def TestCDTRSRC(TmpPath: FilePath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
 def TestPAPTMALP(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Assembly = GetAssembly(SourceDoc)
@@ -3621,6 +3629,7 @@ def TestPAPTMALP(TmpPath: FilePath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
 def TestPACTLCDS(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Output = TmpPath / "carried.SLDASM"
@@ -3640,6 +3649,7 @@ def TestPACTLCDS(TmpPath: FilePath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
 def TestPADWACIR(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Assembly = GetAssembly(SourceDoc)

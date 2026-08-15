@@ -44,7 +44,7 @@ KOracle = GetFreecadPath()
 
 
 # this definition exists because focused behavior needs one stable owner
-def AsmDoc():
+def AsmDoc() -> CadDoc:
     Source = InterchangeAsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -62,7 +62,7 @@ def PropAction(NodeValue: ET.Element, NameValue: str) -> XmlTree.Element:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshDoc():
+def MeshDoc() -> CadDoc:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -106,7 +106,7 @@ def MeshDoc():
 
 
 # this definition exists because focused behavior needs one stable owner
-def NestedAsmDoc():
+def NestedAsmDoc() -> CadDoc:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None

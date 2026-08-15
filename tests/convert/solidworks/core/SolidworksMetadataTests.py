@@ -32,10 +32,10 @@ from interchange import (
     ParameterValue,
     SupportPlane,
     Transform,
-    UnitSystem,
     ValueKind,
     Vector3 as VectorThree,
 )
+from interchange.enums.EnumUnits import UnitSystem
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

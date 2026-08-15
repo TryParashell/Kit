@@ -221,7 +221,12 @@ def TestEMFUTNTV() -> None:
             MetaInfoA.features, MetaInfoA.depth_present, strict=True
         ):
             Topology = FeatureTopology(*Entry)
-            assert list(Topology.key) == Entry, DonorId
+            assert (
+                Topology.operation,
+                Topology.profile,
+                Topology.support,
+                Topology.end_condition,
+            ) == Entry, DonorId
             assert Topology.operation in KOperations, DonorId
             assert Topology.end_condition in KConditions, DonorId
             assert Topology.profile, DonorId

@@ -22,20 +22,24 @@ from convert.adapters.solidworks.programs.configuration.revolve.pin.front.Progra
 )
 from convert.adapters.solidworks.programs.configuration.revolve.pin.front.Program import (
     KAnnotationMatrixOffset,
-    KConfigOps,
-    KFieldOwners as KConfigOwners,
     KReferenceDigest as KConfigDigest,
     KReferenceLength as KConfigLength,
+)
+from convert.adapters.solidworks.programs.configuration.revolve.pin.front.Registry import (
+    KConfigOps,
+    KFieldOwners as KConfigOwners,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.resolved.revolve.pin.front.Program import (
     EncodeProgram,
     GetCoverage,
     KAngleOffsets,
-    KFieldOwners,
     KProfileOffsets,
     KReferenceDigest,
     KReferenceLength,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.pin.front.Registry import (
+    KFieldOwners,
     KResolvedOps,
 )
 from convert.adapters.solidworks.envelopes.revolve.pin.front.Envelope import (

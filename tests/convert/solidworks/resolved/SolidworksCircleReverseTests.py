@@ -15,10 +15,12 @@ from convert.adapters.solidworks.container.Archive import (
     read_string as ReadString,
 )
 from convert.adapters.solidworks.programs.configuration.circle.reverse.Program import (
-    ConfigOps,
     EncodeProgram as EncodeConfig,
-    FieldOwners as ConfigOwners,
     ReferenceLength,
+)
+from convert.adapters.solidworks.programs.configuration.circle.reverse.Registry import (
+    ConfigOps,
+    FieldOwners as ConfigOwners,
 )
 from convert.adapters.solidworks.container.Container import (
     SldprtArchive,
@@ -26,6 +28,8 @@ from convert.adapters.solidworks.container.Container import (
 )
 from convert.adapters.solidworks.programs.resolved.circle.reverse.Program import (
     EncodeProgram as EncodeResolved,
+)
+from convert.adapters.solidworks.programs.resolved.circle.reverse.Registry import (
     FieldOwners as ResolvedOwners,
     ResolvedOps,
 )

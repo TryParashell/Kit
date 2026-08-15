@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from typing import cast as CastValue
+from typing import Mapping as TypeMap
 from typing import TypeAlias
 
 
@@ -34,3 +35,11 @@ def ValidateWireData(SourceValue: object) -> WireData:
             ResultValue[KeyValue] = ValidateWireData(ItemValue)
         return ResultValue
     raise TypeError(f"unsupported wire value type {type(SourceValue).__name__}")
+
+
+# document restoration requires a recursive object root rather than an arbitrary wire scalar
+def ValidateWireMap(SourceValue: object) -> TypeMap[str, WireData]:
+    DataValue = ValidateWireData(SourceValue)
+    if not isinstance(DataValue, dict):
+        raise TypeError("wire document root must be an object")
+    return DataValue

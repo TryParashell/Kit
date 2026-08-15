@@ -8,16 +8,18 @@
 
 from __future__ import annotations
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import replace as ReplaceData
 from pathlib import Path as FilePath
 import struct as StructLib
+from typing import cast as CastValue
 import pytest as PytestLib
-from convert.adapters.base import ReadOptions
 from convert.adapters.solidworks import (
-    SldprtAdapter,
     SldprtArchive,
     build_sldprt as BuildSldprt,
 )
+from convert.adapters.base.ReadOptions import ReadOptions
+from convert.adapters.solidworks.core.Adapter import SldprtAdapter
 from convert.adapters.solidworks.core.Adapter import (
     Companion as CompanionPayloads,
     MateGroups,
@@ -603,7 +605,12 @@ def TestMARRANML(Document: CadDocument) -> None:
         if Payload.format_id == "solidworks.mates"
     ]
     assert [len(Payload.data or b"") for Payload in Payloads] == [2202551, 18893, 43184]
-    assert sum((Payload.attributes["declared_count"] for Payload in Payloads)) == 638
+    DeclaredCount = 0
+    for Payload in Payloads:
+        CountValue = Payload.attributes["declared_count"]
+        assert isinstance(CountValue, int)
+        DeclaredCount += CountValue
+    assert DeclaredCount == 638
     assert all(
         (MateInfo.attributes["native_payload_id"] for MateInfo in Assembly.mates)
     )
@@ -632,23 +639,38 @@ def TestMARDMVAA(Document: CadDocument) -> None:
     assert GearInfo.value is not None
     assert GearInfo.value.value == PytestLib.approx(1.0)
     assert GearInfo.value.kind == ValueKind.NUMBER
-    assert [
-        ItemValueA["name"] for ItemValueA in GearInfo.attributes["native_dimensions"]
-    ] == ["D1", "D2"]
+    NativeDimensionsValue = GearInfo.attributes["native_dimensions"]
+    assert isinstance(NativeDimensionsValue, tuple)
+    NativeDimensions = CastValue(tuple[object, ...], NativeDimensionsValue)
+    DimensionNames: list[str] = []
+    for DimensionInfo in NativeDimensions:
+        assert isinstance(DimensionInfo, Mapping)
+        DimensionMap = CastValue(Mapping[str, object], DimensionInfo)
+        NameValue = DimensionMap.get("name")
+        assert isinstance(NameValue, str)
+        DimensionNames.append(NameValue)
+    assert DimensionNames == ["D1", "D2"]
     assert GearInfo.alignment == MateAlignment.UNKNOWN
     Belts = [MateInfo for MateInfo in Assembly.mates if MateInfo.kind == MateKind.BELT]
-    assert all((MateInfo.value is not None for MateInfo in Belts))
     assert all((MateInfo.alignment == MateAlignment.UNKNOWN for MateInfo in Belts))
-    assert all(
-        (
-            MateInfo.value.value
-            == PytestLib.approx(
-                MateInfo.attributes["native_dimensions"][0]["value"]
-                / MateInfo.attributes["native_dimensions"][1]["value"]
-            )
-            for MateInfo in Belts
-        )
-    )
+    for MateInfo in Belts:
+        MateValue = MateInfo.value
+        assert MateValue is not None
+        BeltDimensionsValue = MateInfo.attributes["native_dimensions"]
+        assert isinstance(BeltDimensionsValue, tuple)
+        BeltDimensions = CastValue(tuple[object, ...], BeltDimensionsValue)
+        assert len(BeltDimensions) >= 2
+        FirstDimension = BeltDimensions[0]
+        SecondDimension = BeltDimensions[1]
+        assert isinstance(FirstDimension, Mapping)
+        assert isinstance(SecondDimension, Mapping)
+        FirstMap = CastValue(Mapping[str, object], FirstDimension)
+        SecondMap = CastValue(Mapping[str, object], SecondDimension)
+        FirstValue = FirstMap.get("value")
+        SecondValue = SecondMap.get("value")
+        assert isinstance(FirstValue, (int, float))
+        assert isinstance(SecondValue, (int, float))
+        assert MateValue.value == PytestLib.approx(FirstValue / SecondValue)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -695,7 +717,13 @@ def TestMTUNCWLFR() -> None:
     assert NeutralMateKind(MateInfo.kind) == MateKind.NATIVE
     Payload = MatePayload("future", RecordInfo.name, Future, FutureList, 7, "fixture")
     assert Payload.data == Future
-    assert Payload.attributes["records"][0] == {
+    PayloadRecordsValue = Payload.attributes["records"]
+    assert isinstance(PayloadRecordsValue, tuple)
+    PayloadRecords = CastValue(tuple[object, ...], PayloadRecordsValue)
+    assert PayloadRecords
+    FirstRecord = PayloadRecords[0]
+    assert isinstance(FirstRecord, Mapping)
+    assert FirstRecord == {
         "name": "CustomMate1",
         "kind": "native",
         "class_name": "moMateVendorType",
@@ -835,9 +863,13 @@ def TestMARERM(Document: CadDocument) -> None:
     Assembly = Document.assembly
     assert Assembly is not None
     assert len(Document.meshes) == 65
-    assert (
-        sum((len(MeshInfo.attributes["faces"]) for MeshInfo in Document.meshes)) == 4391
-    )
+    FaceCount = 0
+    for MeshInfo in Document.meshes:
+        FacesValue = MeshInfo.attributes["faces"]
+        assert isinstance(FacesValue, tuple)
+        FacesInfo = CastValue(tuple[object, ...], FacesValue)
+        FaceCount += len(FacesInfo)
+    assert FaceCount == 4391
     assert sum((len(MeshInfo.vertices) for MeshInfo in Document.meshes)) == 492148
     assert sum((len(MeshInfo.triangles) for MeshInfo in Document.meshes)) == 391218
     PartDefinitions = {
@@ -864,8 +896,13 @@ def TestNADPTOT(Document: CadDocument) -> None:
         27,
         29,
     ]
-    assert sorted((len(ItemValueA.assembly.mates) for ItemValueA in Nested)) == [6, 13]
-    assert all((not ItemValueA.assembly.documents for ItemValueA in Nested))
+    MateCounts: list[int] = []
+    for ItemValueA in Nested:
+        NestedAssembly = ItemValueA.assembly
+        assert NestedAssembly is not None
+        MateCounts.append(len(NestedAssembly.mates))
+        assert not NestedAssembly.documents
+    assert sorted(MateCounts) == [6, 13]
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

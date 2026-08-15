@@ -56,12 +56,20 @@ class AssemblyData(ModelBase):
                 return DefinitionValue
         raise KeyError(f"unknown component definition id {EntityId!r}")
 
+    # lowercase lookup stays concrete because static consumers cannot observe runtime aliases
+    def definition(self, entity_id: str) -> ComponentDef:
+        return self.GetDefinition(entity_id)
+
     # embedded document lookup avoids exposing storage details to assembly consumers
     def GetDocument(self, EntityId: str) -> CadDocument:
         for DocumentValue in self.documents:
             if DocumentValue.id == EntityId:
                 return DocumentValue.document
         raise KeyError(f"unknown component document id {EntityId!r}")
+
+    # lowercase lookup stays concrete because linked document consumers need its exact return type
+    def document(self, entity_id: str) -> CadDocument:
+        return self.GetDocument(entity_id)
 
     # child ordering stays deterministic when source order values contain ties
     def GetChildren(self, DefinitionId: str) -> tuple[ComponentInst, ...]:
@@ -78,3 +86,7 @@ class AssemblyData(ModelBase):
                 key=lambda InstanceValue: (InstanceValue.order, InstanceValue.id),
             )
         )
+
+    # lowercase lookup stays concrete because static consumers cannot observe runtime aliases
+    def children(self, definition_id: str) -> tuple[ComponentInst, ...]:
+        return self.GetChildren(definition_id)

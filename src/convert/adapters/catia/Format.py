@@ -8,8 +8,8 @@
 
 from __future__ import annotations as Annotations
 from types import MappingProxyType
-from convert.adapters.base import AdapterInfo
-from interchange import Capability
+from convert.adapters.base.AdapterInfo import AdapterInfo
+from interchange.enums.EnumDocument import Capability
 
 # this binding exists because shared behavior needs one stable value
 KPartDocType = "CATPart"

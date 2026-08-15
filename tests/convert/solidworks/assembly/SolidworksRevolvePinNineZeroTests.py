@@ -25,19 +25,23 @@ from convert.adapters.solidworks.programs.configuration.revolve.pin.rightangle.P
     GetCoverage as GetConfigCoverage,
 )
 from convert.adapters.solidworks.programs.configuration.revolve.pin.rightangle.Program import (
-    KConfigOps,
-    KFieldOwners as KConfigOwners,
     KReferenceDigest as KConfigDigest,
     KReferenceLength as KConfigLength,
+)
+from convert.adapters.solidworks.programs.configuration.revolve.pin.rightangle.Registry import (
+    KConfigOps,
+    KFieldOwners as KConfigOwners,
 )
 from convert.adapters.solidworks.programs.resolved.revolve.pin.rightangle.Program import (
     EncodeProgram,
     GetCoverage,
     KAngleOffsets,
-    KFieldOwners,
     KProfileOffsets,
     KReferenceDigest,
     KReferenceLength,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.pin.rightangle.Registry import (
+    KFieldOwners,
     KResolvedOps,
 )
 from convert.adapters.solidworks.container.Format import (

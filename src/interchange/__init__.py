@@ -42,20 +42,20 @@ from .types import (
     Vector3 as LegacyVectorThree,
     frozen_mapping as FrozenMapping,
 )
-from .assembly import (
-    AssemblyData,
-    ComponentDef,
-    ComponentDoc,
-    ComponentInst,
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyEnums import (
     ComponentKind,
     MateAlignment,
-    MateConstraint,
-    MateEntity,
     MateEntityKind,
-    MateGroup,
     MateKind,
-    TransformMatrix,
 )
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentDocument import ComponentDoc
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.MateGroup import MateGroup
+from interchange.assembly.TransformMatrix import TransformMatrix
 from .brep import (
     BrepBody,
     BrepCoedge,
@@ -92,16 +92,12 @@ from .brep import (
     SphereSurface,
     TorusSurface,
 )
-from .document import (
-    AddWrapperMeta,
-    CadDocument,
-    DocumentError,
-    FilterDocument,
-    GetPayloadIds,
-    GetRetainedCaps,
-    GetSemanticMeta,
-    InferCaps,
-)
+from interchange.document.models.DocumentCaps import GetRetainedCaps, InferCaps
+from interchange.document.models.DocumentError import DocumentError
+from interchange.document.models.DocumentFilter import FilterDocument
+from interchange.document.models.DocumentMetadata import AddWrapperMeta, GetSemanticMeta
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.models.DocumentPayload import GetPayloadIds
 from interchange.enums.EnumDocument import Capability, Severity
 from interchange.enums.EnumFeatures import FeatureKind
 from interchange.enums.EnumGeometry import ConstraintKind, GeometryKind
@@ -126,31 +122,34 @@ from interchange.features.FeatureKinds import (
     ShellFeature,
 )
 from interchange.features.FeatureStep import FeatureCfgState, FeatureStep
-from .geometry import (
+from interchange.geometry.models.GeometryConics import (
     ArcEllipseGeom,
-    ArcGeometry,
     ArcHyperGeom,
     ArcParabGeom,
-    CircleGeometry,
-    ConstraintRef,
     EllipseGeometry,
     HyperbolaGeom,
+    ParabolaGeom,
+)
+from interchange.geometry.models.GeometryCurves import (
+    ArcGeometry,
+    CircleGeometry,
     LineGeometry,
     NativeGeometry,
-    ParabolaGeom,
     PointGeometry,
-    SelectPathElem,
-    Selection,
+    SplineGeometry,
+)
+from interchange.geometry.models.Selection import Selection, SelectPathElem
+from interchange.geometry.models.Sketch import (
+    ConstraintRef,
     Sketch,
     SketchEntity,
     SketchRelation,
-    SplineGeometry,
-    SupportPlane,
 )
+from interchange.geometry.models.SupportPlane import SupportPlane
 from .geometry.models.VectorPlane import PlaneVector
 from .geometry.models.VectorSpace import SpaceVector
 from .history import AdapterCaps
-from .mesh import SurfaceMesh
+from interchange.mesh.SurfaceMesh import SurfaceMesh
 from interchange.payloads.PayloadMigrate import MigratePayload
 from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.payloads.PayloadRoles import PayloadRole
@@ -161,7 +160,8 @@ from interchange.records.RecordParameter import Expression, Parameter, Parameter
 from interchange.records.RecordProvenance import Provenance, ProvenanceSpan
 from interchange.records.RecordSource import CadSource
 from interchange.records.RecordTopology import TopologyCounts
-from .serialization import RegMigration, RegisterTypes
+from interchange.serialization.MigrationRegistry import RegMigration
+from interchange.serialization.TypeRegistry import RegisterTypes
 from interchange.geometry.models.Vectors import (
     BoundingBox,
     Transform,

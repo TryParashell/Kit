@@ -506,10 +506,16 @@ def SourceBytesMut(Source: Source) -> tuple[bytes, str]:
     Reader = getattr(Source, "read", None)
     if not callable(Reader):
         raise TypeError("CATIA source must be a path, bytes, or binary stream")
-    Position = Source.tell() if hasattr(Source, "tell") else None
+    TellMethod = getattr(Source, "tell", None)
+    SeekMethod = getattr(Source, "seek", None)
+    Position: int | None = None
+    if callable(TellMethod) and callable(SeekMethod):
+        PositionValue: object = TellMethod()
+        if isinstance(PositionValue, int):
+            Position = PositionValue
     Value = Reader()
-    if Position is not None and hasattr(Source, "seek"):
-        Source.seek(Position)
+    if Position is not None and callable(SeekMethod):
+        SeekMethod(Position)
     if not isinstance(Value, (bytes, bytearray)):
         raise TypeError("CATIA source stream must be binary")
     return (bytes(Value), getattr(Source, "name", "<stream>"))
@@ -2071,11 +2077,7 @@ def DigestDoc(
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            DigestDoc(ItemValue.document, IgnoredPayload)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=DigestDoc(ItemValue.document, IgnoredPayload),
                     )
                     for ItemValue in Nested.documents
                 )

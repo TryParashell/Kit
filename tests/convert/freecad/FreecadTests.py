@@ -8,7 +8,7 @@
 
 from __future__ import annotations as Annotations
 import base64 as BaseSixFour
-from collections.abc import Callable as FuncCall
+from collections.abc import Callable as FuncCall, Mapping, Sequence
 from dataclasses import replace as Replace
 import hashlib as Hashlib
 import inspect as Inspect
@@ -18,7 +18,7 @@ import math as MathValue
 from pathlib import Path as FilePath
 import struct as Struct
 from types import MappingProxyType as MapProxy
-from typing import TypedDict as TypeDict
+from typing import TypeGuard, TypedDict as TypeDict
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import zlib as ZlibValue
@@ -30,13 +30,10 @@ from convert import (
     registry as Registry,
     write_document as WriteDoc,
 )
-from convert.adapters.base import (
-    CarrierReason,
-    ReadOptions,
-    TransferMode,
-    WriteOptions,
-    WriteResult,
-)
+from convert.adapters.base.ReadOptions import ReadOptions
+from convert.adapters.base.TransferContract import CarrierReason, TransferMode
+from convert.adapters.base.WriteOptions import WriteOptions
+from convert.adapters.base.WriteResult import WriteResult
 from convert.adapters.freecad import (
     FreeCADAdapter as FreeCadAdapter,
     FreeCADAdapterError as FreeCadAdapterError,
@@ -156,27 +153,19 @@ from interchange import (
     ArcEllipseGeometry as ArcEllipseGeom,
     ArcHyperbolaGeometry as ArcHyperbolaGeom,
     ArcParabolaGeometry as ArcParabolaGeom,
-    BooleanOperation as BoolOperation,
     BrepPayload,
     CadDocument,
-    Capability,
     ChamferFeature,
     CircleGeometry as CircleGeom,
     CircularPatternFeature,
     Configuration as Config,
-    ConstraintKind as RuleKind,
     ConstraintReference as RuleRef,
     Expression,
-    ExtrusionEndCondition,
-    ExtrusionFeature,
-    FeatureKind,
     FeatureStep,
     EllipseGeometry as EllipseGeom,
-    GeometryKind as GeomKind,
     HyperbolaGeometry as HyperbolaGeom,
     LineGeometry as LineGeom,
     LinearPatternFeature,
-    MateKind,
     Mesh as MeshRecord,
     NativeFeatureDefinition,
     NativeGeometry as NativeGeom,
@@ -191,10 +180,17 @@ from interchange import (
     SketchConstraint as SketchRule,
     SketchEntity,
     Transform,
-    ValueKind,
     Vector2 as VectorTwo,
     Vector3 as VectorThree,
 )
+from interchange.assembly.AssemblyEnums import MateKind
+from interchange.enums.EnumDocument import Capability
+from interchange.enums.EnumFeatures import BooleanOp as BoolOperation, FeatureKind
+from interchange.enums.EnumGeometry import ConstraintKind as RuleKind
+from interchange.enums.EnumGeometry import GeometryKind as GeomKind
+from interchange.enums.EnumValues import ValueKind
+from interchange.features.FeatureExtrude import ExtrudeEnd as ExtrusionEndCondition
+from interchange.features.FeatureExtrude import ExtrudeFeature as ExtrusionFeature
 from tests.interchange.document.DocumentTests import document as NeutralDoc
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
@@ -215,6 +211,46 @@ NativeOptions = TypeDict(
     },
     total=False,
 )
+
+
+# runtime mapping checks need an object contract before recursive metadata iteration
+def IsMetaMap(SourceValue: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(SourceValue, Mapping)
+
+
+# runtime sequence checks need an object contract without accepting scalar containers
+def IsMetaSeq(SourceValue: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(SourceValue, Sequence) and not isinstance(
+        SourceValue, (str, bytes, bytearray)
+    )
+
+
+# nested metadata needs checked string keyed mappings before tests inspect vendor fields
+def MetaMap(SourceValue: object) -> dict[str, object]:
+    if not IsMetaMap(SourceValue):
+        raise TypeError("metadata value must be a mapping")
+    ResultValue: dict[str, object] = {}
+    for KeyValue, ItemValue in SourceValue.items():
+        if not isinstance(KeyValue, str):
+            raise TypeError("metadata mapping keys must be strings")
+        ResultValue[KeyValue] = ItemValue
+    return ResultValue
+
+
+# nested metadata needs checked sequences without accepting text or binary scalar values
+def MetaSeq(SourceValue: object) -> tuple[object, ...]:
+    if not IsMetaSeq(SourceValue):
+        raise TypeError("metadata value must be a sequence")
+    return tuple(SourceValue)
+
+
+# external document assertions share one recursive metadata boundary across portable write tests
+def OuterDocs(DocValue: CadDocument) -> tuple[dict[str, object], ...]:
+    FreecadMeta = MetaMap(DocValue.metadata["freecad"])
+    return tuple(
+        MetaMap(ItemValue) for ItemValue in MetaSeq(FreecadMeta["external_documents"])
+    )
+
 
 # this binding exists because shared behavior needs one stable value
 KSample = FilePath(__file__).parents[3] / "examples" / ".SLDPRT" / "example.SLDPRT"
@@ -2233,7 +2269,7 @@ def TestDatumPlane() -> None:
     DocValue = FreeCadAdapter().read(RewriteDocXml(NativePart(), DatumAnd))
     assert DocValue.sketches[0].support_plane_id == DocValue.support_planes[0].id
     assert (
-        DocValue.support_planes[0].attributes["freecad"]["type_id"]
+        MetaMap(DocValue.support_planes[0].attributes["freecad"])["type_id"]
         == "PartDesign::Plane"
     )
     assert len(DocValue.selections) == 1
@@ -2256,7 +2292,7 @@ def TestCustomIsAs() -> None:
     assert len(DocValue.support_planes) == 1
     assert DocValue.sketches[0].support_plane_id == DocValue.support_planes[0].id
     assert (
-        DocValue.support_planes[0].attributes["freecad"]["type_id"]
+        MetaMap(DocValue.support_planes[0].attributes["freecad"])["type_id"]
         == "Vendor::FeaturePythonPlane"
     )
 
@@ -2292,7 +2328,7 @@ def TestCustomDatum() -> None:
     assert len(DocValue.support_planes) == 1
     assert DocValue.support_planes[0].name == "Future datum"
     assert (
-        DocValue.support_planes[0].attributes["freecad"]["type_id"]
+        MetaMap(DocValue.support_planes[0].attributes["freecad"])["type_id"]
         == "Vendor::FutureDatumPlane"
     )
 
@@ -2320,7 +2356,7 @@ def TestCustomAnd() -> None:
     assert len(DocValue.feature_timeline) == 1
     assert str(DocValue.feature_timeline[0].kind) == "native"
     assert (
-        DocValue.feature_timeline[0].attributes["freecad"]["type_id"]
+        MetaMap(DocValue.feature_timeline[0].attributes["freecad"])["type_id"]
         == "Vendor::ParametricFeature"
     )
     ShapePayloads = tuple(
@@ -2590,6 +2626,28 @@ def TestNeutralTrip() -> None:
         Expected = SourceValue[1]
         Actual = ItemValue.geometry
         assert type(Actual) is type(Expected)
+        assert isinstance(
+            Actual,
+            (
+                EllipseGeom,
+                ArcEllipseGeom,
+                HyperbolaGeom,
+                ArcHyperbolaGeom,
+                ParabolaGeom,
+                ArcParabolaGeom,
+            ),
+        )
+        assert isinstance(
+            Expected,
+            (
+                EllipseGeom,
+                ArcEllipseGeom,
+                HyperbolaGeom,
+                ArcHyperbolaGeom,
+                ParabolaGeom,
+                ArcParabolaGeom,
+            ),
+        )
         assert (Actual.center.x, Actual.center.y) == Pytest.approx(
             (Expected.center.x, Expected.center.y)
         )
@@ -2966,7 +3024,7 @@ def TestCurrentPad(TypeId: str, TypeCode: int, Expected: str) -> None:
         NativeArchive((("Extrude", TypeId, (), Properties),), {})
     )
     Definition = DocValue.feature_timeline[0].definition
-    assert Definition is not None
+    assert isinstance(Definition, ExtrusionFeature)
     assert str(Definition.end_condition) == Expected
     assert str(Definition.second_end_condition) == "up_to_shape"
     assert Definition.second_length is not None
@@ -3027,11 +3085,11 @@ def TestFeatureAnd() -> None:
     assert isinstance(Feature.definition, NativeFeatureDefinition)
     assert Feature.definition.format_id == "freecad.fcstd"
     assert Feature.definition.type_id == "PartDesign::Revolution"
-    ObjectData = dict(Feature.definition.object_data)
-    NativeProperties = dict(ObjectData["properties"])
-    Angle = dict(NativeProperties["Angle"])
-    AngleValue = dict(Angle["children"][0])
-    AngleAttributes = dict(AngleValue["attributes"])
+    ObjectData = MetaMap(Feature.definition.object_data)
+    NativeProperties = MetaMap(ObjectData["properties"])
+    Angle = MetaMap(NativeProperties["Angle"])
+    AngleValue = MetaMap(MetaSeq(Angle["children"])[0])
+    AngleAttributes = MetaMap(AngleValue["attributes"])
     AngleAttributes["value"] = "37.5"
     AngleValue["attributes"] = AngleAttributes
     Angle["children"] = [AngleValue]
@@ -3596,14 +3654,18 @@ def TestUnknownData(CarrierSuffix: str, TmpPath: Path) -> None:
     )
     assert NativeDoc.data == SourceData
     assert NativeBinding.data == Hashlib.sha256(SourceData).digest()
+    FreecadMeta = MetaMap(Carried.metadata["freecad"])
     FutureObject = next(
         (
-            Value
-            for Value in Carried.metadata["freecad"]["objects"]
-            if Value["name"] == "FutureResult"
+            MetaMap(ItemValue)
+            for ItemValue in MetaSeq(FreecadMeta["objects"])
+            if MetaMap(ItemValue)["name"] == "FutureResult"
         )
     )
-    assert FutureObject["properties"]["SolverState"]["children"][0]["attributes"] == {
+    FutureProps = MetaMap(FutureObject["properties"])
+    SolverState = MetaMap(FutureProps["SolverState"])
+    SolverChild = MetaMap(MetaSeq(SolverState["children"])[0])
+    assert SolverChild["attributes"] == {
         "encoding": "opaque",
         "value": "future-state",
     }
@@ -3649,8 +3711,8 @@ def VerifyPart(DocValue: CadDocument) -> None:
     )
     assert sum((Param.expression is not None for Param in DocValue.parameters)) == 2
     NativeRule = DocValue.sketches[0].constraints[2]
-    Slots = NativeRule.attributes["freecad_reference_slots"]
-    assert [SlotValue["freecad_geometry_index"] for SlotValue in Slots] == [
+    Slots = MetaSeq(NativeRule.attributes["freecad_reference_slots"])
+    assert [MetaMap(SlotValue)["freecad_geometry_index"] for SlotValue in Slots] == [
         1,
         -3,
         -2000,
@@ -3847,13 +3909,13 @@ def TestSketchShape() -> None:
     assert SketchShape is not None
     assert FinalShape is not None
     SketchPart = SketchShape.find("./Part")
-    SketchMap = SketchShape.find("./ElementMap")
+    SketchMapNode = SketchShape.find("./ElementMap")
     SketchElem = SketchShape.find("./ElementMap/Element")
     SketchMapTwo = SketchShape.find("./ElementMap2")
     FinalPart = FinalShape.find("./Part")
     FinalMapTwo = FinalShape.find("./ElementMap2")
     assert SketchPart is not None
-    assert SketchMap is not None
+    assert SketchMapNode is not None
     assert SketchElem is not None
     assert SketchMapTwo is not None
     assert FinalPart is not None
@@ -3862,7 +3924,7 @@ def TestSketchShape() -> None:
         "ElementMap": "0.15.70200.5",
         "file": "Sketch.Shape.brp",
     }
-    assert SketchMap.attrib == {"new": "1", "count": "1"}
+    assert SketchMapNode.attrib == {"new": "1", "count": "1"}
     assert SketchElem.attrib == {
         "key": "Dummy",
         "value": "Dummy",
@@ -3911,7 +3973,7 @@ def TestStringRoot() -> None:
     Table = b"StringTableStart v1 0\n"
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(HasherSource(Table))
-    StringHasher = DocValue.metadata["freecad"]["string_hasher"]
+    StringHasher = MetaMap(MetaMap(DocValue.metadata["freecad"])["string_hasher"])
     assert StringHasher["attribute"] == "1"
     assert StringHasher["entries"] == [
         {"source_stream": "StringHasher.Table.txt", "data": Table}
@@ -4146,13 +4208,14 @@ def TestPartGraph() -> None:
     Source, Entries = GraphFixture()
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(Source)
+    FreecadMeta = MetaMap(DocValue.metadata["freecad"])
     assert [
-        ItemValue["name"] for ItemValue in DocValue.metadata["freecad"]["objects"]
+        MetaMap(ItemValue)["name"] for ItemValue in MetaSeq(FreecadMeta["objects"])
     ] == ["Body", "Opaque", "XY_Plane", "Sketch", "Pad"]
     assert {Payload.source_stream: Payload.data for Payload in DocValue.brep_payloads}[
         "Sketch.InternalShape.brp"
     ] == b""
-    assert DocValue.metadata["freecad"]["entries"] == [
+    assert FreecadMeta["entries"] == [
         {"source_stream": "Blob.bin", "data": b"opaque-native-stream"}
     ]
     Output = IoStream.BytesIO()
@@ -4214,15 +4277,15 @@ def TestCustomAsm() -> None:
     assert len(DocValue.assembly.instances) == 1
     assert len(DocValue.assembly.mates) == 1
     assert (
-        DocValue.assembly.attributes["freecad"]["type_id"]
+        MetaMap(DocValue.assembly.attributes["freecad"])["type_id"]
         == "Vendor::FutureAssemblyRoot"
     )
     assert (
-        DocValue.assembly.instances[0].attributes["freecad"]["type_id"]
+        MetaMap(DocValue.assembly.instances[0].attributes["freecad"])["type_id"]
         == "Vendor::FutureOccurrenceLink"
     )
     assert (
-        DocValue.assembly.mate_groups[0].attributes["freecad"]["type_id"]
+        MetaMap(DocValue.assembly.mate_groups[0].attributes["freecad"])["type_id"]
         == "Vendor::FutureConstraintCollection"
     )
     Output = IoStream.BytesIO()
@@ -4253,7 +4316,7 @@ def TestCustomAsm() -> None:
 def TestAsmObjects() -> None:
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(NativeAsm())
-    assert DocValue.metadata["freecad"]["entries"] == [
+    assert MetaMap(DocValue.metadata["freecad"])["entries"] == [
         {"source_stream": "Blob.bin", "data": b"opaque"}
     ]
     Output = IoStream.BytesIO()
@@ -4283,9 +4346,9 @@ def TestAsmObjects() -> None:
         )
     )
     References = {
-        NodeValue.get("file", "")
+        NodeValue.get("file") or ""
         for NodeValue in RootValue.findall(".//*[@file]")
-        if NodeValue.tag != "XLink" and NodeValue.get("file", "")
+        if NodeValue.tag != "XLink" and (NodeValue.get("file") or "")
     }
     assert References <= Names
 
@@ -4564,8 +4627,7 @@ def VerifyEmbedMut(Adapter: FreeCadAdapter, DocValue: CadDocument) -> None:
     )
     PortableRestored = Adapter.read(PortableStream.getvalue())
     assert (
-        PortableRestored.metadata["freecad"]["external_documents"][0]["document"]
-        == DocValue.metadata["freecad"]["external_documents"][0]["document"]
+        OuterDocs(PortableRestored)[0]["document"] == OuterDocs(DocValue)[0]["document"]
     )
 
 
@@ -4593,14 +4655,12 @@ def TestLinkOnlyDoc(TmpPath: FilePath) -> None:
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(RootValue)
     assert DocValue.assembly is None
-    assert [
-        ItemValue["file"]
-        for ItemValue in DocValue.metadata["freecad"]["external_documents"]
-    ] == ["nested/Child.FCStd"]
-    WithoutBrep = Adapter.read(RootValue, ReadOptions(include_brep=False))
-    LinkedWithoutBrep = WithoutBrep.metadata["freecad"]["external_documents"][0][
-        "document"
+    assert [ItemValue["file"] for ItemValue in OuterDocs(DocValue)] == [
+        "nested/Child.FCStd"
     ]
+    WithoutBrep = Adapter.read(RootValue, ReadOptions(include_brep=False))
+    LinkedWithoutBrep = OuterDocs(WithoutBrep)[0]["document"]
+    assert isinstance(LinkedWithoutBrep, CadDocument)
     assert not any(
         (
             Payload.role == PayloadRole.BREP
@@ -4839,8 +4899,8 @@ def TestFcstdUnsafe() -> None:
     with Pytest.raises(FreeCadAdapterError, match="unsafe or invalid"):
         Adapter.read(Unsafe)
     DocValue = Adapter.read(NativePart())
-    Freecad = dict(DocValue.metadata["freecad"])
-    Objects = [dict(Value) for Value in Freecad["objects"]]
+    Freecad = MetaMap(DocValue.metadata["freecad"])
+    Objects = [MetaMap(ItemValue) for ItemValue in MetaSeq(Freecad["objects"])]
     Objects[0]["name"] = "../Bad"
     Freecad["objects"] = Objects
     Invalid = Replace(DocValue, metadata={"freecad": Freecad})
@@ -5063,9 +5123,9 @@ def TestCarrierNon() -> None:
     with Zipfile.ZipFile(IoStream.BytesIO(Valid.getvalue())) as Source:
         RootValue = XmlTree.fromstring(Source.read("Document.xml"))
         Referenced = [
-            NodeValue.get("file", "")
+            NodeValue.get("file") or ""
             for NodeValue in RootValue.findall(".//*[@file]")
-            if NodeValue.tag != "XLink" and NodeValue.get("file", "")
+            if NodeValue.tag != "XLink" and (NodeValue.get("file") or "")
         ]
         assert Referenced
         Missing = Referenced[0]
@@ -5238,9 +5298,9 @@ def TestPartdesignC() -> None:
         Names = set(Archive.namelist())
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
     References = [
-        NodeValue.get("file", "")
+        NodeValue.get("file") or ""
         for NodeValue in RootValue.findall(".//*[@file]")
-        if NodeValue.tag != "XLink" and NodeValue.get("file", "")
+        if NodeValue.tag != "XLink" and (NodeValue.get("file") or "")
     ]
     assert References
     assert set(References) <= Names

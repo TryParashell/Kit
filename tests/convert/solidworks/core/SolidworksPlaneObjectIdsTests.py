@@ -17,9 +17,9 @@ from interchange import (
     CadSource,
     SupportPlane,
     Transform,
-    UnitSystem,
     Vector3 as VectorThree,
 )
+from interchange.enums.EnumUnits import UnitSystem
 
 # centralizes shared evidence so every related assertion uses one value
 KFront = Transform(

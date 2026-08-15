@@ -11,6 +11,13 @@ from interchange.enums.EnumBase import WireEnum
 
 # value categories preserve parameter meaning beyond primitive python representation
 class ValueKind(WireEnum):
+    LENGTH = "length"
+    ANGLE = "angle"
+    QUANTITY = "quantity"
+    NUMBER = "number"
+    INTEGER = "integer"
+    BOOLEAN = "boolean"
+    STRING = "string"
     KLength = "length"
     KAngle = "angle"
     KQuantity = "quantity"
@@ -22,6 +29,10 @@ class ValueKind(WireEnum):
 
 # parameter roles retain whether downstream systems may drive each value
 class ParameterRole(WireEnum):
+    DRIVING = "driving"
+    DRIVEN = "driven"
+    REFERENCE = "reference"
+    DERIVED = "derived"
     KDriving = "driving"
     KDriven = "driven"
     KReference = "reference"

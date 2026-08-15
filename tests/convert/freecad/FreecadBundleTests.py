@@ -21,11 +21,12 @@ from convert.adapters.freecad import (
     write_freecad as WriteFreecad,
 )
 from interchange import (
-    Capability,
+    CadDocument as CadDoc,
     ComponentDocument as ComponentDoc,
     Mesh as MeshRecord,
     Vector3 as VectorThree,
 )
+from interchange.enums.EnumDocument import Capability
 from tests.interchange.assembly.AssemblyTests import assembly_document as AsmDoc
 
 # this binding keeps xml element annotations aligned with the imported parser
@@ -72,7 +73,7 @@ def Representation(RootValue: ET.Element, Target: str) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshSource(Linked: bool):
+def MeshSource(Linked: bool) -> tuple[CadDoc, MeshRecord]:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None

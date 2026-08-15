@@ -11,7 +11,14 @@ from collections import deque as Deque
 from collections.abc import Sequence
 from dataclasses import dataclass as Dataclass
 import math as MathValue
-from typing import Any as AnyValue, Mapping, TypeAlias
+from typing import (
+    Mapping,
+    Protocol,
+    runtime_checkable,
+    SupportsFloat,
+    TypeAlias,
+    TypeGuard,
+)
 from interchange import (
     BrepCoedge,
     BrepCurve,
@@ -64,6 +71,26 @@ KTriangle = tuple[int, int, int]
 KGeomValue = tuple[
     tuple[KPoint, KPoint, KPoint], tuple[float, float, float], KPoint, KPoint, KPoint
 ]
+
+
+# point like runtime objects need typed coordinates without weakening mesh inputs
+@runtime_checkable
+class PointSource(Protocol):
+    x: SupportsFloat
+    y: SupportsFloat
+    z: SupportsFloat
+
+
+# mesh collection checks need concrete object members before coordinate validation
+def IsObjectSeq(SourceValue: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(SourceValue, Sequence)
+
+
+# coordinate conversion rejects unsupported objects before numeric mesh validation begins
+def FloatCoord(SourceValue: object) -> float:
+    if isinstance(SourceValue, str) or isinstance(SourceValue, SupportsFloat):
+        return float(SourceValue)
+    raise TypeError("coordinate value must be numeric")
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -152,18 +179,28 @@ def Number(Value: float) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParsePoint(Value: Any) -> KPoint:
-    if all((hasattr(Value, AxisValue) for AxisValue in ("x", "y", "z"))):
-        Point = (float(Value.x), float(Value.y), float(Value.z))
+def ParsePoint(Value: object) -> KPoint:
+    if isinstance(Value, PointSource):
+        Components: tuple[object, ...] = (Value.x, Value.y, Value.z)
     else:
         try:
-            Point = tuple((float(Component) for Component in Value))
-        except (TypeError, ValueError) as ErrorInfo:
+            Components = tuple(Value) if IsObjectSeq(Value) else ()
+        except TypeError as ErrorInfo:
             raise ValueError(
                 "each vertex must contain three finite coordinates"
             ) from ErrorInfo
-        if len(Point) != 3:
-            raise ValueError("each vertex must contain three finite coordinates")
+    if len(Components) != 3:
+        raise ValueError("each vertex must contain three finite coordinates")
+    try:
+        Point = (
+            FloatCoord(Components[0]),
+            FloatCoord(Components[1]),
+            FloatCoord(Components[2]),
+        )
+    except (TypeError, ValueError) as ErrorInfo:
+        raise ValueError(
+            "each vertex must contain three finite coordinates"
+        ) from ErrorInfo
     if not all((MathValue.isfinite(Component) for Component in Point)):
         raise ValueError("each vertex must contain three finite coordinates")
     return Point
@@ -208,17 +245,19 @@ def Values(Values: Sequence[float]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParseTriangle(Value: Any, VertexCount: int) -> KTriangle:
-    try:
-        Indices = tuple(Value)
-    except TypeError as ErrorInfo:
-        raise ValueError(
-            "each triangle must contain three vertex indices"
-        ) from ErrorInfo
-    if len(Indices) != 3 or any(
-        (isinstance(Index, bool) or not isinstance(Index, int) for Index in Indices)
+def ParseTriangle(Value: object, VertexCount: int) -> KTriangle:
+    if not IsObjectSeq(Value) or len(Value) != 3:
+        raise ValueError("each triangle must contain three vertex indices")
+    First, Middle, LastValue = Value
+    if any(
+        isinstance(Index, bool) or not isinstance(Index, int)
+        for Index in (First, Middle, LastValue)
     ):
         raise ValueError("each triangle must contain three vertex indices")
+    assert isinstance(First, int)
+    assert isinstance(Middle, int)
+    assert isinstance(LastValue, int)
+    Indices = (First, Middle, LastValue)
     if len(set(Indices)) != 3 or any(
         (Index < 0 or Index >= VertexCount for Index in Indices)
     ):
@@ -242,7 +281,7 @@ def IsFacetBad(Points: tuple[Point, ...], Facet: Triangle, Tolerance: float) -> 
 # this definition exists because focused behavior needs one stable owner
 def GeomAction(
     Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float
-):
+) -> tuple[KGeomValue, ...]:
     Result: list[KGeomValue] = []
     for Triangle in Facets:
         Corners = (Points[Triangle[0]], Points[Triangle[1]], Points[Triangle[2]])
@@ -266,7 +305,9 @@ def GeomAction(
 
 
 # this definition exists because focused behavior needs one stable owner
-def EdgeUses(Facets: tuple[Triangle, ...]):
+def EdgeUses(
+    Facets: tuple[Triangle, ...],
+) -> dict[tuple[int, int], list[tuple[int, int]]]:
     Result: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for FacetIndex, Facet in enumerate(Facets):
         for Index in range(3):
@@ -279,7 +320,9 @@ def EdgeUses(Facets: tuple[Triangle, ...]):
 
 
 # facet adjacency stays isolated because manifold validation precedes orientation traversal
-def BuildNeighbors(Facets: tuple[Triangle, ...]):
+def BuildNeighbors(
+    Facets: tuple[Triangle, ...],
+) -> dict[int, list[tuple[int, int]]] | None:
     UsesValue = EdgeUses(Facets)
     if any(len(EdgeFaces) > 2 for EdgeFaces in UsesValue.values()):
         return None
@@ -297,7 +340,9 @@ def BuildNeighbors(Facets: tuple[Triangle, ...]):
 
 
 # component traversal stays isolated because contradictory facet parity invalidates the whole mesh
-def GetComponents(FacetCount: int, Neighbors: Mapping[int, list[tuple[int, int]]]):
+def GetComponents(
+    FacetCount: int, Neighbors: Mapping[int, list[tuple[int, int]]]
+) -> tuple[list[int], tuple[tuple[int, ...], ...]] | None:
     Flips = [0] * FacetCount
     Components: list[tuple[int, ...]] = []
     for StartIndex in range(FacetCount):
@@ -375,7 +420,7 @@ def GetClosedMut(
 # facet orientation composes adjacency parity and volume phases because each has one failure mode
 def OrientFacets(
     Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float
-):
+) -> tuple[tuple[KTriangle, ...], tuple[tuple[int, ...], ...], tuple[bool, ...]] | None:
     Neighbors = BuildNeighbors(Facets)
     if Neighbors is None:
         return None
@@ -395,7 +440,7 @@ def Header(
     Facets: tuple[Triangle, ...],
     Edges: tuple[tuple[int, int], ...],
     GeomValue: tuple[Geometry, ...],
-):
+) -> list[str]:
     Lines = [
         "DBRep_DrawableShape",
         "",
@@ -462,7 +507,15 @@ def BuildOrdinals(
     FacetCount: int,
     Components: tuple[tuple[int, ...], ...],
     Closed: tuple[bool, ...],
-):
+) -> tuple[
+    dict[int, int],
+    dict[tuple[int, int], int],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    dict[int, int],
+    int,
+]:
     Ordinal = 1
     VertexOrdinals: dict[int, int] = {}
     for Index in VertexIndices:
@@ -1525,7 +1578,7 @@ def GetSeamSpan(
     HighIndex: int,
     Means: tuple[float, float],
     Allowed: float,
-):
+) -> tuple[KPoint, KPoint, float] | None:
     LowPoint = VectorThreeA(Graph.vertices[Edges[LowIndex].start_vertex_id].point)
     HighPoint = VectorThreeA(Graph.vertices[Edges[HighIndex].start_vertex_id].point)
     SpanVector = Subtract(HighPoint, LowPoint)
@@ -1831,7 +1884,7 @@ def HasCoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
 # planar point extraction stays isolated because line and surface evidence must precede polygon tests
 def GetPlanarPoints(
     Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
-):
+) -> tuple[tuple[tuple[float, float], ...], float] | None:
     if len(LoopValue.coedge_ids) < 3:
         return None
     Surface = Graph.surfaces[FaceValue.surface_id]
@@ -2330,8 +2383,6 @@ def ShapeLines(
 
 # model validation stays isolated because type geometry and transform failures precede all emission
 def ValidateBrep(Model: BrepModel, Tolerance: float) -> None:
-    if not isinstance(Model, BrepModel):
-        raise TypeError("model must be a BrepModel")
     if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
     DesignIds = frozenset(
@@ -2696,7 +2747,9 @@ def ProvenAsciiBrep(DataValue: bytes) -> bytes | None:
 
 # this definition exists because focused behavior needs one stable owner
 def TriangleMesh(
-    Vertices: Sequence[Any], Triangles: Sequence[Any], Tolerance: float = 1e-07
+    Vertices: Sequence[object],
+    Triangles: Sequence[object],
+    Tolerance: float = 1e-07,
 ) -> bytes:
     if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
@@ -2715,9 +2768,6 @@ def TriangleMesh(
     OrientedFacets, Components, Closed = Oriented
     return SharedBrep(Points, OrientedFacets, Components, Closed, Tolerance)
 
-
-# this binding exists because shared behavior needs one stable value
-Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
 FreeCADBrepWriteError = FreeCadBrep

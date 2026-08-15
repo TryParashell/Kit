@@ -28,10 +28,12 @@ from convert.adapters.solidworks.core.Native import (
 from convert.adapters.solidworks.programs.resolved.polyline.sixpoint.Program import (
     EncodeProgram,
     KDepthOffset,
-    KFieldOwners,
     KPointOffsets,
-    KResolvedOps,
     PadFieldMap,
+)
+from convert.adapters.solidworks.programs.resolved.polyline.sixpoint.Registry import (
+    KFieldOwners,
+    KResolvedOps,
 )
 
 # centralizes shared evidence so every related assertion uses one value

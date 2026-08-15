@@ -1229,7 +1229,7 @@ def TestPFRTROACP() -> None:
     assert len(Patched) == len(Resolved)
     Relocated = LocateFeatures(Patched)[Circular.ordinal]
     assert Relocated.feature_id == 214
-    assert Relocated.radii_mm == (PytestLib.approx(6.0), PytestLib.approx(6.5))
+    assert Relocated.radii_mm == PytestLib.approx((6.0, 6.5))
     for ArcData, ExpectedCentre in zip(Relocated.arcs, ExpectedCentres, strict=True):
         assert ArcData.centre_mm == PytestLib.approx(ExpectedCentre)
     assert Relocated.depth_mm == PytestLib.approx(44.0)
@@ -1259,12 +1259,14 @@ def TestCCRIRTLF(NameText: str, RadiusMm: float) -> None:
     assert len(Circular.arcs) == 1
     ArcInfo = Circular.arcs[0]
     assert ArcInfo.radius_mm == PytestLib.approx(RadiusMm)
-    assert ArcInfo.centre_mm == (PytestLib.approx(0.0), PytestLib.approx(0.0))
-    assert Circular.bounds_mm == (
-        PytestLib.approx(-RadiusMm),
-        PytestLib.approx(-RadiusMm),
-        PytestLib.approx(RadiusMm),
-        PytestLib.approx(RadiusMm),
+    assert ArcInfo.centre_mm == PytestLib.approx((0.0, 0.0))
+    assert Circular.bounds_mm == PytestLib.approx(
+        (
+            -RadiusMm,
+            -RadiusMm,
+            RadiusMm,
+            RadiusMm,
+        )
     )
     Patched = PatchFeatures(Resolved, {1: FeatureEdit(radii_mm=(RadiusMm + 1.5,))})
     assert LocateFeatures(Patched)[1].arcs[0].radius_mm == PytestLib.approx(

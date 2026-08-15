@@ -139,8 +139,14 @@ class BrepModel(ModelBase):
     def SchemaVersion(self) -> str:
         return self.schema_version
 
-    # model validation delegates because topology checks change independently from storage
-    def GetErrors(self, DesignBodyIds: frozenset[str] = frozenset()) -> tuple[str, ...]:
+    # lowercase validation stays concrete because static consumers cannot observe runtime aliases
+    def validate(
+        self, design_body_ids: frozenset[str] = frozenset()
+    ) -> tuple[str, ...]:
         from interchange.brep.validation.BrepValidate import GetBrepErrors
 
-        return GetBrepErrors(self, DesignBodyIds)
+        return GetBrepErrors(self, design_body_ids)
+
+    # pascal validation remains available because existing adapters still use the canonical method
+    def GetErrors(self, DesignBodyIds: frozenset[str] = frozenset()) -> tuple[str, ...]:
+        return self.validate(DesignBodyIds)

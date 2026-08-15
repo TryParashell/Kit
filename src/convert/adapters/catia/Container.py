@@ -778,7 +778,7 @@ def DecodeOsmx(
 def UThreeTwobe(DataValue: bytes, Offset: int) -> int:
     if Offset < 0 or Offset + 4 > len(DataValue):
         return -1
-    return Struct.unpack_from(">I", DataValue, Offset)[0]
+    return int.from_bytes(DataValue[Offset : Offset + 4], "big")
 
 
 # this definition exists because focused behavior needs one stable owner

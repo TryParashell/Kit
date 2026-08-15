@@ -13,7 +13,7 @@ import hashlib as Hashlib
 import os as OsModule
 from pathlib import Path as FilePath
 import stat as StatValue
-from typing import Callable
+from typing import Callable, TypeGuard
 from convert.adapters.base import ReadOptions
 from interchange import (
     AssemblyData as AsmData,
@@ -118,6 +118,11 @@ class NativeProductA:
 
 # this binding exists because shared behavior needs one stable value
 KComponentReader = Callable[[FilePath, ReadOptions], CadDoc]
+
+
+# option tuple narrowing prevents dynamic extension values from leaking unknown element types
+def IsObjectTuple(Value: object) -> TypeGuard[tuple[object, ...]]:
+    return isinstance(Value, tuple)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1007,7 +1012,7 @@ def SearchRoots(Label: str, Settings: ReadOptions) -> tuple[FilePath, ...]:
     Source = SourcePath(Label)
     if Source is None:
         return ()
-    Candidates = (Source.parent,)
+    Candidates: tuple[FilePath, ...] = (Source.parent,)
     if Source.parent.name.casefold() in {
         KProductSuffix,
         KProductSuffix.removeprefix("."),
@@ -1021,12 +1026,9 @@ def SearchLimit(
     Settings: ReadOptions, NameValue: str, Default: int, *, AllowZero: bool = False
 ) -> int:
     Value = Settings.values.get(NameValue, Default)
-    if isinstance(Value, bool):
+    if isinstance(Value, bool) or not isinstance(Value, int):
         raise ValueError(f"{NameValue} must be an integer")
-    try:
-        Parsed = int(Value)
-    except (TypeError, ValueError) as ErrorInfo:
-        raise ValueError(f"{NameValue} must be an integer") from ErrorInfo
+    Parsed = Value
     Minimum = 0 if AllowZero else 1
     if Parsed < Minimum:
         raise ValueError(f"{NameValue} must be at least {Minimum}")
@@ -1161,7 +1163,15 @@ def ReadContext(
     Label: str, Settings: ReadOptions
 ) -> tuple[FilePath | None, tuple[str, ...], set[str], ReadOptions]:
     Source = SourcePath(Label)
-    Stack = tuple(str(Value) for Value in Settings.values.get("catia_path_stack", ()))
+    StackValue = Settings.values.get("catia_path_stack", ())
+    if not IsObjectTuple(StackValue):
+        raise ValueError("catia path stack must be a tuple")
+    StackItems: list[str] = []
+    for PathValue in StackValue:
+        if not isinstance(PathValue, str):
+            raise ValueError("catia path stack entries must be strings")
+        StackItems.append(PathValue)
+    Stack = tuple(StackItems)
     Active = {Value.casefold() for Value in Stack}
     if Source is not None:
         Active.add(str(Source).casefold())

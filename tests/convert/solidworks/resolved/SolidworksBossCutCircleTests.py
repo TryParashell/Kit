@@ -31,6 +31,8 @@ from convert.adapters.solidworks.resolved.Core import (
 )
 from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Program import (
     EncodeProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Registry import (
     KFieldOwners,
     KResolvedOps,
 )

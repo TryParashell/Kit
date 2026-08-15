@@ -21,10 +21,12 @@ from convert.adapters.solidworks.programs.configuration.revolve.pin.midplane.Pro
     GetCoverage as GetConfigCoverage,
 )
 from convert.adapters.solidworks.programs.configuration.revolve.pin.midplane.Program import (
-    KConfigOps,
-    KFieldOwners as KConfigOwners,
     KReferenceDigest as KConfigDigest,
     KReferenceLength as KConfigLength,
+)
+from convert.adapters.solidworks.programs.configuration.revolve.pin.midplane.Registry import (
+    KConfigOps,
+    KFieldOwners as KConfigOwners,
 )
 from convert.adapters.solidworks.container.Container import (
     SldprtArchive,
@@ -37,14 +39,16 @@ from convert.adapters.solidworks.container.Format import (
 from convert.adapters.solidworks.programs.resolved.revolve.pin.midplane.Program import (
     EncodeProgram,
     GetCoverage,
-    KFieldOwners,
     KFirstAngleOffsets,
     KProfileOffsets,
     KReferenceDigest,
     KReferenceLength,
-    KResolvedOps,
     KSecondAngleOffsets,
     KSingleEndOffset,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.pin.midplane.Registry import (
+    KFieldOwners,
+    KResolvedOps,
 )
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
     CalcPinBounds,

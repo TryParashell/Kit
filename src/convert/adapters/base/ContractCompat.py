@@ -107,7 +107,7 @@ class ContractMeta(type):
                     f"{self.__name__}() got multiple values for argument "
                     f"{PublicName!r}"
                 )
-        ResultValue = super().__call__(*ArgValues, **TranslatedValues)
+        ResultValue = type.__call__(self, *ArgValues, **TranslatedValues)
         return CastValue(ContractValue, ResultValue)
 
     # class level legacy fields keep introspection and descriptor access compatible for external adapters

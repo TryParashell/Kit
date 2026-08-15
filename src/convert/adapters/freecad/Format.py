@@ -9,8 +9,8 @@
 from __future__ import annotations as Annotations
 from collections.abc import Mapping
 from types import MappingProxyType
-from convert.adapters.base import AdapterInfo, CarrierReason
-from interchange import Capability
+from convert.adapters.base.AdapterInfo import AdapterInfo
+from convert.adapters.base.TransferContract import CarrierReason
 from convert.adapters.freecad.Protocol import (
     ASSEMBLY_JOINT_GROUP_TYPE_ID as AsmJointGroupTypeId,
     ASSEMBLY_LINK_TYPE_ID as AsmLinkTypeId,
@@ -18,6 +18,7 @@ from convert.adapters.freecad.Protocol import (
     FEATURE_WRITE_TYPE_IDS as FeatureWriteTypeIds,
     SKETCH_TYPE_ID as SketchTypeId,
 )
+from interchange.enums.EnumDocument import Capability
 
 # this binding exists because shared behavior needs one stable value
 KSuffix = ".FCStd"

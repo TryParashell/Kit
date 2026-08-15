@@ -10,16 +10,13 @@ from __future__ import annotations as Annotations
 from collections.abc import Mapping
 from dataclasses import dataclass as Dataclass
 from types import MappingProxyType
-from interchange import (
-    BooleanOperation as BoolOperation,
-    ConstraintKind as RuleKind,
-    ExtrusionEndCondition,
-    FeatureKind,
-    GeometryKind as GeomKind,
-    MateEntityKind,
-    MateKind,
-    ValueKind,
-)
+from interchange.assembly.AssemblyEnums import MateEntityKind, MateKind
+from interchange.enums.EnumFeatures import BooleanOp as BoolOperation
+from interchange.enums.EnumFeatures import FeatureKind
+from interchange.enums.EnumGeometry import ConstraintKind as RuleKind
+from interchange.enums.EnumGeometry import GeometryKind as GeomKind
+from interchange.enums.EnumValues import ValueKind
+from interchange.features.FeatureExtrude import ExtrudeEnd as ExtrusionEndCondition
 
 # this binding exists because shared behavior needs one stable value
 KAsmObjectTypePrefix = "Assembly::"

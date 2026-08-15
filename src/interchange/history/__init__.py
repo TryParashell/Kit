@@ -87,23 +87,23 @@ BindCompatMut(
 )
 BindHistoryMut(AdapterCaps)
 
-for AttrName, AttrValue in {
+for FeatureAttrName, FeatureAttrValue in {
     "__name__": "ExtrusionEndCondition",
     "__qualname__": "ExtrusionEndCondition",
     "__module__": __name__,
 }.items():
-    setattr(ExtrudeEnd, AttrName, AttrValue)
-for AttrName, AttrValue in {"__module__": __name__}.items():
-    setattr(PayloadRole, AttrName, AttrValue)
-for AttrName, AttrValue in {
+    setattr(ExtrudeEnd, FeatureAttrName, FeatureAttrValue)
+for PayloadAttrName, PayloadAttrValue in {"__module__": __name__}.items():
+    setattr(PayloadRole, PayloadAttrName, PayloadAttrValue)
+for DefinitionAttrName, DefinitionAttrValue in {
     "__name__": "FeatureDefinition",
     "__qualname__": "FeatureDefinition",
     "__module__": __name__,
     "__signature__": FuncSig(),
 }.items():
-    setattr(FeatureDef, AttrName, AttrValue)
-for AttrName, AttrValue in {"__module__": __name__}.items():
-    setattr(TopologyCounts, AttrName, AttrValue)
+    setattr(FeatureDef, DefinitionAttrName, DefinitionAttrValue)
+for TopologyAttrName, TopologyAttrValue in {"__module__": __name__}.items():
+    setattr(TopologyCounts, TopologyAttrName, TopologyAttrValue)
 
 ExtrusionEndCondition = ExtrudeEnd
 FeatureDefinition = FeatureDef

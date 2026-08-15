@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import suppress as Suppress
 from dataclasses import replace as Replace
 from datetime import datetime as Datetime, timezone as Timezone
@@ -61,7 +61,8 @@ from interchange import (
     semantic_metadata as SemanticMeta,
     source_payload_indexes as SourcePayloadIndexes,
 )
-from interchange.serialization import ToData
+from interchange.serialization.EncodeData import ToData
+from interchange.serialization.WireData import ValidateWireMap
 from convert.adapters.freecad.Archive import (
     DOCUMENT_ENTRY as DocEntry,
     MANIFEST_ENTRY as ManifestEntry,
@@ -223,7 +224,7 @@ def FilterOuters(Outer: object, Settings: ReadOptions) -> tuple[list[object], bo
         Mapped = IsPayloadMap(Linked)
         if Mapped:
             try:
-                Linked = CadDoc.from_dict(Linked)
+                Linked = CadDoc.from_dict(ValidateWireMap(Linked))
             except (TypeError, ValueError, RecursionError):
                 StrippedOuter.append(Value)
                 continue
@@ -365,11 +366,7 @@ def SemanticDoc(DocValue: CadDocument) -> CadDoc:
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            SemanticDoc(ItemValue.document)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=SemanticDoc(ItemValue.document),
                     )
                     for ItemValue in AsmValue.documents
                 )
@@ -423,11 +420,7 @@ def AnnotateNative(DocValue: CadDocument) -> CadDoc:
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            AnnotateNative(ItemValue.document)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=AnnotateNative(ItemValue.document),
                     )
                     for ItemValue in AsmValue.documents
                 )
@@ -506,7 +499,6 @@ def DocTree(DocValue: CadDocument) -> tuple[CadDoc, ...]:
                 (
                     Component.document
                     for Component in reversed(ItemValue.assembly.documents)
-                    if isinstance(Component.document, CadDoc)
                 )
             )
     return tuple(Result)
@@ -554,14 +546,10 @@ def HasFeatureEdges(DocValue: CadDocument, Feature: FeatureStep) -> bool:
             == "extrusion_terminal_profile_boundary"
         ):
             return True
-        if any(
-            (
-                isinstance(Selection.query.get(NameValue), (int, float))
-                and Selection.query[NameValue] > 0
-                for NameValue in ("edge_index", "native_local_id", "index")
-            )
-        ):
-            return True
+        for NameValue in ("edge_index", "native_local_id", "index"):
+            QueryValue = Selection.query.get(NameValue)
+            if isinstance(QueryValue, (int, float)) and QueryValue > 0:
+                return True
     return False
 
 
@@ -598,7 +586,7 @@ def IsExtrusion(Feature: FeatureStep) -> bool:
 def IsFeatureNeeded(
     Feature: FeatureStep,
     DependentFeatureIds: set[str],
-    FinalFeatureIds: set[str | None],
+    FinalFeatureIds: Collection[str | None],
 ) -> bool:
     KindValue = EnumText(Feature.EntityKind)
     if KindValue == FeatureKind.IMPORTED.value:
@@ -1120,7 +1108,6 @@ def IsNativeGeom(
         Documents = {
             ItemValue.id: ItemValue.document
             for ItemValue in DocValue.assembly.documents
-            if isinstance(ItemValue.document, CadDoc)
         }
         for Definition in DocValue.assembly.definitions:
             if Definition.id == DocValue.assembly.root_definition_id:
@@ -1408,7 +1395,7 @@ def AddProvMut(ItemValue: CadDocument, Parts: dict[Capability, list[bool]]) -> N
         *ItemValue.brep_payloads,
     )
     Parts[Capability.PROVENANCE].extend(
-        False for Value in Values if Value.provenance is not None
+        False for Value in Values if getattr(Value, "provenance", None) is not None
     )
 
 
@@ -1959,7 +1946,7 @@ def SourceKeys(
     Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]
 ) -> frozenset[tuple[str, str, str]]:
     Config = Definition.configuration_id or Definition.configuration_name
-    Scope = f"{Definition.kind.value}:{Config}"
+    Scope = f"{EnumText(Definition.kind)}:{Config}"
     Values: set[tuple[str, str, str]] = set()
 
     # this definition exists because focused behavior needs one stable owner
@@ -2019,11 +2006,7 @@ def OuterLinkMap(
     AsmValue = Component.assembly
     if AsmValue is None:
         return {}
-    Documents = {
-        ItemValue.id: ItemValue.document
-        for ItemValue in AsmValue.documents
-        if isinstance(ItemValue.document, CadDoc)
-    }
+    Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents}
     Result: dict[str, dict[str, object]] = {}
     for Definition in AsmValue.definitions:
         if Definition.id == AsmValue.root_definition_id:
@@ -2064,11 +2047,7 @@ def ComponentPlans(
     AsmValue = DocValue.assembly
     if AsmValue is None:
         return []
-    Documents = {
-        ItemValue.id: ItemValue.document
-        for ItemValue in AsmValue.documents
-        if isinstance(ItemValue.document, CadDoc)
-    }
+    Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents}
     Definitions = {ItemValue.id: ItemValue for ItemValue in AsmValue.definitions}
     Plans: list[tuple[str, FilePath, ComponentDefinition, CadDoc]] = []
     for DefinitionId, PathValue in Paths.items():
@@ -2104,11 +2083,7 @@ def WriteComponents(
         else {}
     )
     Documents = (
-        {
-            ItemValue.id: ItemValue.document
-            for ItemValue in DocValue.assembly.documents
-            if isinstance(ItemValue.document, CadDoc)
-        }
+        {ItemValue.id: ItemValue.document for ItemValue in DocValue.assembly.documents}
         if DocValue.assembly is not None
         else {}
     )
@@ -2180,7 +2155,7 @@ def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
         Linked: object = Value.get("document")
         if IsPayloadMap(Linked):
             try:
-                Linked = CadDoc.from_dict(Linked)
+                Linked = CadDoc.from_dict(ValidateWireMap(Linked))
             except (TypeError, ValueError, RecursionError) as ErrorInfo:
                 raise FreeCadAdapterA(
                     "native FreeCAD external document metadata is invalid"
@@ -2250,7 +2225,7 @@ def WriteNative(
 # this definition exists because focused behavior needs one stable owner
 def ManifestDoc(Value: Mapping[str, object]) -> CadDoc:
     try:
-        return CadDoc.from_dict(Value)
+        return CadDoc.from_dict(ValidateWireMap(Value))
     except (TypeError, ValueError, RecursionError) as ErrorInfo:
         raise FreeCadAdapterA(
             "embedded neutral document cannot be restored"

@@ -19,6 +19,7 @@ from typing import Any as AnyValue, cast as Cast
 import xml.etree.ElementTree as XmlTree
 import xml.etree.ElementTree as ET
 import zipfile as Zipfile
+from interchange.serialization.WireData import ValidateWireMap
 from interchange.geometry.models.GeometryTypes import KGeometryTypes as GeometryTypes
 from interchange import (
     ArcEllipseGeometry as ArcEllipseGeom,
@@ -1475,8 +1476,8 @@ def SupportTarget(ObjValue: _NativeObject) -> str:
             ("./XLink", "name"),
         ):
             LinkValue = NodeValue.find(PathValue)
-            if LinkValue is not None and LinkValue.get(AttrValue, ""):
-                return LinkValue.get(AttrValue, "")
+            if LinkValue is not None and (LinkValue.get(AttrValue) or ""):
+                return LinkValue.get(AttrValue) or ""
     return ""
 
 
@@ -2370,10 +2371,13 @@ def DecodedDocBrep(
         if len(Matches) != 1 or Matches[0].id in Selected:
             return None
         Payload = Matches[0]
+        PayloadData = Payload.data
+        if PayloadData is None:
+            return None
         Selected.add(Payload.id)
         Digest = Hashlib.sha256(Payload.id.encode("utf-8")).hexdigest()[:20]
         Model = DecodeAsciiBrep(
-            Payload.data,
+            PayloadData,
             id_prefix=f"freecad:occ:{Digest}",
             design_body_id=BodyValue.id,
             attributes={
@@ -2531,7 +2535,7 @@ def XlinkData(ObjValue: _NativeObject, NameValue: str) -> dict[str, AnyValue]:
     if Value is None:
         return {"file": "", "stamp": "", "name": "", "subelements": []}
     Subelements = [Child.get("value", "") for Child in Value.findall("./Sub")]
-    if not Subelements and Value.get("name", ""):
+    if not Subelements and (Value.get("name") or ""):
         Subelements.append("")
     return {
         "file": Value.get("file", ""),
@@ -2931,7 +2935,7 @@ def ReadOuterMut(Choice: FilePath, State: OuterState, Depth: int) -> CadDoc:
             return ReadNativeFcstd(
                 ChildData, str(Choice), StateValue=State, OuterDepth=Depth + 1
             )
-        return CadDoc.from_dict(Manifest)
+        return CadDoc.from_dict(ValidateWireMap(Manifest))
     finally:
         State.active.discard(Choice)
 

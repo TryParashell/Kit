@@ -16,6 +16,7 @@ from convert.adapters.solidworks.assembly import Assembly as SolidworksAssembly
 from convert.adapters.solidworks.core import Display as SolidworksDisplay
 from convert.adapters.solidworks.core import Native as SolidworksNative
 from convert.adapters.solidworks.core.Adapter import SldprtAdapter
+from convert.adapters.solidworks.core.FeatureKindByNative import KFeatureKindByNative
 from convert.adapters.solidworks.container.Container import SldprtArchive
 from convert.adapters.solidworks.container.Format import (
     ASSEMBLY_FORMAT_ID as IdInfo,
@@ -54,10 +55,9 @@ from interchange import (
     BooleanOperation,
     CadDocument,
     Capability,
-    CircleGeometry,
-    FeatureKind,
-    LineGeometry,
 )
+from interchange.enums.EnumFeatures import FeatureKind
+from interchange.geometry.models.GeometryCurves import CircleGeometry, LineGeometry
 
 # centralizes shared evidence so every related assertion uses one value
 KSample = FilePath(__file__).parents[4] / "examples" / ".SLDPRT" / "example.SLDPRT"
@@ -112,8 +112,7 @@ def TestFPVAEADFAI() -> None:
     assert TypesB == frozenset({"featsolidbodyfolder", "solidbodyfolder"})
     assert all(
         (
-            SolidworksAdapter.KFeatureKindByNative[NativeType]
-            == FeatureKind.REFERENCE
+            KFeatureKindByNative[NativeType] == FeatureKind.REFERENCE
             for NativeType in (*TypesA, *TypesB)
         )
     )
@@ -282,12 +281,15 @@ def TestSPASPAE() -> None:
     Document = SldprtAdapter().read(KSample)
     assert len(Document.sketches) == 5
     First = Document.sketch("sldprt:sketch:26")
-    FirstEdges = [
+    ProfileEdges = [
         Entity.geometry
         for Entity in First.entities
         if Entity.id in First.closed_profile_entity_ids[0]
     ]
-    assert all((isinstance(EdgeInfo, LineGeometry) for EdgeInfo in FirstEdges))
+    FirstEdges = [
+        EdgeInfo for EdgeInfo in ProfileEdges if isinstance(EdgeInfo, LineGeometry)
+    ]
+    assert len(FirstEdges) == len(ProfileEdges)
     assert FirstEdges[0].start.x == -124.3
     assert FirstEdges[0].start.y == -89.75
     assert FirstEdges[2].start.x == 124.3

@@ -19,6 +19,17 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 
 # extrusion bounds preserve editable termination intent instead of only distance
 class ExtrudeEnd(WireEnum):
+    BLIND = "blind"
+    THROUGH_ALL = "through_all"
+    UP_TO_FIRST = "up_to_first"
+    UP_TO_LAST = "up_to_last"
+    UP_TO_FACE = "up_to_face"
+    UP_TO_SHAPE = "up_to_shape"
+    UP_TO_VERTEX = "up_to_vertex"
+    TWO_LENGTHS = "two_lengths"
+    MID_PLANE = "mid_plane"
+    OFFSET_FROM_SURFACE = "offset_from_surface"
+    NATIVE = "native"
     KBlind = "blind"
     KThroughAll = "through_all"
     KUpToFirst = "up_to_first"

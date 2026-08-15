@@ -30,6 +30,7 @@ from convert.adapters.solidworks.assembly.Assembly import (
     KMateLossReasons as ReasonsB,
     KMateLossValueMissing as Missing,
     KMateRejectionReasons as ReasonsC,
+    NativeAssemblyEncoding,
     encode_native_assembly as EncodeNativeAssembly,
 )
 from convert.adapters.solidworks.container.Container import SldprtArchive
@@ -88,9 +89,9 @@ KMateInfoA = "moPlaneSurfIdRep_c,3,4, "
 # keeps this focused behavior isolated so regressions remain immediately visible
 def PersistentMD(**MateOverrides: object) -> CadDocument:
     SourceDoc = AssemblyDocument()
-    Assembly = SourceDoc.Assembly
+    Assembly = SourceDoc.assembly
     assert Assembly is not None
-    RootEntity, ComponentEntity = Assembly.MateEntities
+    RootEntity, ComponentEntity = Assembly.mate_entities
     RootEntity = ReplaceData(
         RootEntity,
         source_entity_id=KMateInfoA,
@@ -102,21 +103,23 @@ def PersistentMD(**MateOverrides: object) -> CadDocument:
         attributes=FrozenMapping({"persistent_references": (KMateInfo,)}),
     )
     MateInfo = ReplaceData(
-        Assembly.Mates[0],
+        Assembly.mates[0],
         EntityIds=(ComponentEntity.EntityId, RootEntity.EntityId),
         alignment=MateAlignment.ALIGNED,
         **MateOverrides,
     )
     return ReplaceData(
         SourceDoc,
-        Assembly=ReplaceData(
-            Assembly, MateEntities=(ComponentEntity, RootEntity), Mates=(MateInfo,)
+        assembly=ReplaceData(
+            Assembly,
+            mate_entities=(ComponentEntity, RootEntity),
+            mates=(MateInfo,),
         ),
     )
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def Encode(SourceDoc: CadDocument):
+def Encode(SourceDoc: CadDocument) -> NativeAssemblyEncoding:
     Assembly = SourceDoc.Assembly
     assert Assembly is not None
     return EncodeNativeAssembly(Assembly, SourceDoc.Configurations, "Engine")
@@ -156,6 +159,7 @@ def TestGAHITCNHH() -> None:
 def TestFCFC() -> None:
     SourceData = AssemblyDocument()
     AssemblyValue = SourceData.assembly
+    assert AssemblyValue is not None
     FixedData = ReplaceData(
         SourceData,
         assembly=ReplaceData(
@@ -494,6 +498,7 @@ def TestPABHNSP(TmpPath: FilePath) -> None:
 def TestICSWVL() -> None:
     SourceDoc = AssemblyDocument()
     Assembly = SourceDoc.assembly
+    assert Assembly is not None
     Broken = ReplaceData(
         SourceDoc,
         assembly=ReplaceData(
@@ -516,6 +521,7 @@ def TestICSWVL() -> None:
 def TestAMLDNVTNMR() -> None:
     SourceDoc = PersistentMD()
     Assembly = SourceDoc.assembly
+    assert Assembly is not None
     Framed = ReplaceData(
         SourceDoc,
         assembly=ReplaceData(

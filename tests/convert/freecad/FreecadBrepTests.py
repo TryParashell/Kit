@@ -26,7 +26,7 @@ from convert import (
     open_document as OpenDoc,
     write_document as WriteDoc,
 )
-from convert.adapters.base import CarrierReason, TransferMode
+from convert.adapters.base.TransferContract import CarrierReason, TransferMode
 from convert.adapters.freecad import FreeCADAdapter as FreeCadAdapter
 from convert.adapters.freecad.Brep import (
     FreeCADBrepWriteError as FreeCadBrepWriteError,
@@ -45,7 +45,6 @@ from interchange import (
     BrepFace,
     BrepFaceUse,
     BrepLoop,
-    BrepModel,
     BrepPayload,
     BrepRegion,
     BrepShell,
@@ -56,7 +55,6 @@ from interchange import (
     CadSource,
     CircleCurve,
     CirclePcurve,
-    Capability,
     ConeSurface,
     Configuration as Config,
     CylinderSurface,
@@ -78,6 +76,8 @@ from interchange import (
     Vector3 as VectorThree,
     frozen_mapping as FrozenMapping,
 )
+from interchange.brep.topology.BrepModel import BrepModel
+from interchange.enums.EnumDocument import Capability
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
 # this binding exists because shared behavior needs one stable value
