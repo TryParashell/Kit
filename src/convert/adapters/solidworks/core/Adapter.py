@@ -20,7 +20,7 @@ import re as RegexLib
 import struct as Struct
 import tempfile as Tempfile
 from types import MappingProxyType
-from typing import Any as AnyValue, Mapping, Sequence
+from typing import Any as AnyValue, Mapping, Sequence, TypeGuard, cast as CastValue
 import xml.etree.ElementTree as XmlTree
 from convert.adapters.base import (
     AdapterInfo,
@@ -437,7 +437,7 @@ class WritePlan:
 
 # string mapping validation prevents untyped option payloads reaching assembly writers
 def StringMap(Value: object) -> Mapping[str, str]:
-    if not isinstance(Value, Mapping):
+    if not IsObjectMap(Value):
         return {}
     Result: dict[str, str] = {}
     for KeyValue, ItemValue in Value.items():
@@ -449,7 +449,7 @@ def StringMap(Value: object) -> Mapping[str, str]:
 
 # integer mapping validation prevents untyped option payloads reaching assembly writers
 def IntegerMap(Value: object) -> Mapping[str, int]:
-    if not isinstance(Value, Mapping):
+    if not IsObjectMap(Value):
         return {}
     Result: dict[str, int] = {}
     for KeyValue, ItemValue in Value.items():
@@ -457,6 +457,40 @@ def IntegerMap(Value: object) -> Mapping[str, int]:
             raise TypeError("bundle stamps must map strings to integers")
         Result[KeyValue] = ItemValue
     return Result
+
+
+# object mapping narrowing gives decoded option and json records concrete member types
+def IsObjectMap(Value: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(Value, Mapping)
+
+
+# dictionary narrowing keeps decoded json iteration free from unknown key types
+def IsObjectDict(Value: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(Value, dict)
+
+
+# list narrowing keeps decoded json iteration free from unknown element types
+def IsObjectList(Value: object) -> TypeGuard[list[object]]:
+    return isinstance(Value, list)
+
+
+# json object validation rejects nontext keys before records enter typed contracts
+def ObjectDict(Value: object) -> dict[str, object] | None:
+    if not IsObjectDict(Value):
+        return None
+    Result: dict[str, object] = {}
+    for KeyValue, ItemValue in Value.items():
+        if not isinstance(KeyValue, str):
+            return None
+        Result[KeyValue] = ItemValue
+    return Result
+
+
+# json array validation prevents unknown element types escaping decoder boundaries
+def ObjectList(Value: object) -> list[object] | None:
+    if not IsObjectList(Value):
+        return None
+    return Value
 
 
 # generation input selection owns carrier policy bundle discovery and caller supplied identities
@@ -663,8 +697,12 @@ def BuildSavedPlan(
         VendorLoadable = True
     elif Attestation is not None:
         Transfers = Attested(Attestation, RequiredCaps)
-        AppUsable = Attestation["application_usable"]
-        VendorLoadable = Attestation["vendor_loadable"]
+        AppUsable = BooleanValue(
+            Attestation["application_usable"], "application_usable"
+        )
+        VendorLoadable = BooleanValue(
+            Attestation["vendor_loadable"], "vendor_loadable"
+        )
         NativeBrep = str(Attestation.get("native_brep", "template"))
         NativeContent = "source-preserved"
     else:
@@ -1111,11 +1149,7 @@ def SemanticDoc(DocValue: CadDocument) -> CadDoc:
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            SemanticDoc(ItemValue.document)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=SemanticDoc(ItemValue.document),
                     )
                     for ItemValue in AsmValue.documents
                 )
@@ -1758,16 +1792,17 @@ def NativeBytes(
 # this definition exists because attestation envelopes need authenticated decoding
 def NativeEnvelope(
     DataValue: bytes,
-) -> tuple[SldprtArchive, dict[str, AnyValue], CadDocument] | None:
+) -> tuple[SldprtArchive, dict[str, object], CadDocument] | None:
     try:
         Archive = SldprtArchive.from_bytes(DataValue)
         RawValue = Archive.require(KitNativeStream)
         Embedded = Archive.require(KitDocStream)
-        Value = JsonValue.loads(RawValue.decode("utf-8"))
+        DecodedValue: object = JsonValue.loads(RawValue.decode("utf-8"))
+        Value = ObjectDict(DecodedValue)
         DocValue = CadDoc.from_json(Embedded.decode("utf-8"))
     except (KeyError, SldprtFormatError, TypeError, ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(Value, dict) or Value.get("version") != 2:
+    if Value is None or Value.get("version") != 2:
         return None
     if Value.get("embedded_sha256") != Hashlib.sha256(Embedded).hexdigest():
         return None
@@ -1792,29 +1827,34 @@ def NativeEnvelope(
 
 # this definition exists because capability records need exact typed decoding
 def ParseTransfers(
-    Value: Mapping[str, AnyValue],
+    Value: Mapping[str, object],
 ) -> tuple[CapabilityTransfer, ...] | None:
-    Records = Value.get("transfers")
-    if not isinstance(Records, list):
+    Records = ObjectList(Value.get("transfers"))
+    if Records is None:
         return None
+    ParsedValues: list[CapabilityTransfer] = []
     try:
-        Parsed = tuple(
-            (
+        for RecordValue in Records:
+            Record = ObjectDict(RecordValue)
+            if Record is None:
+                return None
+            CapabilityValue = Record.get("capability")
+            ModeValue = Record.get("mode")
+            ReasonValue = Record.get("carrier_reason")
+            if not isinstance(CapabilityValue, str) or not isinstance(ModeValue, str):
+                return None
+            if ReasonValue is not None and not isinstance(ReasonValue, str):
+                return None
+            ParsedValues.append(
                 CapabilityTransfer(
-                    Capability(Record["capability"]),
-                    TransferMode(Record["mode"]),
-                    (
-                        CarrierReason(Record["carrier_reason"])
-                        if Record.get("carrier_reason") is not None
-                        else None
-                    ),
+                    Capability(CapabilityValue),
+                    TransferMode(ModeValue),
+                    CarrierReason(ReasonValue) if ReasonValue is not None else None,
                 )
-                for Record in Records
-                if isinstance(Record, dict)
             )
-        )
     except (KeyError, TypeError, ValueError):
         return None
+    Parsed = tuple(ParsedValues)
     if len(Parsed) != len(Records) or len(
         {ItemValue.capability for ItemValue in Parsed}
     ) != len(Parsed):
@@ -1824,7 +1864,7 @@ def ParseTransfers(
 
 # this predicate exists because regenerated proof must match every attested claim
 def IsProofMatch(
-    Value: Mapping[str, AnyValue],
+    Value: Mapping[str, object],
     Compatibility: str,
     Proof: Generated,
 ) -> bool:
@@ -1837,7 +1877,7 @@ def IsProofMatch(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
+def Native(DataValue: bytes) -> dict[str, object] | None:
     Envelope = NativeEnvelope(DataValue)
     if Envelope is None:
         return None
@@ -1930,11 +1970,21 @@ def AttestedBundle(DocValue: CadDocument, Archive: SldprtArchive) -> Mapping[str
 
 
 # this definition exists because focused behavior needs one stable owner
+def IsTransferTuple(
+    Value: object,
+) -> TypeGuard[tuple[CapabilityTransfer, ...]]:
+    if not isinstance(Value, tuple):
+        return False
+    ItemValues = CastValue(tuple[object, ...], Value)
+    return all(isinstance(ItemValue, CapabilityTransfer) for ItemValue in ItemValues)
+
+
+# this definition exists because focused behavior needs one stable owner
 def Attested(
-    Attestation: Mapping[str, Any], Required: frozenset[Capability]
+    Attestation: Mapping[str, object], Required: frozenset[Capability]
 ) -> tuple[CapabilityTransfer, ...]:
     Parsed = Attestation.get("parsed_transfers")
-    if not isinstance(Parsed, tuple):
+    if not IsTransferTuple(Parsed):
         return SolidworksA(Required, frozenset())
     ByCapability = {ItemValue.capability: ItemValue for ItemValue in Parsed}
     if set(ByCapability) != set(Required):
@@ -1962,6 +2012,11 @@ def Replay(DataValue: bytes) -> str:
     )
 
 
+# empty object identifiers keep generated state defaults concrete for both analyzers
+def EmptyObjectIds() -> Mapping[str, int]:
+    return {}
+
+
 # this state exists because native generation has format specific branches
 @DataClass(slots=True)
 class GeneratedState:
@@ -1970,7 +2025,7 @@ class GeneratedState:
     PartCapabilities: frozenset[Capability] = frozenset()
     MixedCapabilities: frozenset[Capability] = frozenset()
     PartPartition: bytes | None = None
-    PartObjectIds: Mapping[str, int] = Field(default_factory=dict)
+    PartObjectIds: Mapping[str, int] = Field(default_factory=EmptyObjectIds)
     PartAppUsable: bool = False
     PartVendorLoadable: bool = False
     PartDonorNotes: tuple[str, ...] = ()
@@ -2443,7 +2498,7 @@ def IsSavedPayloads(
     AsmValue: AsmData,
     Candidates: Mapping[str, tuple[BrepPayload, NativeMateList]],
 ) -> bool:
-    PayloadIds = {Payload.id for Payload, Ignored in Candidates.values()}
+    PayloadIds = {Payload.id for Payload, _ in Candidates.values()}
     DesiredPayloadIds = {
         str(Value)
         for Value in (
@@ -2721,8 +2776,9 @@ def IsAsmOrder(
         # this callback exists because native sibling ordering needs a stable key
         Expected = [
             Encoding.occurrence_ids[ItemValue.id]
-            for Ignored, Ignored, ItemValue in sorted(
-                Values, key=lambda Value: (Value[0], Value[1])
+            for ItemValue in (
+                Entry[2]
+                for Entry in sorted(Values, key=lambda Value: (Value[0], Value[1]))
             )
         ]
         Actual = [
@@ -2996,11 +3052,10 @@ def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
 def KeywordsBytes(
     Prefix: bytes, RootValue: XmlTree.Element, Trailing: bytes
 ) -> bytes:
-    return (
-        Prefix
-        + XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
-        + Trailing
-    )
+    Serialized = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
+    if not isinstance(Serialized, bytes):
+        raise TypeError("keyword xml serialization must produce bytes")
+    return Prefix + Serialized + Trailing
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3772,7 +3827,7 @@ def PatchTemplatMut(
     OriginalStreams: Mapping[str, bytes],
 ) -> tuple[str, bool, bool]:
     Archive = SldprtArchive.from_bytes(BuildSldprt(OriginalStreams))
-    OriginalPayloads, Ignored = BrepPayloads(Archive, ReadOptions(strict=False))
+    OriginalPayloads = BrepPayloads(Archive, ReadOptions(strict=False))[0]
     DesiredIndexes = SourcePayloadIndexes(DocValue)
     DesiredPayloads = tuple(
         (
@@ -3882,8 +3937,7 @@ def AsmBaseCaps(
     DocIds = {Component.id for Component in AsmValue.documents}
     SavedDocuments = all(
         (
-            isinstance(Component.document, CadDoc)
-            and SavedSource(Component.document, None) is not None
+            SavedSource(Component.document, None) is not None
             for Component in AsmValue.documents
         )
     )
@@ -3895,7 +3949,6 @@ def AsmBaseCaps(
                 not Component.document.bodies
                 or Capability.BODY_STRUCTURE in Component.document.capabilities
                 for Component in AsmValue.documents
-                if isinstance(Component.document, CadDoc)
             )
         ):
             Result.add(Capability.BODY_STRUCTURE)
@@ -3920,7 +3973,7 @@ def IsRootMates(
     IdentityOccurrences = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
-    Ignored, Entities, Mates, Groups = AsmMates(
+    _, Entities, Mates, Groups = AsmMates(
         Native,
         (
             (
@@ -3981,7 +4034,7 @@ def AsmFinalCapsMut(
         Capability.COMPONENT_DOCUMENTS in ResultMut,
     ):
         ResultMut.add(Capability.ASSEMBLY_MATES)
-    NativeMeshes, Ignored = AsmMeshes(Native)
+    NativeMeshes = AsmMeshes(Native)[0]
     if MeshValues(DocValue.meshes) == MeshValues(NativeMeshes):
         ResultMut.add(Capability.TESSELLATION)
 
@@ -5960,7 +6013,8 @@ def SourceBytes(Source: Source) -> tuple[bytes, str]:
     TellValue = getattr(Source, "tell", None)
     if callable(TellValue):
         try:
-            Position = TellValue()
+            PositionValue = TellValue()
+            Position = PositionValue if isinstance(PositionValue, int) else None
         except (OSError, ValueError):
             Position = None
     Value = Source.read()
@@ -6515,7 +6569,7 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
     SketchParamIds = tuple(
         (
             ParamId
-            for Dimension, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions)
+            for _, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions)
             if ParamId in ParamIds
         )
     )
@@ -7168,7 +7222,7 @@ def OperationId(Operation: NativeOperation, Producer: int, LocalId: int) -> str:
         sum(
             (
                 RefLocal == LocalId
-                for Ignored, RefLocal in Operation.selection_references
+                for _, RefLocal in Operation.selection_references
             )
         )
         > 1
@@ -7231,7 +7285,7 @@ def TimelineOp(
     Selected = tuple(
         (
             SelectionId
-            for Producer, LocalId, Ignored in OperationA(Operation)
+            for Producer, LocalId, _ in OperationA(Operation)
             for SelectionId in (OperationId(Operation, Producer, LocalId),)
             if SelectionId in SelectionIds
         )
@@ -7270,7 +7324,7 @@ def Timeline(
         ParamIds = tuple(
             (
                 ParamId
-                for Dimension, ParamId in ParamEntries(
+                for _, ParamId in ParamEntries(
                     Feature.object_id, Feature.dimensions
                 )
             )

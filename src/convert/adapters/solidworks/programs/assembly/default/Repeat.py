@@ -402,7 +402,7 @@ def EncodeHeader(
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     RefShift = 2 * (ItemCount - KTracedCount)
     SuffixOps = SliceOps("Contents/Config-0-ModelHeader", SuffixStart)
-    SuffixOverrides = {
+    SuffixOverrides: dict[int, FieldType] = {
         OffsetValue: RequireInt(Operation[4], "header suffix reference") + RefShift
         for OffsetValue in KHeaderShiftRefs
         for Operation in SuffixOps
