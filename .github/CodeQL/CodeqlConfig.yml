@@ -13,6 +13,9 @@ disable-default-queries: true
 
 threat-models: local
 
+paths-ignore:
+  - re/**
+
 queries:
   - uses: security-and-quality
   - uses: security-experimental

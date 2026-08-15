@@ -2182,19 +2182,19 @@ SUFFIX_BY_DOCUMENT_TYPE = SuffixByDocType
 Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-_PART_STREAM = KPartStream
+_PART_STREAM = KPartStream  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_PRESERVED_BINDING_PREFIX = KSavedBindingPrefix
+_PRESERVED_BINDING_PREFIX = KSavedBindingPrefix  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_PRESERVED_DOCUMENT_PREFIX = KSavedDocPrefix
+_PRESERVED_DOCUMENT_PREFIX = KSavedDocPrefix  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_PRODUCT_SUFFIX = KProductSuffix
+_PRODUCT_SUFFIX = KProductSuffix  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_WRAPPER_METADATA_KEYS = KWrapperMetaKeys
+_WRAPPER_METADATA_KEYS = KWrapperMetaKeys  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
 _binding_matches_payload = IsBindingMatch

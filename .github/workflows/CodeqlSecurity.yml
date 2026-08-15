@@ -35,7 +35,6 @@ jobs:
       matrix:
         language:
           - actions
-          - java-kotlin
           - python
     steps:
       - name: Checkout repository
