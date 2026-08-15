@@ -43,6 +43,7 @@ jobs:
       remediation-attempted: >-
         ${{ steps.remediation-state.outputs.cache-hit == 'true' }}
     steps:
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout trusted workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,7 +117,7 @@ jobs:
 
       - name: Checkout pull request head as detached data
         if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ steps.refs.outputs.head }}
@@ -200,6 +201,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout trusted workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
