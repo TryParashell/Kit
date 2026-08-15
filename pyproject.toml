@@ -26,9 +26,6 @@ maintainers = [
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 keywords = ["cad"]
-classifiers = [
-    "Private :: Do Not Upload",
-]
 dependencies = []
 
 [project.urls]
