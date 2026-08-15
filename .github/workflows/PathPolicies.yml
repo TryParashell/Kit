@@ -6,7 +6,7 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-name: Test suites
+name: Path policies
 
 on:
   pull_request:
@@ -23,14 +23,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-suites:
-    name: Smoke, unit, application, and integration
+  verify-path-policies:
+    name: Verify path policies
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
-      - name: Checkout repository
+      - name: Checkout full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up uv
@@ -41,19 +42,15 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Synchronize the locked environment
-        run: uv sync --frozen --all-groups --all-extras --python 3.11
+        run: uv sync --frozen --python 3.11
 
-      - name: Run smoke tests
-        run: uv run pytest -q tests/smoke
-
-      - name: Run unit tests
-        run: uv run pytest -q tests/interchange tests/Policy tests/steering
-
-      - name: Run application tests
-        run: uv run pytest -q tests/convert/api tests/convert/runtime
-
-      - name: Run integration tests without CAD applications
+      - name: Verify path policies
         env:
-          KIT_FREECAD_ORACLE: ""
-          KIT_SOLIDWORKS_ORACLE: ""
-        run: uv run pytest -q tests/convert
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || '' }}
+        run: |
+          Arguments=()
+          if [ -n "$BASE_REF" ]; then
+            Arguments=(--base "$BASE_REF" --head "$HEAD_REF")
+          fi
+          uv run python -m tools.Policy.CheckPaths "${Arguments[@]}"

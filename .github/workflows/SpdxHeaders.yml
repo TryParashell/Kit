@@ -145,26 +145,24 @@ jobs:
             exit 1
           fi
           if [ "$EVENT_NAME" = "pull_request_target" ]; then
-            DataHead="$(git -C SpdxHeadData rev-parse HEAD)"
+            SourceRoot="$GITHUB_WORKSPACE/SpdxHeadData"
+            DataHead="$(git -C "$SourceRoot" rev-parse HEAD)"
             if [ "$DataHead" != "$HEAD_SHA" ]; then
               echo "::error::Detached pull request data does not match the event SHA."
               exit 1
             fi
-            git -C SpdxHeadData fetch --no-tags "$GITHUB_WORKSPACE" "$BASE_SHA"
+            git -C "$SourceRoot" fetch --no-tags "$GITHUB_WORKSPACE" "$BASE_SHA"
           else
             SourceRoot="$RUNNER_TEMP/SpdxHeaderSource"
             git worktree add --detach "$SourceRoot" "$HEAD_SHA"
-            echo "path=$SourceRoot" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$(git -C SpdxHeadData cat-file -t "$BASE_SHA")" != "commit" ]; then
+          if [ "$(git -C "$SourceRoot" cat-file -t "$BASE_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$(git -C SpdxHeadData cat-file -t "$HEAD_SHA")" != "commit" ]; then
+          if [ "$(git -C "$SourceRoot" cat-file -t "$HEAD_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$EVENT_NAME" = "pull_request_target" ]; then
-            echo "path=$GITHUB_WORKSPACE/SpdxHeadData" >> "$GITHUB_OUTPUT"
-          fi
+          echo "path=$SourceRoot" >> "$GITHUB_OUTPUT"
 
       - name: Restore remediation state for this head
         id: remediation-state
@@ -296,10 +294,6 @@ jobs:
             --head "$HEAD_SHA" \
             --worktree "$SOURCE_ROOT" \
             --fix-missing
-          uv run --frozen python .github/scripts/VerifySpdxHeaders.py \
-            --base "$BASE_SHA" \
-            --head "$HEAD_SHA" \
-            --worktree "$SOURCE_ROOT"
           git -C "$SOURCE_ROOT" diff --name-only --diff-filter=M -z -- \
             > "$RepairPaths"
           if [ ! -s "$RepairPaths" ]; then

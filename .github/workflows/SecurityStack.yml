@@ -23,8 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  python-security:
-    name: Python security tools
+  bandit:
+    name: Bandit
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -44,50 +44,153 @@ jobs:
       - name: Synchronize the locked environment
         run: uv sync --frozen --all-groups --all-extras --python 3.11
 
-      - name: Report ranked scanner stack
-        run: |
-          cat <<'STACK'
-          01 CodeQL SAST
-          02 Semgrep SAST
-          03 Bandit Python SAST
-          04 pip-audit SCA
-          05 Safety dependency intelligence
-          06 Checkov IaC
-          07 Zizmor GitHub Actions security
-          08 detect-secrets secret scanning
-          09 Ruff security rules
-          10 GitHub dependency review via Dependabot alerts
-          11 SPDX license guard
-          12 Workflow pin verifier
-          13 Explicit import policy
-          14 Folder density policy
-          15 File name policy
-          16 Steering policy
-          17 Pyright strict type gate
-          18 Mypy strict type gate
-          19 Black formatting gate
-          20 Pytest application gate
-          STACK
-
       - name: Run Bandit SAST
         run: uv run bandit -q -r src tools .github/scripts -x .venv,examples,Parashell,modules,re,tests -s B101,B105,B314,B404,B405,B603,B607
 
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
       - name: Run Semgrep SAST
         run: uv run semgrep scan --config=p/default --error --metrics=off --timeout=30 --exclude=.venv --exclude=examples --exclude=Parashell --exclude=modules --exclude=re
+
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Run pip-audit SCA
         run: |
           uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/runtime-requirements.txt"
           uv run pip-audit --strict --requirement "${RUNNER_TEMP}/runtime-requirements.txt"
 
+  safety:
+    name: Safety
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
       - name: Run Safety SCA
-        run: uv run safety check --file "${RUNNER_TEMP}/runtime-requirements.txt" --output text
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/runtime-requirements.txt"
+          uv run safety check --file "${RUNNER_TEMP}/runtime-requirements.txt" --output text
+
+  checkov:
+    name: Checkov
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Run Checkov IaC
         run: uv run checkov --directory . --quiet --skip-path .venv --skip-path examples --skip-path re
 
+  zizmor:
+    name: Zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
       - name: Run Zizmor Actions audit
         run: uv run zizmor --pedantic .github/workflows
+
+  detect-secrets:
+    name: detect-secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Run detect-secrets
         run: uv run detect-secrets scan --all-files --exclude-files '(^\.venv/|^examples/|^re/|^uv\.lock$)' --only-verified
