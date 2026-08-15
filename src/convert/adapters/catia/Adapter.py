@@ -2197,187 +2197,187 @@ _PRODUCT_SUFFIX = KProductSuffix  # lgtm[py/unused-global-variable]
 _WRAPPER_METADATA_KEYS = KWrapperMetaKeys  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_binding_matches_payload = IsBindingMatch
+_binding_matches_payload = IsBindingMatch  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_carrier_manifest_document = CarrierManifest
+_carrier_manifest_document = CarrierManifest  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_carrier_semantic_digest = CarrierSemantic
+_carrier_semantic_digest = CarrierSemantic  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_catia_envelope_payload = IsCatiaEnvelope
+_catia_envelope_payload = IsCatiaEnvelope  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_container_metadata = ContainerMeta
+_container_metadata = ContainerMeta  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_declared_container_role = DeclaredRole
+_declared_container_role = DeclaredRole  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_declared_osmx_role = DeclaredOsmx
+_declared_osmx_role = DeclaredOsmx  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_decode_typed_brep = DecodeTypedBrep
+_decode_typed_brep = DecodeTypedBrep  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_destination_type = TargetType
+_destination_type = TargetType  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_digest_document = DigestDoc
+_digest_document = DigestDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_document_digest = DocDigest
+_document_digest = DocDigest  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_document_type = DetectDocType
+_document_type = DetectDocType  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_embedded_document = EmbeddedDoc
+_embedded_document = EmbeddedDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_generated_archive = Generated
+_generated_archive = Generated  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_brep_mode_payload = IsBrepMode
+_is_brep_mode_payload = IsBrepMode  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_catia_document_binding = IsCatiaDoc
+_is_catia_document_binding = IsCatiaDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_catia_document_payload = IsCatiaDocA
+_is_catia_document_payload = IsCatiaDocA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_cgm_payload = IsCgmPayload
+_is_cgm_payload = IsCgmPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_cgr_payload = IsCgrPayload
+_is_cgr_payload = IsCgrPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_delta_payload = IsDeltaPayload
+_is_delta_payload = IsDeltaPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_mfbrp_payload = IsMfbrpPayload
+_is_mfbrp_payload = IsMfbrpPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_native_document_binding = IsNativeDoc
+_is_native_document_binding = IsNativeDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_native_document_payload = IsNativeDocA
+_is_native_document_payload = IsNativeDocA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_preserved_document_binding = IsSavedDoc
+_is_preserved_document_binding = IsSavedDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_is_preserved_document_payload = IsSavedDocA
+_is_preserved_document_payload = IsSavedDocA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_logical_spans = LogicalSpans
+_logical_spans = LogicalSpans  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_manifest_bytes = ManifestBytes
+_manifest_bytes = ManifestBytes  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_manifest_document = ManifestDoc
+_manifest_document = ManifestDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_manifest_json = ManifestJson
+_manifest_json = ManifestJson  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_matching_document_binding = MatchingDoc
+_matching_document_binding = MatchingDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_base_overlay_matches = IsNativeBase
+_native_base_overlay_matches = IsNativeBase  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_base_payload = NativeBaseA
+_native_base_payload = NativeBaseA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_candidate_is_unchanged = IsNativeChoice
+_native_candidate_is_unchanged = IsNativeChoice  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_container_data_included = CanIncludeData
+_native_container_data_included = CanIncludeData  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_container_specification = NativeContaineA
+_native_container_specification = NativeContaineA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_document_binding = NativeDoc
+_native_document_binding = NativeDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_document_binding_matches = IsNativeBinding
+_native_document_binding_matches = IsNativeBinding  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_document_payload = NativeDocB
+_native_document_payload = NativeDocB  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_part_data = NativePartData
+_native_part_data = NativePartData  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_payload_matches_document = IsNativePayload
+_native_payload_matches_document = IsNativePayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_native_payloads = NativePayloads
+_native_payloads = NativePayloads  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_osmx_metadata = OsmxMeta
+_osmx_metadata = OsmxMeta  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_osmx_payload_role = OsmxPayloadRole
+_osmx_payload_role = OsmxPayloadRole  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_overlay_preserves_native_base = IsOverlayNative
+_overlay_preserves_native_base = IsOverlayNative  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_pack_manifest = PackManifest
+_pack_manifest = PackManifest  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_part_planes = PartPlanes
+_part_planes = PartPlanes  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_part_semantic_digest = PartSemantic
+_part_semantic_digest = PartSemantic  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_payload_signature = PayloadDigest
+_payload_signature = PayloadDigest  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_preserved_replay_digest = SavedReplay
+_preserved_replay_digest = SavedReplay  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_replay_compatibility = Replay
+_replay_compatibility = Replay  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_restore_generated = Restore
+_restore_generated = Restore  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_selected_configurations = Selected
+_selected_configurations = Selected  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_semantic_digest = SemanticDigest
+_semantic_digest = SemanticDigest  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_source_bytes = SourceBytesMut
+_source_bytes = SourceBytesMut  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_stream_provenance = StreamSource
+_stream_provenance = StreamSource  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_summary_stream = SummaryStream
+_summary_stream = SummaryStream  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_symbol_provenance = SymbolSource
+_symbol_provenance = SymbolSource  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_typed_brep = TypedBrep
+_typed_brep = TypedBrep  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_unchanged_native_payload = UnchangedNative
+_unchanged_native_payload = UnchangedNative  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_unpack_manifest = UnpackManifest
+_unpack_manifest = UnpackManifest  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_bytes = WriteBytes
+_write_bytes = WriteBytes  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
 annotations = Annotations
