@@ -226,6 +226,61 @@ def Coordinates(Value: VectorThree) -> tuple[float, float, float]:
     return Value.x, Value.y, Value.z
 
 
+# binary metadata access fails clearly when recovered record payloads lose their concrete representation
+def GetBytes(Attributes: Mapping[str, object], KeyValue: str) -> bytes:
+    Value = Attributes[KeyValue]
+    if not isinstance(Value, bytes):
+        raise TypeError(f"{KeyValue} must contain bytes")
+    return Value
+
+
+# tuple metadata access fails clearly when recovered record collections lose their concrete representation
+def GetTuple(Attributes: Mapping[str, object], KeyValue: str) -> tuple[object, ...]:
+    Value = Attributes[KeyValue]
+    if not isinstance(Value, tuple):
+        raise TypeError(f"{KeyValue} must contain a tuple")
+    return CastValue(tuple[object, ...], Value)
+
+
+# numeric metadata access preserves exact parameter types for geometric evaluation
+def GetFloatTuple(Attributes: Mapping[str, object], KeyValue: str) -> tuple[float, ...]:
+    Values = GetTuple(Attributes, KeyValue)
+    if not all(
+        isinstance(Value, (int, float)) and not isinstance(Value, bool)
+        for Value in Values
+    ):
+        raise TypeError(f"{KeyValue} must contain numeric values")
+    return tuple(float(Value) for Value in Values if isinstance(Value, (int, float)))
+
+
+# integer metadata access preserves recovered identifier ordering in assertions
+def GetInteger(Attributes: Mapping[str, object], KeyValue: str) -> int:
+    Value = Attributes[KeyValue]
+    if not isinstance(Value, int) or isinstance(Value, bool):
+        raise TypeError(f"{KeyValue} must contain an integer")
+    return Value
+
+
+# vector metadata access keeps expected intersection points concrete during comparison
+def GetVectors(
+    Attributes: Mapping[str, object], KeyValue: str
+) -> tuple[VectorThree, ...]:
+    Values = GetTuple(Attributes, KeyValue)
+    if not all(isinstance(Value, VectorThree) for Value in Values):
+        raise TypeError(f"{KeyValue} must contain vectors")
+    return CastValue(tuple[VectorThree, ...], Values)
+
+
+# uv metadata access keeps both surface parameter lanes concrete during evaluation
+def GetUvLanes(
+    Attributes: Mapping[str, object], KeyValue: str
+) -> tuple[tuple[tuple[float, float], ...], ...]:
+    Value = Attributes[KeyValue]
+    if not isinstance(Value, tuple):
+        raise TypeError(f"{KeyValue} must contain uv lanes")
+    return CastValue(tuple[tuple[tuple[float, float], ...], ...], Value)
+
+
 # this definition exists because focused behavior needs one stable owner
 def SolidT() -> BrepModel:
     Model = DecodeAsciiBrep(
@@ -931,13 +986,14 @@ def TestCBIDWCNL(PathValueA: PathValue, FaceCount: int, CurveCount: int) -> None
     assert len(Curves) == CurveCount
     for Curve in Curves:
         Attributes = Curve.attributes
-        assert len(Curve.samples) == len(Attributes["chart_parameters"])
-        assert len(Curve.samples) == len(Attributes["support_uv"][0])
-        assert len(Curve.samples) == len(Attributes["support_uv"][1])
+        SupportUv = GetUvLanes(Attributes, "support_uv")
+        assert len(Curve.samples) == len(GetTuple(Attributes, "chart_parameters"))
+        assert len(Curve.samples) == len(SupportUv[0])
+        assert len(Curve.samples) == len(SupportUv[1])
         assert Attributes["limit_forms"] == ("L?", "L?")
         assert Attributes["intersection_record"]
         assert Attributes["chart_record"]
-        assert len(Attributes["limit_records"]) == 2
+        assert len(GetTuple(Attributes, "limit_records")) == 2
         assert Attributes["support_uv_record"]
 
 
@@ -1025,7 +1081,7 @@ def AssertCurveData(Curve: NurbsCurve) -> None:
     assert Attributes["vertex_dimension"] == 4
     assert Attributes["control_count"] == len(Curve.control_points)
     assert Attributes["knot_count"] == len(Curve.knots)
-    assert len(Attributes["array_references"]) == 3
+    assert len(GetTuple(Attributes, "array_references")) == 3
     assert Attributes["curve_record"]
     assert Attributes["descriptor_record"]
     assert Attributes["curve_data_record"]
@@ -1094,7 +1150,8 @@ def TestNICDAWCFC() -> None:
     Model = DecodeBrepModel(Payload)
     assert Model is not None
     Curve = next(Curve for Curve in Model.curves if isinstance(Curve, NurbsCurve))
-    Descriptor = bytearray(Curve.attributes["descriptor_record"])
+    DescriptorRecord = GetBytes(Curve.attributes, "descriptor_record")
+    Descriptor = bytearray(DescriptorRecord)
     Start = RecordStart(Descriptor, 0, 0x88)
     assert Start is not None
     Decoded = XmtValue(Descriptor, Start)
@@ -1103,19 +1160,20 @@ def TestNICDAWCFC() -> None:
     assert Descriptor[DescriptorCursor + 15] == 1
     Descriptor[DescriptorCursor + 15] = 0
     assert ParseNurbsCurveRecord(bytes(Descriptor), 0) is None
-    DescriptorOffset = Payload.find(Curve.attributes["descriptor_record"])
+    DescriptorOffset = Payload.find(DescriptorRecord)
     assert DescriptorOffset >= 0
     CorruptedDescriptor = bytearray(Payload)
     CorruptedDescriptor[DescriptorOffset : DescriptorOffset + len(Descriptor)] = (
         Descriptor
     )
     assert DecodeBrepModel(CorruptedDescriptor) is None
-    Control = bytearray(Curve.attributes["control_record"])
+    ControlRecord = GetBytes(Curve.attributes, "control_record")
+    Control = bytearray(ControlRecord)
     Fields = ArrayRecordFields(Control, 0, 0x2D)
     assert Fields is not None
     ValuesOffset = Fields[2]
     Control[ValuesOffset + 24 : ValuesOffset + 32] = bytes(8)
-    ControlOffset = Payload.find(Curve.attributes["control_record"])
+    ControlOffset = Payload.find(ControlRecord)
     assert ControlOffset >= 0
     CorruptedControl = bytearray(Payload)
     CorruptedControl[ControlOffset : ControlOffset + len(Control)] = Control
@@ -1177,26 +1235,30 @@ def TestUTCPNRAVG() -> None:
     assert sum(isinstance(Curve, CircleCurve) for Curve in Curves) == 2
     for Curve in Curves:
         Attributes = Curve.attributes
-        assert len(Attributes["header_references"]) == 5
-        assert Attributes["basis_reference"] > 1
+        assert len(GetTuple(Attributes, "header_references")) == 5
+        assert GetInteger(Attributes, "basis_reference") > 1
         assert Attributes["basis_curve_id"]
         assert Attributes["trim_record"]
+        TrimParameters = GetFloatTuple(Attributes, "trim_parameters")
+        TrimPoints = GetVectors(Attributes, "trim_points")
         Evaluated = tuple(
-            CurvePointAtParameter(Curve, Parameter)
-            for Parameter in Attributes["trim_parameters"]
+            CurvePointAtParameter(Curve, Parameter) for Parameter in TrimParameters
         )
         assert all(Point is not None for Point in Evaluated)
         assert all(
             MathValue.dist(Coordinates(Actual), Coordinates(Expected)) <= 1e-7
-            for Actual, Expected in zip(Evaluated, Attributes["trim_points"])
+            for Actual, Expected in zip(Evaluated, TrimPoints)
             if Actual is not None
         )
         if isinstance(Curve, LineCurve):
-            assert Attributes["trim_parameters"] == Pytest.approx(
-                tuple(Value * 1000.0 for Value in Attributes["trim_parameters_native"])
+            assert TrimParameters == Pytest.approx(
+                tuple(
+                    Value * 1000.0
+                    for Value in GetFloatTuple(Attributes, "trim_parameters_native")
+                )
             )
         else:
-            assert Attributes["trim_parameters"] == Attributes["trim_parameters_native"]
+            assert TrimParameters == GetFloatTuple(Attributes, "trim_parameters_native")
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1207,7 +1269,7 @@ def TestTCRAPCFC() -> None:
         for Curve in TablesA.curves.values()
         if isinstance(Curve, LineCurve) and Curve.attributes.get("trimmed") is True
     )
-    RawValue = Curve.attributes["trim_record"]
+    RawValue = GetBytes(Curve.attributes, "trim_record")
     Record = ParseTrimmedCurveRecord(RawValue, 0)
     assert Record is not None
     Basis = TablesA.curves[Record.basis_reference]
@@ -1246,7 +1308,7 @@ def TestPNSPTPI() -> None:
     assert Surface.degree_v == 2
     assert len(Surface.control_points) == 7
     assert len(Surface.control_points[0]) == 97
-    LaneValue = Curve.attributes["support_uv"][1]
+    LaneValue = GetUvLanes(Curve.attributes, "support_uv")[1]
     assert len(LaneValue) == len(Curve.samples) == 21
     Evaluated = tuple(
         NurbsSurfacePoint(Surface, Parameters) for Parameters in LaneValue
@@ -1295,7 +1357,8 @@ def TestNSDAWCFC() -> None:
     Surface = next(
         Surface for Surface in Model.surfaces if isinstance(Surface, NurbsSurface)
     )
-    Descriptor = bytearray(Surface.attributes["descriptor_record"])
+    DescriptorRecord = GetBytes(Surface.attributes, "descriptor_record")
+    Descriptor = bytearray(DescriptorRecord)
     Start = RecordStart(Descriptor, 0, 0x7E)
     assert Start is not None
     Decoded = XmtValue(Descriptor, Start)
@@ -1304,19 +1367,20 @@ def TestNSDAWCFC() -> None:
     assert Descriptor[DescriptorCursor + 24] == 1
     Descriptor[DescriptorCursor + 24] = 0
     assert ParseNurbsSurfaceRecord(bytes(Descriptor), 0) is None
-    DescriptorOffset = Payload.find(Surface.attributes["descriptor_record"])
+    DescriptorOffset = Payload.find(DescriptorRecord)
     assert DescriptorOffset >= 0
     CorruptedDescriptor = bytearray(Payload)
     CorruptedDescriptor[DescriptorOffset : DescriptorOffset + len(Descriptor)] = (
         Descriptor
     )
     assert DecodeBrepModel(CorruptedDescriptor) is None
-    Control = bytearray(Surface.attributes["control_record"])
+    ControlRecord = GetBytes(Surface.attributes, "control_record")
+    Control = bytearray(ControlRecord)
     Fields = ArrayRecordFields(Control, 0, 0x2D)
     assert Fields is not None
     ValuesOffset = Fields[2]
     Control[ValuesOffset + 24 : ValuesOffset + 32] = bytes(8)
-    ControlOffset = Payload.find(Surface.attributes["control_record"])
+    ControlOffset = Payload.find(ControlRecord)
     assert ControlOffset >= 0
     CorruptedControl = bytearray(Payload)
     CorruptedControl[ControlOffset : ControlOffset + len(Control)] = Control

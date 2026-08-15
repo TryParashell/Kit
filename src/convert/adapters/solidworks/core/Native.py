@@ -1957,11 +1957,11 @@ def EncodeNative(DocValue: CadDocument, ModelName: str) -> NativePart:
         )
     Authored = Canonical(SourceAuthored, ObjectIds, DocValue)
     Identity = NativeIdentityA(DocValue, ModelName)
-    SystemFeatures = {
-        int(Feature.attributes["native_object_id"]): Feature
-        for Feature in DocValue.feature_timeline
-        if IsNativeSystem(Feature)
-    }
+    SystemFeatures: dict[int, FeatureStep] = {}
+    for Feature in DocValue.feature_timeline:
+        NativeObjectId = Feature.attributes.get("native_object_id")
+        if IsNativeSystem(Feature) and isinstance(NativeObjectId, int):
+            SystemFeatures[NativeObjectId] = Feature
     BaseValue = tuple(
         (
             WriteObject(
@@ -2648,7 +2648,7 @@ def ResolveCutData(
     elif CutCodes[1] == 0:
         if len(CutObject.dimensions) != 1:
             return None
-        CutDepth: float | None = CutObject.dimensions[0].value_mm
+        CutDepth = CutObject.dimensions[0].value_mm
         ProgramData = EncodeBossCutProgram()
         HeaderStamps = KBossCutHeaderStamps
     elif CutCodes == (1, 1):
@@ -5251,7 +5251,7 @@ def FinishPairMut(
     ):
         if ItemData.kind == "Extrusion":
             DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
+            DimensionValues: tuple[WriteDimension, ...] = (
                 ()
                 if DimensionValue is None
                 else (
@@ -5499,7 +5499,7 @@ def FinishCutMut(
     ):
         if ItemData.kind == "Extrusion":
             DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
+            DimensionValues: tuple[WriteDimension, ...] = (
                 Replace(
                     DimensionValue,
                     name="D1",
@@ -6937,7 +6937,6 @@ def FreeCadBossC(
         PadDimension is None
         or SpacingDimension is None
         or isinstance(ItemCount, bool)
-        or (not isinstance(ItemCount, int))
         or (not 2 <= ItemCount <= 1000)
         or (not MathValue.isfinite(SpacingDimension.value_mm))
         or (SpacingDimension.value_mm <= 0.0)
@@ -7178,7 +7177,6 @@ def FreeCadBossA(
         or (not MathValue.isfinite(float(AngleNumber)))
         or (not 0.0 < float(AngleNumber) <= 360.0)
         or isinstance(ItemCount, bool)
-        or (not isinstance(ItemCount, int))
         or (not 2 <= ItemCount <= 1000)
         or any(
             (
@@ -7872,8 +7870,10 @@ def FreeCadSingle(
 def IsFreecadParam(
     Param: Parameter,
     KindValue: ValueKind,
-    Expected: str | int | float | bool | None,
+    Expected: object,
 ) -> bool:
+    if Expected is not None and not isinstance(Expected, (str, int, float, bool)):
+        return False
     Value = Param.value
     if Value.kind is not KindValue:
         return False
@@ -8344,9 +8344,12 @@ def EncodeRectMut(
         for Entity in Selected
     ):
         return None
-    BoundsValue = Rectangle(
-        tuple(Entity.geometry for Entity in Selected if Entity is not None)
-    )
+    LineValues: list[LineGeom] = []
+    for Entity in Selected:
+        if Entity is None or not isinstance(Entity.geometry, LineGeom):
+            return None
+        LineValues.append(Entity.geometry)
+    BoundsValue = Rectangle(tuple(LineValues))
     if BoundsValue is None:
         return None
     Points = (
@@ -8378,7 +8381,12 @@ def EncodePolyMut(
         for Entity in Selected
     ):
         return None
-    LineData = tuple(Entity.geometry for Entity in Selected if Entity is not None)
+    LineValues: list[LineGeom] = []
+    for Entity in Selected:
+        if Entity is None or not isinstance(Entity.geometry, LineGeom):
+            return None
+        LineValues.append(Entity.geometry)
+    LineData = tuple(LineValues)
     PointData = LineLoopPoints(LineData)
     if PointData is None:
         return None
@@ -8566,7 +8574,7 @@ def EncodeExtrude(Feature: FeatureStep) -> bytes:
         if isinstance(Definition, ExtrusionFeature)
         else None
     )
-    Termination = {
+    TerminationCodes = {
         ExtrusionEndCondition.BLIND: 0,
         ExtrusionEndCondition.THROUGH_ALL: 1,
         ExtrusionEndCondition.UP_TO_FIRST: 2,
@@ -8575,7 +8583,12 @@ def EncodeExtrude(Feature: FeatureStep) -> bytes:
         ExtrusionEndCondition.UP_TO_SHAPE: 4,
         ExtrusionEndCondition.OFFSET_FROM_SURFACE: 5,
         ExtrusionEndCondition.MID_PLANE: 6,
-    }.get(Condition, 0)
+    }
+    Termination = (
+        TerminationCodes.get(Condition, 0)
+        if isinstance(Condition, ExtrusionEndCondition)
+        else 0
+    )
     DeclValue = ClassDecl("moEndSpec_c")
     return b"".join(
         (
@@ -9121,7 +9134,7 @@ def EncodeNativeAsm(
 
 
 # root parsing isolates native header identity and log count validation
-def ReadHeaderRoot(DataValue: bytes):
+def ReadHeaderRoot(DataValue: bytes) -> tuple[str, int, int]:
     ClassName, Offset = ReadClass(DataValue, 0)
     if ClassName != "moHeader_c":
         raise SldprtFormatError("native SOLIDWORKS header class is not moHeader_c")
@@ -9146,7 +9159,9 @@ def ReadHeaderRoot(DataValue: bytes):
 
 
 # object parsing isolates native header action and reference extraction
-def ReadHeaderObjs(DataValue: bytes, Offset: int, LogCount: int):
+def ReadHeaderObjs(
+    DataValue: bytes, Offset: int, LogCount: int
+) -> tuple[str, tuple[tuple[int, str], ...], int]:
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "moLogs_c":
         raise SldprtFormatError("native SOLIDWORKS header log record is missing")
@@ -9190,7 +9205,7 @@ def ReadHeaderObjs(DataValue: bytes, Offset: int, LogCount: int):
 
 
 # tail parsing isolates native document path and configuration extraction
-def ReadHeaderTail(DataValue: bytes, Offset: int):
+def ReadHeaderTail(DataValue: bytes, Offset: int) -> tuple[str, str]:
     Offset += 14
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "moExtObject_c":

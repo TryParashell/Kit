@@ -13,6 +13,7 @@ import itertools as Itertools
 import os as OsModule
 from pathlib import Path as PathValue, PureWindowsPath
 import subprocess as Subprocess
+from typing import cast as CastValue
 import xml.etree.ElementTree as ElementTree
 import zipfile as Zipfile
 
@@ -305,23 +306,32 @@ def TestRAPMMAMT(
     assert [len(Group.MateIds) for Group in Assembly.MateGroups] == [6, 2, 9]
     for Instance in Assembly.Instances:
         Native = Instance.Attributes["native_transform"]
+        if not isinstance(Native, tuple):
+            raise TypeError("native transform must contain sixteen values")
+        NativeItems = CastValue(tuple[object, ...], Native)
+        if len(NativeItems) != 16 or not all(
+            isinstance(Value, (int, float)) and not isinstance(Value, bool)
+            for Value in NativeItems
+        ):
+            raise TypeError("native transform must contain sixteen numeric values")
+        NativeValues = CastValue(tuple[float, ...], NativeItems)
         Expected = (
-            Native[0],
-            Native[4],
-            Native[8],
-            Native[12] * 1000.0,
-            Native[1],
-            Native[5],
-            Native[9],
-            Native[13] * 1000.0,
-            Native[2],
-            Native[6],
-            Native[10],
-            Native[14] * 1000.0,
+            NativeValues[0],
+            NativeValues[4],
+            NativeValues[8],
+            NativeValues[12] * 1000.0,
+            NativeValues[1],
+            NativeValues[5],
+            NativeValues[9],
+            NativeValues[13] * 1000.0,
+            NativeValues[2],
+            NativeValues[6],
+            NativeValues[10],
+            NativeValues[14] * 1000.0,
             0.0,
             0.0,
             0.0,
-            Native[15],
+            NativeValues[15],
         )
         assert Instance.Transform.Values == Pytest.approx(Expected, abs=1e-12)
     assert max(

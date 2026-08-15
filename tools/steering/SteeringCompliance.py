@@ -229,9 +229,11 @@ def CheckDefs(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding]:
                 ArgFinding = CheckName(SourcePath, ArgNode, ArgNode.arg, "argument")
                 if ArgFinding is not None:
                     FindingList.append(ArgFinding)
-            for ArgNode in (AstNode.args.vararg, AstNode.args.kwarg):
-                if ArgNode is not None:
-                    ArgFinding = CheckName(SourcePath, ArgNode, ArgNode.arg, "argument")
+            for OptionalArg in (AstNode.args.vararg, AstNode.args.kwarg):
+                if OptionalArg is not None:
+                    ArgFinding = CheckName(
+                        SourcePath, OptionalArg, OptionalArg.arg, "argument"
+                    )
                     if ArgFinding is not None:
                         FindingList.append(ArgFinding)
         if FindingInfo is not None:
@@ -507,7 +509,7 @@ def FindReasonSites(
 ) -> list[tuple[int, int, str]]:
     SiteMap: dict[tuple[int, int], str] = {}
     for AstNode in AstLib.walk(SyntaxTree):
-        TargetNode = None
+        TargetNode: AstLib.stmt | None = None
         KindText = "declaration"
         if isinstance(
             AstNode, (AstLib.ClassDef, AstLib.FunctionDef, AstLib.AsyncFunctionDef)
@@ -993,6 +995,7 @@ def CheckSplits(
     ParentMap = BuildParents(SyntaxTree)
     FindingList: list[Finding] = []
     for AstNode in AstLib.walk(SyntaxTree):
+        NameText: str | None
         if isinstance(
             AstNode, (AstLib.ClassDef, AstLib.FunctionDef, AstLib.AsyncFunctionDef)
         ):

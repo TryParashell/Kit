@@ -1294,7 +1294,7 @@ def SketchPlaneId(DataValue: bytes | bytearray) -> int | None:
     if Chain is None:
         return None
     for Offset in range(Chain, min(Chain + 320, len(BlobValue) - 14)):
-        Choice = Struct.unpack_from("<I", BlobValue, Offset)[0]
+        Choice = int(Struct.unpack_from("<I", BlobValue, Offset)[0])
         if Choice not in {2, 3, 4}:
             continue
         AxisValue = Struct.unpack_from("<I", BlobValue, Offset + 10)[0]
@@ -1975,10 +1975,10 @@ def VerifyProfile(
     ):
         raise SldprtFormatError(f"patched feature {Ordinal} corners do not verify")
     if EditValue.radii_mm is not None:
-        for Index, (ArcValue, RadiusMm) in enumerate(
+        for Index, (ArcData, RadiusMm) in enumerate(
             zip(After.arcs, EditValue.radii_mm, strict=True)
         ):
-            VerifyArc(ArcValue, Before.arcs[Index], RadiusMm, Index)
+            VerifyArc(ArcData, Before.arcs[Index], RadiusMm, Index)
     if EditValue.arc_centres_mm is not None and (
         not IsMatches(
             tuple((ArcValue.centre_mm for ArcValue in After.arcs)),
@@ -2046,7 +2046,7 @@ def IsDepthCopies(Patched: bytes, Feature: FeatureLayout, DepthMm: float) -> boo
 def ReadDouble(BlobValue: bytes, Offset: int) -> float | None:
     if Offset < 0 or Offset + 8 > len(BlobValue):
         return None
-    Value = Struct.unpack_from("<d", BlobValue, Offset)[0]
+    Value = float(Struct.unpack_from("<d", BlobValue, Offset)[0])
     if not MathValue.isfinite(Value):
         return None
     return Value

@@ -68,14 +68,14 @@ def CheckReadFilter() -> None:
     )
     SourceData = ReplaceValue(
         BuildSource(),
-        Configurations=(
+        configurations=(
             Configuration("configuration:first", "Shared", True, None, (), (), {}),
             Configuration("configuration:second", "Second", False, None, (), (), {}),
             Configuration("configuration:third", "Shared", False, None, (), (), {}),
         ),
-        Meshes=(MeshData,),
-        BrepPayloads=(BrepData, MeshPayload),
-        Capabilities=frozenset(
+        meshes=(MeshData,),
+        brep_payloads=(BrepData, MeshPayload),
+        capabilities=frozenset(
             {
                 Capability.KBrep,
                 Capability.KTessellation,

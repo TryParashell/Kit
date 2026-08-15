@@ -23,7 +23,7 @@ def CheckExactBrep(TmpPath: FilePath) -> None:
     SourceData = OpenLegacy(KSamplePath)
     DocumentData = ReplaceData(
         SourceData,
-        BrepPayloads=(
+        brep_payloads=(
             *SourceData.BrepPayloads,
             BrepPayload(
                 "history",
@@ -84,7 +84,7 @@ def CheckDeviceBrep(TmpPath: FilePath) -> None:
     )
     DocumentData = ReplaceData(
         OpenLegacy(KSamplePath),
-        BrepPayloads=(PayloadData,),
+        brep_payloads=(PayloadData,),
     )
     assert ExtractLegacy(DocumentData, TmpPath)[0].name == "_CON.x_b"
 

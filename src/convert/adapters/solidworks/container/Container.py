@@ -147,9 +147,7 @@ class SldprtArchive:
 
     # compatibility callers require the conventional archive open spelling
     @classmethod
-    def open(
-        cls: type[SldprtArchive], SourcePath: str | FilePath
-    ) -> SldprtArchive:
+    def open(cls: type[SldprtArchive], SourcePath: str | FilePath) -> SldprtArchive:
         return cls.OpenAction(SourcePath)
 
     # compatibility callers require stream lookup through the conventional spelling

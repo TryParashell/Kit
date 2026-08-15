@@ -47,7 +47,7 @@ def CheckSrcAlias() -> None:
     SourceData = BuildSource()
     SourceData = ReplaceValue(
         SourceData,
-        Source=ReplaceValue(SourceData.Source, FormatId="FORMAT.ALIAS"),
+        source=ReplaceValue(SourceData.Source, FormatId="FORMAT.ALIAS"),
     )
     ResultData = ConversionEngine(RegistryData).convert(
         SourceData.ToJson().encode("utf-8"),

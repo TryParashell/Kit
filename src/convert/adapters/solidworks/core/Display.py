@@ -113,7 +113,7 @@ def DecodeDisplay(DataValue: bytes) -> tuple[NativeDisplay, ...]:
         )
         Records.append((Offset, Value, SourcePath))
     Offsets = [Record[0] for Record in Records]
-    Grouped: list[list[NativeFace]] = list(map(list, ((),) * len(Records)))
+    Grouped: list[list[NativeFace]] = [[] for _ in Records]
     for FaceValue in Faces:
         Index = BisectRight(Offsets, FaceValue.offset) - 1
         if Index >= 0:

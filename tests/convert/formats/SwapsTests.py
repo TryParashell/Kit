@@ -266,8 +266,6 @@ def AssemblyS(Assembly: AssemblyData | None) -> AssemblySig | None:
     Documents: list[tuple[str, DocumentSig]] = []
     for Component in Assembly.Documents:
         Embedded = Component.Document
-        if not isinstance(Embedded, CadDocument):
-            raise TypeError("assembly component document must be a CadDocument")
         Documents.append((Component.EntityId, DocumentS(Embedded)))
     return AssemblySig(
         Assembly.RootDefinitionId,

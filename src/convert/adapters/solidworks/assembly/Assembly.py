@@ -34,7 +34,7 @@ from convert.adapters.solidworks.container.Container import (
     SldprtFormatError,
 )
 from convert.adapters.solidworks.core.Display import (
-    NativeDisplayComponent,
+    NativeDisplayComponent as NativeDisplayComponent,
     NativeTessellationFace as NativeTessellationFace,
     decode_display_lists as DecodeDisplayLists,
     decode_tessellation_faces as DecodeTessellationFaces,
@@ -1698,9 +1698,7 @@ def GetEntityRefs(Entity: MateEntity) -> tuple[str, ...] | None:
         if isinstance(Persistent, tuple)
         else ()
     )
-    if PersistentValues and all(
-        (isinstance(Value, str) for Value in PersistentValues)
-    ):
+    if PersistentValues and all((isinstance(Value, str) for Value in PersistentValues)):
         References = CastValue(tuple[str, ...], Persistent)
     elif Entity.source_entity_id:
         References = (Entity.source_entity_id,)
@@ -2025,9 +2023,7 @@ def ParseMatePlan(DataValue: bytes, Stream: str) -> MateParsePlan:
         raise SldprtFormatError(
             f"mate count mismatch in {Stream}: expected {DeclaredCount}, decoded {len(Candidates)}"
         )
-    Starts = tuple(
-        (MateRecordStart(DataValue, Offset) for Offset, _, _ in Candidates)
-    )
+    Starts = tuple((MateRecordStart(DataValue, Offset) for Offset, _, _ in Candidates))
     return MateParsePlan(NativeId, DeclaredCount, tuple(Candidates), Starts)
 
 

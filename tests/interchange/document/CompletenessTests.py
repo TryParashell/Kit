@@ -311,9 +311,12 @@ def CheckLegacyCaps() -> None:
 
 # historical enum attributes stay available without becoming duplicate enum members
 def CheckOldEnums() -> None:
-    assert Capability.ROUNDTRIP_METADATA is Capability.KRoundtripMeta
-    assert ComponentKind.ASSEMBLY is ComponentKind.KAssembly
-    assert PayloadRole.BREP is PayloadRole.KBrep
+    LegacyCapability: object = Capability.KRoundtripMeta
+    LegacyComponent: object = ComponentKind.KAssembly
+    LegacyPayload: object = PayloadRole.KBrep
+    assert Capability.ROUNDTRIP_METADATA is LegacyCapability
+    assert ComponentKind.ASSEMBLY is LegacyComponent
+    assert PayloadRole.BREP is LegacyPayload
 
 
 # historical json options remain accepted because document consumers upgrade independently
