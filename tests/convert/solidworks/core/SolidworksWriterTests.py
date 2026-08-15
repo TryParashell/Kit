@@ -1713,30 +1713,18 @@ def TestFPPWTENF() -> None:
             ItemData.kind,
             ItemData.sketch_id,
             ItemData.reversed,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            False,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Cut-Extrude1",
-            "cut",
-            33,
-            True,
-            PytestLib.approx(6.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26, False),
+        (40, "Cut-Extrude1", "cut", 33, True),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(6.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
     assert ResultData.application_usable is True
     assert ResultData.metadata["native_brep"] == "feature-rebuilt"
     assert ResultData.metadata["native_geometry"] is True
@@ -1777,28 +1765,18 @@ def TestFPPWTENB() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Boss-Extrude2",
-            "boss",
-            33,
-            PytestLib.approx(25.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (40, "Boss-Extrude2", "boss", 33),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(25.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
     assert [ItemData.kind for ItemData in NativeData.operations] == ["join", "join"]
     assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 40]
     TransferData = {
@@ -1839,31 +1817,22 @@ def TestFPGWENRC() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.angle_radians,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            None,
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            39,
-            "Cut-Revolve1",
-            "revolve-cut",
-            33,
-            None,
-            PytestLib.approx(2.0 * 3.141592653589793),
-            PytestLib.approx((-25.0, 0.0, 25.0, 3.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (39, "Cut-Revolve1", "revolve-cut", 33),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].angle_radians is None
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm is None
+    assert FeatureData[1].angle_radians == PytestLib.approx(
+        2.0 * 3.141592653589793
+    )
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-25.0, 0.0, 25.0, 3.0))
     assert [ItemData.kind for ItemData in NativeData.operations] == [
         "join",
         "revolve_cut",
@@ -1952,36 +1921,21 @@ def TestFPTPWTENF() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Cut-Extrude1",
-            "cut",
-            33,
-            PytestLib.approx(6.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
-        (
-            47,
-            "Cut-Extrude2",
-            "cut",
-            41,
-            PytestLib.approx(5.0),
-            PytestLib.approx((15.0, -5.0, 25.0, 5.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (40, "Cut-Extrude1", "cut", 33),
+        (47, "Cut-Extrude2", "cut", 41),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(6.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
+    assert FeatureData[2].depth_mm == PytestLib.approx(5.0)
+    assert FeatureData[2].bounds_mm == PytestLib.approx((15.0, -5.0, 25.0, 5.0))
     assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 40, 47]
     assert [ItemData.length_mm for ItemData in NativeData.operations] == [
         PytestLib.approx(15.0),
@@ -2031,44 +1985,24 @@ def TestFPTPWFENF() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Cut-Extrude1",
-            "cut",
-            33,
-            PytestLib.approx(6.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
-        (
-            47,
-            "Cut-Extrude2",
-            "cut",
-            41,
-            PytestLib.approx(5.0),
-            PytestLib.approx((15.0, -5.0, 25.0, 5.0)),
-        ),
-        (
-            54,
-            "Cut-Extrude3",
-            "cut",
-            48,
-            PytestLib.approx(4.0),
-            PytestLib.approx((-25.0, -4.0, -17.0, 4.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (40, "Cut-Extrude1", "cut", 33),
+        (47, "Cut-Extrude2", "cut", 41),
+        (54, "Cut-Extrude3", "cut", 48),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(6.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
+    assert FeatureData[2].depth_mm == PytestLib.approx(5.0)
+    assert FeatureData[2].bounds_mm == PytestLib.approx((15.0, -5.0, 25.0, 5.0))
+    assert FeatureData[3].depth_mm == PytestLib.approx(4.0)
+    assert FeatureData[3].bounds_mm == PytestLib.approx((-25.0, -4.0, -17.0, 4.0))
     assert [ItemData.object_id for ItemData in NativeData.operations] == [
         32,
         40,
