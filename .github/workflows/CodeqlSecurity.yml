@@ -16,10 +16,7 @@ name: CodeQL security and quality
     branches:
       - main
 
-permissions:
-  actions: read
-  contents: read
-  security-events: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,6 +27,9 @@ jobs:
     name: Analyze ${{ matrix.language }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      actions: read # CodeQL reads workflow metadata for analysis.
+      contents: read
     strategy:
       fail-fast: false
       matrix:

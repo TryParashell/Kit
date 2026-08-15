@@ -9,7 +9,7 @@
 name: SPDX headers
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -54,7 +54,7 @@ jobs:
           persist-credentials: false
           ref: >-
             ${{
-              github.event_name == 'pull_request_target' &&
+              github.event_name == 'pull_request' &&
               github.event.pull_request.base.sha ||
               github.sha
             }}
@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$EVENT_NAME" in
-            pull_request_target)
+            pull_request)
               BaseSha="$PULL_BASE_SHA"
               HeadSha="$PULL_HEAD_SHA"
               ;;
@@ -120,7 +120,7 @@ jobs:
 
       # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout pull request head as detached data
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -144,7 +144,7 @@ jobs:
           if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             exit 1
           fi
-          if [ "$EVENT_NAME" = "pull_request_target" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             SourceRoot="$GITHUB_WORKSPACE/SpdxHeadData"
             DataHead="$(git -C "$SourceRoot" rev-parse HEAD)"
             if [ "$DataHead" != "$HEAD_SHA" ]; then
@@ -166,7 +166,7 @@ jobs:
 
       - name: Restore remediation state for this head
         id: remediation-state
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ runner.temp }}/SpdxHeaderRemediation
@@ -196,12 +196,12 @@ jobs:
     if: >-
       needs.verify-headers.outputs.result == 'failure' &&
       needs.verify-headers.outputs.remediation-attempted != 'true' &&
-      github.event_name == 'pull_request_target' &&
+      github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: write # Pushes validated header-only repairs to same-repository branches.
     steps:
       # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout trusted workflow source
@@ -412,9 +412,11 @@ jobs:
             origin "HEAD:$HEAD_TARGET"
 
       - name: Persist the remediation attempt for this head
+        env:
+          REPAIR_HEAD: ${{ steps.repair.outputs.head }}
         run: |
           mkdir -p "$RUNNER_TEMP/SpdxHeaderRemediation"
-          printf '%s\n' "${{ steps.repair.outputs.head }}" \
+          printf '%s\n' "$REPAIR_HEAD" \
             > "$RUNNER_TEMP/SpdxHeaderRemediation/Attempt"
 
       - name: Save remediation state for this head
