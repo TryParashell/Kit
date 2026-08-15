@@ -14,7 +14,7 @@ def GetShellErrors(
     ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for ShellValue in ModelValue.Shells:
+    for ShellValue in ModelValue.shells:
         if not ShellValue.FaceUseIds:
             ErrorValues.append(f"B-rep shell {ShellValue.EntityId} is empty")
         for FaceUseId in ShellValue.FaceUseIds:
@@ -22,7 +22,7 @@ def GetShellErrors(
                 ErrorValues.append(
                     f"B-rep shell {ShellValue.EntityId} references a missing face use"
                 )
-    for ShellUseValue in ModelValue.ShellUses:
+    for ShellUseValue in ModelValue.shell_uses:
         if ShellUseValue.ShellId not in IdentitySets["Shells"]:
             ErrorValues.append(
                 f"B-rep shell use {ShellUseValue.EntityId} references a missing shell"

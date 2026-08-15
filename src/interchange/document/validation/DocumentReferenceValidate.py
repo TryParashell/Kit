@@ -18,16 +18,16 @@ def GetConfigErrs(
     ErrorValues: list[str] = []
     for ConfigValue in DocumentValue.configurations:
         if (
-            ConfigValue.ParentId
-            and ConfigValue.ParentId not in IdentitySets["configurations"]
+            ConfigValue.parent_id
+            and ConfigValue.parent_id not in IdentitySets["configurations"]
         ):
             ErrorValues.append(
-                f"configuration {ConfigValue.EntityId} has missing parent"
+                f"configuration {ConfigValue.id} has missing parent"
             )
-        for OverrideValue in ConfigValue.Overrides:
-            if OverrideValue.ParameterId not in IdentitySets["parameters"]:
+        for OverrideValue in ConfigValue.overrides:
+            if OverrideValue.parameter_id not in IdentitySets["parameters"]:
                 ErrorValues.append(
-                    f"configuration {ConfigValue.EntityId} references missing parameter {OverrideValue.ParameterId}"
+                    f"configuration {ConfigValue.id} references missing parameter {OverrideValue.parameter_id}"
                 )
     return tuple(ErrorValues)
 
@@ -38,11 +38,11 @@ def GetParamErrs(
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for ParamValue in DocumentValue.parameters:
-        if ParamValue.Expression:
-            for ReferenceValue in ParamValue.Expression.ParameterIds:
+        if ParamValue.expression:
+            for ReferenceValue in ParamValue.expression.parameter_ids:
                 if ReferenceValue not in IdentitySets["parameters"]:
                     ErrorValues.append(
-                        f"parameter {ParamValue.EntityId} references missing parameter {ReferenceValue}"
+                        f"parameter {ParamValue.id} references missing parameter {ReferenceValue}"
                     )
     return tuple(ErrorValues)
 
@@ -54,18 +54,18 @@ def GetPlaneErrs(
     ErrorValues: list[str] = []
     for PlaneValue in DocumentValue.support_planes:
         if (
-            PlaneValue.SupportSelectionId
-            and PlaneValue.SupportSelectionId not in IdentitySets["selections"]
+            PlaneValue.support_selection_id
+            and PlaneValue.support_selection_id not in IdentitySets["selections"]
         ):
             ErrorValues.append(
-                f"plane {PlaneValue.EntityId} references missing selection"
+                f"plane {PlaneValue.id} references missing selection"
             )
         if (
-            PlaneValue.OffsetParameterId
-            and PlaneValue.OffsetParameterId not in IdentitySets["parameters"]
+            PlaneValue.offset_parameter_id
+            and PlaneValue.offset_parameter_id not in IdentitySets["parameters"]
         ):
             ErrorValues.append(
-                f"plane {PlaneValue.EntityId} references missing offset parameter"
+                f"plane {PlaneValue.id} references missing offset parameter"
             )
     return tuple(ErrorValues)
 
@@ -76,23 +76,23 @@ def GetSketchErrs(
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for SketchValue in DocumentValue.sketches:
-        if SketchValue.SupportPlaneId not in IdentitySets["support_planes"]:
+        if SketchValue.support_plane_id not in IdentitySets["support_planes"]:
             ErrorValues.append(
-                f"sketch {SketchValue.EntityId} references missing plane"
+                f"sketch {SketchValue.id} references missing plane"
             )
-        EntityIds = {EntityValue.EntityId for EntityValue in SketchValue.Entities}
-        for RelationValue in SketchValue.Constraints:
-            for ReferenceValue in RelationValue.References:
-                if ReferenceValue.EntityId not in EntityIds:
+        EntityIds = {EntityValue.id for EntityValue in SketchValue.entities}
+        for RelationValue in SketchValue.constraints:
+            for ReferenceValue in RelationValue.references:
+                if ReferenceValue.entity_id not in EntityIds:
                     ErrorValues.append(
-                        f"constraint {RelationValue.EntityId} references missing entity {ReferenceValue.EntityId}"
+                        f"constraint {RelationValue.id} references missing entity {ReferenceValue.entity_id}"
                     )
             if (
-                RelationValue.ParameterId
-                and RelationValue.ParameterId not in IdentitySets["parameters"]
+                RelationValue.parameter_id
+                and RelationValue.parameter_id not in IdentitySets["parameters"]
             ):
                 ErrorValues.append(
-                    f"constraint {RelationValue.EntityId} references missing parameter"
+                    f"constraint {RelationValue.id} references missing parameter"
                 )
     return tuple(ErrorValues)
 

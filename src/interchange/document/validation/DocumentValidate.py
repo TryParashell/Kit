@@ -41,7 +41,7 @@ def GetDocErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
         ErrorValues.append("document capabilities must be Capability values")
     IdentitySets: dict[str, set[str]] = {}
     for NameValue, LabelText, ItemValues in GetIdGroups(DocumentValue):
-        IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
+        IdValues = [ItemValue.id for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
         IdentitySets[NameValue] = set(IdValues)
@@ -54,7 +54,7 @@ def GetDocErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
         else:
             ErrorValues.extend(
                 BrepValue.GetErrors(
-                    frozenset(BodyValue.EntityId for BodyValue in DocumentValue.bodies)
+                    frozenset(BodyValue.id for BodyValue in DocumentValue.bodies)
                 )
             )
     if DocumentValue.assembly is not None:

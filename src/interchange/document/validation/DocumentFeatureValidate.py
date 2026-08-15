@@ -17,45 +17,45 @@ def GetFeatureErrs(
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     FeatureOrders = {
-        FeatureValue.EntityId: FeatureValue.Order
+        FeatureValue.id: FeatureValue.order
         for FeatureValue in DocumentValue.feature_timeline
     }
     if len(FeatureOrders) != len(DocumentValue.feature_timeline):
         ErrorValues.append("feature ids are not unique")
     if len(
-        {FeatureValue.Order for FeatureValue in DocumentValue.feature_timeline}
+        {FeatureValue.order for FeatureValue in DocumentValue.feature_timeline}
     ) != len(DocumentValue.feature_timeline):
         ErrorValues.append("feature order values are not unique")
     for FeatureValue in DocumentValue.feature_timeline:
         if (
-            FeatureValue.SketchId
-            and FeatureValue.SketchId not in IdentitySets["sketches"]
+            FeatureValue.sketch_id
+            and FeatureValue.sketch_id not in IdentitySets["sketches"]
         ):
             ErrorValues.append(
-                f"feature {FeatureValue.EntityId} references missing sketch"
+                f"feature {FeatureValue.id} references missing sketch"
             )
-        for InputId in FeatureValue.InputFeatureIds:
+        for InputId in FeatureValue.input_feature_ids:
             if InputId not in FeatureOrders:
                 ErrorValues.append(
-                    f"feature {FeatureValue.EntityId} references missing input {InputId}"
+                    f"feature {FeatureValue.id} references missing input {InputId}"
                 )
-            elif FeatureOrders[InputId] >= FeatureValue.Order:
+            elif FeatureOrders[InputId] >= FeatureValue.order:
                 ErrorValues.append(
-                    f"feature {FeatureValue.EntityId} has a forward dependency"
+                    f"feature {FeatureValue.id} has a forward dependency"
                 )
-        for ParameterId in FeatureValue.ParameterIds:
+        for ParameterId in FeatureValue.parameter_ids:
             if ParameterId not in IdentitySets["parameters"]:
                 ErrorValues.append(
-                    f"feature {FeatureValue.EntityId} references missing parameter"
+                    f"feature {FeatureValue.id} references missing parameter"
                 )
-        for SelectionId in FeatureValue.SelectionIds:
+        for SelectionId in FeatureValue.selection_ids:
             if SelectionId not in IdentitySets["selections"]:
                 ErrorValues.append(
-                    f"feature {FeatureValue.EntityId} references missing selection"
+                    f"feature {FeatureValue.id} references missing selection"
                 )
     for BodyValue in DocumentValue.bodies:
-        if BodyValue.FinalFeatureId not in IdentitySets["feature_timeline"]:
+        if BodyValue.final_feature_id not in IdentitySets["feature_timeline"]:
             ErrorValues.append(
-                f"body {BodyValue.EntityId} references missing final feature"
+                f"body {BodyValue.id} references missing final feature"
             )
     return tuple(ErrorValues)

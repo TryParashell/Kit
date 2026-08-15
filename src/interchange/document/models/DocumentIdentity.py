@@ -21,7 +21,10 @@ from interchange.serialization.Wire import GetWireField
 # identity validation needs only one stable member shared by every indexed model
 @RuntimeCheck
 class Identified(TypeProtocol):
-    EntityId: str
+
+    # immutable record identities remain readable during reflective collection validation
+    @property
+    def id(self) -> str: ...
 
 
 # readable duplicate diagnostics need labels derived consistently from model types

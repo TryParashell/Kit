@@ -30,37 +30,56 @@ def ValidateFeature(SourceValue: object) -> FeatureDef | None:
 
 # canonical typing needs an inherited key while public reflection exposes historical fields
 class FeatureHintBase(ModelBase):
-    Definition: FeatureDef | None
+    definition: FeatureDef | None
     if TYPE_CHECKING:
-        definition: ClassVar[FeatureDef | None]
+        Definition: ClassVar[FeatureDef | None]
 
 
 # configuration state retains suppression and parameter changes without duplicate features
 @MakeDataClass(frozen=True, slots=True)
 class FeatureCfgState(ModelBase):
-    ConfigurationId: str
-    IsSuppressed: bool = False
-    ParamOverrideIds: tuple[str, ...] = ()
+    configuration_id: str
+    suppressed: bool = False
+    parameter_override_ids: tuple[str, ...] = ()
+    if TYPE_CHECKING:
+        ConfigurationId: ClassVar[str]
+        IsSuppressed: ClassVar[bool]
+        ParamOverrideIds: ClassVar[tuple[str, ...]]
 
 
 # feature steps preserve ordered dependencies and definitions for editable translation
 @MakeDataClass(frozen=True, slots=True)
 class FeatureStep(FeatureHintBase):
-    EntityId: str
-    EntityName: str
-    EntityKind: FeatureKind | str
-    Order: int
-    InputFeatureIds: tuple[str, ...] = ()
-    SketchId: str | None = None
-    ParameterIds: tuple[str, ...] = ()
-    Operation: BooleanOp | str | None = None
-    Definition: FeatureDef | None = None
-    SelectionIds: tuple[str, ...] = ()
-    IsSuppressed: bool = False
-    ConfigStates: tuple[FeatureCfgState, ...] = ()
-    Provenance: Provenance | None = None
-    Attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    id: str
+    name: str
+    kind: FeatureKind | str
+    order: int
+    input_feature_ids: tuple[str, ...] = ()
+    sketch_id: str | None = None
+    parameter_ids: tuple[str, ...] = ()
+    operation: BooleanOp | str | None = None
+    definition: FeatureDef | None = None
+    selection_ids: tuple[str, ...] = ()
+    suppressed: bool = False
+    configuration_states: tuple[FeatureCfgState, ...] = ()
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        EntityKind: ClassVar[FeatureKind | str]
+        Order: ClassVar[int]
+        InputFeatureIds: ClassVar[tuple[str, ...]]
+        SketchId: ClassVar[str | None]
+        ParameterIds: ClassVar[tuple[str, ...]]
+        Operation: ClassVar[BooleanOp | str | None]
+        Definition: ClassVar[FeatureDef | None]
+        SelectionIds: ClassVar[tuple[str, ...]]
+        IsSuppressed: ClassVar[bool]
+        ConfigStates: ClassVar[tuple[FeatureCfgState, ...]]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]
 
     # invalid definitions must fail before corrupt feature records propagate
     def __post_init__(self) -> None:
-        ValidateFeature(self.Definition)
+        ValidateFeature(self.definition)

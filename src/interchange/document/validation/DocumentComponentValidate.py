@@ -18,20 +18,20 @@ def GetDocLinkErrs(
     DocumentValue: CadDocument, AssemblyValue: AssemblyData
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for ItemValue in AssemblyValue.Documents:
-        NestedDocument = GetDocument(ItemValue.Document)
+    for ItemValue in AssemblyValue.documents:
+        NestedDocument = GetDocument(ItemValue.document)
         if NestedDocument is None:
             ErrorValues.append(
-                f"component document {ItemValue.EntityId} does not contain a CadDocument"
+                f"component document {ItemValue.id} does not contain a CadDocument"
             )
         elif NestedDocument is DocumentValue:
             ErrorValues.append(
-                f"component document {ItemValue.EntityId} contains its owner"
+                f"component document {ItemValue.id} contains its owner"
             )
         else:
             ErrorValues.extend(
-                f"component document {ItemValue.EntityId}: {ErrorText}"
-                for ErrorText in NestedDocument.GetErrors()
+                f"component document {ItemValue.id}: {ErrorText}"
+                for ErrorText in NestedDocument.validate()
             )
     return tuple(ErrorValues)
 
@@ -43,26 +43,26 @@ def GetDefLinkErrs(
     DocumentValues: TypeMap[str, CadDocument],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    MeshById = {ItemValue.EntityId: ItemValue for ItemValue in DocumentValue.meshes}
-    for DefinitionValue in AssemblyValue.Definitions:
-        for MeshEntityId in DefinitionValue.MeshIds:
+    MeshById = {ItemValue.id: ItemValue for ItemValue in DocumentValue.meshes}
+    for DefinitionValue in AssemblyValue.definitions:
+        for MeshEntityId in DefinitionValue.mesh_ids:
             if MeshEntityId not in MeshById:
                 ErrorValues.append(
-                    f"component definition {DefinitionValue.EntityId} references missing mesh {MeshEntityId}"
+                    f"component definition {DefinitionValue.id} references missing mesh {MeshEntityId}"
                 )
         if (
-            DefinitionValue.DocumentId
-            and DefinitionValue.DocumentId not in DocumentValues
+            DefinitionValue.document_id
+            and DefinitionValue.document_id not in DocumentValues
         ):
             ErrorValues.append(
-                f"component definition {DefinitionValue.EntityId} references missing document"
+                f"component definition {DefinitionValue.id} references missing document"
             )
             continue
-        TargetDocument = DocumentValues.get(DefinitionValue.DocumentId, DocumentValue)
-        TargetBodyIds = {BodyValue.EntityId for BodyValue in TargetDocument.bodies}
-        for BodyId in DefinitionValue.BodyIds:
+        TargetDocument = DocumentValues.get(DefinitionValue.document_id, DocumentValue)
+        TargetBodyIds = {BodyValue.id for BodyValue in TargetDocument.bodies}
+        for BodyId in DefinitionValue.body_ids:
             if BodyId not in TargetBodyIds:
                 ErrorValues.append(
-                    f"component definition {DefinitionValue.EntityId} references missing body {BodyId}"
+                    f"component definition {DefinitionValue.id} references missing body {BodyId}"
                 )
     return tuple(ErrorValues)

@@ -35,36 +35,36 @@ def GetMateEntErrs(
     IdentitySets: TypeMap[str, set[str]],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for EntityValue in AssemblyValue.MateEntities:
-        if EntityValue.OwnerDefinitionId not in Definitions:
+    for EntityValue in AssemblyValue.mate_entities:
+        if EntityValue.owner_definition_id not in Definitions:
             ErrorValues.append(
-                f"mate entity {EntityValue.EntityId} references missing owner definition"
+                f"mate entity {EntityValue.id} references missing owner definition"
             )
             continue
-        CurrentDefId = EntityValue.OwnerDefinitionId
+        CurrentDefId = EntityValue.owner_definition_id
         IsValidPath = True
-        for InstanceId in EntityValue.InstancePath:
+        for InstanceId in EntityValue.instance_path:
             InstanceValue = Instances.get(InstanceId)
             if InstanceValue is None:
                 ErrorValues.append(
-                    f"mate entity {EntityValue.EntityId} references missing instance {InstanceId}"
+                    f"mate entity {EntityValue.id} references missing instance {InstanceId}"
                 )
                 IsValidPath = False
                 break
-            if InstanceValue.OwnerDefinitionId != CurrentDefId:
+            if InstanceValue.owner_definition_id != CurrentDefId:
                 ErrorValues.append(
-                    f"mate entity {EntityValue.EntityId} has a disconnected instance path"
+                    f"mate entity {EntityValue.id} has a disconnected instance path"
                 )
                 IsValidPath = False
                 break
-            CurrentDefId = InstanceValue.DefinitionId
-        if EntityValue.Frame is not None and not EntityValue.Frame.IsFinite():
+            CurrentDefId = InstanceValue.definition_id
+        if EntityValue.frame is not None and not EntityValue.frame.IsFinite():
             ErrorValues.append(
-                f"mate entity {EntityValue.EntityId} has an invalid frame"
+                f"mate entity {EntityValue.id} has an invalid frame"
             )
-        if EntityValue.Radius is not None and not IsValidRadius(EntityValue.Radius):
+        if EntityValue.radius is not None and not IsValidRadius(EntityValue.radius):
             ErrorValues.append(
-                f"mate entity {EntityValue.EntityId} has an invalid radius"
+                f"mate entity {EntityValue.id} has an invalid radius"
             )
         ErrorValues.extend(
             GetSelectErrors(
@@ -90,19 +90,19 @@ def GetSelectErrors(
     CurrentDefId: str,
     IsValidPath: bool,
 ) -> tuple[str, ...]:
-    if not EntityValue.SelectionId or not IsValidPath:
+    if not EntityValue.selection_id or not IsValidPath:
         return ()
     TargetDef = Definitions.get(CurrentDefId)
     TargetDocument: CadDocument | None = DocumentValue
-    if TargetDef is not None and TargetDef.DocumentId:
-        TargetDocument = DocumentValues.get(TargetDef.DocumentId)
+    if TargetDef is not None and TargetDef.document_id:
+        TargetDocument = DocumentValues.get(TargetDef.document_id)
     if TargetDocument is None:
         return ()
     TargetSelectIds = (
         IdentitySets["selections"]
         if TargetDocument is DocumentValue
-        else {SelectionValue.EntityId for SelectionValue in TargetDocument.selections}
+        else {SelectionValue.id for SelectionValue in TargetDocument.selections}
     )
-    if EntityValue.SelectionId not in TargetSelectIds:
-        return (f"mate entity {EntityValue.EntityId} references missing selection",)
+    if EntityValue.selection_id not in TargetSelectIds:
+        return (f"mate entity {EntityValue.id} references missing selection",)
     return ()

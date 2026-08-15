@@ -15,7 +15,7 @@ def GetFaceErrors(
     ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for FaceValue in ModelValue.Faces:
+    for FaceValue in ModelValue.faces:
         if FaceValue.SurfaceId not in IdentitySets["Surfaces"]:
             ErrorValues.append(
                 f"B-rep face {FaceValue.EntityId} references a missing surface"
@@ -31,7 +31,7 @@ def GetFaceErrors(
             ErrorValues.append(
                 f"B-rep face {FaceValue.EntityId} has an invalid tolerance"
             )
-    for FaceUseValue in ModelValue.FaceUses:
+    for FaceUseValue in ModelValue.face_uses:
         if FaceUseValue.FaceId not in IdentitySets["Faces"]:
             ErrorValues.append(
                 f"B-rep face use {FaceUseValue.EntityId} references a missing face"

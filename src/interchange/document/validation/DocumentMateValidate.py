@@ -24,36 +24,36 @@ def GetMateErrors(
     IdentitySets: TypeMap[str, set[str]],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for MateValue in AssemblyValue.Mates:
-        if MateValue.OwnerDefinitionId not in Definitions:
+    for MateValue in AssemblyValue.mates:
+        if MateValue.owner_definition_id not in Definitions:
             ErrorValues.append(
-                f"mate {MateValue.EntityId} references missing owner definition"
+                f"mate {MateValue.id} references missing owner definition"
             )
-        if not MateValue.EntityIds:
-            ErrorValues.append(f"mate {MateValue.EntityId} has no entities")
-        for EntityId in MateValue.EntityIds:
+        if not MateValue.entity_ids:
+            ErrorValues.append(f"mate {MateValue.id} has no entities")
+        for EntityId in MateValue.entity_ids:
             EntityValue = Entities.get(EntityId)
             if EntityValue is None:
                 ErrorValues.append(
-                    f"mate {MateValue.EntityId} references missing entity {EntityId}"
+                    f"mate {MateValue.id} references missing entity {EntityId}"
                 )
-            elif EntityValue.OwnerDefinitionId != MateValue.OwnerDefinitionId:
+            elif EntityValue.owner_definition_id != MateValue.owner_definition_id:
                 ErrorValues.append(
-                    f"mate {MateValue.EntityId} references entity from another assembly"
+                    f"mate {MateValue.id} references entity from another assembly"
                 )
-        OwnerDef = Definitions.get(MateValue.OwnerDefinitionId)
+        OwnerDef = Definitions.get(MateValue.owner_definition_id)
         TargetDocument: CadDocument | None = DocumentValue
-        if OwnerDef is not None and OwnerDef.DocumentId:
-            TargetDocument = DocumentValues.get(OwnerDef.DocumentId)
+        if OwnerDef is not None and OwnerDef.document_id:
+            TargetDocument = DocumentValues.get(OwnerDef.document_id)
         if TargetDocument is not None:
             TargetParamIds = (
                 IdentitySets["parameters"]
                 if TargetDocument is DocumentValue
-                else {ParamValue.EntityId for ParamValue in TargetDocument.parameters}
+                else {ParamValue.id for ParamValue in TargetDocument.parameters}
             )
-            for ParameterId in MateValue.ParameterIds:
+            for ParameterId in MateValue.parameter_ids:
                 if ParameterId not in TargetParamIds:
                     ErrorValues.append(
-                        f"mate {MateValue.EntityId} references missing parameter {ParameterId}"
+                        f"mate {MateValue.id} references missing parameter {ParameterId}"
                     )
     return tuple(ErrorValues)

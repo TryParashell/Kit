@@ -28,18 +28,18 @@ from interchange.brep.topology.BrepTopology import (
 
 # the validation view decouples topology storage from independent diagnostic passes
 class BrepView(TypeProtocol):
-    Curves: tuple[BrepCurve, ...]
-    Pcurves: tuple[BrepPcurve, ...]
-    Surfaces: tuple[BrepSurface, ...]
-    Vertices: tuple[BrepVertex, ...]
-    Edges: tuple[BrepEdge, ...]
-    Coedges: tuple[BrepCoedge, ...]
-    Loops: tuple[BrepLoop, ...]
-    Wires: tuple[BrepWire, ...]
-    Faces: tuple[BrepFace, ...]
-    FaceUses: tuple[BrepFaceUse, ...]
-    Shells: tuple[BrepShell, ...]
-    ShellUses: tuple[BrepShellUse, ...]
-    Regions: tuple[BrepRegion, ...]
-    Bodies: tuple[BrepBody, ...]
-    SchemaVersion: str
+    curves: tuple[BrepCurve, ...]
+    pcurves: tuple[BrepPcurve, ...]
+    surfaces: tuple[BrepSurface, ...]
+    vertices: tuple[BrepVertex, ...]
+    edges: tuple[BrepEdge, ...]
+    coedges: tuple[BrepCoedge, ...]
+    loops: tuple[BrepLoop, ...]
+    wires: tuple[BrepWire, ...]
+    faces: tuple[BrepFace, ...]
+    face_uses: tuple[BrepFaceUse, ...]
+    shells: tuple[BrepShell, ...]
+    shell_uses: tuple[BrepShellUse, ...]
+    regions: tuple[BrepRegion, ...]
+    bodies: tuple[BrepBody, ...]
+    schema_version: str

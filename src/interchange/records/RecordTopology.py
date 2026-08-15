@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
+from typing import ClassVar, TYPE_CHECKING
 
 from interchange.geometry.models.BoundingBox import BoundingBox
 from interchange.core.ModelBase import ModelBase
@@ -17,12 +18,22 @@ from interchange.core.ModelBase import ModelBase
 # topology summaries expose counts without requiring every caller to inspect boundary data
 @MakeDataClass(frozen=True, slots=True)
 class TopologyCounts(ModelBase):
-    SolidCount: int = 0
-    ShellCount: int = 0
-    FaceCount: int = 0
-    EdgeCount: int = 0
-    VertexCount: int = 0
-    Volume: float | None = None
-    SurfaceArea: float | None = None
-    BoundingBox: BoundingBox | None = None
-    IsValid: bool | None = None
+    solid_count: int = 0
+    shell_count: int = 0
+    face_count: int = 0
+    edge_count: int = 0
+    vertex_count: int = 0
+    volume: float | None = None
+    surface_area: float | None = None
+    bounding_box: BoundingBox | None = None
+    valid: bool | None = None
+    if TYPE_CHECKING:
+        SolidCount: ClassVar[int]
+        ShellCount: ClassVar[int]
+        FaceCount: ClassVar[int]
+        EdgeCount: ClassVar[int]
+        VertexCount: ClassVar[int]
+        Volume: ClassVar[float | None]
+        SurfaceArea: ClassVar[float | None]
+        BoundingBox: ClassVar[BoundingBox | None]
+        IsValid: ClassVar[bool | None]

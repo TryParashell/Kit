@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -21,10 +22,18 @@ from interchange.records.RecordTopology import TopologyCounts
 # design bodies connect feature results with topology material and source evidence
 @MakeDataClass(frozen=True, slots=True)
 class DesignBody(ModelBase):
-    EntityId: str
-    EntityName: str
-    FinalFeatureId: str
-    Topology: TopologyCounts = TopologyCounts()
-    MaterialId: str | None = None
-    Provenance: Provenance | None = None
-    Attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    id: str
+    name: str
+    final_feature_id: str
+    topology: TopologyCounts = TopologyCounts()
+    material_id: str | None = None
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        FinalFeatureId: ClassVar[str]
+        Topology: ClassVar[TopologyCounts]
+        MaterialId: ClassVar[str | None]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

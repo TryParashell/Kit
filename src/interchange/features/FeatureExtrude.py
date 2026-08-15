@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
+from typing import ClassVar, TYPE_CHECKING
 
 from interchange.enums.EnumBase import WireEnum
 from interchange.features.FeatureContract import FeatureDef
@@ -34,16 +35,30 @@ class ExtrudeEnd(WireEnum):
 # extrusions retain directional and termination choices needed for reconstruction
 @MakeDataClass(frozen=True, slots=True)
 class ExtrudeFeature(FeatureDef):
-    Length: ParameterValue
-    EndCondition: ExtrudeEnd | str = ExtrudeEnd.KBlind
-    IsReversed: bool = False
-    IsSymmetric: bool = False
-    Direction: SpaceVector | None = None
-    SecondLength: ParameterValue | None = None
-    SecondEndCondition: ExtrudeEnd | str | None = None
-    Offset: ParameterValue | None = None
-    SecondOffset: ParameterValue | None = None
-    DraftAngle: ParameterValue | None = None
-    SecondDraftAngle: ParameterValue | None = None
-    UpToReference: str = ""
-    SecondUpToRef: str = ""
+    length: ParameterValue
+    end_condition: ExtrudeEnd | str = ExtrudeEnd.KBlind
+    reversed: bool = False
+    symmetric: bool = False
+    direction: SpaceVector | None = None
+    second_length: ParameterValue | None = None
+    second_end_condition: ExtrudeEnd | str | None = None
+    offset: ParameterValue | None = None
+    second_offset: ParameterValue | None = None
+    draft_angle: ParameterValue | None = None
+    second_draft_angle: ParameterValue | None = None
+    up_to_reference: str = ""
+    second_up_to_reference: str = ""
+    if TYPE_CHECKING:
+        Length: ClassVar[ParameterValue]
+        EndCondition: ClassVar[ExtrudeEnd | str]
+        IsReversed: ClassVar[bool]
+        IsSymmetric: ClassVar[bool]
+        Direction: ClassVar[SpaceVector | None]
+        SecondLength: ClassVar[ParameterValue | None]
+        SecondEndCondition: ClassVar[ExtrudeEnd | str | None]
+        Offset: ClassVar[ParameterValue | None]
+        SecondOffset: ClassVar[ParameterValue | None]
+        DraftAngle: ClassVar[ParameterValue | None]
+        SecondDraftAngle: ClassVar[ParameterValue | None]
+        UpToReference: ClassVar[str]
+        SecondUpToRef: ClassVar[str]

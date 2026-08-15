@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -18,37 +18,54 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # typed values retain dimensional and primitive meaning alongside source text
-@ModelDataMut(DefaultMap={"EntityKind": ValueKind.KNumber, "UnitName": ""})
+@ModelDataMut(DefaultMap={"kind": ValueKind.KNumber, "unit": ""})
 class ParameterValue(ModelBase):
-    Value: str | int | float | bool
-    EntityKind: ValueKind
-    UnitName: str
+    value: str | int | float | bool
+    kind: ValueKind
+    unit: str
+    if TYPE_CHECKING:
+        Value: ClassVar[str | int | float | bool]
+        EntityKind: ClassVar[ValueKind]
+        UnitName: ClassVar[str]
 
 
 # expressions preserve editable relationships instead of reducing every parameter to literals
-@ModelDataMut(DefaultMap={"ParameterIds": (), "Language": "kit"})
+@ModelDataMut(DefaultMap={"parameter_ids": (), "language": "kit"})
 class Expression(ModelBase):
-    Source: str
-    ParameterIds: tuple[str, ...]
-    Language: str
+    source: str
+    parameter_ids: tuple[str, ...]
+    language: str
+    if TYPE_CHECKING:
+        Source: ClassVar[str]
+        ParameterIds: ClassVar[tuple[str, ...]]
+        Language: ClassVar[str]
 
 
 # parameters retain editable values ownership and source evidence across format boundaries
 @ModelDataMut(
     DefaultMap={
-        "ValueRole": ParameterRole.KDriving,
-        "Expression": None,
-        "OwnerId": "",
-        "Provenance": None,
+        "role": ParameterRole.KDriving,
+        "expression": None,
+        "owner_id": "",
+        "provenance": None,
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class Parameter(ModelBase):
-    EntityId: str
-    EntityName: str
-    Value: ParameterValue
-    ValueRole: ParameterRole
-    Expression: Expression | None
-    OwnerId: str
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    value: ParameterValue
+    role: ParameterRole
+    expression: Expression | None
+    owner_id: str
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        Value: ClassVar[ParameterValue]
+        ValueRole: ClassVar[ParameterRole]
+        Expression: ClassVar[Expression | None]
+        OwnerId: ClassVar[str]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
-
 from interchange.brep.curves.BrepCurves import BrepCurve
 from interchange.brep.curves.BrepPcurves import BrepPcurve
 from interchange.brep.surfaces.BrepSurfaces import BrepSurface
@@ -65,22 +63,81 @@ class BrepModel(ModelBase):
     regions: tuple[BrepRegion, ...]
     bodies: tuple[BrepBody, ...]
     schema_version: str
-    if TYPE_CHECKING:
-        Curves: ClassVar[tuple[BrepCurve, ...]]
-        Pcurves: ClassVar[tuple[BrepPcurve, ...]]
-        Surfaces: ClassVar[tuple[BrepSurface, ...]]
-        Vertices: ClassVar[tuple[BrepVertex, ...]]
-        Edges: ClassVar[tuple[BrepEdge, ...]]
-        Coedges: ClassVar[tuple[BrepCoedge, ...]]
-        Loops: ClassVar[tuple[BrepLoop, ...]]
-        Wires: ClassVar[tuple[BrepWire, ...]]
-        Faces: ClassVar[tuple[BrepFace, ...]]
-        FaceUses: ClassVar[tuple[BrepFaceUse, ...]]
-        Shells: ClassVar[tuple[BrepShellUse, ...]]
-        ShellUses: ClassVar[tuple[BrepShellUse, ...]]
-        Regions: ClassVar[tuple[BrepRegion, ...]]
-        Bodies: ClassVar[tuple[BrepBody, ...]]
-        SchemaVersion: ClassVar[str]
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Curves(self) -> tuple[BrepCurve, ...]:
+        return self.curves
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Pcurves(self) -> tuple[BrepPcurve, ...]:
+        return self.pcurves
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Surfaces(self) -> tuple[BrepSurface, ...]:
+        return self.surfaces
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Vertices(self) -> tuple[BrepVertex, ...]:
+        return self.vertices
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Edges(self) -> tuple[BrepEdge, ...]:
+        return self.edges
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Coedges(self) -> tuple[BrepCoedge, ...]:
+        return self.coedges
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Loops(self) -> tuple[BrepLoop, ...]:
+        return self.loops
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Wires(self) -> tuple[BrepWire, ...]:
+        return self.wires
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Faces(self) -> tuple[BrepFace, ...]:
+        return self.faces
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def FaceUses(self) -> tuple[BrepFaceUse, ...]:
+        return self.face_uses
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Shells(self) -> tuple[BrepShell, ...]:
+        return self.shells
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def ShellUses(self) -> tuple[BrepShellUse, ...]:
+        return self.shell_uses
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Regions(self) -> tuple[BrepRegion, ...]:
+        return self.regions
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def Bodies(self) -> tuple[BrepBody, ...]:
+        return self.bodies
+
+    # pascal consumers remain typed while lowercase fields own dataclass storage
+    @property
+    def SchemaVersion(self) -> str:
+        return self.schema_version
 
     # model validation delegates because topology checks change independently from storage
     def GetErrors(self, DesignBodyIds: frozenset[str] = frozenset()) -> tuple[str, ...]:

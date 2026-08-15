@@ -15,8 +15,17 @@ from interchange.records.RecordParameter import Parameter
 from interchange.geometry.models.Sketch import Sketch
 from interchange.geometry.models.SupportPlane import SupportPlane
 
+
+# lookup entities share a concrete lowercase identity contract across model domains
+class Identified(TypeProtocol):
+
+    # immutable model identities remain readable through the narrow lookup contract
+    @property
+    def id(self) -> str: ...
+
+
 # generic lookup results remain the exact model type stored by each collection
-EntityType = TypeVar("EntityType")
+EntityType = TypeVar("EntityType", bound=Identified)
 
 
 # document lookup needs only the four collections exposed by its focused behavior
@@ -35,20 +44,12 @@ def GetLookupDoc(SourceValue: object) -> LookupDocument:
     return SourceValue
 
 
-# dynamic compatibility callers need one checked identifier boundary
-def GetEntityId(SourceValue: object) -> str:
-    RawValue: object = getattr(SourceValue, "EntityId", None)
-    if not isinstance(RawValue, str):
-        raise TypeError("lookup entities must expose a string identifier")
-    return RawValue
-
-
 # entity lookup keeps every document convenience method on one failure contract
 def FindEntity(
     ItemValues: tuple[EntityType, ...], EntityId: str, LabelText: str
 ) -> EntityType:
     for ItemValue in ItemValues:
-        if GetEntityId(ItemValue) == EntityId:
+        if ItemValue.id == EntityId:
             return ItemValue
     raise KeyError(f"unknown {LabelText} id {EntityId!r}")
 

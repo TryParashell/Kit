@@ -54,11 +54,11 @@ def ToData(SourceValue: object) -> WireData:
         TupleValue = CastValue(tuple[object, ...], SourceValue)
         return {"$tuple": [ToData(ItemValue) for ItemValue in TupleValue]}
     if isinstance(SourceValue, frozenset):
-        SetValue = CastValue(frozenset[object], SourceValue)
-        return {"$frozenset": OrderData(SetValue)}
+        FrozenValues = CastValue(frozenset[object], SourceValue)
+        return {"$frozenset": OrderData(FrozenValues)}
     if isinstance(SourceValue, set):
-        SetValue = CastValue(set[object], SourceValue)
-        return {"$set": OrderData(SetValue)}
+        MutableValues = CastValue(set[object], SourceValue)
+        return {"$set": OrderData(MutableValues)}
     if isinstance(SourceValue, list):
         ListValue = CastValue(list[object], SourceValue)
         return [ToData(ItemValue) for ItemValue in ListValue]

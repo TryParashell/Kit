@@ -30,7 +30,7 @@ def BuildDocument() -> CadDocument:
     )
     SketchValue = Sketch("sketch:1", "Sketch1", PlaneValue.EntityId, (EntityValue,))
     FeatureValue = FeatureStep(
-        "feature:1", "Boss1", FeatureKind.KExtrusion, 0, SketchId=SketchValue.EntityId
+        "feature:1", "Boss1", FeatureKind.KExtrusion, 0, sketch_id=SketchValue.id
     )
     BodyValue = DesignBody("body:1", "Body", FeatureValue.EntityId)
     return CadDocument(

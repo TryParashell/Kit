@@ -28,13 +28,13 @@ def FilterPayloads(
 ) -> tuple[BrepPayload, ...]:
     PayloadValues: list[BrepPayload] = []
     for PayloadValue in DocumentValue.brep_payloads:
-        IsExcluded = (
-            PayloadValue.ValueRole == PayloadRole.KBrep and not IncludeBrep
-        ) or (PayloadValue.ValueRole == PayloadRole.KTessellation and not IncludeMesh)
+        IsExcluded = (PayloadValue.role == PayloadRole.KBrep and not IncludeBrep) or (
+            PayloadValue.role == PayloadRole.KTessellation and not IncludeMesh
+        )
         if not IsExcluded:
             PayloadValues.append(PayloadValue)
         elif KeepPayloads:
-            PayloadValues.append(ReplaceValue(PayloadValue, PayloadData=None))
+            PayloadValues.append(ReplaceValue(PayloadValue, data=None))
     return tuple(PayloadValues)
 
 
@@ -66,22 +66,22 @@ def FilterDocument(
     if AssemblyValue is not None:
         AssemblyValue = ReplaceValue(
             AssemblyValue,
-            Documents=tuple(
+            documents=tuple(
                 ReplaceValue(
                     ComponentValue,
-                    Document=(
+                    document=(
                         FilterDocument(
                             NestedValue,
                             IncludeBrep=IncludeBrep,
                             IncludeMesh=IncludeMesh,
                             KeepPayloads=KeepPayloads,
                         )
-                        if (NestedValue := GetDocument(ComponentValue.Document))
+                        if (NestedValue := GetDocument(ComponentValue.document))
                         is not None
-                        else ComponentValue.Document
+                        else ComponentValue.document
                     ),
                 )
-                for ComponentValue in AssemblyValue.Documents
+                for ComponentValue in AssemblyValue.documents
             ),
         )
     FilteredDoc = ReplaceValue(

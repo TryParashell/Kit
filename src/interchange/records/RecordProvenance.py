@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -16,22 +16,33 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
 # source spans connect portable entities back to exact native container records
-@ModelDataMut(DefaultMap={"RecordKind": ""})
+@ModelDataMut(DefaultMap={"record_kind": ""})
 class ProvenanceSpan(ModelBase):
-    Stream: str
-    Offset: int
-    Length: int
-    RecordKind: str
+    stream: str
+    offset: int
+    length: int
+    record_kind: str
+    if TYPE_CHECKING:
+        Stream: ClassVar[str]
+        Offset: ClassVar[int]
+        Length: ClassVar[int]
+        RecordKind: ClassVar[str]
 
 
 # provenance preserves source identity confidence and evidence through conversion pipelines
 @ModelDataMut(
-    DefaultMap={"NativeId": "", "Confidence": 1.0, "Spans": ()},
-    FactoryMap={"Attributes": FreezeMapping},
+    DefaultMap={"native_id": "", "confidence": 1.0, "spans": ()},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class Provenance(ModelBase):
-    Adapter: str
-    NativeId: str
-    Confidence: float
-    Spans: tuple[ProvenanceSpan, ...]
-    Attributes: TypeMap[str, AnyValue]
+    adapter: str
+    native_id: str
+    confidence: float
+    spans: tuple[ProvenanceSpan, ...]
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        Adapter: ClassVar[str]
+        NativeId: ClassVar[str]
+        Confidence: ClassVar[float]
+        Spans: ClassVar[tuple[ProvenanceSpan, ...]]
+        Attributes: ClassVar[TypeMap[str, object]]

@@ -128,10 +128,12 @@ def CheckPayRole(RoleValue: PayloadRole) -> None:
 # behavior coverage protects portable interchange semantics during structural refactors
 @PytestLib.mark.parametrize("RuleValue", KLegacyPayloadRules)
 def CheckRules(RuleValue: PayloadRule) -> None:
-    FormatId = sorted(RuleValue.FormatIds)[0] if RuleValue.FormatIds else ""
-    KindValue = sorted(RuleValue.Kinds)[0] if RuleValue.Kinds else ""
-    SchemaText = sorted(RuleValue.Schemas)[0] if RuleValue.Schemas else ""
-    SuffixText = sorted(RuleValue.SourceSuffixes)[0] if RuleValue.SourceSuffixes else ""
+    FormatId = sorted(RuleValue.format_ids)[0] if RuleValue.format_ids else ""
+    KindValue = sorted(RuleValue.kinds)[0] if RuleValue.kinds else ""
+    SchemaText = sorted(RuleValue.schemas)[0] if RuleValue.schemas else ""
+    SuffixText = (
+        sorted(RuleValue.source_suffixes)[0] if RuleValue.source_suffixes else ""
+    )
     RoleValue, FileExtension = GetLegacyFields(
         {
             "format_id": FormatId,
@@ -140,8 +142,8 @@ def CheckRules(RuleValue: PayloadRule) -> None:
             "source_stream": f"legacy{SuffixText}" if SuffixText else "",
         }
     )
-    assert RoleValue == RuleValue.ValueRole
-    assert FileExtension == (RuleValue.FileExtension or ".bin")
+    assert RoleValue == RuleValue.role
+    assert FileExtension == (RuleValue.file_extension or ".bin")
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -339,8 +341,8 @@ def CheckFiltering() -> None:
     SourceValue = BuildAssembly()
     AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
-    ComponentValue = AssemblyValue.Documents[0]
-    ChildValue = ComponentValue.Document
+    ComponentValue = AssemblyValue.documents[0]
+    ChildValue = ComponentValue.document
     assert isinstance(ChildValue, CadDocument)
     PayloadValues = tuple(
         (
@@ -372,7 +374,7 @@ def CheckFiltering() -> None:
         | {Capability.KBrep, Capability.KTessellation, Capability.KNativePayloads},
         assembly=ReplaceValue(
             AssemblyValue,
-            Documents=(ReplaceValue(ComponentValue, Document=ChildValue),),
+            documents=(ReplaceValue(ComponentValue, document=ChildValue),),
         ),
     )
     FilteredValue = FilterDocument(
@@ -382,10 +384,10 @@ def CheckFiltering() -> None:
     assert Capability.KTessellation not in FilteredValue.capabilities
     FilteredAssembly = FilteredValue.assembly
     assert FilteredAssembly is not None
-    FilteredChild = FilteredAssembly.Documents[0].Document
+    FilteredChild = FilteredAssembly.documents[0].document
     assert isinstance(FilteredChild, CadDocument)
     assert tuple(
-        (PayloadValue.ValueRole for PayloadValue in FilteredChild.brep_payloads)
+        (PayloadValue.role for PayloadValue in FilteredChild.brep_payloads)
     ) == (PayloadRole.KAuxiliary,)
     assert Capability.KBrep not in FilteredChild.capabilities
     assert Capability.KTessellation not in FilteredChild.capabilities
@@ -394,13 +396,13 @@ def CheckFiltering() -> None:
     )
     DescribedAssembly = DescribedValue.assembly
     assert DescribedAssembly is not None
-    DescribedChild = DescribedAssembly.Documents[0].Document
+    DescribedChild = DescribedAssembly.documents[0].document
     assert isinstance(DescribedChild, CadDocument)
     assert tuple(
-        (PayloadValue.ValueRole for PayloadValue in DescribedChild.brep_payloads)
-    ) == tuple((PayloadValue.ValueRole for PayloadValue in PayloadValues))
+        (PayloadValue.role for PayloadValue in DescribedChild.brep_payloads)
+    ) == tuple((PayloadValue.role for PayloadValue in PayloadValues))
     assert tuple(
-        (PayloadValue.PayloadData for PayloadValue in DescribedChild.brep_payloads)
+        (PayloadValue.data for PayloadValue in DescribedChild.brep_payloads)
     ) == (None, None, b"auxiliary")
 
 
@@ -437,9 +439,7 @@ def CheckInferCaps() -> None:
     ImportedValue = ReplaceValue(
         SourceValue,
         feature_timeline=(
-            ReplaceValue(
-                SourceValue.feature_timeline[0], EntityKind=FeatureKind.KImported
-            ),
+            ReplaceValue(SourceValue.feature_timeline[0], kind=FeatureKind.KImported),
         ),
     )
     assert Capability.KParamHistory not in InferCaps(ImportedValue)
@@ -507,7 +507,7 @@ def CheckForwardRef() -> None:
         "Invalid",
         FeatureKind.KExtrusion,
         0,
-        InputFeatureIds=("feature:1",),
+        input_feature_ids=("feature:1",),
     )
     SecondValue = FeatureStep("feature:1", "Later", FeatureKind.KExtrusion, 1)
     InvalidValue = CadDocument(

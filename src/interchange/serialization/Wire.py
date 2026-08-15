@@ -54,7 +54,7 @@ def FormatWireName(FieldName: str) -> str:
 # boolean model fields omit their source marker on the historical wire format
 def GetWireField(FieldName: str, ClassType: type[object] | None = None) -> str:
     if ClassType is not None:
-        TypeFields = KTypeWireFields.get(ClassType.__name__, {})
+        TypeFields = KTypeWireFields.get(GetCanonicalName(ClassType), {})
         if FieldName in TypeFields:
             return TypeFields[FieldName]
     if FieldName in KWireFields:

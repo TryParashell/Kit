@@ -23,12 +23,12 @@ def ValidateWireData(SourceValue: object) -> WireData:
     if SourceValue is None or isinstance(SourceValue, (bool, int, float, str)):
         return SourceValue
     if isinstance(SourceValue, list):
-        SourceItems = CastValue(list[object], SourceValue)
-        return [ValidateWireData(ItemValue) for ItemValue in SourceItems]
+        ListItems = CastValue(list[object], SourceValue)
+        return [ValidateWireData(ItemValue) for ItemValue in ListItems]
     if isinstance(SourceValue, dict):
-        SourceItems = CastValue(dict[object, object], SourceValue)
+        DictItems = CastValue(dict[object, object], SourceValue)
         ResultValue: dict[str, WireData] = {}
-        for KeyValue, ItemValue in SourceItems.items():
+        for KeyValue, ItemValue in DictItems.items():
             if not isinstance(KeyValue, str):
                 raise TypeError("wire object keys must be strings")
             ResultValue[KeyValue] = ValidateWireData(ItemValue)

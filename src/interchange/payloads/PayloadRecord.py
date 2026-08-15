@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -18,7 +18,7 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # payload extensions need validation before writers derive filesystem paths
-def FindExtError(ExtensionText: AnyValue) -> str:
+def FindExtError(ExtensionText: object) -> str:
     if not isinstance(ExtensionText, str):
         return "payload file extension must start with a period"
     NameValue = ExtensionText[1:] if ExtensionText.startswith(".") else ""
@@ -36,31 +36,43 @@ def FindExtError(ExtensionText: AnyValue) -> str:
 # native bytes need identity purpose and integrity metadata for lossless translation
 @ModelDataMut(
     DefaultMap={
-        "PayloadData": None,
-        "SourceStream": "",
-        "Provenance": None,
-        "ValueRole": PayloadRole.KAuxiliary,
-        "FileExtension": ".bin",
+        "data": None,
+        "source_stream": "",
+        "provenance": None,
+        "role": PayloadRole.KAuxiliary,
+        "file_extension": ".bin",
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class BrepPayload(ModelBase):
-    EntityId: str
-    FormatId: str
-    EntityKind: str
-    SchemaText: str
-    SourceDigest: str
-    PayloadData: bytes | None
-    SourceStream: str
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
-    ValueRole: PayloadRole
-    FileExtension: str
+    id: str
+    format_id: str
+    kind: str
+    schema: str
+    sha256: str
+    data: bytes | None
+    source_stream: str
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    role: PayloadRole
+    file_extension: str
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        FormatId: ClassVar[str]
+        EntityKind: ClassVar[str]
+        SchemaText: ClassVar[str]
+        SourceDigest: ClassVar[str]
+        PayloadData: ClassVar[bytes | None]
+        SourceStream: ClassVar[str]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]
+        ValueRole: ClassVar[PayloadRole]
+        FileExtension: ClassVar[str]
 
     # invalid metadata must fail before bytes reach archive writers
     def __post_init__(self) -> None:
-        if type(self.ValueRole) is not PayloadRole:
+        if type(self.role) is not PayloadRole:
             raise TypeError("payload role must be a PayloadRole")
-        ErrorText = FindExtError(self.FileExtension)
+        ErrorText = FindExtError(self.file_extension)
         if ErrorText:
             raise ValueError(ErrorText)

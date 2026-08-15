@@ -45,7 +45,7 @@ def InferCaps(
             ItemValue.parameters for ItemValue in DocumentValues
         ),
         Capability.KParamHistory: any(
-            FeatureValue.EntityKind != FeatureKind.KImported
+            FeatureValue.kind != FeatureKind.KImported
             for ItemValue in DocumentValues
             for FeatureValue in ItemValue.feature_timeline
         ),
@@ -65,40 +65,39 @@ def InferCaps(
             ItemValue.configurations for ItemValue in DocumentValues
         ),
         Capability.KExpressions: any(
-            ParamValue.Expression is not None
+            ParamValue.expression is not None
             for ItemValue in DocumentValues
             for ParamValue in ItemValue.parameters
         ),
         Capability.KBrep: any(
             ItemValue.brep is not None
             or any(
-                PayloadValue.ValueRole == PayloadRole.KBrep
-                and PayloadValue.PayloadData is not None
+                PayloadValue.role == PayloadRole.KBrep and PayloadValue.data is not None
                 for PayloadValue in ItemValue.brep_payloads
             )
             for ItemValue in DocumentValues
         ),
         Capability.KTessellation: any(ItemValue.meshes for ItemValue in DocumentValues)
         or any(
-            PayloadValue.ValueRole == PayloadRole.KTessellation
-            and PayloadValue.PayloadData is not None
+            PayloadValue.role == PayloadRole.KTessellation
+            and PayloadValue.data is not None
             for ItemValue in DocumentValues
             for PayloadValue in ItemValue.brep_payloads
         ),
         Capability.KAssemblies: bool(AssemblyValues),
         Capability.KAssemblyMates: any(
-            AssemblyValue.Mates for AssemblyValue in AssemblyValues
+            AssemblyValue.mates for AssemblyValue in AssemblyValues
         ),
         Capability.KComponentDocs: any(
-            AssemblyValue.Documents for AssemblyValue in AssemblyValues
+            AssemblyValue.documents for AssemblyValue in AssemblyValues
         ),
         Capability.KExternalRefs: any(
-            DefinitionValue.SourcePath
+            DefinitionValue.source_path
             for AssemblyValue in AssemblyValues
-            for DefinitionValue in AssemblyValue.Definitions
+            for DefinitionValue in AssemblyValue.definitions
         ),
         Capability.KMaterials: any(
-            BodyValue.MaterialId
+            BodyValue.material_id
             for ItemValue in DocumentValues
             for BodyValue in ItemValue.bodies
         ),
@@ -145,8 +144,8 @@ def GetRetainedCaps(
     if not IncludeMesh and not any(
         ItemValue.meshes
         or any(
-            PayloadValue.ValueRole == PayloadRole.KTessellation
-            and PayloadValue.PayloadData is not None
+            PayloadValue.role == PayloadRole.KTessellation
+            and PayloadValue.data is not None
             for PayloadValue in ItemValue.brep_payloads
         )
         for ItemValue in DocumentValues

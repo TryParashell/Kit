@@ -41,28 +41,28 @@ def GetAssemblyErrs(
     for GroupValue in GetIdGroups(AssemblyValue):
         LabelText = GroupValue[1]
         ItemValues = GroupValue[2]
-        IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
+        IdValues = [ItemValue.id for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
     Definitions: dict[str, ComponentDef] = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Definitions
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.definitions
     }
     Instances: dict[str, ComponentInst] = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Instances
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.instances
     }
     DocumentValues = {
-        ItemValue.EntityId: NestedValue
-        for ItemValue in AssemblyValue.Documents
-        if (NestedValue := GetDocument(ItemValue.Document)) is not None
+        ItemValue.id: NestedValue
+        for ItemValue in AssemblyValue.documents
+        if (NestedValue := GetDocument(ItemValue.document)) is not None
     }
     Entities: dict[str, MateEntity] = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.MateEntities
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.mate_entities
     }
     MateValues: dict[str, MateConstraint] = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Mates
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.mates
     }
     GroupById: dict[str, MateGroup] = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.MateGroups
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.mate_groups
     }
     ErrorValues.extend(GetGraphErrors(AssemblyValue, Definitions))
     ErrorValues.extend(GetDocLinkErrs(DocumentValue, AssemblyValue))

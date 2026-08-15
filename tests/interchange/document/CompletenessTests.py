@@ -110,7 +110,7 @@ def CheckGeometry() -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckFeatures() -> None:
-    DefinitionHint = GetTypeHints(FeatureStep)["Definition"]
+    DefinitionHint = GetTypeHints(FeatureStep)["definition"]
     assert set(GetTypeArgs(DefinitionHint)) == {FeatureDefinition, type(None)}
     Definitions = {
         ItemValue
@@ -121,13 +121,13 @@ def CheckFeatures() -> None:
     }
     assert Definitions
     StepValue = ReplaceValue(
-        BuildDocument().feature_timeline[0], Definition=FutureFeature("future")
+        BuildDocument().feature_timeline[0], definition=FutureFeature("future")
     )
-    assert isinstance(StepValue.Definition, FeatureDefinition)
+    assert isinstance(StepValue.definition, FeatureDefinition)
     with PytestLib.raises(TypeError, match="feature definition"):
         ReplaceValue(
             StepValue,
-            Definition=CastValue(FeatureDefinition, {"type": "unregistered"}),
+            definition=CastValue(FeatureDefinition, {"type": "unregistered"}),
         )
 
 
@@ -181,7 +181,7 @@ def CheckNestedCaps() -> None:
         BaseValue,
         parameters=(ParamValue,),
         selections=(Selection("selection:child", "Child selection", ()),),
-        bodies=(ReplaceValue(BaseValue.bodies[0], MaterialId="material:child"),),
+        bodies=(ReplaceValue(BaseValue.bodies[0], material_id="material:child"),),
         meshes=(MeshValue,),
         brep_payloads=(PayloadValue,),
         capabilities=frozenset(),

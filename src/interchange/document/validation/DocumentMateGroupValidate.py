@@ -22,30 +22,30 @@ def GetGroupLinks(
     GroupById: TypeMap[str, MateGroup],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for GroupValue in AssemblyValue.MateGroups:
-        if GroupValue.OwnerDefinitionId not in Definitions:
+    for GroupValue in AssemblyValue.mate_groups:
+        if GroupValue.owner_definition_id not in Definitions:
             ErrorValues.append(
-                f"mate group {GroupValue.EntityId} references missing owner definition"
+                f"mate group {GroupValue.id} references missing owner definition"
             )
-        if GroupValue.ParentGroupId:
-            ParentGroup = GroupById.get(GroupValue.ParentGroupId)
+        if GroupValue.parent_group_id:
+            ParentGroup = GroupById.get(GroupValue.parent_group_id)
             if ParentGroup is None:
                 ErrorValues.append(
-                    f"mate group {GroupValue.EntityId} references missing parent"
+                    f"mate group {GroupValue.id} references missing parent"
                 )
-            elif ParentGroup.OwnerDefinitionId != GroupValue.OwnerDefinitionId:
+            elif ParentGroup.owner_definition_id != GroupValue.owner_definition_id:
                 ErrorValues.append(
-                    f"mate group {GroupValue.EntityId} has a parent in another assembly"
+                    f"mate group {GroupValue.id} has a parent in another assembly"
                 )
-        for MateId in GroupValue.MateIds:
+        for MateId in GroupValue.mate_ids:
             MateValue = MateValues.get(MateId)
             if MateValue is None:
                 ErrorValues.append(
-                    f"mate group {GroupValue.EntityId} references missing mate {MateId}"
+                    f"mate group {GroupValue.id} references missing mate {MateId}"
                 )
-            elif MateValue.OwnerDefinitionId != GroupValue.OwnerDefinitionId:
+            elif MateValue.owner_definition_id != GroupValue.owner_definition_id:
                 ErrorValues.append(
-                    f"mate group {GroupValue.EntityId} contains mate from another assembly"
+                    f"mate group {GroupValue.id} contains mate from another assembly"
                 )
     return tuple(ErrorValues)
 
@@ -55,15 +55,15 @@ def GetGroupCycles(
     AssemblyValue: AssemblyData, GroupById: TypeMap[str, MateGroup]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for GroupValue in AssemblyValue.MateGroups:
+    for GroupValue in AssemblyValue.mate_groups:
         SeenValues: set[str] = set()
         CurrentGroup = GroupValue
-        while CurrentGroup.ParentGroupId:
-            if CurrentGroup.EntityId in SeenValues:
+        while CurrentGroup.parent_group_id:
+            if CurrentGroup.id in SeenValues:
                 ErrorValues.append("mate group graph contains a cycle")
                 break
-            SeenValues.add(CurrentGroup.EntityId)
-            ParentGroup = GroupById.get(CurrentGroup.ParentGroupId)
+            SeenValues.add(CurrentGroup.id)
+            ParentGroup = GroupById.get(CurrentGroup.parent_group_id)
             if ParentGroup is None:
                 break
             CurrentGroup = ParentGroup

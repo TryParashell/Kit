@@ -19,45 +19,45 @@ def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
             not all(
                 IsFiniteNum(SourceValue)
                 for SourceValue in (
-                    VertexValue.XCoord,
-                    VertexValue.YCoord,
-                    VertexValue.ZCoord,
+                    VertexValue.x,
+                    VertexValue.y,
+                    VertexValue.z,
                 )
             )
-            for VertexValue in MeshValue.Vertices
+            for VertexValue in MeshValue.vertices
         ):
             ErrorValues.append(
-                f"mesh {MeshValue.EntityId} contains a non-finite vertex"
+                f"mesh {MeshValue.id} contains a non-finite vertex"
             )
-        if MeshValue.Normals and len(MeshValue.Normals) != len(MeshValue.Vertices):
+        if MeshValue.normals and len(MeshValue.normals) != len(MeshValue.vertices):
             ErrorValues.append(
-                f"mesh {MeshValue.EntityId} has a mismatched normal count"
+                f"mesh {MeshValue.id} has a mismatched normal count"
             )
         if any(
             not all(
                 IsFiniteNum(SourceValue)
                 for SourceValue in (
-                    NormalValue.XCoord,
-                    NormalValue.YCoord,
-                    NormalValue.ZCoord,
+                    NormalValue.x,
+                    NormalValue.y,
+                    NormalValue.z,
                 )
             )
-            for NormalValue in MeshValue.Normals
+            for NormalValue in MeshValue.normals
         ):
             ErrorValues.append(
-                f"mesh {MeshValue.EntityId} contains a non-finite normal"
+                f"mesh {MeshValue.id} contains a non-finite normal"
             )
-        for TriangleValue in MeshValue.Triangles:
+        for TriangleValue in MeshValue.triangles:
             if (
                 len(TriangleValue) != 3
                 or any(type(IndexValue) is not int for IndexValue in TriangleValue)
                 or any(
-                    IndexValue < 0 or IndexValue >= len(MeshValue.Vertices)
+                    IndexValue < 0 or IndexValue >= len(MeshValue.vertices)
                     for IndexValue in TriangleValue
                 )
             ):
                 ErrorValues.append(
-                    f"mesh {MeshValue.EntityId} contains an invalid triangle"
+                    f"mesh {MeshValue.id} contains an invalid triangle"
                 )
                 break
     return tuple(ErrorValues)

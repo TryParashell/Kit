@@ -17,20 +17,20 @@ def GetBrepIds(
     ErrorValues: list[str] = []
     IdentitySets: dict[str, frozenset[str]] = {}
     IdentityGroups: tuple[tuple[str, tuple[BrepEntity, ...]], ...] = (
-        ("Curves", ModelValue.Curves),
-        ("Pcurves", ModelValue.Pcurves),
-        ("Surfaces", ModelValue.Surfaces),
-        ("Vertices", ModelValue.Vertices),
-        ("Edges", ModelValue.Edges),
-        ("Coedges", ModelValue.Coedges),
-        ("Loops", ModelValue.Loops),
-        ("Wires", ModelValue.Wires),
-        ("Faces", ModelValue.Faces),
-        ("FaceUses", ModelValue.FaceUses),
-        ("Shells", ModelValue.Shells),
-        ("ShellUses", ModelValue.ShellUses),
-        ("Regions", ModelValue.Regions),
-        ("Bodies", ModelValue.Bodies),
+        ("Curves", ModelValue.curves),
+        ("Pcurves", ModelValue.pcurves),
+        ("Surfaces", ModelValue.surfaces),
+        ("Vertices", ModelValue.vertices),
+        ("Edges", ModelValue.edges),
+        ("Coedges", ModelValue.coedges),
+        ("Loops", ModelValue.loops),
+        ("Wires", ModelValue.wires),
+        ("Faces", ModelValue.faces),
+        ("FaceUses", ModelValue.face_uses),
+        ("Shells", ModelValue.shells),
+        ("ShellUses", ModelValue.shell_uses),
+        ("Regions", ModelValue.regions),
+        ("Bodies", ModelValue.bodies),
     )
     for GroupName, ItemValues in IdentityGroups:
         Identifiers = tuple(ItemValue.EntityId for ItemValue in ItemValues)
