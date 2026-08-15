@@ -8,12 +8,13 @@
 
 from __future__ import annotations
 
+from importlib.util import module_from_spec as BuildModule
+from importlib.util import spec_from_file_location as BuildSpec
 import pathlib as Pathlib
-import runpy as Runpy
 import tempfile as Tempfile
 import unittest as UnitTest
 from typing import Callable as CallType
-from typing import TypedDict as TypeDict
+from typing import Protocol
 from typing import cast as TypeCast
 from unittest import mock as Mocking
 
@@ -22,24 +23,26 @@ from tests.Policy.SpdxHeadersTest import LoadGuard
 
 
 # dynamic repair loading needs concrete signatures so byte mutation calls remain strictly checked
-class RepairApi(TypeDict):
+class RepairContract(Protocol):
     CanRepairMut: CallType[[Pathlib.Path, list[str], str], bool]
     MakeHeader: CallType[[list[str], bytes], bytes]
     WriteMissingMut: CallType[[Pathlib.Path, list[str]], None]
 
 
 # direct helper loading keeps byte transformation tests independent from script execution
-def LoadRepair() -> RepairApi:
+def LoadRepair() -> RepairContract:
     ScriptPath = (
         Pathlib.Path(__file__).parents[2]
         / ".github"
         / "scripts"
         / "SpdxHeaderRemediation.py"
     )
-    RepairValues: dict[str, object] = Runpy.run_path(
-        str(ScriptPath), run_name="SpdxRepairTest"
-    )
-    return TypeCast(RepairApi, RepairValues)
+    RepairSpec = BuildSpec("SpdxRepairTest", ScriptPath)
+    if RepairSpec is None or RepairSpec.loader is None:
+        raise RuntimeError("spdx remediation script cannot be loaded")
+    RepairModule = BuildModule(RepairSpec)
+    RepairSpec.loader.exec_module(RepairModule)
+    return TypeCast(RepairContract, RepairModule)
 
 
 # adversarial diff fixtures prove automation accepts only canonical repository destinations
@@ -47,7 +50,7 @@ class TestDiffGuard(UnitTest.TestCase):
 
     # nul records must preserve rename destinations while rejecting every ambiguous path spelling
     def TestDiffParse(self) -> None:
-        ParseDiff = LoadGuard()["ParseDiff"]
+        ParseDiff = LoadGuard().ParseDiff
         DiffBytes = b"M\0Alpha.py\0R100\0Old.py\0New.py\0"
         self.assertEqual(ParseDiff(DiffBytes), ["Alpha.py", "New.py"])
         BadPaths = (
@@ -70,23 +73,23 @@ class TestByteRepair(UnitTest.TestCase):
 
     # inserted headers must retain existing newline bytes and preserve unterminated shebang content
     def TestMissBytes(self) -> None:
-        GuardValues = LoadGuard()
-        RepairValues = LoadRepair()
-        HeaderLines = GuardValues["RenderLines"](GuardValues["LoadCanon"](), "#")
+        GuardModule = LoadGuard()
+        RepairModule = LoadRepair()
+        HeaderLines = GuardModule.RenderLines(GuardModule.LoadCanon(), "#")
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             CrLfPath = RootPath / "CrLf.py"
             CrLfPath.write_bytes(b"print('ok')\r\n")
-            RepairValues["WriteMissingMut"](CrLfPath, HeaderLines)
-            HeaderBytes = RepairValues["MakeHeader"](HeaderLines, b"\r\n")
+            RepairModule.WriteMissingMut(CrLfPath, HeaderLines)
+            HeaderBytes = RepairModule.MakeHeader(HeaderLines, b"\r\n")
             self.assertEqual(CrLfPath.read_bytes(), HeaderBytes + b"print('ok')\r\n")
             ScriptPath = RootPath / "Script.py"
             ShebangBytes = b"#!/usr/bin/env python"
             ScriptPath.write_bytes(ShebangBytes)
-            RepairValues["WriteMissingMut"](ScriptPath, HeaderLines)
+            RepairModule.WriteMissingMut(ScriptPath, HeaderLines)
             self.assertEqual(
                 ScriptPath.read_bytes(),
-                ShebangBytes + b"\n" + RepairValues["MakeHeader"](HeaderLines, b"\n"),
+                ShebangBytes + b"\n" + RepairModule.MakeHeader(HeaderLines, b"\n"),
             )
 
 
@@ -95,9 +98,9 @@ class TestSpanRepair(UnitTest.TestCase):
 
     # recognizable fragments may be replaced but adjacent documentation must make repair fail closed
     def TestBoundRepair(self) -> None:
-        GuardValues = LoadGuard()
-        RepairValues = LoadRepair()
-        HeaderLines = GuardValues["RenderLines"](GuardValues["LoadCanon"](), "#")
+        GuardModule = LoadGuard()
+        RepairModule = LoadRepair()
+        HeaderLines = GuardModule.RenderLines(GuardModule.LoadCanon(), "#")
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             SafePath = RootPath / "Safe.py"
@@ -106,7 +109,7 @@ class TestSpanRepair(UnitTest.TestCase):
                 b"# SPDX-FileCopyrightText: damaged\n\n"
                 b"print('safe')\n"
             )
-            self.assertTrue(RepairValues["CanRepairMut"](SafePath, HeaderLines, "#"))
+            self.assertTrue(RepairModule.CanRepairMut(SafePath, HeaderLines, "#"))
             self.assertTrue(SafePath.read_bytes().endswith(b"print('safe')\n"))
             DocsPath = RootPath / "Docs.py"
             DocsBytes = (
@@ -115,7 +118,7 @@ class TestSpanRepair(UnitTest.TestCase):
                 b"print('safe')\n"
             )
             DocsPath.write_bytes(DocsBytes)
-            self.assertFalse(RepairValues["CanRepairMut"](DocsPath, HeaderLines, "#"))
+            self.assertFalse(RepairModule.CanRepairMut(DocsPath, HeaderLines, "#"))
             self.assertEqual(DocsPath.read_bytes(), DocsBytes)
             EncodingPath = RootPath / "Encoding.py"
             EncodingBytes = (
@@ -124,9 +127,7 @@ class TestSpanRepair(UnitTest.TestCase):
                 b"print('safe')\n"
             )
             EncodingPath.write_bytes(EncodingBytes)
-            self.assertFalse(
-                RepairValues["CanRepairMut"](EncodingPath, HeaderLines, "#")
-            )
+            self.assertFalse(RepairModule.CanRepairMut(EncodingPath, HeaderLines, "#"))
             self.assertEqual(EncodingPath.read_bytes(), EncodingBytes)
 
 
@@ -135,8 +136,8 @@ class TestStyleGuard(UnitTest.TestCase):
 
     # unknown formats may retain a proven marker but must never receive a guessed missing style
     def TestUnkStyle(self) -> None:
-        GuardValues = LoadGuard()
-        CanonLines = GuardValues["LoadCanon"]()
+        GuardModule = LoadGuard()
+        CanonLines = GuardModule.LoadCanon()
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             DebugPath = RootPath / "Debug.trace"
@@ -145,7 +146,7 @@ class TestStyleGuard(UnitTest.TestCase):
                 b"$$ SPDX-FileCopyrightText: damaged\n\n"
                 b"command\n"
             )
-            IsFixed, ReasonText = GuardValues["RepairHeadMut"](
+            IsFixed, ReasonText = GuardModule.RepairHeadMut(
                 DebugPath, CanonLines, RootPath
             )
             self.assertTrue(IsFixed, ReasonText)
@@ -158,7 +159,7 @@ class TestStyleGuard(UnitTest.TestCase):
                 b"-->\n\n"
                 b"markup\n"
             )
-            IsFixed, ReasonText = GuardValues["RepairHeadMut"](
+            IsFixed, ReasonText = GuardModule.RepairHeadMut(
                 BlockPath, CanonLines, RootPath
             )
             self.assertTrue(IsFixed, ReasonText)
@@ -166,7 +167,7 @@ class TestStyleGuard(UnitTest.TestCase):
             MissingPath = RootPath / "Missing.trace"
             MissingPath.write_bytes(b"command\n")
             OriginalBytes = MissingPath.read_bytes()
-            IsFixed, ReasonText = GuardValues["RepairHeadMut"](
+            IsFixed, ReasonText = GuardModule.RepairHeadMut(
                 MissingPath, CanonLines, RootPath
             )
             self.assertFalse(IsFixed, ReasonText)
@@ -178,13 +179,13 @@ class TestTextGuard(UnitTest.TestCase):
 
     # known source formats must report invalid utf eight instead of being silently treated as binary
     def TestInvalidText(self) -> None:
-        GuardValues = LoadGuard()
+        GuardModule = LoadGuard()
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             SourcePath = RootPath / "Invalid.py"
             SourcePath.write_bytes(b"\xff\xfe")
-            IsValid, ReasonText = GuardValues["CheckFile"](
-                SourcePath, GuardValues["LoadCanon"](), RootPath
+            IsValid, ReasonText = GuardModule.CheckFile(
+                SourcePath, GuardModule.LoadCanon(), RootPath
             )
         self.assertFalse(IsValid)
         self.assertIn("UTF-8", ReasonText)
@@ -195,26 +196,22 @@ class TestPathGuard(UnitTest.TestCase):
 
     # regular candidates pass while missing directories and lexical links never reach content checks
     def TestPathBound(self) -> None:
-        GuardValues = LoadGuard()
+        GuardModule = LoadGuard()
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath).resolve()
             SourcePath = RootPath / "Source.py"
             SourcePath.write_text("source\n", encoding="utf-8")
-            self.assertEqual(
-                GuardValues["ResolvePath"](RootPath, "Source.py"), SourcePath
-            )
-            self.assertIsNone(GuardValues["ResolvePath"](RootPath, "Missing.py"))
+            self.assertEqual(GuardModule.ResolvePath(RootPath, "Source.py"), SourcePath)
+            self.assertIsNone(GuardModule.ResolvePath(RootPath, "Missing.py"))
             FolderPath = RootPath / "Folder"
             FolderPath.mkdir()
-            self.assertIsNone(GuardValues["ResolvePath"](RootPath, "Folder"))
+            self.assertIsNone(GuardModule.ResolvePath(RootPath, "Folder"))
             ChildPath = FolderPath / "Child.py"
             ChildPath.write_text("child\n", encoding="utf-8")
             with Mocking.patch.object(
-                GuardValues["StatLib"], "S_ISLNK", return_value=True
+                GuardModule.StatLib, "S_ISLNK", return_value=True
             ):
-                self.assertIsNone(
-                    GuardValues["ResolvePath"](RootPath, "Folder/Child.py")
-                )
+                self.assertIsNone(GuardModule.ResolvePath(RootPath, "Folder/Child.py"))
 
 
 # skill focused fixtures preserve agent metadata while restoring its distinct license contract
@@ -222,7 +219,7 @@ class TestSkillGuard(UnitTest.TestCase):
 
     # agent skill repair stays inside the selected worktree and preserves all nonlicense frontmatter
     def TestSkillField(self) -> None:
-        GuardValues = LoadGuard()
+        GuardModule = LoadGuard()
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             SkillPath = RootPath / ".agents" / "skills" / "alpha" / "SKILL.md"
@@ -230,8 +227,8 @@ class TestSkillGuard(UnitTest.TestCase):
             SkillPath.write_bytes(
                 b"---\r\nname: alpha\r\nlicense: damaged\r\n---\r\nbody\r\n"
             )
-            IsFixed, ReasonText = GuardValues["RepairHeadMut"](
-                SkillPath, GuardValues["LoadCanon"](), RootPath
+            IsFixed, ReasonText = GuardModule.RepairHeadMut(
+                SkillPath, GuardModule.LoadCanon(), RootPath
             )
             self.assertTrue(IsFixed, ReasonText)
             SourceBytes = SkillPath.read_bytes()
@@ -244,7 +241,7 @@ class TestHeadGuard(UnitTest.TestCase):
 
     # exact commit and worktree checks prevent symbolic revisions or a stale materialized head
     def TestExactHead(self) -> None:
-        GuardValues = LoadGuard()
+        GuardModule = LoadGuard()
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             FixtureInfo = RepoFixture(RootPath)
@@ -252,12 +249,12 @@ class TestHeadGuard(UnitTest.TestCase):
             BaseRef = FixtureInfo.CommitAll("base")
             FixtureInfo.MoveFile("Source.py", "Target.py")
             HeadRef = FixtureInfo.CommitAll("head")
-            self.assertTrue(GuardValues["IsCommit"](HeadRef, RootPath))
-            self.assertFalse(GuardValues["IsCommit"]("HEAD", RootPath))
+            self.assertTrue(GuardModule.IsCommit(HeadRef, RootPath))
+            self.assertFalse(GuardModule.IsCommit("HEAD", RootPath))
             self.assertEqual(
-                GuardValues["GetDiffFiles"](BaseRef, HeadRef, RootPath), ["Target.py"]
+                GuardModule.GetDiffFiles(BaseRef, HeadRef, RootPath), ["Target.py"]
             )
-            WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](RootPath, HeadRef)
+            WorktreeRoot, ReasonText = GuardModule.CheckWorktree(RootPath, HeadRef)
             self.assertEqual(WorktreeRoot, RootPath.resolve(), ReasonText)
-            WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](RootPath, "0" * 40)
+            WorktreeRoot, ReasonText = GuardModule.CheckWorktree(RootPath, "0" * 40)
             self.assertIsNone(WorktreeRoot, ReasonText)

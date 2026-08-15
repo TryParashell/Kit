@@ -8,12 +8,15 @@
 
 from pathlib import Path as FilePath
 from typing import Callable as ValueFactory
+from typing import cast as CastValue
 from typing import Mapping as TypeMap
 from typing import Protocol as TypeProtocol
 from typing import runtime_checkable as RuntimeCheck
 from typing import TypeVar
 
-from interchange.serialization import DumpJson, FromData, LoadJson, ToData
+from interchange.serialization.Deserialize import FromData
+from interchange.serialization.EncodeData import ToData
+from interchange.serialization.JsonCodec import DumpJson, LoadJson
 from interchange.serialization.WireData import WireData
 
 
@@ -45,7 +48,7 @@ def FromMapping(
     ):
         raise TypeError("data does not describe a CadDocument")
     ResultValue.AssertValid()
-    return ResultValue
+    return CastValue(DocumentType, ResultValue)
 
 
 # json output centralizes deterministic serialization options for document methods
@@ -61,7 +64,7 @@ def FromJson(ClassType: type[DocumentType], SourceValue: str) -> DocumentType:
     ):
         raise TypeError("JSON does not describe a CadDocument")
     ResultValue.AssertValid()
-    return ResultValue
+    return CastValue(DocumentType, ResultValue)
 
 
 # file output provides atomic ownership of path normalization and parent creation

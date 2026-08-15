@@ -8,31 +8,21 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass as MakeDataClass
+
 from interchange.geometry.models.BoundingBox import BoundingBox
-from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelBase import ModelBase
 
 
 # topology summaries expose counts without requiring every caller to inspect boundary data
-@ModelDataMut(
-    DefaultMap={
-        "SolidCount": 0,
-        "ShellCount": 0,
-        "FaceCount": 0,
-        "EdgeCount": 0,
-        "VertexCount": 0,
-        "Volume": None,
-        "SurfaceArea": None,
-        "BoundingBox": None,
-        "IsValid": None,
-    }
-)
+@MakeDataClass(frozen=True, slots=True)
 class TopologyCounts(ModelBase):
-    SolidCount: int
-    ShellCount: int
-    FaceCount: int
-    EdgeCount: int
-    VertexCount: int
-    Volume: float | None
-    SurfaceArea: float | None
-    BoundingBox: BoundingBox | None
-    IsValid: bool | None
+    SolidCount: int = 0
+    ShellCount: int = 0
+    FaceCount: int = 0
+    EdgeCount: int = 0
+    VertexCount: int = 0
+    Volume: float | None = None
+    SurfaceArea: float | None = None
+    BoundingBox: BoundingBox | None = None
+    IsValid: bool | None = None

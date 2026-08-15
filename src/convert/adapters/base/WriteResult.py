@@ -186,36 +186,22 @@ class WriteResult(ContractBase):
     def transferred_capabilities(self) -> frozenset[Capability]:
         return self.TransferCaps
 
+    # canonical native capability access supports both modern and historical result consumers
+    @property
+    def NativeCaps(self) -> frozenset[Capability]:
+        return GetNativeCaps(self.Transfers)
+
+    # canonical carrier capability access keeps reversible preservation evidence directly typed
+    @property
+    def CarrierCaps(self) -> frozenset[Capability]:
+        return GetCarrierCaps(self.Transfers)
+
     # legacy callers need native capability accounting without reflection
     @property
     def native_capabilities(self) -> frozenset[Capability]:
-        return GetNativeCaps(self.Transfers)
+        return self.NativeCaps
 
     # legacy callers need carrier capability accounting without reflection
     @property
     def carrier_capabilities(self) -> frozenset[Capability]:
-        return GetCarrierCaps(self.Transfers)
-
-
-for LegacyName, PropertyName in {
-    "transferred_capabilities": "TransferCaps",
-    "roundtrip_safe": "IsRoundtripSafe",
-    "near_lossless": "IsNearLossless",
-}.items():
-    setattr(WriteResult, LegacyName, getattr(WriteResult, PropertyName))
-
-
-# native view stays focused because target representation is independently useful
-def GetNativeView(SelfValue: WriteResult) -> frozenset[Capability]:
-    return GetNativeCaps(SelfValue.Transfers)
-
-
-# carrier view stays focused because reversible preservation is independently useful
-def GetCarrierView(SelfValue: WriteResult) -> frozenset[Capability]:
-    return GetCarrierCaps(SelfValue.Transfers)
-
-
-setattr(WriteResult, "NativeCaps", property(GetNativeView))
-setattr(WriteResult, "CarrierCaps", property(GetCarrierView))
-setattr(WriteResult, "native_capabilities", getattr(WriteResult, "NativeCaps"))
-setattr(WriteResult, "carrier_capabilities", getattr(WriteResult, "CarrierCaps"))
+        return self.CarrierCaps

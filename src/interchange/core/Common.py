@@ -9,8 +9,9 @@
 from __future__ import annotations
 
 from types import MappingProxyType as FrozenMap
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
+from typing import overload as TypeOverload
+from typing import TypeVar
 
 
 # recursive scalar typing exists because payload contracts must reject unsupported primitive values
@@ -21,8 +22,22 @@ KJsonScalar = str | int | float | bool | None
 KJsonValue = KJsonScalar | list["KJsonValue"] | dict[str, "KJsonValue"]
 
 
+# mapping factories preserve each caller value type without widening it to any
+MapValue = TypeVar("MapValue")
+
+
+# empty immutable mappings provide a concrete object value contract for default factories
+@TypeOverload
+def FreezeMapping() -> TypeMap[str, object]: ...
+
+
+# populated immutable mappings retain their precise member type for model fields
+@TypeOverload
+def FreezeMapping(SourceValues: TypeMap[str, MapValue]) -> TypeMap[str, MapValue]: ...
+
+
 # immutable mappings prevent accidental mutation of frozen interchange records
 def FreezeMapping(
-    SourceValues: TypeMap[str, AnyValue] | None = None,
-) -> TypeMap[str, AnyValue]:
+    SourceValues: TypeMap[str, MapValue] | None = None,
+) -> TypeMap[str, MapValue] | TypeMap[str, object]:
     return FrozenMap(dict(SourceValues or {}))

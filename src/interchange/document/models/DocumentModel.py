@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from dataclasses import dataclass as MakeDataClass
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyData import AssemblyData
@@ -19,8 +20,8 @@ from interchange.document.models.DocumentRoot import DocumentRoot
 from interchange.enums.EnumDocument import Capability
 from interchange.enums.EnumUnits import UnitSystem
 from interchange.features.FeatureBody import DesignBody
-from interchange.mesh import SurfaceMesh
-from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.mesh.SurfaceMesh import SurfaceMesh
+from interchange.core.ModelBase import ModelBase
 from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.records.RecordConfig import Configuration
 from interchange.records.RecordDiagnostic import Diagnostic
@@ -33,19 +34,7 @@ from interchange.records.RecordParameter import Parameter
 
 
 # portable cad exchange needs one immutable root connecting every neutral model domain
-@ModelDataMut(
-    DefaultMap={
-        "Meshes": (),
-        "BrepPayloads": (),
-        "Diagnostics": (),
-        "Capabilities": frozenset[Capability](),
-        "Units": UnitSystem.KMillimeter,
-        "SchemaVersion": "1.0",
-        "Assembly": None,
-        "BrepModel": None,
-    },
-    FactoryMap={"Metadata": FreezeMapping},
-)
+@MakeDataClass(frozen=True, slots=True)
 class CadDocument(DocumentRoot, DocumentApi, ModelBase):
     Source: CadSource
     Configurations: tuple[Configuration, ...]
@@ -55,12 +44,12 @@ class CadDocument(DocumentRoot, DocumentApi, ModelBase):
     Selections: tuple[Selection, ...]
     FeatureTimeline: tuple[FeatureStep, ...]
     Bodies: tuple[DesignBody, ...]
-    Meshes: tuple[SurfaceMesh, ...]
-    BrepPayloads: tuple[BrepPayload, ...]
-    Diagnostics: tuple[Diagnostic, ...]
-    Capabilities: frozenset[Capability]
-    Metadata: TypeMap[str, AnyValue]
-    Units: UnitSystem
-    SchemaVersion: str
-    Assembly: AssemblyData | None
-    BrepModel: BrepModel | None
+    Meshes: tuple[SurfaceMesh, ...] = ()
+    BrepPayloads: tuple[BrepPayload, ...] = ()
+    Diagnostics: tuple[Diagnostic, ...] = ()
+    Capabilities: frozenset[Capability] = frozenset()
+    Metadata: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    Units: UnitSystem = UnitSystem.KMillimeter
+    SchemaVersion: str = "1.0"
+    Assembly: AssemblyData | None = None
+    BrepModel: BrepModel | None = None

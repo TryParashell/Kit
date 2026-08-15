@@ -203,7 +203,9 @@ def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> st
     )
     AddAliasesMut(SourceLines, ProgramData, OwnerConst, OpsConst)
     SourceLines.append("")
-    return FormatSource("\n".join(SourceLines))
+    RenderedText = FormatSource("\n".join(SourceLines))
+    RegistryMarker = "\n# explicit ordering keeps generated imports deterministic while offsets govern composition"
+    return RenderedText.replace(RegistryMarker, "\n" + RegistryMarker, 1)
 
 
 # removal discovery stays isolated so facade parsing and source reconstruction have separate contracts

@@ -8,80 +8,78 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from dataclasses import dataclass as MakeDataClass
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumFeatures import BooleanOp
 from interchange.features.FeatureContract import FeatureDef
 from interchange.features.FeatureExtrude import ExtrudeEnd
-from interchange.core.ModelBase import ModelDataMut
 from interchange.records.RecordParameter import ParameterValue
 from interchange.geometry.models.VectorSpace import SpaceVector
 
 
 # fillets retain constant and variable radius bindings for target reconstruction
-@ModelDataMut(DefaultMap={"VariableRadiusParamIds": ()})
+@MakeDataClass(frozen=True, slots=True)
 class FilletFeature(FeatureDef):
     Radius: ParameterValue
-    VariableRadiusParamIds: tuple[str, ...]
+    VariableRadiusParamIds: tuple[str, ...] = ()
 
 
 # revolutions preserve axis direction and angular extent rather than only geometry
-@ModelDataMut(DefaultMap={"IsReversed": False, "IsSymmetric": False})
+@MakeDataClass(frozen=True, slots=True)
 class RevolveFeature(FeatureDef):
     Angle: ParameterValue
     AxisEntityId: str
-    IsReversed: bool
-    IsSymmetric: bool
+    IsReversed: bool = False
+    IsSymmetric: bool = False
 
 
 # holes retain diameter depth and termination so targets create native features
-@ModelDataMut(DefaultMap={"EndCondition": ExtrudeEnd.KBlind})
+@MakeDataClass(frozen=True, slots=True)
 class HoleFeature(FeatureDef):
     Diameter: ParameterValue
     Depth: ParameterValue
-    EndCondition: ExtrudeEnd | str
+    EndCondition: ExtrudeEnd | str = ExtrudeEnd.KBlind
 
 
 # chamfers retain alternate measurement modes so targets receive equivalent intent
-@ModelDataMut(
-    DefaultMap={"ValueMode": "equal_distance", "SecondDistance": None, "Angle": None}
-)
+@MakeDataClass(frozen=True, slots=True)
 class ChamferFeature(FeatureDef):
     Distance: ParameterValue
-    ValueMode: str
-    SecondDistance: ParameterValue | None
-    Angle: ParameterValue | None
+    ValueMode: str = "equal_distance"
+    SecondDistance: ParameterValue | None = None
+    Angle: ParameterValue | None = None
 
 
 # shell features retain thickness orientation when topology cannot recover intent
-@ModelDataMut(DefaultMap={"IsOutward": None})
+@MakeDataClass(frozen=True, slots=True)
 class ShellFeature(FeatureDef):
     Thickness: ParameterValue
-    IsOutward: bool | None
+    IsOutward: bool | None = None
 
 
 # linear patterns preserve editable pitch count and direction bindings
-@ModelDataMut(DefaultMap={"IsReversed": False})
+@MakeDataClass(frozen=True, slots=True)
 class LinearPattern(FeatureDef):
     Spacing: ParameterValue
     InstanceCount: int
     DirectionSelectionId: str
-    IsReversed: bool
+    IsReversed: bool = False
 
 
 # circular patterns preserve angular span count and selected axis bindings
-@ModelDataMut(DefaultMap={"IsReversed": False})
+@MakeDataClass(frozen=True, slots=True)
 class CirclePattern(FeatureDef):
     Angle: ParameterValue
     InstanceCount: int
     AxisSelectionId: str
-    IsReversed: bool
+    IsReversed: bool = False
 
 
 # reference planes retain support and offset bindings for editable reconstruction
-@ModelDataMut
+@MakeDataClass(frozen=True, slots=True)
 class RefPlaneFeature(FeatureDef):
     SupportPlaneId: str
     ReferencePlaneId: str
@@ -89,33 +87,33 @@ class RefPlaneFeature(FeatureDef):
 
 
 # dome features retain their driving height rather than only resulting surfaces
-@ModelDataMut
+@MakeDataClass(frozen=True, slots=True)
 class DomeFeature(FeatureDef):
     Height: ParameterValue
 
 
 # body moves retain explicit translations and copy intent across histories
-@ModelDataMut(DefaultMap={"IsCopy": False})
+@MakeDataClass(frozen=True, slots=True)
 class MoveBodyFeature(FeatureDef):
     Translation: SpaceVector
-    IsCopy: bool
+    IsCopy: bool = False
 
 
 # combine features preserve constructive operation intent between modeling kernels
-@ModelDataMut(DefaultMap={"Operation": BooleanOp.KJoin})
+@MakeDataClass(frozen=True, slots=True)
 class CombineFeature(FeatureDef):
-    Operation: BooleanOp
+    Operation: BooleanOp = BooleanOp.KJoin
 
 
 # scale features retain anisotropic factors needed to reconstruct target operations
-@ModelDataMut
+@MakeDataClass(frozen=True, slots=True)
 class ScaleFeature(FeatureDef):
     Factors: SpaceVector
 
 
 # native definitions preserve unsupported data without claiming portable semantics
-@ModelDataMut(FactoryMap={"ObjectData": FreezeMapping})
+@MakeDataClass(frozen=True, slots=True)
 class NativeFeature(FeatureDef):
     FormatId: str
     TypeId: str
-    ObjectData: TypeMap[str, AnyValue]
+    ObjectData: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)

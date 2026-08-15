@@ -32,12 +32,12 @@ CompatMethod: TypeAlias = tuple[
 
 # method contracts stay declarative because exact historical reflection spans several split behaviors
 KDocumentMethods: tuple[CompatMethod, ...] = (
-    ("ToMapping", "to_dict", {}, (), "dict[str, Any]"),
+    ("ToMapping", "to_dict", {}, (), "dict[str, WireData]"),
     (
         "FromMapping",
         "from_dict",
-        {"value": "Mapping[str, Any]"},
-        (("value", "Mapping[str, Any]"),),
+        {"value": "Mapping[str, WireData]"},
+        (("value", "Mapping[str, WireData]"),),
         "CadDocument",
     ),
     (
@@ -140,17 +140,17 @@ def BindDocumentMut(DocumentType: type) -> None:
         FindEntity,
         "_lookup",
         {
-            "items": "tuple[Any, ...]",
+            "items": "tuple[EntityType, ...]",
             "entity_id": "str",
             "label": "str",
-            "return": "Any",
+            "return": "EntityType",
         },
         MakeLegacySig(
             (
-                ("items", "tuple[Any, ...]"),
+                ("items", "tuple[EntityType, ...]"),
                 ("entity_id", "str"),
                 ("label", "str"),
             ),
-            "Any",
+            "EntityType",
         ),
     )

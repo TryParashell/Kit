@@ -42,7 +42,7 @@ def GetMateErrors(
                     f"mate {MateValue.EntityId} references entity from another assembly"
                 )
         OwnerDef = Definitions.get(MateValue.OwnerDefinitionId)
-        TargetDocument = DocumentValue
+        TargetDocument: CadDocument | None = DocumentValue
         if OwnerDef is not None and OwnerDef.DocumentId:
             TargetDocument = DocumentValues.get(OwnerDef.DocumentId)
         if TargetDocument is not None:

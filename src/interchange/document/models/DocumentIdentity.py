@@ -7,7 +7,6 @@
 # to you under it immediately and permanently.
 
 from dataclasses import is_dataclass as IsDataClass
-from functools import cache as CacheResult
 from typing import cast as CastValue
 from typing import get_args as GetTypeArgs
 from typing import get_origin as GetTypeOrigin
@@ -38,7 +37,6 @@ def FormatTypeLabel(SourceValue: type[object]) -> str:
 
 
 # validation needs identified collections without maintaining a fragile manual registry
-@CacheResult
 def GetIdFields(ValueType: type[object]) -> tuple[tuple[str, str], ...]:
     RawHints: object = GetTypeHints(ValueType)
     TypeHints = CastValue(dict[str, object], RawHints)

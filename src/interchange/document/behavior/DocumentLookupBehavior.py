@@ -6,6 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from typing import cast as CastValue
+
 from interchange.features.FeatureStep import FeatureStep
 from interchange.records.RecordParameter import Parameter
 from interchange.geometry.models.Sketch import Sketch
@@ -18,24 +20,36 @@ class DocumentLookup:
 
     # parameter lookup remains discoverable without coupling storage to callers
     def GetParameter(self, EntityId: str) -> Parameter:
-        from interchange.document.behavior.DocumentLookup import GetParameter
+        from interchange.document.behavior.DocumentLookup import (
+            GetParameter,
+            LookupDocument,
+        )
 
-        return GetParameter(self, EntityId)
+        return GetParameter(CastValue(LookupDocument, self), EntityId)
 
     # sketch lookup remains discoverable without coupling storage to callers
     def GetSketch(self, EntityId: str) -> Sketch:
-        from interchange.document.behavior.DocumentLookup import GetSketch
+        from interchange.document.behavior.DocumentLookup import (
+            GetSketch,
+            LookupDocument,
+        )
 
-        return GetSketch(self, EntityId)
+        return GetSketch(CastValue(LookupDocument, self), EntityId)
 
     # feature lookup remains discoverable without coupling timeline storage to callers
     def GetFeature(self, EntityId: str) -> FeatureStep:
-        from interchange.document.behavior.DocumentLookup import GetFeature
+        from interchange.document.behavior.DocumentLookup import (
+            GetFeature,
+            LookupDocument,
+        )
 
-        return GetFeature(self, EntityId)
+        return GetFeature(CastValue(LookupDocument, self), EntityId)
 
     # plane lookup remains discoverable without coupling support storage to callers
     def GetPlane(self, EntityId: str) -> SupportPlane:
-        from interchange.document.behavior.DocumentLookup import GetPlane
+        from interchange.document.behavior.DocumentLookup import (
+            GetPlane,
+            LookupDocument,
+        )
 
-        return GetPlane(self, EntityId)
+        return GetPlane(CastValue(LookupDocument, self), EntityId)

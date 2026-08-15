@@ -81,7 +81,7 @@ class ModelMeta(type):
                     continue
                 raise TypeError(f"duplicate model field {ModelName!r}")
             TranslatedValues[ModelName] = FieldValue
-        ResultValue: object = super().__call__(*ArgValues, **TranslatedValues)
+        ResultValue: object = type.__call__(self, *ArgValues, **TranslatedValues)
         return CastValue(ModelValue, ResultValue)
 
     # implementation names remain available after historical reflection identity is restored

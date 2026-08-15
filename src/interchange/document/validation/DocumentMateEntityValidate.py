@@ -93,7 +93,7 @@ def GetSelectErrors(
     if not EntityValue.SelectionId or not IsValidPath:
         return ()
     TargetDef = Definitions.get(CurrentDefId)
-    TargetDocument = DocumentValue
+    TargetDocument: CadDocument | None = DocumentValue
     if TargetDef is not None and TargetDef.DocumentId:
         TargetDocument = DocumentValues.get(TargetDef.DocumentId)
     if TargetDocument is None:

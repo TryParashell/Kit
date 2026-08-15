@@ -15,6 +15,7 @@ from interchange.document.models.DocumentError import DocumentError
 from interchange.document.models.DocumentIdentity import GetIdGroups
 from interchange.document.models.DocumentModel import CadDocument
 from interchange.enums.EnumDocument import Capability
+from interchange.serialization.Wire import GetModelField
 
 
 # decoded capability collections need runtime checks before validation trusts their members
@@ -44,8 +45,7 @@ def GetDocErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
         IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
-        CanonicalName = NameValue.title().replace("_", "")
-        IdentitySets[CanonicalName] = set(IdValues)
+        IdentitySets[GetModelField(NameValue)] = set(IdValues)
     ErrorValues.extend(GetRefErrors(DocumentValue, IdentitySets))
     ErrorValues.extend(GetFeatureErrs(DocumentValue, IdentitySets))
     BrepValue: object = DocumentValue.BrepModel

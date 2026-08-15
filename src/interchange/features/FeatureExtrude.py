@@ -8,9 +8,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass as MakeDataClass
+
 from interchange.enums.EnumBase import WireEnum
 from interchange.features.FeatureContract import FeatureDef
-from interchange.core.ModelBase import ModelDataMut
 from interchange.records.RecordParameter import ParameterValue
 from interchange.geometry.models.VectorSpace import SpaceVector
 
@@ -31,33 +32,18 @@ class ExtrudeEnd(WireEnum):
 
 
 # extrusions retain directional and termination choices needed for reconstruction
-@ModelDataMut(
-    DefaultMap={
-        "EndCondition": ExtrudeEnd.KBlind,
-        "IsReversed": False,
-        "IsSymmetric": False,
-        "Direction": None,
-        "SecondLength": None,
-        "SecondEndCondition": None,
-        "Offset": None,
-        "SecondOffset": None,
-        "DraftAngle": None,
-        "SecondDraftAngle": None,
-        "UpToReference": "",
-        "SecondUpToRef": "",
-    }
-)
+@MakeDataClass(frozen=True, slots=True)
 class ExtrudeFeature(FeatureDef):
     Length: ParameterValue
-    EndCondition: ExtrudeEnd | str
-    IsReversed: bool
-    IsSymmetric: bool
-    Direction: SpaceVector | None
-    SecondLength: ParameterValue | None
-    SecondEndCondition: ExtrudeEnd | str | None
-    Offset: ParameterValue | None
-    SecondOffset: ParameterValue | None
-    DraftAngle: ParameterValue | None
-    SecondDraftAngle: ParameterValue | None
-    UpToReference: str
-    SecondUpToRef: str
+    EndCondition: ExtrudeEnd | str = ExtrudeEnd.KBlind
+    IsReversed: bool = False
+    IsSymmetric: bool = False
+    Direction: SpaceVector | None = None
+    SecondLength: ParameterValue | None = None
+    SecondEndCondition: ExtrudeEnd | str | None = None
+    Offset: ParameterValue | None = None
+    SecondOffset: ParameterValue | None = None
+    DraftAngle: ParameterValue | None = None
+    SecondDraftAngle: ParameterValue | None = None
+    UpToReference: str = ""
+    SecondUpToRef: str = ""
