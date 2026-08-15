@@ -194,9 +194,7 @@ def CheckNestedCaps() -> None:
         document_id="document:child",
         source_path="Child.FCStd",
     )
-    InstanceValue = ComponentInst(
-        "instance:child", "Child", ChildDef.id, RootDef.id
-    )
+    InstanceValue = ComponentInst("instance:child", "Child", ChildDef.id, RootDef.id)
     MateEntityValue = MateEntity(
         "mate-entity:root", RootDef.id, (), MateEntityKind.KPlane
     )

@@ -15,7 +15,6 @@ from inspect import signature as GetSignature
 from types import ModuleType
 import typing as TypingTypes
 from typing import Mapping as TypeMap
-from typing import cast as CastValue
 
 from interchange.compatibility.PythonCompatData import KLegacyAnnots, KLegacyModels
 from interchange.core.Reflection import (

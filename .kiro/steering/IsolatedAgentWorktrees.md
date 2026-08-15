@@ -4,42 +4,24 @@ inclusion: always
 
 # Isolated Agent Worktrees And Draft Pull Requests
 
-Every future agent that performs repository work MUST use its own isolated Git worktree and MUST finish by opening a draft pull request. Do not edit, stage, commit, or otherwise work from the user's current checkout.
+Every future agent or sub-agent that performs repository work MUST use its own isolated Git worktree or an equivalent platform-provided isolated checkout. An agent MUST NOT make changes in the invoking agent's worktree.
 
-## Start Gate
+## Required Workflow
 
-Before changing files:
+1. Before delegation, create or select a dedicated worktree and non-protected feature branch for that agent. Use one worktree and branch per agent task; never share them between concurrent agents.
+2. Give the agent only its isolated checkout as its working directory. Preserve all user-owned and caller-owned changes outside that checkout.
+3. Require the agent to inspect, implement, format, and verify the task entirely inside its isolated checkout.
+4. Require the agent to commit only its task changes to its feature branch and push only that branch. It MUST never write to `main` or another protected branch.
+5. At the end, require the agent to open a draft pull request targeting the repository's normal base branch. The draft PR description MUST summarize the changes, list verification performed, and disclose failures or remaining blockers.
+6. Treat the draft PR URL as the final handoff artifact. Do not merge the PR automatically.
 
-1. Inspect the repository, current branch, remotes, and existing worktrees without modifying them.
-2. Preserve all existing tracked, staged, unstaged, and untracked state as user-owned work.
-3. Create a unique non-protected branch and a unique worktree directory outside the current checkout. Use the available agent or workspace manager when it provides isolated worktrees; otherwise use `git worktree add -b <branch> <path> <base-ref>`.
-4. Base the worktree on the intended remote base branch when it is available. Never create work on `main`, `master`, `release`, or `release/*`.
-5. Perform every edit, generated-file update, dependency operation, test, commit, and push inside that isolated worktree.
+## Capability Fallbacks
 
-If an isolated worktree cannot be created safely, stop before modifying the repository and report the blocker. Never fall back to the current checkout.
-
-## Isolation Rules
-
-- Use one worktree and one branch per agent task. Never share a writable worktree between concurrent agents.
-- Choose collision-safe branch and worktree names that identify the task or agent.
-- Do not copy dirty changes from the user's checkout unless the user explicitly includes them in the task.
-- Do not delete, prune, reset, clean, overwrite, or reuse another worktree or branch.
-- Do not remove the task worktree at completion unless the user explicitly requests cleanup.
-- Follow the repository's protected-branch and user-owned-workspace rules throughout.
+- Kiro Web tasks already run in isolated sandbox checkouts and normally create branches and pull requests. Preserve that isolation and make the resulting pull request a draft when the platform exposes draft control.
+- If the agent runtime cannot create worktrees, use its native isolated workspace, sandbox, or checkout instead; never fall back to the caller's worktree.
+- If credentials, remote access, or draft-PR tooling are unavailable, complete and verify the work on the isolated feature branch, then report the exact blocker and the branch or commit that is ready for handoff. Never claim a draft PR exists unless creation succeeded.
+- Read-only advisory agents that make no repository changes do not require a worktree or pull request.
 
 ## Completion Gate
 
-Before reporting completion:
-
-1. Complete and verify the requested work with no known failures.
-2. Review the task branch diff and ensure it contains only intended changes and no secrets.
-3. Commit the intended changes on the task branch.
-4. Push only the task branch to its remote.
-5. Open a draft pull request targeting the intended base branch, preferably with `gh pr create --draft`, and include a concise summary plus verification results.
-6. Confirm the pull request is marked draft and report its URL.
-
-The task is not complete until the draft pull request exists. If authentication, permissions, remote configuration, or network access prevents the push or draft pull request, keep the work and commits in the isolated worktree, report the exact blocker, and do not claim completion.
-
-## Kiro Support
-
-Kiro loads workspace steering from `.kiro/steering/` in the IDE, CLI, Web, and Mobile clients and also supports `AGENTS.md`. Kiro's documented steering and custom-agent configuration does not itself guarantee automatic Git worktree provisioning, so agents must enforce this rule through available workspace orchestration or Git worktree commands.
+Repository-changing delegated work is not complete until the isolated branch is verified and a draft pull request has been created, except when a concrete capability blocker has been reported with a ready handoff branch or commit.

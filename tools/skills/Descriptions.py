@@ -21,6 +21,7 @@ KDescriptions = {
     "hostcontrol-contract": "Keep HostControl services, schemas, tests, documentation, and consumers synchronized. Use when changing a HostControl service contract.",
     "identifier-markers": "Prefix boolean-returning functions and methods with Is, Has, or Can. Use when naming or renaming any function or method that returns a bool.",
     "isolated-agent-worktrees": "Require every repository-working agent to use its own isolated Git worktree and finish with a draft pull request. Use before delegating or starting agent work.",
+    "isolated-agent-worktrees": "Run every repository-changing delegated agent in its own isolated worktree and finish with a draft pull request. Use when creating, invoking, or handing off work to another agent.",
     "layout-system": "Use existing global layout primitives and avoid hand-rolled layout. Use when changing React or Next.js page layout, shells, or spacing.",
     "linear-issue-tracking": "Track work end-to-end in Linear. Use when starting, updating, or completing a task that requires a Linear issue workflow.",
     "lossless-translation": "Hold every format translation to lossless, vendor loadable, application usable, and parametric output verified in the target application. Use when converting between CAD formats or reporting translation results.",

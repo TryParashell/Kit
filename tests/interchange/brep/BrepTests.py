@@ -133,7 +133,7 @@ def CheckBaseTypes() -> None:
 def CheckBadRefs() -> None:
     ModelValue = BuildTriangle()
     BrokenValue = ReplaceValue(
-        ModelValue, Edges=(ReplaceValue(ModelValue.Edges[0], CurveId="missing"),)
+        ModelValue, edges=(ReplaceValue(ModelValue.edges[0], curve_id="missing"),)
     )
     ErrorValues = BrokenValue.GetErrors(frozenset({"body:1"}))
     assert any(("missing curve" in ErrorText for ErrorText in ErrorValues))
@@ -154,7 +154,9 @@ def CheckBadSpline() -> None:
         (2, 2),
     )
     InvalidValue = ReplaceValue(
-        ModelValue, Curves=(InvalidCurve, *ModelValue.Curves[1:]), SchemaVersion=""
+        ModelValue,
+        curves=(InvalidCurve, *ModelValue.curves[1:]),
+        schema_version="",
     )
     ErrorValues = InvalidValue.GetErrors(frozenset({"body:1"}))
     assert "B-rep schema version must be a non-empty string" in ErrorValues
