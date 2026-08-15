@@ -233,10 +233,10 @@ def CheckNestedCaps() -> None:
     StaleChild = ReplaceValue(BaseValue, capabilities=frozenset(Capability))
     StaleAssembly = ReplaceValue(
         AssemblyValue,
-        Definitions=(RootDef, ReplaceValue(ChildDef, SourcePath="")),
-        Documents=(ComponentDoc("document:child", StaleChild),),
-        MateEntities=(),
-        Mates=(),
+        definitions=(RootDef, ReplaceValue(ChildDef, source_path="")),
+        documents=(ComponentDoc("document:child", StaleChild),),
+        mate_entities=(),
+        mates=(),
     )
     StaleRoot = ReplaceValue(
         RootValue, assembly=StaleAssembly, capabilities=frozenset()

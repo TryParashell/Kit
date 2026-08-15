@@ -32,14 +32,14 @@ def BuildAssembly() -> CadDocument:
         "definition:part",
         "Piston",
         ComponentKind.KPart,
-        DocumentId="document:part",
-        BodyIds=("body:1",),
+        document_id="document:part",
+        body_ids=("body:1",),
     )
     SubassemblyInst = ComponentInst(
         "instance:subassembly",
         "Piston-1",
-        Subassembly.EntityId,
-        RootValue.EntityId,
+        Subassembly.id,
+        RootValue.id,
         TransformMatrix(
             (
                 1.0,
@@ -62,19 +62,19 @@ def BuildAssembly() -> CadDocument:
         ),
     )
     PartInstance = ComponentInst(
-        "instance:part", "Piston-1", PartDef.EntityId, Subassembly.EntityId
+        "instance:part", "Piston-1", PartDef.id, Subassembly.id
     )
     FirstEntity = MateEntity(
         "mate-entity:assembly",
-        RootValue.EntityId,
+        RootValue.id,
         (),
         MateEntityKind.KPlane,
         SourceEntityId="plane:front",
     )
     SecondEntity = MateEntity(
         "mate-entity:part",
-        RootValue.EntityId,
-        (SubassemblyInst.EntityId, PartInstance.EntityId),
+        RootValue.id,
+        (SubassemblyInst.id, PartInstance.id),
         MateEntityKind.KPlane,
         SourceEntityId="plane:xy",
     )
@@ -82,16 +82,16 @@ def BuildAssembly() -> CadDocument:
         "mate:1",
         "Coincident1",
         MateKind.KCoincident,
-        RootValue.EntityId,
-        (FirstEntity.EntityId, SecondEntity.EntityId),
+        RootValue.id,
+        (FirstEntity.id, SecondEntity.id),
     )
     AssemblyValue = AssemblyData(
-        RootValue.EntityId,
+        RootValue.id,
         (RootValue, Subassembly, PartDef),
         (SubassemblyInst, PartInstance),
-        Documents=(ComponentDoc("document:part", PartValue),),
-        MateEntities=(FirstEntity, SecondEntity),
-        Mates=(MateValue,),
+        documents=(ComponentDoc("document:part", PartValue),),
+        mate_entities=(FirstEntity, SecondEntity),
+        mates=(MateValue,),
     )
     return CadDocument(
         source=CadSource("test.assembly", "memory", "1" * 64),
