@@ -2209,9 +2209,6 @@ _REPLAY_SEMANTIC_ATTRIBUTE = KReplaySemanticAttr
 _WRAPPER_METADATA_KEYS = KWrapperMetaKeys
 
 # this binding exists because shared behavior needs one stable value
-_application_version = AppVersion
-
-# this binding exists because shared behavior needs one stable value
 _binding_matches_payload = IsBindingMatch
 
 # this binding exists because shared behavior needs one stable value
