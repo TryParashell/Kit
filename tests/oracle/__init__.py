@@ -7,15 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+from tests.oracle.Session import IsOracleReady, OracleMissing, OracleSession
 
-from .session import (
-    SolidWorksSession,
-    SolidWorksUnavailable,
-    solidworks_available,
-)
-
-__all__ = [
-    "SolidWorksSession",
-    "SolidWorksUnavailable",
-    "solidworks_available",
-]
+# centralizes shared evidence so every related assertion uses one value
+__all__ = ["IsOracleReady", "OracleMissing", "OracleSession"]

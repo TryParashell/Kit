@@ -3,7 +3,7 @@ name: design-system-discipline
 description: "Apply shared design-system primitives and UI composition rules. Use when designing or modifying React or Next.js pages, views, or components."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/design-system-discipline.md"
+  source: ".kiro/steering/DesignSystemDiscipline.md"
   kiro-inclusion: "always"
 ---
 
@@ -86,7 +86,7 @@ theme: {
 }
 ```
 
-No page gets `37px` of padding because of a feeling. No raw hex in markup (`text-[#3b82f6]`), no inline pixel margins (`style={{ marginTop: 13 }}`), no arbitrary one-off values for foundational surfaces. This reinforces the token rule in `shadcn-pages.md`.
+No page gets `37px` of padding because of a feeling. No raw hex in markup (`text-[#3b82f6]`), no inline pixel margins (`style={{ marginTop: 13 }}`), no arbitrary one-off values for foundational surfaces. This reinforces the token rule in `ShadcnPages.md`.
 
 ## Rule 4: Page Templates. Compose From Approved Patterns.
 
@@ -123,7 +123,7 @@ Boring page files. Powerful shared components.
 Important components are owned by the shared layer. You CONSUME them; you do not clone a card and "just make it better." That is how a codebase ends up with nineteen different cards.
 
 - Need a new shared behavior? Extend the shared component (or propose adding it there), don't fork a private copy into a feature folder.
-- This is the same boundary as `component-architecture.md` Rule 2 and `shadcn-pages.md` Rule 5: generated/shared primitives are protected. Compose and wrap; don't duplicate or silently patch.
+- This is the same boundary as `ComponentArchitecture.md` Rule 2 and `ShadcnPages.md` Rule 5: generated/shared primitives are protected. Compose and wrap; don't duplicate or silently patch.
 
 ## Rule 6: Shared Packages / Monorepo Structure.
 
@@ -140,7 +140,7 @@ packages/
   tsconfig/
 ```
 
-When adding or refactoring frontend code: put reusable components, layouts, tokens, and configs in the shared packages — not copied per app. Application code imports from the shared layer (`@company/ui`, `@company/layouts`, `@company/design-tokens` style packages). Respect the existing monorepo wiring (this aligns with the `--monorepo` ShadCN init in `frontend-stack.md`). Do not introduce a second, divergent Tailwind config or UI copy inside an app.
+When adding or refactoring frontend code: put reusable components, layouts, tokens, and configs in the shared packages — not copied per app. Application code imports from the shared layer (`@company/ui`, `@company/layouts`, `@company/design-tokens` style packages). Respect the existing monorepo wiring (this aligns with the `--monorepo` ShadCN init in `FrontendStack.md`). Do not introduce a second, divergent Tailwind config or UI copy inside an app.
 
 ## Rule 7: Make Inconsistency Hard (Lint + Constraints).
 
@@ -152,7 +152,7 @@ Enforce the system through tooling, not vibes. When working in this workspace:
 
 ## Rule 8: Document & Protect States.
 
-Every shared component must account for its real states, not just the happy path: default, loading, error, empty, disabled, mobile, dark mode, long-text overflow. When you build or modify a shared component, handle these states (use `Skeleton` / `Alert` / designed empty states per `shadcn-pages.md`). Where a Storybook or component catalog exists, keep it in sync as the source of truth.
+Every shared component must account for its real states, not just the happy path: default, loading, error, empty, disabled, mobile, dark mode, long-text overflow. When you build or modify a shared component, handle these states (use `Skeleton` / `Alert` / designed empty states per `ShadcnPages.md`). Where a Storybook or component catalog exists, keep it in sync as the source of truth.
 
 ## Rule 9: Visual Stability.
 
@@ -173,7 +173,7 @@ Before considering any page or React view complete, confirm:
 2. Global layout comes from shared shells (`AppShell` / `layout.tsx` / `Page`); `page.tsx` files are thin and render approved page components.
 3. All values are tokens — no raw hex, inline pixel styles, or arbitrary spacing/radius literals for foundational surfaces.
 4. Reusable components, layouts, tokens, and configs live in the shared layer, not copied per app.
-5. No shared/owned component was cloned, forked, or silently patched (per `component-architecture.md` and `shadcn-pages.md`).
+5. No shared/owned component was cloned, forked, or silently patched (per `ComponentArchitecture.md` and `ShadcnPages.md`).
 6. Real component states (loading/error/empty/disabled/long-text) are handled, and shared-change blast radius was checked.
 
 If any check fails, the work is not done. Fix it before reporting completion.

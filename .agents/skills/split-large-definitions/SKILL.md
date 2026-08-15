@@ -3,7 +3,7 @@ name: split-large-definitions
 description: "Split substantial declarations into focused files with exact symbol imports. Use when adding or changing code structure, modules, classes, functions, variables, registries, or imports."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/split-large-definitions.md"
+  source: ".kiro/steering/SplitLargeDefinitions.md"
   kiro-inclusion: "always"
 ---
 
@@ -34,13 +34,15 @@ Small declarations may share a file only when they form one inseparable concept 
 - Add new behavior through a new module and one small registry dispatcher factory composition root or public entry point edit.
 - Keep registries declarative. A normal feature addition should add one explicit import and one registration entry without modifying unrelated branches.
 - Split large constant tables schemas and generated programs from the behavior that consumes them.
+- Keep one deterministic generated SOLIDWORKS serializer method table intact when that file represents exactly one natural recovered method. The same narrow allowance applies to its deduplicated owner catalog and explicit generated registry. It is valid only under the generated `programs` tree when regeneration checks and decomposition equivalence pass; it never applies to handwritten behavior facades or arbitrary chunks.
 - Put shared contracts and types in focused contract modules only when multiple implementations genuinely depend on them.
 - Keep tests focused by module and feature so a new implementation normally adds a new test file rather than expanding an unrelated large suite.
 
 ## Explicit imports
 
-- Import the exact symbol from its defining module such as `from package.feature_writer import FeatureWriter`.
-- Never use wildcard imports.
+- Import the exact symbol from its defining module such as `from Package.FeatureWriter import FeatureWriter`.
+- Never use wildcard imports in production tests scripts generated code or package facades.
+- Treat the steering checkers `IMP001` diagnostic as a merge blocking failure.
 - Never import a broad package or module when only one or two symbols are required.
 - Never depend on accidental transitive imports.
 - Never create convenience barrel modules that re export unrelated implementation symbols.
@@ -57,5 +59,6 @@ Before completing a code change verify:
 3. New behavior was added primarily through new files plus small composition edits.
 4. Every import names the narrowest required symbol and its real defining module.
 5. The diff can be reviewed feature by feature without navigating an unrelated monolithic file.
+6. Every oversized generated program table is one natural method owner catalog or explicit registry and passes deterministic regeneration plus decomposition equivalence.
 
 If a change requires repeatedly editing a large central file redesign the extension point before adding the feature.

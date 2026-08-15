@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+from __future__ import annotations
+
+from convert.adapters.solidworks.programs.Owners.Sldmodu.MoEntVisPropC.Serialize import (
+    KOwnerSites,
+)
+
+
+# isolated method data lets new reverse engineered serializers compose independently
+KMethodProgram = (
+    KOwnerSites,
+    {
+        "Contents/CMgr": (
+            (102, 2, 122, "primitive:ushort", 65535),
+            (104, 2, 135, "primitive:ushort", 0),
+            (106, 1, 188, "primitive:uchar", 3),
+            (298, 2, 122, "primitive:ushort", 65535),
+            (300, 2, 135, "primitive:ushort", 0),
+            (302, 1, 188, "primitive:uchar", 3),
+        ),
+        "Contents/Config-0": (
+            (257, 2, 122, "primitive:ushort", 65535),
+            (259, 2, 135, "primitive:ushort", 0),
+            (261, 1, 188, "primitive:uchar", 3),
+            (20575, 2, 122, "primitive:ushort", 65535),
+            (20577, 2, 135, "primitive:ushort", 0),
+            (20579, 1, 188, "primitive:uchar", 3),
+            (20878, 2, 122, "primitive:ushort", 65535),
+            (20880, 2, 135, "primitive:ushort", 0),
+            (20882, 1, 188, "primitive:uchar", 3),
+            (21199, 2, 122, "primitive:ushort", 65535),
+            (21201, 2, 135, "primitive:ushort", 0),
+            (21203, 1, 188, "primitive:uchar", 3),
+            (21520, 2, 122, "primitive:ushort", 65535),
+            (21522, 2, 135, "primitive:ushort", 0),
+            (21524, 1, 188, "primitive:uchar", 3),
+            (21781, 2, 122, "primitive:ushort", 65535),
+            (21783, 2, 135, "primitive:ushort", 0),
+            (21785, 1, 188, "primitive:uchar", 3),
+            (24013, 2, 122, "primitive:ushort", 65535),
+            (24015, 2, 135, "primitive:ushort", 0),
+            (24017, 1, 188, "primitive:uchar", 3),
+            (24331, 2, 122, "primitive:ushort", 65535),
+            (24333, 2, 135, "primitive:ushort", 0),
+            (24335, 1, 188, "primitive:uchar", 3),
+        ),
+        "Contents/Config-0-ResolvedFeatures": (
+            (132, 2, 122, "primitive:ushort", 65535),
+            (134, 2, 135, "primitive:ushort", 0),
+            (136, 1, 188, "primitive:uchar", 3),
+            (331, 2, 122, "primitive:ushort", 65535),
+            (333, 2, 135, "primitive:ushort", 0),
+            (335, 1, 188, "primitive:uchar", 3),
+            (533, 2, 122, "primitive:ushort", 65535),
+            (535, 2, 135, "primitive:ushort", 0),
+            (537, 1, 188, "primitive:uchar", 3),
+            (897, 2, 122, "primitive:ushort", 65535),
+            (899, 2, 135, "primitive:ushort", 0),
+            (901, 1, 188, "primitive:uchar", 3),
+            (1096, 2, 122, "primitive:ushort", 65535),
+            (1098, 2, 135, "primitive:ushort", 0),
+            (1100, 1, 188, "primitive:uchar", 3),
+            (1318, 2, 122, "primitive:ushort", 65535),
+            (1320, 2, 135, "primitive:ushort", 0),
+            (1322, 1, 188, "primitive:uchar", 3),
+            (1525, 2, 122, "primitive:ushort", 65535),
+            (1527, 2, 135, "primitive:ushort", 0),
+            (1529, 1, 188, "primitive:uchar", 3),
+            (1799, 2, 122, "primitive:ushort", 65535),
+            (1801, 2, 135, "primitive:ushort", 0),
+            (1803, 1, 188, "primitive:uchar", 3),
+            (1994, 2, 122, "primitive:ushort", 65535),
+            (1996, 2, 135, "primitive:ushort", 0),
+            (1998, 1, 188, "primitive:uchar", 3),
+            (2153, 2, 122, "primitive:ushort", 65535),
+            (2155, 2, 135, "primitive:ushort", 0),
+            (2157, 1, 188, "primitive:uchar", 3),
+            (2375, 2, 122, "primitive:ushort", 65535),
+            (2377, 2, 135, "primitive:ushort", 0),
+            (2379, 1, 188, "primitive:uchar", 3),
+            (2569, 2, 122, "primitive:ushort", 65535),
+            (2571, 2, 135, "primitive:ushort", 0),
+            (2573, 1, 188, "primitive:uchar", 3),
+            (2766, 2, 122, "primitive:ushort", 65535),
+            (2768, 2, 135, "primitive:ushort", 0),
+            (2770, 1, 188, "primitive:uchar", 3),
+            (3285, 2, 122, "primitive:ushort", 65535),
+            (3287, 2, 135, "primitive:ushort", 0),
+            (3289, 1, 188, "primitive:uchar", 3),
+            (3855, 2, 122, "primitive:ushort", 65535),
+            (3857, 2, 135, "primitive:ushort", 0),
+            (3859, 1, 188, "primitive:uchar", 3),
+            (4443, 2, 122, "primitive:ushort", 65535),
+            (4445, 2, 135, "primitive:ushort", 0),
+            (4447, 1, 188, "primitive:uchar", 3),
+            (4548, 2, 122, "primitive:ushort", 65535),
+            (4550, 2, 135, "primitive:ushort", 31),
+            (4552, 1, 188, "primitive:uchar", 3),
+            (5363, 2, 122, "primitive:ushort", 65535),
+            (5365, 2, 135, "primitive:ushort", 0),
+            (5367, 1, 188, "primitive:uchar", 3),
+        ),
+    },
+)

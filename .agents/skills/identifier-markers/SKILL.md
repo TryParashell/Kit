@@ -3,15 +3,15 @@ name: identifier-markers
 description: "Prefix boolean-returning functions and methods with Is, Has, or Can. Use when naming or renaming any function or method that returns a bool."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/identifier-markers.md"
+  source: ".kiro/steering/IdentifierMarkers.md"
   kiro-inclusion: "always"
 ---
 
 # Identifier Markers — Old-School Conventions Adapted For Python
 
-This rule layers three historically grounded conventions on top of `naming-convention.md` and `rationale-comments.md`. All three are old standards that cannot be adopted literally in Python, because Python identifiers cannot contain `?` or `!` and raw Hungarian-style prefixes would break the PascalCase and length rules already locked in. This file defines the adapted, Python-legal equivalents and makes them MANDATORY.
+This rule layers three historically grounded conventions on top of `NamingConvention.md` and `RationaleComments.md`. All three are old standards that cannot be adopted literally in Python, because Python identifiers cannot contain `?` or `!` and raw Hungarian-style prefixes would break the PascalCase and length rules already locked in. This file defines the adapted, Python-legal equivalents and makes them MANDATORY.
 
-Nothing here overrides `naming-convention.md` or `rationale-comments.md`. The length ranges, PascalCase, and the mandatory why-comment still apply to every identifier below.
+Nothing here overrides `NamingConvention.md` or `RationaleComments.md`. The length ranges, PascalCase, and the mandatory why-comment still apply to every identifier below.
 
 ## 1. Predicate Marking — adapted from the Lisp/Scheme `?` suffix
 
@@ -74,7 +74,7 @@ KMaxRetries = 5
 KDefaultTimeout = 30
 ```
 
-This applies only to true constants. A module-level global that gets reassigned during runtime is NOT a constant, takes no `K` prefix, and follows the plain variable rule in `naming-convention.md`.
+This applies only to true constants. A module-level global that gets reassigned during runtime is NOT a constant, takes no `K` prefix, and follows the plain variable rule in `NamingConvention.md`.
 
 `K` counts toward the 5–25 character range like any other letter. `KMax` is too short at 4; `KMaxRetries` at 11 is fine.
 
@@ -103,7 +103,7 @@ KCacheTtlSecs = 300
 - In-place mutators (mutate an argument, not `self`): must end with `Mut`.
 - True constants (module or class level, set once): must start with `K`.
 - All three still obey PascalCase, the 5–15 range for classes and defs, the 5–25 range for variables and constants, and the mandatory why-comment above them.
-- `__init__` and the other dunders remain exempt from all of the above, same as in `naming-convention.md`.
+- `__init__` and the other dunders remain exempt from all of the above, same as in `NamingConvention.md`.
 
 ## Verification
 

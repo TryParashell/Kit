@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+---
+name: CodeQL security and quality
+
+"on":
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - java-kotlin
+          - python
+    steps:
+      - name: Checkout repository
+        # yamllint disable-line rule:comments
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare CodeQL model extensions
+        shell: bash
+        run: |
+          mkdir -p .github/codeql
+          cp -R .github/CodeQL/extensions .github/codeql/extensions
+
+      - name: Initialize CodeQL
+        # yamllint disable-line rule:comments rule:line-length
+        uses: github/codeql-action/init@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config-file: ./.github/CodeQL/CodeqlConfig.yml
+
+      - name: Analyze repository
+        id: analysis
+        # yamllint disable-line rule:comments rule:line-length
+        uses: github/codeql-action/analyze@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+        with:
+          category: /language:${{ matrix.language }}
+          post-processed-sarif-path: CodeqlResults
+
+      - name: Block reported findings
+        run: |
+          mapfile -d '' SarifFiles < <(
+            find CodeqlResults -type f -name '*.sarif' -print0
+          )
+          if [ "${#SarifFiles[@]}" -eq 0 ]; then
+            echo "::error::CodeQL produced no SARIF output"
+            exit 1
+          fi
+          FindingCount="$(
+            jq -s '[.[].runs[]?.results[]?] | length' "${SarifFiles[@]}"
+          )"
+          if [ "$FindingCount" -ne 0 ]; then
+            echo "::error::CodeQL reported $FindingCount blocking findings"
+            exit 1
+          fi
+          echo "CodeQL reported no findings"

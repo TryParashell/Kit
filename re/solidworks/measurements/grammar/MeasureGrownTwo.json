@@ -1,0 +1,326 @@
+[
+  {
+    "path": "c:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\PADPLANE_rev_d5.SLDPRT",
+    "returncode": 0,
+    "seconds": 21.668754600003012,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@PADPLANE_rev_d5.Part",
+            10.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude2",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude2@PADPLANE_rev_d5.Part",
+            5.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 8500.0,
+    "surface_mm2": 3000.0000000000005,
+    "centre_mm": [
+      0.0,
+      0.0,
+      4.5588235294117645
+    ],
+    "status": "measured",
+    "attempts": 1
+  },
+  {
+    "path": "c:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\re\\parts\\G3_three_boss.SLDPRT",
+    "returncode": 0,
+    "seconds": 46.8604231000063,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@Part1.Part",
+            12.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 36000.0,
+    "surface_mm2": 9120.0,
+    "centre_mm": [
+      -8.176220810301927e-16,
+      0.0,
+      5.999999999999999
+    ],
+    "status": "measured",
+    "attempts": 1
+  },
+  {
+    "path": "c:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\re\\parts\\G4_four_boss.SLDPRT",
+    "returncode": 1,
+    "seconds": 120.38374800000747,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 81, in _GetGoodDispatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 58, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": "",
+    "status": "session-unavailable",
+    "attempts": 4
+  },
+  {
+    "path": "c:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\re\\parts\\G5_five_boss.SLDPRT",
+    "returncode": 1,
+    "seconds": 120.30034169999999,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 81, in _GetGoodDispatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 58, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": "",
+    "status": "session-unavailable",
+    "attempts": 4
+  },
+  {
+    "path": "c:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\BASELINE_40x20x10.SLDPRT",
+    "returncode": 1,
+    "seconds": 120.33481749999919,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 81, in _GetGoodDispatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 58, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": "",
+    "status": "session-unavailable",
+    "attempts": 4
+  }
+]

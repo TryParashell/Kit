@@ -3,13 +3,13 @@ name: rationale-comments
 description: "Explain why each class, function, lambda, and module-level constant exists in a comment directly above it. Use when adding or editing Python declarations."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/rationale-comments.md"
+  source: ".kiro/steering/RationaleComments.md"
   kiro-inclusion: "always"
 ---
 
 # Rationale Comment Convention — One "Why" Comment Above Every Definition
 
-This rule is MANDATORY for every definition in this codebase. It is separate from and in addition to `naming-convention.md`. Every class, `def`, lambda, and module-level global or constant requires exactly one comment directly above it explaining WHY it exists — not what it does, not how it works.
+This rule is MANDATORY for every definition in this codebase. It is separate from and in addition to `NamingConvention.md`. Every class, `def`, lambda, and module-level global or constant requires exactly one comment directly above it explaining WHY it exists — not what it does, not how it works.
 
 ## The Core Rule
 
@@ -153,7 +153,7 @@ Run Black as normal after writing code. It will never delete or reflow these com
 
 ## Enforcement
 
-Neither Black nor Python enforces any of this. Pair the predicate above with `IsValidName` from `naming-convention.md` into a single AST-walking pre-commit hook that:
+Neither Black nor Python enforces any of this. Pair the predicate above with `IsValidName` from `NamingConvention.md` into a single AST-walking pre-commit hook that:
 
 1. Walks the AST for every `ClassDef`, `FunctionDef`, `AsyncFunctionDef`, `Lambda`, and module-level `Assign`.
 2. Confirms a blank line plus a comment line immediately precedes it in source.
@@ -162,9 +162,9 @@ Neither Black nor Python enforces any of this. Pair the predicate above with `Is
 
 This is not optional tooling. Without it both conventions drift.
 
-## Relationship To no-stubs.md
+## Relationship To NoStubs.md
 
-`no-stubs.md` bans explanatory comments in code. This rule overrides that ban for exactly one case: the single mandated rationale comment above each definition. Everything else in `no-stubs.md` still stands — no `TODO`, no `FIXME`, no inline commentary inside function bodies, no comments standing in for missing logic. One rationale comment per definition, nothing more.
+`NoStubs.md` bans explanatory comments in code. This rule overrides that ban for exactly one case: the single mandated rationale comment above each definition. Everything else in `NoStubs.md` still stands — no `TODO`, no `FIXME`, no inline commentary inside function bodies, no comments standing in for missing logic. One rationale comment per definition, nothing more.
 
 ## Cheat Sheet
 

@@ -18,10 +18,10 @@ SOLIDWORKS**.
 
 | file        | what it establishes                                                                                                                                                                                                                                                                                                                                                                                                         | confidence                                                                                                                                    |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STATIC.md` | Static census of the 63-file real-world corpus through Kit's own container parser, no COM: `format_version` 4 in all 63, 61 distinct `file_id`s, 61 distinct signature triplets, 234 distinct `mo*`/`sg*` classes, 11 distinct tree-node flag values, 83 distinct stream names (30 present in all 63, **39 unknown to Kit**), plus a per-file table of bytes / streams / lanes / classes / nodes / scalars / sketch points. | **confirmed** as a census (measured over real bytes). The "present in all 63 files" column is labelled _candidate_ load-critical, not proven. |
+| `Static.md` | Static census of the 63-file real-world corpus through Kit's own container parser, no COM: `format_version` 4 in all 63, 61 distinct `file_id`s, 61 distinct signature triplets, 234 distinct `mo*`/`sg*` classes, 11 distinct tree-node flag values, 83 distinct stream names (30 present in all 63, **39 unknown to Kit**), plus a per-file table of bytes / streams / lanes / classes / nodes / scalars / sketch points. | **confirmed** as a census (measured over real bytes). The "present in all 63 files" column is labelled _candidate_ load-critical, not proven. |
 
-Machine-readable: `../../data/container_inventory_static.json`,
-`../../data/container_inventory_reader.json`, `../../data/corpus_census_per_file.json`.
+Machine-readable: `../../data/ContainerInventoryStatic.json`,
+`../../data/ContainerInventoryReader.json`, `../../data/CorpusCensusPerFile.json`.
 
 ## The signature table — the single most useful result in this workspace
 
@@ -63,16 +63,16 @@ and all three of its signatures are exactly the parallel entry. Nothing was hand
 Reproduce:
 
 ```powershell
-uv run python re\tooling\ghidra\gen_signature_table.py
-uv run python re\tooling\ghidra\gen_signature_table.py --check
-uv run python re\tooling\ghidra\sigtable.py
+uv run python re\tooling\ghidra\Generation\GenSignatureTable.py
+uv run python re\tooling\ghidra\Generation\GenSignatureTable.py --check
+uv run python re\tooling\ghidra\Sigtable.py
 ```
 
-`gen_signature_table.py` reads `re/binaries/sldmfcu.dll` (falling back to the install), verifies its
-SHA-256 against `re/binaries/manifest.json`, and writes both the shipped resource
+`GenSignatureTable.py` reads `re/binaries/sldmfcu.dll` (falling back to the install), verifies its
+SHA-256 against `re/binaries/Manifest.json`, and writes both the shipped resource
 `src/convert/adapters/solidworks/data/sldprt_signature_table.bin` and the provenance record
-`../../data/signature_table.json`. `--check` re-extracts and compares the shipped resource byte for
-byte. `sigtable.py` then rescans the corpora; that half needs the `.SLDPRT` corpora under
+`../../data/SignatureTable.json`. `--check` re-extracts and compares the shipped resource byte for
+byte. `Sigtable.py` then rescans the corpora; that half needs the `.SLDPRT` corpora under
 `.rescratch/`, while the 1000-entry extraction needs only the DLL.
 
 ### Why every mixer search failed
@@ -90,25 +90,25 @@ it.
 hardcoded pairs (they turned out to be table entries **711** `0xEC6E2386` and **750** `0x715BE98F`).
 It now serves all 1000 ids from the generated resource, and the donor template is no longer needed
 for the container framing. Supported stream content is also emitted from typed programs; unsupported
-feature families fail closed. See `../CORPUS_COVERAGE.md` for the current boundary.
+feature families fail closed. See `../CorpusCoverage.md` for the current boundary.
 
-`container.py` carries no signature bytes of its own. The base85 literal that used to sit in it was
+`Container.py` carries no signature bytes of its own. The base85 literal that used to sit in it was
 removed; the table is loaded from the package resource through `importlib.resources`, and
-`tests/convert/test_solidworks_signature_table.py` re-extracts from the tracked DLL in-test so the
+`tests/convert/solidworks/container/SolidworksSignatureTableTests.py` re-extracts from the tracked DLL in-test so the
 resource cannot drift from its source.
 
 ## Streams: droppable, stale-safe, load-critical
 
-Established by deleting streams and rebuilding in SOLIDWORKS (`../archive/MULTISTREAM.md` §5):
+Established by deleting streams and rebuilding in SOLIDWORKS (`../archive/Multistream.md` §5):
 
 | class             | streams                                                                                                                                        |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | **load-critical** | `Contents/Config-0-ResolvedFeatures`, `Contents/CMgr`, `Contents/Config-0-ModelHeader` + `Header2`, `Contents/Config-0`, `Contents/Definition` |
 
 Of the five load-critical streams, `Contents/Definition` is **solved and emitted from scratch** — see
-`../records/DEFINITION.md`, where a constructively emitted one is measured opening in SOLIDWORKS 2025
+`../records/Definition.md`, where a constructively emitted one is measured opening in SOLIDWORKS 2025
 with the correct volume and centre of mass in two different host documents. `Contents/CMgr` and
-`Contents/Config-0` remain the open blockers: `../archive/MULTISTREAM.md` §3 characterises 4 of 28
+`Contents/Config-0` remain the open blockers: `../archive/Multistream.md` §3 characterises 4 of 28
 `CMgr` nodes and 3 of 123 `Config-0` objects, and records that the `Config-0` growth rule is not
 general beyond four features.
 | **stale-safe** (keep the donor's copy, do not update) | `Contents/Config-0-LWDATA`, `Contents/DisplayLists`, `_MO_VERSION_*/Biography` |
@@ -119,13 +119,13 @@ than a cached solid being read back.
 
 `swXmlContents/KeyWords` is a stream in its own right and is the cheapest oracle in the format: plain
 XML, feature ids that match the binary tree nodes, authored dimensions as text. It **starts with a
-single `0x86` byte** and uses **CRLF**; a UTF-8 BOM crashes SOLIDWORKS. See `../GROUND_TRUTH.md` §1
-and `../archive/GRAMMAR.md`.
+single `0x86` byte** and uses **CRLF**; a UTF-8 BOM crashes SOLIDWORKS. See `../GroundTruth.md` §1
+and `../archive/Grammar.md`.
 
 ## Also relevant
 
-- `../records/ANSWERS.md` **Q7** is the full derivation of the signature table, including the
-  decompiled initialiser loop. `../../data/sldmfcu_sigtable_refs.c` is that function's decompiled C.
-- `../corpus/CORPUS2.md` §9 shows the container being rebuilt end to end four times — donor stream
+- `../records/Answers.md` **Q7** is the full derivation of the signature table, including the
+  decompiled initialiser loop. `../../data/SldmfcuSigtableRefs.txt` is that function's decompiled C.
+- `../corpus/CorpusTwo.md` §9 shows the container being rebuilt end to end four times — donor stream
   reused, `Partition` dropped, file id and triplet carried over — with measured volumes agreeing to
   12 significant figures.

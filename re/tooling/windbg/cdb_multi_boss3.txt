@@ -1,8 +1,0 @@
-.symopt+0x4000
-.symopt-0x20000
-.exepath+ C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS
-.reload /f swccu.dll
-bp swccu!su_CArchive::ReadObject ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x717) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x821) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0xa43) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x52d5) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x634c)) { .printf \"RO %p %x %d %p %x\\n\", poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50), @rsp, poi(@rcx+0x40)-poi(@rcx+0x48) }; gc"
-bp swccu!su_CArchive::ReadClass ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x717) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x821) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0xa43) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x52d5) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x634c)) { .printf \"RC %p %x %d %p %x\\n\", poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50), @rsp, poi(@rcx+0x40)-poi(@rcx+0x48) }; gc"
-bl
-g

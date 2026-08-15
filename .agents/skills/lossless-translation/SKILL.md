@@ -3,13 +3,13 @@ name: lossless-translation
 description: "Hold every format translation to lossless, vendor loadable, application usable, and parametric output verified in the target application. Use when converting between CAD formats or reporting translation results."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/lossless-translation.md"
+  source: ".kiro/steering/LosslessTranslation.md"
   kiro-inclusion: "always"
 ---
 
 # THE ONLY ACCEPTANCE CRITERION: LOSSLESS, VENDOR LOADABLE, APPLICATION USABLE, PARAMETRIC
 
-This is the acceptance gate for every translation this workspace performs. It outranks progress reports, partial results, and your own sense that a hard problem has been worked hard enough. It sits alongside `no-donor-blocks.md` and `no-stubs.md`.
+This is the acceptance gate for every translation this workspace performs. It outranks progress reports, partial results, and your own sense that a hard problem has been worked hard enough. It sits alongside `NoDonorBlocks.md` and `NoStubs.md`.
 
 ## THE CRITERION
 
@@ -52,7 +52,7 @@ State all of those numbers. A claim of success without them is not a claim, it i
 
 ## WHEN YOU ARE NOT THERE YET
 
-Say so plainly, in the first line, with the measured numbers. Then keep working. The stopping conditions are the ones in `no-donor-blocks.md`: **success, or running out of context.** Nothing else.
+Say so plainly, in the first line, with the measured numbers. Then keep working. The stopping conditions are the ones in `NoDonorBlocks.md`: **success, or running out of context.** Nothing else.
 
 Do not ask whether to continue. Do not offer a menu of next steps and wait. Identify the blocking artifact, say you are going after it, and go after it.
 

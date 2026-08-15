@@ -1,0 +1,304 @@
+[
+  {
+    "label": "circle",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\CIRCLE_r10.SLDPRT",
+    "stream_length": 10556,
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\CdbTraceCircle.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_trace_circle.log",
+    "cdb_reason": "quiet",
+    "cdb_seconds": 80.9,
+    "read_object_events": 286,
+    "status": "traced",
+    "objects": 285,
+    "definitions": 45,
+    "base_map_index": 109,
+    "tiles": true,
+    "header_bytes": 6,
+    "trailing_bytes": 0,
+    "counter_mismatches": 0,
+    "increment_rule": {
+      "classref": [
+        1
+      ],
+      "definition": [
+        2
+      ],
+      "null": [
+        0
+      ],
+      "objectref": [
+        0
+      ]
+    },
+    "cross_check": {
+      "static_definitions": 45,
+      "traced_definitions": 45,
+      "static_offsets_head": [
+        6,
+        203,
+        410,
+        606,
+        657,
+        890,
+        1109,
+        1302
+      ],
+      "missing_from_trace": [],
+      "traced_not_scanned": [],
+      "agree": true
+    }
+  },
+  {
+    "label": "cutbase",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\CUTBASE_cd5.SLDPRT",
+    "stream_length": 16579,
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\CdbTraceCutbase.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_trace_cutbase.log",
+    "cdb_reason": "quiet",
+    "cdb_seconds": 78.9,
+    "read_object_events": 536,
+    "status": "traced",
+    "objects": 536,
+    "definitions": 45,
+    "base_map_index": 110,
+    "tiles": true,
+    "header_bytes": 6,
+    "trailing_bytes": 0,
+    "counter_mismatches": 0,
+    "increment_rule": {
+      "classref": [
+        1
+      ],
+      "definition": [
+        2
+      ],
+      "null": [
+        0
+      ],
+      "objectref": [
+        0
+      ]
+    },
+    "cross_check": {
+      "static_definitions": 45,
+      "traced_definitions": 45,
+      "static_offsets_head": [
+        6,
+        203,
+        410,
+        606,
+        657,
+        1128,
+        1347,
+        1540
+      ],
+      "missing_from_trace": [],
+      "traced_not_scanned": [],
+      "agree": true
+    }
+  },
+  {
+    "label": "planetop",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\PLANE_TOP.SLDPRT",
+    "stream_length": 11075,
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\CdbTracePlanetop.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_trace_planetop.log",
+    "cdb_reason": "quiet",
+    "cdb_seconds": 81.0,
+    "read_object_events": 321,
+    "status": "traced",
+    "objects": 321,
+    "definitions": 41,
+    "base_map_index": 109,
+    "tiles": true,
+    "header_bytes": 6,
+    "trailing_bytes": 0,
+    "counter_mismatches": 0,
+    "increment_rule": {
+      "classref": [
+        1
+      ],
+      "definition": [
+        2
+      ],
+      "null": [
+        0
+      ],
+      "objectref": [
+        0
+      ]
+    },
+    "cross_check": {
+      "static_definitions": 41,
+      "traced_definitions": 41,
+      "static_offsets_head": [
+        6,
+        203,
+        410,
+        606,
+        657,
+        890,
+        1109,
+        1302
+      ],
+      "missing_from_trace": [],
+      "traced_not_scanned": [],
+      "agree": true
+    }
+  },
+  {
+    "label": "twopad",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\TWOPAD_d5.SLDPRT",
+    "stream_length": 19390,
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\CdbTraceTwopad.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_trace_twopad.log",
+    "cdb_reason": "quiet",
+    "cdb_seconds": 81.2,
+    "read_object_events": 400,
+    "status": "traced",
+    "objects": 400,
+    "definitions": 41,
+    "base_map_index": 110,
+    "tiles": true,
+    "header_bytes": 6,
+    "trailing_bytes": 0,
+    "counter_mismatches": 0,
+    "increment_rule": {
+      "classref": [
+        1
+      ],
+      "definition": [
+        2
+      ],
+      "null": [
+        0
+      ],
+      "objectref": [
+        0
+      ]
+    },
+    "cross_check": {
+      "static_definitions": 48,
+      "traced_definitions": 41,
+      "static_offsets_head": [
+        6,
+        203,
+        410,
+        606,
+        657,
+        1128,
+        1347,
+        1540
+      ],
+      "missing_from_trace": [
+        14572,
+        15587,
+        15756,
+        16346,
+        16582,
+        16932,
+        16988
+      ],
+      "traced_not_scanned": [],
+      "agree": false
+    }
+  },
+  {
+    "label": "vendor_ring",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\examples\\Single Turbo Dual Overhead Cam V8 - KDP - 2024\\Piston Ring KF.SLDPRT",
+    "stream_length": 25998,
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\CdbTraceVendorRing.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_trace_vendor_ring.log",
+    "cdb_reason": "quiet",
+    "cdb_seconds": 83.4,
+    "read_object_events": 918,
+    "status": "traced",
+    "objects": 916,
+    "definitions": 61,
+    "base_map_index": 111,
+    "tiles": true,
+    "header_bytes": 6,
+    "trailing_bytes": 0,
+    "counter_mismatches": 0,
+    "increment_rule": {
+      "classref": [
+        1
+      ],
+      "definition": [
+        2
+      ],
+      "null": [
+        0
+      ],
+      "objectref": [
+        0
+      ]
+    },
+    "cross_check": {
+      "static_definitions": 61,
+      "traced_definitions": 61,
+      "static_offsets_head": [
+        6,
+        203,
+        410,
+        606,
+        657,
+        1112,
+        1331,
+        1524
+      ],
+      "missing_from_trace": [],
+      "traced_not_scanned": [],
+      "agree": true
+    }
+  },
+  {
+    "label": "vendor_cojinete",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\examples\\Single Turbo Dual Overhead Cam V8 - KDP - 2024\\COJINETE INFERIOR.SLDPRT",
+    "stream_length": 17601,
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\CdbTraceVendorCojinete.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_trace_vendor_cojinete.log",
+    "cdb_reason": "quiet",
+    "cdb_seconds": 83.1,
+    "read_object_events": 574,
+    "status": "traced",
+    "objects": 573,
+    "definitions": 49,
+    "base_map_index": 111,
+    "tiles": true,
+    "header_bytes": 6,
+    "trailing_bytes": 0,
+    "counter_mismatches": 0,
+    "increment_rule": {
+      "classref": [
+        1
+      ],
+      "definition": [
+        2
+      ],
+      "null": [
+        0
+      ],
+      "objectref": [
+        0
+      ]
+    },
+    "cross_check": {
+      "static_definitions": 49,
+      "traced_definitions": 49,
+      "static_offsets_head": [
+        6,
+        209,
+        416,
+        616,
+        667,
+        892,
+        1131,
+        1326
+      ],
+      "missing_from_trace": [],
+      "traced_not_scanned": [],
+      "agree": true
+    }
+  }
+]

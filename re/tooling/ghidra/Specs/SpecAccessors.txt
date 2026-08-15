@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+moEndSpec_c::get
+moEndSpec_c::set
+moFromEndSpec_c::get
+moFromEndSpec_c::set
+moRevEndSpec_c::get
+moRevEndSpec_c::set
+moICE_c::get
+moICE_c::set
+moICE_c::is
+moExtrusion_c::get
+moExtrusion_c::set
+moRevolution_c::get
+moRevolution_c::set
+moProfileFeature_c::get
+moProfileFeature_c::set
+moLengthParameter_c::get
+moAngleParameter_c::get
+moDirectionSpec_c::get
+moDirectionSpec_c::set
+sgArcHandle::
+sgEntHandle::get
+sgEntHandle::set
+sgArc::get
+sgArc::set
+sgSpline
+moVersionManager_c::getCurrentFileVerion

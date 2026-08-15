@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+---
+- description: Parashell maximal Python security and quality queries
+- apply: codeql-suites/python-security-and-quality.qls
+  from: codeql/python-queries
+- apply: codeql-suites/python-security-experimental.qls
+  from: codeql/python-queries
+- exclude:
+    id:
+      - py/not-named-self
+      - py/not-named-cls
+      - py/possible-timing-attack-sensitive-info
+      - py/possible-timing-attack-against-hash

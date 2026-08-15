@@ -1,0 +1,164 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+11 flag words
+
+0x40000000  total=1380
+    stems: CompCurve(353), Design Binder(62), Markups(62), CurvaComp(62), Material <not specified>(56), Comentarios(56), Favoritos(56), Historial(56), Conjuntos de selecciones(56), Sensores(56), Anotaciones(56), Notas(56), Notas1___EndTag___(56), Ecuaciones(56), Conjuntos de superficies(53), Sólidos(53), Taladro de margen para M(13), Cortar-Revolución(13), Revolución(9), Comments(7), Favorites(7), History(7), Selection Sets(7), Sensors(7)
+    preceding class: moCompositeCurve_c(415), moNotesAreaFtrFolder_c(126), moCommentsFolder_c(63), moFavoriteFolder_c(63), moHistoryFolder_c(63), moSelectionSetFolder_c(63), moSensorFolder_c(63), moDocsFolder_c(63)
+
+0xC0000000  total=1324
+    stems: Croquis(630), Plano(100), Redondeo(80), Alzado(56), Planta(56), Vista lateral(56), Origen(56), Croquis3D(41), Sketch(40), Simetría(36), MatrizL local(24), MatrizL(23), MatrizC(16), Eje(13), Rosca de taladro(11), RedondeoVar(9), Plane(8), Origin(7), Front Plane(5), Top Plane(5), Right Plane(5), Vaciado(5), LocalLPattern(4), Sólido-Eliminar/Conservar (3)
+    preceding class: moDefaultRefPlnData_c(126), moRefPlane_c(63), moOriginProfileFeature_c(63), moProfileFeature_c(58), moFromEndSpec_c(51), mo3DProfileFeature_c(39), moMirrorPattern_c(33), moTempAxisRef_w(32)
+
+0xC0000140  total=237
+    stems: Saliente-Extruir(233), Partially Threaded(2), Boss-Extrude(1), Extruir-Lámina(1)
+    preceding class: moExtrusion_c(43), moICE_c(40), moTempAxisRef_w(29), moSingleFaceRef_w(17), moExtensionLineIndicator_c(11), moFilletSurfIdRep_c(8), moWzdHoleSurfIdRep_c(8), sgLLDist(5)
+
+0xC00201CA  total=199
+    stems: Cortar-Extruir(185), Cut-Extrude(14)
+    preceding class: moICE_c(22), moSegmRightTrimEdgeIdRep_c(13), moSingleFaceRef_w(12), moTempAxisRef_w(11), moSketchRegion_c(10), moPerBodyChooserDataWithFileName_c(7), moWzdHoleSurfIdRep_c(7), moCirPatternSurfIdRep_c(6)
+
+0xC0000001  total=56
+    stems: Chaflán(54), Chamfer(2)
+    preceding class: Chamfer_c(31), moSegmLeftTrimEdgeIdRep_c(4), moExtFeature_c(3), moAngleParameter_c(3), moNetSideSurfIdRep_c(3), moMirrorPattern_c(2), moMirPatternSurfIdRep_c(1), moFixedRefPlnData_c(1)
+
+0x40004003  total=15
+    stems: Barrer(9), Cortar-Barrer(6)
+    preceding class: moSweep_c(4), moRefDim2E_c(3), moSweepCut_c(3), moNetSideSurfIdRep_c(3), moCircleRef_w(2)
+
+0x40004404  total=15
+    stems: Recubrir(10), Cortar-Recubrir(5)
+    preceding class: moBlend_c(10), moBlendCut_c(5)
+
+0x40004002  total=4
+    stems: Cut-Sweep(3), Barrer(1)
+    preceding class: moSweepCut_c(3), moSweep_c(1)
+
+0xC0000040  total=4
+    stems: Extrude(4)
+    preceding class: moBoss_c(2), moFromEndSpec_c(2)
+
+0x400201CA  total=3
+    stems: Cut-Extrude(3)
+    preceding class: moSketchRegion_c(3)
+
+0x40000140  total=1
+    stems: Boss-Extrude(1)
+    preceding class: moPointBackedUpData_c(1)
+
+109 distinct name stems
+  'Croquis'                        0xC0000000(630)
+  'CompCurve'                      0x40000000(353)
+  'Saliente-Extruir'               0xC0000140(233)
+  'Cortar-Extruir'                 0xC00201CA(185)
+  'Plano'                          0xC0000000(100)
+  'Redondeo'                       0xC0000000(80), 0x40000000(5)
+  'Design Binder'                  0x40000000(62)
+  'Markups'                        0x40000000(62)
+  'CurvaComp'                      0x40000000(62)
+  'Material <not specified>'       0x40000000(56)
+  'Comentarios'                    0x40000000(56)
+  'Favoritos'                      0x40000000(56)
+  'Historial'                      0x40000000(56)
+  'Conjuntos de selecciones'       0x40000000(56)
+  'Sensores'                       0x40000000(56)
+  'Anotaciones'                    0x40000000(56)
+  'Notas'                          0x40000000(56)
+  'Notas1___EndTag___'             0x40000000(56)
+  'Ecuaciones'                     0x40000000(56)
+  'Alzado'                         0xC0000000(56)
+  'Planta'                         0xC0000000(56)
+  'Vista lateral'                  0xC0000000(56)
+  'Origen'                         0xC0000000(56)
+  'Chaflán'                        0xC0000001(54)
+  'Conjuntos de superficies'       0x40000000(53)
+  'Sólidos'                        0x40000000(53)
+  'Sketch'                         0xC0000000(40), 0x40000000(4)
+  'Croquis3D'                      0xC0000000(41)
+  'Simetría'                       0xC0000000(36)
+  'MatrizL local'                  0xC0000000(24)
+  'MatrizL'                        0xC0000000(23)
+  'Cut-Extrude'                    0xC00201CA(14), 0x400201CA(3)
+  'MatrizC'                        0xC0000000(16)
+  'Eje'                            0xC0000000(13)
+  'Taladro de margen para M'       0x40000000(13)
+  'Cortar-Revolución'              0x40000000(13)
+  'Rosca de taladro'               0xC0000000(11)
+  'Plane'                          0xC0000000(8), 0x40000000(3)
+  'Barrer'                         0x40004003(9), 0x40004002(1)
+  'Recubrir'                       0x40004404(10)
+  'Revolución'                     0x40000000(9)
+  'RedondeoVar'                    0xC0000000(9)
+  'Comments'                       0x40000000(7)
+  'Favorites'                      0x40000000(7)
+  'History'                        0x40000000(7)
+  'Selection Sets'                 0x40000000(7)
+  'Sensors'                        0x40000000(7)
+  'Annotations'                    0x40000000(7)
+  'Notes'                          0x40000000(7)
+  'Notes1___EndTag___'             0x40000000(7)
+  'Equations'                      0x40000000(5), 0xC0000000(2)
+  'Origin'                         0xC0000000(7)
+  'Revolve'                        0x40000000(6)
+  'TaladroAvanzado'                0x40000000(6)
+  'Cortar-Barrer'                  0x40004003(6)
+  'Front Plane'                    0xC0000000(5)
+  'Top Plane'                      0xC0000000(5)
+  'Right Plane'                    0xC0000000(5)
+  'Vaciado'                        0xC0000000(5)
+  'Cortar-Recubrir'                0x40004404(5)
+  'Surface Bodies'                 0x40000000(4)
+  'Solid Bodies'                   0x40000000(4)
+  'Extrude'                        0xC0000040(4)
+  'Ranura de margen para M'        0x40000000(4)
+  'Refrentado para perno con cabeza hexagonal de M' 0x40000000(4)
+  'LocalLPattern'                  0xC0000000(4)
+  'Tables'                         0x40000000(3)
+  'Helix/Spiral'                   0x40000000(3)
+  'Cut-Sweep'                      0x40004002(3)
+  'Sólido-Eliminar/Conservar '     0xC0000000(3)
+  'Refrentado para tornillo con cabeza troncocónica de M' 0x40000000(3)
+  'Taladro roscado M6x1.'          0x40000000(3)
+  'Diámetro de taladro 1/4 (0.25)' 0x40000000(3)
+  'Live Section Planes'            0x40000000(3)
+  'Planos de la sección activa'    0x40000000(3)
+  'Croquis1<5>'                    0xC0000000(3)
+  'Croquis2<3>'                    0xC0000000(3)
+  'Croquis2<5>'                    0xC0000000(3)
+  'Croquis12<3>'                   0xC0000000(3)
+  'Croquis3D2<3>'                  0xC0000000(3)
+  'Croquis44<2>'                   0xC0000000(3)
+  'Croquis3D4<3>'                  0xC0000000(3)
+  'Refrentado para perno con cabeza hexagonal (calidades AB) de M' 0x40000000(3)
+  'Front'                          0xC0000000(2)
+  'Top'                            0xC0000000(2)
+  'Right'                          0xC0000000(2)
+  'Chamfer'                        0xC0000001(2)
+  'Cut-Revolve'                    0x40000000(2)
+  'Partially Threaded'             0xC0000140(2)
+  'Taladro roscado M'              0x40000000(2)
+  'Boss-Extrude'                   0xC0000140(1), 0x40000140(1)
+  'Core Geometry'                  0x40000000(1)
+  'Folder1___EndTag___'            0x40000000(1)
+  'Fillet'                         0xC0000000(1)
+  'Threads'                        0x40000000(1)
+  'Folder2___EndTag___'            0x40000000(1)
+  'Taladro roscado 5/16-'          0x40000000(1)
+  'Cuaderno de diseño'             0x40000000(1)
+  'MatrizC local'                  0xC0000000(1)
+  'PLANO'                          0xC0000000(1)
+  'Relaciones de posición'         0x40000000(1)
+  'Axis'                           0xC0000000(1)
+  'Croquis8<3>'                    0xC0000000(1)
+  'Croquis7<4>'                    0xC0000000(1)
+  'Copper'                         0x40000000(1)
+  'Extruir-Lámina'                 0xC0000140(1)
+  'Taladro roscado 1/4-'           0x40000000(1)
+  'Hélice/Espiral'                 0x40000000(1)
+  'Taladro roscado M8x1.'          0x40000000(1)

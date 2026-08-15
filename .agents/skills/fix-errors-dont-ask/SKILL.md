@@ -3,7 +3,7 @@ name: fix-errors-dont-ask
 description: "Investigate, fix, and verify reported errors, failures, stack traces, broken behavior, or failing tests without stopping at diagnosis."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/fix-errors-dont-ask.md"
+  source: ".kiro/steering/FixErrorsDontAsk.md"
   kiro-inclusion: "always"
 ---
 
