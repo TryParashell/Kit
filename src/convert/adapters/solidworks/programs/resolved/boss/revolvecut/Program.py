@@ -19,13 +19,9 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 )
 
 from .Registry import (
-    KFieldOwners,
-    ResolvedOps,
-)
-
-from .Registry import (
-    FieldOwners,
-    ResolvedOps,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
+    ResolvedOps as ResolvedOps,
 )
 
 

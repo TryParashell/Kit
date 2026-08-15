@@ -411,7 +411,7 @@ def EncodeHeader(
         )
     FirstItem = UniqueValues[0]
     FirstStem = PureWindowsPath(FirstItem.CompPath).stem
-    ExtOverrides = {
+    ExtOverrides: dict[int, FieldType] = {
         4: 24 + ItemCount,
         31: UniqueCount,
         75: FirstItem.CompPath,
@@ -434,7 +434,7 @@ def EncodeHeader(
         TemplateIndex = min(FileIndex, KTracedCount)
         FileStart = KHeaderFileStart + ((TemplateIndex - 2) * KHeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
-        FileOverrides = {
+        FileOverrides: dict[int, FieldType] = {
             0: 72 + (2 * BaseShift),
             2: 74 + (2 * BaseShift),
             4: ItemValue.CompPath,
