@@ -2203,9 +2203,6 @@ _PRODUCT_STREAM = KProductStream
 _PRODUCT_SUFFIX = KProductSuffix
 
 # this binding exists because shared behavior needs one stable value
-_REPLAY_SEMANTIC_ATTRIBUTE = KReplaySemanticAttr
-
-# this binding exists because shared behavior needs one stable value
 _WRAPPER_METADATA_KEYS = KWrapperMetaKeys
 
 # this binding exists because shared behavior needs one stable value
