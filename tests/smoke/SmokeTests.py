@@ -8,13 +8,13 @@
 
 from __future__ import annotations
 
-from convert import available_adapters
+from convert import available_adapters as AvailableAdapters
 from interchange import CadDocument
 from interchange import CadSource
 
 
-# this definition exists because the blocking CI smoke suite needs a fast package import check
-def TestPublicPackagesImport() -> None:
+# needed because smoke tests must prove packages import before expensive suites
+def TestPkgImports() -> None:
     assert (
         CadDocument(
             Source=CadSource(FormatId="smoke", FilePath=None, SourceDigest=None),
@@ -30,7 +30,7 @@ def TestPublicPackagesImport() -> None:
     )
 
 
-# this definition exists because the blocking CI smoke suite needs a fast adapter registry check
-def TestAdapterRegistryListsFormats() -> None:
-    AdapterNames = {Item.name for Item in available_adapters()}
+# needed because smoke tests must prove adapter discovery remains publicly available
+def TestRegistry() -> None:
+    AdapterNames = {AdapterInfo.name for AdapterInfo in AvailableAdapters()}
     assert "Kit interchange JSON" in AdapterNames
