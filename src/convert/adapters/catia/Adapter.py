@@ -2182,9 +2182,6 @@ SUFFIX_BY_DOCUMENT_TYPE = SuffixByDocType
 Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-_PARASOLID_FORMAT_IDS = KParasolidFormatIds
-
-# this binding exists because shared behavior needs one stable value
 _PART_STREAM = KPartStream
 
 # this binding exists because shared behavior needs one stable value
