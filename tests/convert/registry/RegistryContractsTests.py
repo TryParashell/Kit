@@ -47,10 +47,10 @@ def CheckSrcAlias() -> None:
     SourceData = BuildSource()
     SourceData = ReplaceValue(
         SourceData,
-        source=ReplaceValue(SourceData.source, format_id="FORMAT.ALIAS"),
+        Source=ReplaceValue(SourceData.Source, FormatId="FORMAT.ALIAS"),
     )
     ResultData = ConversionEngine(RegistryData).convert(
-        SourceData.to_json().encode("utf-8"),
+        SourceData.ToJson().encode("utf-8"),
         BytesIO(),
         source_format="format.alias",
         destination_format="format.canonical",
@@ -133,14 +133,14 @@ def CheckMixedViews() -> None:
         1,
         transfers=(
             CapabilityTransfer(
-                Capability.PARAMETRIC_HISTORY,
-                TransferMode.MIXED,
+                Capability.KParamHistory,
+                TransferMode.KMixed,
             ),
         ),
         application_usable=True,
         vendor_loadable=True,
     )
-    ExpectedCaps = frozenset({Capability.PARAMETRIC_HISTORY})
+    ExpectedCaps = frozenset({Capability.KParamHistory})
     assert ResultData.native_capabilities == ExpectedCaps
     assert ResultData.carrier_capabilities == ExpectedCaps
 
@@ -182,8 +182,8 @@ class LoadableAdapter(ResultAdapter):
     ) -> WriteResult:
         return ReplaceValue(
             super().write(document, destination, options),
-            application_usable=False,
-            vendor_loadable=True,
+            IsAppUsable=False,
+            IsVendorLoadable=True,
         )
 
 
@@ -243,5 +243,5 @@ def CheckErrorMap() -> None:
         CapabilityData.value for CapabilityData in ErrorData.carrier_capabilities
     }
     assert set(PayloadData["carrier_reasons"].values()) == {
-        CarrierReason.WRITER_UNIMPLEMENTED.value
+        CarrierReason.KWriterGap.value
     }

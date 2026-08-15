@@ -24,15 +24,16 @@ from convert.adapters import (
     WriteOptions,
     WriteResult,
 )
-from interchange import CadDocument, Capability, InferCaps
+from interchange import CadDocument, Capability
+from interchange.document.models.DocumentCaps import InferCaps
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
 
 # one sorted capability view keeps transfer fixtures deterministic across hash seeds
 def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
-    ReturnCaps = DocumentData.capabilities | InferCaps(
+    ReturnCaps = DocumentData.Capabilities | InferCaps(
         DocumentData,
-        RoundtripMeta=Capability.ROUNDTRIP_METADATA in DocumentData.capabilities,
+        RoundtripMeta=Capability.KRoundtripMeta in DocumentData.Capabilities,
     )
 
     # capability wire names provide stable ordering for transfer assertions across runs
@@ -53,15 +54,15 @@ class MixedAdapter(ResultAdapter):
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
-                TransferMode.NATIVE if IndexValue == 0 else TransferMode.CARRIER,
+                TransferMode.KNative if IndexValue == 0 else TransferMode.KCarrier,
             )
             for IndexValue, CapabilityData in enumerate(GetCapabilities(document))
         )
         return ReplaceValue(
             ResultData,
-            transfers=TransferValues,
-            application_usable=True,
-            vendor_loadable=True,
+            Transfers=TransferValues,
+            IsAppUsable=True,
+            IsVendorLoadable=True,
         )
 
 
@@ -100,16 +101,16 @@ class TargetAdapter(ResultAdapter):
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
-                TransferMode.NATIVE if IndexValue == 0 else TransferMode.CARRIER,
-                None if IndexValue == 0 else CarrierReason.TARGET_UNSUPPORTED,
+                TransferMode.KNative if IndexValue == 0 else TransferMode.KCarrier,
+                None if IndexValue == 0 else CarrierReason.KTargetGap,
             )
             for IndexValue, CapabilityData in enumerate(GetCapabilities(document))
         )
         return ReplaceValue(
             ResultData,
-            transfers=TransferValues,
-            application_usable=True,
-            vendor_loadable=True,
+            Transfers=TransferValues,
+            IsAppUsable=True,
+            IsVendorLoadable=True,
         )
 
 
@@ -136,9 +137,9 @@ def CheckTargetGap() -> None:
     assert ResultData.carrier_capabilities
     assert ResultData.near_lossless is True
     assert all(
-        TransferData.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+        TransferData.carrier_reason is CarrierReason.KTargetGap
         for TransferData in ResultData.transfers
-        if TransferData.mode is TransferMode.CARRIER
+        if TransferData.mode is TransferMode.KCarrier
     )
 
 
@@ -156,16 +157,16 @@ class OnlyCarrier(ResultAdapter):
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
-                TransferMode.CARRIER,
-                CarrierReason.TARGET_UNSUPPORTED,
+                TransferMode.KCarrier,
+                CarrierReason.KTargetGap,
             )
             for CapabilityData in GetCapabilities(document)
         )
         return ReplaceValue(
             ResultData,
-            transfers=TransferValues,
-            application_usable=True,
-            vendor_loadable=True,
+            Transfers=TransferValues,
+            IsAppUsable=True,
+            IsVendorLoadable=True,
         )
 
 

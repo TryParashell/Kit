@@ -38,7 +38,7 @@ class NeedAdapter(ResultAdapter):
     ) -> WriteResult:
         return ReplaceValue(
             super().write(document, destination, options),
-            requirements=("external application",),
+            Requirements=("external application",),
         )
 
 

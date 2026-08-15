@@ -20,8 +20,9 @@ from convert.adapters import (
     WriteResult,
 )
 from convert.adapters.json import JsonAdapter
+from convert.api.ApiOpen import OpenDocument
 from interchange import CadDocument, Capability
-from tests.interchange.document.DocumentTests import BuildDocument
+from tests.convert.api.ApiTestPaths import KSamplePath
 
 
 # configurable results let registry tests provoke contract mismatches without duplicating adapters
@@ -49,7 +50,7 @@ class ResultAdapter(JsonAdapter):
         ResultData = super().probe(source)
         return ReplaceValue(
             ResultData,
-            format_id=self.ProbeFormat or self.info.format_id,
+            FormatId=self.ProbeFormat or self.info.format_id,
         )
 
     # write rewriting exercises registry validation while retaining real output behavior
@@ -62,7 +63,7 @@ class ResultAdapter(JsonAdapter):
         ResultData = super().write(document, destination, options)
         return ReplaceValue(
             ResultData,
-            adapter=self.WriteFormat or self.info.format_id,
+            AdapterName=self.WriteFormat or self.info.format_id,
         )
 
 
@@ -115,4 +116,4 @@ def BuildAdapter(FormatId: str, **NamedValues: str) -> ResultAdapter:
 
 # shared fixture ownership prevents structural refactors from leaking old helper names here
 def BuildSource() -> CadDocument:
-    return BuildDocument()
+    return OpenDocument(KSamplePath)

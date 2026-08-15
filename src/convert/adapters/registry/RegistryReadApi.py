@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path as FilePath
 from typing import Protocol
 
 from interchange import CadDocument
