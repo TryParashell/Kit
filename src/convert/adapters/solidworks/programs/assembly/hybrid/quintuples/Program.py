@@ -21,13 +21,9 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 )
 
 from .Registry import (
-    KFieldOwners,
-    StreamPrograms,
-)
-
-from .Registry import (
-    FieldOwners,
-    StreamPrograms,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
+    StreamPrograms as StreamPrograms,
 )
 
 

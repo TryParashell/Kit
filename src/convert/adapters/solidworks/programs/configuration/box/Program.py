@@ -16,13 +16,9 @@ from convert.adapters.solidworks.programs.Common.ProgramContract import (
 from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed
 
 from .Registry import (
-    KFieldOwners,
-    ConfigOps,
-)
-
-from .Registry import (
-    FieldOwners,
-    ConfigOps,
+    ConfigOps as ConfigOps,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
 )
 
 
