@@ -302,7 +302,7 @@ def EncodeConfig(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     RefShift = 4 * (ItemCount - KTracedCount)
-    SuffixOverrides = {
+    SuffixOverrides: dict[int, FieldType] = {
         OffsetValue: RequireInt(Operation[4], "configuration suffix reference")
         + RefShift
         for OffsetValue in KConfigShiftRefs

@@ -19,6 +19,7 @@ from pathlib import Path as FilePath, PureWindowsPath
 import re as RegexLib
 import struct as Struct
 import tempfile as Tempfile
+from types import MappingProxyType
 from typing import Any as AnyValue, Mapping, Sequence
 import xml.etree.ElementTree as XmlTree
 from convert.adapters.base import (
@@ -333,12 +334,12 @@ class SldprtAdapter:
 
 
 # adapter metadata stays isolated so discovery can inspect capabilities without reading documents
-def InfoAction(Instance) -> AdapterInfo:
+def InfoAction(Instance: SldprtAdapter) -> AdapterInfo:
     return InfoValue
 
 
 # probing stays independent so format detection never performs a full conversion
-def Probe(Instance, Source: Source) -> ProbeResult:
+def Probe(Instance: SldprtAdapter, Source: Source) -> ProbeResult:
     try:
         DataValue, Label = SourceBytes(Source)
         if len(DataValue) < 8:
@@ -366,7 +367,9 @@ def Probe(Instance, Source: Source) -> ProbeResult:
 
 
 # adapter reading dispatches embedded assembly and native part paths through one contract
-def ReadAction(Instance, Source: Source, Options: ReadOptions | None = None) -> CadDoc:
+def ReadAction(
+    Instance: SldprtAdapter, Source: Source, Options: ReadOptions | None = None
+) -> CadDoc:
     Settings = Options or ReadOptions()
     DataValue, Label = SourceBytes(Source)
     Archive = SldprtArchive.from_bytes(DataValue, Label)
@@ -385,7 +388,9 @@ def ReadAction(Instance, Source: Source, Options: ReadOptions | None = None) -> 
 
 
 # destination checks belong on the adapter so callers can reject incompatible targets early
-def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+def IsSupports(
+    Instance: SldprtAdapter, DocValue: CadDocument, Target: Destination
+) -> bool:
     PathValue = TargetPath(Target)
     if PathValue is None:
         return IsBinaryTarget(Target)
@@ -395,7 +400,7 @@ def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
 
 # adapter writing delegates policy and persistence to the focused write composition
 def Write(
-    Instance,
+    Instance: SldprtAdapter,
     DocValue: CadDocument,
     Target: Destination,
     Options: WriteOptions | None = None,
@@ -430,6 +435,30 @@ class WritePlan:
     PortableCarrier: bool
 
 
+# string mapping validation prevents untyped option payloads reaching assembly writers
+def StringMap(Value: object) -> Mapping[str, str]:
+    if not isinstance(Value, Mapping):
+        return {}
+    Result: dict[str, str] = {}
+    for KeyValue, ItemValue in Value.items():
+        if not isinstance(KeyValue, str) or not isinstance(ItemValue, str):
+            raise TypeError("bundle names must map strings to strings")
+        Result[KeyValue] = ItemValue
+    return Result
+
+
+# integer mapping validation prevents untyped option payloads reaching assembly writers
+def IntegerMap(Value: object) -> Mapping[str, int]:
+    if not isinstance(Value, Mapping):
+        return {}
+    Result: dict[str, int] = {}
+    for KeyValue, ItemValue in Value.items():
+        if not isinstance(KeyValue, str) or not isinstance(ItemValue, int):
+            raise TypeError("bundle stamps must map strings to integers")
+        Result[KeyValue] = ItemValue
+    return Result
+
+
 # generation input selection owns carrier policy bundle discovery and caller supplied identities
 def GetGenInputs(
     DocValue: CadDocument, PathValue: FilePath | None, Settings: WriteOptions
@@ -453,18 +482,12 @@ def GetGenInputs(
         and Settings.values.get("allow_carrier") is True
         and (not Bundle.complete)
     )
-    ConfiguredNames = Settings.values.get("bundle_names")
-    BundleNames = (
-        Bundle.names
-        if Bundle.names
-        else ConfiguredNames if isinstance(ConfiguredNames, Mapping) else {}
-    )
-    ConfiguredStamps = Settings.values.get("bundle_stamps")
-    BundleStamps = (
-        Bundle.StampValues
-        if Bundle.StampValues
-        else ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {}
-    )
+    BundleNames: Mapping[str, str] = Bundle.names
+    if not BundleNames:
+        BundleNames = StringMap(Settings.values.get("bundle_names"))
+    BundleStamps: Mapping[str, int] = Bundle.StampValues
+    if not BundleStamps:
+        BundleStamps = IntegerMap(Settings.values.get("bundle_stamps"))
     ConfiguredName = Settings.values.get("model_name")
     ModelName = ConfiguredName if isinstance(ConfiguredName, str) else ""
     return GenWriteInput(
@@ -882,6 +905,20 @@ def ReadNativePart(
     return RetainSource(DocValue, DataValue)
 
 
+# boolean option validation keeps compatibility keywords aligned with canonical options
+def BooleanValue(Value: object, FieldName: str) -> bool:
+    if not isinstance(Value, bool):
+        raise TypeError(f"{FieldName} must be a boolean")
+    return Value
+
+
+# optional text validation keeps compatibility keywords aligned with canonical options
+def OptionalString(Value: object, FieldName: str) -> str | None:
+    if Value is not None and not isinstance(Value, str):
+        raise TypeError(f"{FieldName} must be a string or None")
+    return Value
+
+
 # this definition exists because focused behavior needs one stable owner
 def ReadSldprt(
     Source: Source,
@@ -892,10 +929,15 @@ def ReadSldprt(
     Strict: bool = True,
     **LegacyValues: object,
 ) -> CadDoc:
-    Config = LegacyValues.get("configuration", Config)
-    IncludeBrep = LegacyValues.get("include_brep", IncludeBrep)
-    IncludeTessellation = LegacyValues.get("include_tessellation", IncludeTessellation)
-    Strict = LegacyValues.get("strict", Strict)
+    Config = OptionalString(LegacyValues.get("configuration", Config), "configuration")
+    IncludeBrep = BooleanValue(
+        LegacyValues.get("include_brep", IncludeBrep), "include_brep"
+    )
+    IncludeTessellation = BooleanValue(
+        LegacyValues.get("include_tessellation", IncludeTessellation),
+        "include_tessellation",
+    )
+    Strict = BooleanValue(LegacyValues.get("strict", Strict), "strict")
     UnknownValues = set(LegacyValues) - {
         "configuration",
         "include_brep",
@@ -928,7 +970,9 @@ def WriteSldprt(
     AllowNonNative: bool = True,
     **LegacyValues: object,
 ) -> WriteResult:
-    AllowNonNative = LegacyValues.get("allow_non_native", AllowNonNative)
+    AllowNonNative = BooleanValue(
+        LegacyValues.get("allow_non_native", AllowNonNative), "allow_non_native"
+    )
     UnknownValues = set(LegacyValues) - {"allow_non_native"}
     if UnknownValues:
         Unexpected = next(iter(UnknownValues))
@@ -1153,6 +1197,8 @@ def SourceTemplate(DocValue: CadDocument, Target: Path | None) -> bytes | None:
         return None
     SourceFormat = DocValue.metadata.get(KSourceFormatKey)
     if Target is not None:
+        if not isinstance(SourceFormat, str):
+            return None
         ExpectedSuffix = SuffixByFormatId.get(SourceFormat)
         if ExpectedSuffix is None or Target.suffix.casefold() != ExpectedSuffix:
             return None
@@ -1373,9 +1419,7 @@ def BuildBundleMut(
         if ReadyIndex is None:
             StateMut.Complete = False
             ReadyIndex = 0
-        Ignored, Component, Choice, TargetValue, FinalTarget = PendingTargets.pop(
-            ReadyIndex
-        )
+        _, Component, Choice, TargetValue, FinalTarget = PendingTargets.pop(ReadyIndex)
         Result, Payload = BundleMember(
             Component, Choice, Settings, StateMut.Names, StateMut.Stamps
         )
@@ -1431,7 +1475,7 @@ def AsmBundleA(
         StateMut.Complete = False
     return AsmBundle(
         FrozenMapping(StateMut.Names),
-        FrozenMapping(StateMut.Payloads),
+        MappingProxyType(dict(StateMut.Payloads)),
         FrozenMapping(StateMut.Stamps),
         StateMut.Complete,
         frozenset(StateMut.Capabilities),
@@ -1539,7 +1583,10 @@ def NestedPayloads(
             ):
                 continue
             try:
-                OwnerId = int(Payload.attributes.get("owner_definition_id", -1))
+                OwnerValue = Payload.attributes.get("owner_definition_id", -1)
+                if not isinstance(OwnerValue, (int, str, bytes, bytearray)):
+                    continue
+                OwnerId = int(OwnerValue)
             except (TypeError, ValueError):
                 continue
             if OwnerId != NativeRootId:
@@ -1923,7 +1970,7 @@ class GeneratedState:
     PartCapabilities: frozenset[Capability] = frozenset()
     MixedCapabilities: frozenset[Capability] = frozenset()
     PartPartition: bytes | None = None
-    PartObjectIds: Mapping[str, int] = Field(default_factory=FrozenMapping)
+    PartObjectIds: Mapping[str, int] = Field(default_factory=dict)
     PartAppUsable: bool = False
     PartVendorLoadable: bool = False
     PartDonorNotes: tuple[str, ...] = ()
@@ -2025,6 +2072,7 @@ def BuildAsmMut(
 def BuildGeomMut(
     Portable: CadDocument, StateMut: GeneratedState
 ) -> tuple[bytes | None, str]:
+    Payload: bytes | None
     if StateMut.PartPartition is not None:
         Payload = StateMut.PartPartition
         NativeBrep = "generated"
@@ -2052,6 +2100,7 @@ def GeneratedCaps(
     BundleComplete: bool | None,
     BundleCapabilities: frozenset[Capability],
 ) -> frozenset[Capability]:
+    ResolvedNames = BundleNames or {}
     NativeCaps = set(
         GeneratedAsm(
             Portable.assembly, State.Encoding, State.Streams, Portable.configurations
@@ -2065,8 +2114,8 @@ def GeneratedCaps(
         and all(
             (
                 DefinitionItem.id == Portable.assembly.root_definition_id
-                or DefinitionItem.document_id in BundleNames
-                or DefinitionItem.id in BundleNames
+                or DefinitionItem.document_id in ResolvedNames
+                or DefinitionItem.id in ResolvedNames
                 for DefinitionItem in Portable.assembly.definitions
             )
         )
@@ -2376,7 +2425,10 @@ def SavedMateLists(
         ):
             continue
         try:
-            OwnerId = int(Payload.attributes.get("owner_definition_id", -1))
+            OwnerValue = Payload.attributes.get("owner_definition_id", -1)
+            if not isinstance(OwnerValue, (int, str, bytes, bytearray)):
+                continue
+            OwnerId = int(OwnerValue)
             Decoded = DecodeMateList(Payload.data, Payload.source_stream, OwnerId)
         except (SldprtFormatError, TypeError, ValueError, Struct.error):
             continue
@@ -2464,13 +2516,12 @@ def SavedGenerated(
         or not IsSavedMatches(AsmValue, Candidates)
     ):
         return ({}, False)
-    return (
-        {
-            Payload.source_stream: bytes(Payload.data)
-            for Payload, Ignored in Candidates.values()
-        },
-        True,
-    )
+    SavedStreams: dict[str, bytes] = {}
+    for Payload, _ in Candidates.values():
+        if Payload.data is None:
+            return ({}, False)
+        SavedStreams[Payload.source_stream] = Payload.data
+    return (SavedStreams, True)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2718,6 +2769,8 @@ def GeneratedRef(Instance: ComponentInstance, Fallback: int) -> int:
     ):
         if isinstance(Value, bool):
             continue
+        if not isinstance(Value, (int, str, bytes, bytearray)):
+            continue
         try:
             Number = int(Value)
         except (TypeError, ValueError):
@@ -2729,8 +2782,10 @@ def GeneratedRef(Instance: ComponentInstance, Fallback: int) -> int:
 
 
 # this definition exists because focused behavior needs one stable owner
-def GeneratedA(Value: Any) -> int:
+def GeneratedA(Value: object) -> int:
     if isinstance(Value, bool):
+        return 0
+    if not isinstance(Value, (int, str, bytes, bytearray)):
         return 0
     try:
         return int(Value)
@@ -2938,7 +2993,9 @@ def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def KeywordsBytes(Prefix: bytes, RootValue: ET.Element, Trailing: bytes) -> bytes:
+def KeywordsBytes(
+    Prefix: bytes, RootValue: XmlTree.Element, Trailing: bytes
+) -> bytes:
     return (
         Prefix
         + XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
@@ -2947,7 +3004,7 @@ def KeywordsBytes(Prefix: bytes, RootValue: ET.Element, Trailing: bytes) -> byte
 
 
 # this definition exists because focused behavior needs one stable owner
-def XmlElementsById(RootValue: ET.Element) -> dict[int, XmlTree.Element]:
+def XmlElementsById(RootValue: XmlTree.Element) -> dict[int, XmlTree.Element]:
     Result: dict[int, XmlTree.Element] = {}
     for ElemValue in RootValue.iter():
         RawValue = ElemValue.attrib.get("id")
@@ -3088,7 +3145,10 @@ def IsPatchParamMut(
     if Record is None or Record[1].native_offset is None:
         return False
     ObjectId, Dimension = Record
-    Struct.pack_into("<d", Resolved, Dimension.native_offset, TargetMm / 1000.0)
+    NativeOffset = Dimension.native_offset
+    if NativeOffset is None:
+        return False
+    Struct.pack_into("<d", Resolved, NativeOffset, TargetMm / 1000.0)
     ElemValue = Elements.get(ObjectId)
     if ElemValue is None:
         return False
@@ -3384,14 +3444,12 @@ def PatchRectangle(
         if Entity is None or not isinstance(Entity.geometry, LineGeom):
             return
         Lines.append(Entity.geometry)
-    Points = tuple(
-        (
-            PointValues(Lines[0].start),
-            PointValues(Lines[0].end),
-            PointValues(Lines[1].end),
-            PointValues(Lines[2].end),
-        )
-    )[0]
+    Points = (
+        PointValues(Lines[0].start),
+        PointValues(Lines[0].end),
+        PointValues(Lines[1].end),
+        PointValues(Lines[2].end),
+    )
     if (
         PointValues(Lines[1].start) != Points[1]
         or PointValues(Lines[2].start) != Points[2]
@@ -3748,15 +3806,16 @@ def PatchPathsMut(
     if not BundleNames:
         return
     Prefix, RootValue, Trailing = KeywordsRoot(StreamsMut[ComponentTreeStream])
-    PathByFileId = {
-        int(Definition.attributes["native_file_id"]): BundleNames.get(
-            Definition.document_id
+    PathByFileId: dict[int, str] = {}
+    for Definition in AsmValue.definitions:
+        NativeFileId = Definition.attributes.get("native_file_id")
+        if not isinstance(NativeFileId, int):
+            continue
+        BundlePath = BundleNames.get(Definition.document_id) or BundleNames.get(
+            Definition.id
         )
-        or BundleNames[Definition.id]
-        for Definition in AsmValue.definitions
-        if (Definition.document_id in BundleNames or Definition.id in BundleNames)
-        and isinstance(Definition.attributes.get("native_file_id"), int)
-    }
+        if BundlePath is not None:
+            PathByFileId[NativeFileId] = BundlePath
     Changed = False
     for ElemValue in RootValue.iter():
         if ElemValue.tag.rsplit("}", 1)[-1] != "swFile":
@@ -4069,7 +4128,7 @@ def ReadAsmMates(
     ItemMap = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
-    Ignored, Ignored, OriginalMates, Ignored = AsmMates(
+    OriginalMates = AsmMates(
         Native,
         (
             (
@@ -4080,7 +4139,7 @@ def ReadAsmMates(
                 SourcePath,
             ),
         ),
-    )
+    )[2]
     return {MateValue.id: MateValue for MateValue in OriginalMates}
 
 
@@ -4582,6 +4641,8 @@ def WriteTargetMut(
 ) -> PathValue | None:
     PathValue = TargetPath(Target)
     if PathValue is None:
+        if not IsBinaryTarget(Target):
+            raise TypeError("SLDPRT destination stream must accept bytes")
         try:
             Written = Target.write(DataValue)
         except TypeError as ErrorInfo:
@@ -5575,7 +5636,10 @@ def NeutralMateKinA(Value: str) -> MateKind:
 
 # this definition exists because focused behavior needs one stable owner
 def NeutralMate(MateValue: NativeMate) -> MateAlignment:
-    Alignment = NativeMateAlignmentByCode.get(MateValue.alignment_code)
+    AlignmentCode = MateValue.alignment_code
+    if AlignmentCode is None:
+        return MateAlignment.UNKNOWN
+    Alignment = NativeMateAlignmentByCode.get(AlignmentCode)
     if Alignment is None:
         return MateAlignment.UNKNOWN
     return MateAlignment(Alignment.kind)
@@ -5728,23 +5792,23 @@ def FlattenedMates(
     OwnerPaths: Defaultdict[int, list[tuple[str, tuple[str, ...]]]] = Defaultdict(list)
     OwnerPaths[Native.root_definition_id].append(("", ()))
     for ItemValue in Native.occurrence_paths:
-        PathValue = tuple(
+        InstanceIds = tuple(
             (
                 AsmInstanceId(Value)
                 for Value in MateInstance(Native, Identity, ItemValue.path)
             )
         )
-        OwnerPaths[ItemValue.definition_id].append((ItemValue.path, PathValue))
+        OwnerPaths[ItemValue.definition_id].append((ItemValue.path, InstanceIds))
     Result: list[dict[str, AnyValue]] = []
     for MateValue in Mates:
         OwnerId = int(MateValue.owner_definition_id.rsplit(":", 1)[-1])
-        for Index, (PathValue, InstancePath) in enumerate(OwnerPaths.get(OwnerId, [])):
+        for Index, (SourcePath, InstancePath) in enumerate(OwnerPaths.get(OwnerId, [])):
             Result.append(
                 {
                     "id": f"{MateValue.id}:occurrence:{Index}",
                     "mate_id": MateValue.id,
                     "owner_definition_id": MateValue.owner_definition_id,
-                    "owner_occurrence_path": PathValue,
+                    "owner_occurrence_path": SourcePath,
                     "owner_instance_path": InstancePath,
                 }
             )
@@ -7390,6 +7454,7 @@ def BuildRevolve(
         Operation is not None
         and Operation.kind in {"revolve_join", "revolve_cut"}
         and (Operation.angle_degrees is not None)
+        and (Operation.profile_id is not None)
         and (Operation.profile_id in Sketches)
         and (Operation.axis_marker_offset is not None)
     ):
@@ -7656,20 +7721,31 @@ def BoundingBoxA(Model: NativeModel) -> BoundingBox | None:
         Plane = PlaneById.get(Sketch.support_plane_id)
         if Plane is None or Operation.length_mm is None:
             continue
-        Direction = tuple((Value * Operation.length_mm for Value in Plane.normal))
+        Direction = (
+            Plane.normal[0] * Operation.length_mm,
+            Plane.normal[1] * Operation.length_mm,
+            Plane.normal[2] * Operation.length_mm,
+        )
         for Profile in Sketch.profiles:
             for Local in ProfileExtrema(Profile):
-                BaseValue = tuple(
-                    (
-                        Plane.origin_mm[Index]
-                        + Plane.u_axis[Index] * Local[0]
-                        + Plane.v_axis[Index] * Local[1]
-                        for Index in range(3)
-                    )
+                BaseValue = (
+                    Plane.origin_mm[0]
+                    + Plane.u_axis[0] * Local[0]
+                    + Plane.v_axis[0] * Local[1],
+                    Plane.origin_mm[1]
+                    + Plane.u_axis[1] * Local[0]
+                    + Plane.v_axis[1] * Local[1],
+                    Plane.origin_mm[2]
+                    + Plane.u_axis[2] * Local[0]
+                    + Plane.v_axis[2] * Local[1],
                 )
                 Points.append(BaseValue)
                 Points.append(
-                    tuple((BaseValue[Index] + Direction[Index] for Index in range(3)))
+                    (
+                        BaseValue[0] + Direction[0],
+                        BaseValue[1] + Direction[1],
+                        BaseValue[2] + Direction[2],
+                    )
                 )
     if not Points:
         return None
