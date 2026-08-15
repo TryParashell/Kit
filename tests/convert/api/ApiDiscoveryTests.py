@@ -9,10 +9,11 @@
 from dataclasses import replace as ReplaceData
 from pathlib import Path as FilePath
 import sys as SysModule
+from typing import cast as CastValue
 
 import pytest as Pytest
 
-from convert.adapters import AdapterDiscoveryError
+from convert.adapters import AdapterDiscoveryError, AdapterInfo
 from convert.adapters import AdapterRegistry, AdapterRegistryError
 from convert.adapters.json import JsonAdapter
 
@@ -77,10 +78,8 @@ def CheckAliasCase() -> None:
 
         # altered metadata exists because registry conflicts need an independently constructed adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, format_id="INTERCHANGE.JSON")
-
-        locals()["info"] = GetInfo
+        def info(self) -> AdapterInfo:
+            return ReplaceData(super().info, FormatId="INTERCHANGE.JSON")
 
     with Pytest.raises(AdapterRegistryError, match="metadata differ"):
         RegistryData.register(ConflictJson())
@@ -94,10 +93,8 @@ def CheckAliasIds() -> None:
 
         # altered metadata exists because self alias rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, aliases=("INTERCHANGE.JSON",))
-
-        locals()["info"] = GetInfo
+        def info(self) -> AdapterInfo:
+            return ReplaceData(super().info, AliasNames=("INTERCHANGE.JSON",))
 
     with Pytest.raises(AdapterRegistryError, match="alias must differ"):
         AdapterRegistry().register(SelfAliasJson())
@@ -107,10 +104,11 @@ def CheckAliasIds() -> None:
 
         # altered metadata exists because duplicate alias rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, aliases=("kit.json", "KIT.JSON"))
-
-        locals()["info"] = GetInfo
+        def info(self) -> AdapterInfo:
+            return ReplaceData(
+                super().info,
+                AliasNames=("kit.json", "KIT.JSON"),
+            )
 
     with Pytest.raises(AdapterRegistryError, match="aliases must be unique"):
         AdapterRegistry().register(DupAliasJson())
@@ -124,10 +122,11 @@ def CheckInfoTypes() -> None:
 
         # altered metadata exists because mutable extension rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, extensions=[".json"])
-
-        locals()["info"] = GetInfo
+        def info(self) -> AdapterInfo:
+            return ReplaceData(
+                super().info,
+                Extensions=CastValue(tuple[str, ...], [".json"]),
+            )
 
     with Pytest.raises(AdapterRegistryError, match="extensions has an invalid type"):
         AdapterRegistry().register(MutableExtJson())
@@ -137,10 +136,8 @@ def CheckInfoTypes() -> None:
 
         # altered metadata exists because numeric version rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, version=1)
-
-        locals()["info"] = GetInfo
+        def info(self) -> AdapterInfo:
+            return ReplaceData(super().info, VersionText=CastValue(str, 1))
 
     with Pytest.raises(AdapterRegistryError, match="version has an invalid type"):
         AdapterRegistry().register(NumericVerJson())

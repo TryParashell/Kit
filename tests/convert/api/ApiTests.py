@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from io import BytesIO as ByteStream
 from pathlib import Path as FilePath
+from typing import cast as CastValue
 
 import pytest as Pytest
 
@@ -22,6 +23,7 @@ from convert import open_document as OpenLegacy
 from convert import write_document as WriteLegacy
 from convert.adapters import AdapterRegistry
 from interchange import Capability
+from interchange.document.models.DocumentModel import CadDocument
 from tests.convert.api.ApiTestCapture import CaptureEngine
 from tests.convert.api.ApiTestPaths import KCatPartPath
 from tests.convert.api.ApiTestPaths import KFcstdPath
@@ -128,22 +130,20 @@ def CheckForcedVals(MonkeyPatch: Pytest.MonkeyPatch) -> None:
     EngineValue = CaptureEngine(CapturedVals, SentinelValue)
     MonkeyPatch.setattr(ApiWrite, "KConvertEngine", EngineValue)
     MonkeyPatch.setattr(ApiConvert, "KConvertEngine", EngineValue)
-    assert (
+    assert id(
         WriteLegacy(
-            object(),
+            CastValue(CadDocument, object()),
             ByteStream(),
             values={"require_self_contained": False},
         )
-        is SentinelValue
-    )
-    assert (
+    ) == id(SentinelValue)
+    assert id(
         ConvertLegacy(
             b"source",
             ByteStream(),
             write_values={"require_self_contained": False},
         )
-        is SentinelValue
-    )
+    ) == id(SentinelValue)
     assert len(CapturedVals) == 2
     assert all(ValueData["portable"] is True for ValueData in CapturedVals)
     assert all(ValueData["allow_carrier"] is True for ValueData in CapturedVals)
@@ -202,5 +202,5 @@ def CheckTessellate() -> None:
         include_brep=False,
         include_tessellation=True,
     )
-    assert Capability.TESSELLATION not in WithoutMesh.capabilities
-    assert Capability.TESSELLATION in WithMesh.capabilities
+    assert Capability.KTessellation not in WithoutMesh.Capabilities
+    assert Capability.KTessellation in WithMesh.Capabilities
