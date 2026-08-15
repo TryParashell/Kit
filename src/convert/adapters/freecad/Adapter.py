@@ -2716,36 +2716,6 @@ SUFFIX = Suffix
 XML_TRUE_VALUES = XmlTrueValues
 
 # this binding exists because shared behavior needs one stable value
-_FEATURE_WRITE_VALUES = KFeatureWriteValues
-
-# this binding exists because shared behavior needs one stable value
-_MATE_WRITE_VALUES = KMateWriteValues
-
-# this binding exists because shared behavior needs one stable value
-_MAX_ENTRY_SIZE = MaxEntrySize
-
-# this binding exists because shared behavior needs one stable value
-_MAX_EXTERNAL_FILES = MaxOuterFiles
-
-# this binding exists because shared behavior needs one stable value
-_MAX_TOTAL_SIZE = MaxTotalSize
-
-# this binding exists because shared behavior needs one stable value
-_NATIVE_DOCUMENT_BINDING_ID = KNativeDocBindingId
-
-# this binding exists because shared behavior needs one stable value
-_NATIVE_DOCUMENT_ID = KNativeDocId
-
-# this binding exists because shared behavior needs one stable value
-_NATIVE_EXTRUSION_END_CONDITIONS = KNativeExtrusionEnd
-
-# this binding exists because shared behavior needs one stable value
-_REPLAY_SEMANTIC_ATTRIBUTE = KReplaySemanticAttr
-
-# this binding exists because shared behavior needs one stable value
-_annotate_native_sources = AnnotateNative
-
-# this binding exists because shared behavior needs one stable value
 _archive_member_data = ArchiveMember
 
 # this binding exists because shared behavior needs one stable value
