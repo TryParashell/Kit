@@ -65,6 +65,8 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
           post-processed-sarif-path: CodeqlResults
+          upload: never
+          upload-database: false
 
       - name: Block reported findings
         run: |

@@ -115,14 +115,15 @@ jobs:
           echo "base=$BaseSha" >> "$GITHUB_OUTPUT"
           echo "head=$HeadSha" >> "$GITHUB_OUTPUT"
 
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout pull request head as detached data
         if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ steps.refs.outputs.head }}
           path: SpdxHeadData
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Materialize the exact untrusted head
@@ -146,16 +147,16 @@ jobs:
               echo "::error::Detached pull request data does not match the event SHA."
               exit 1
             fi
-            git fetch --no-tags SpdxHeadData "$HEAD_SHA"
+            git -C SpdxHeadData fetch --no-tags "$GITHUB_WORKSPACE" "$BASE_SHA"
           else
             SourceRoot="$RUNNER_TEMP/SpdxHeaderSource"
             git worktree add --detach "$SourceRoot" "$HEAD_SHA"
             echo "path=$SourceRoot" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$(git cat-file -t "$BASE_SHA")" != "commit" ]; then
+          if [ "$(git -C SpdxHeadData cat-file -t "$BASE_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$(git cat-file -t "$HEAD_SHA")" != "commit" ]; then
+          if [ "$(git -C SpdxHeadData cat-file -t "$HEAD_SHA")" != "commit" ]; then
             exit 1
           fi
           if [ "$EVENT_NAME" = "pull_request_target" ]; then
@@ -225,7 +226,7 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ needs.verify-headers.outputs.head }}
           path: SpdxHeadData
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Validate the repair target
@@ -264,11 +265,11 @@ jobs:
             echo "::error::Detached pull request data does not match the event SHA."
             exit 1
           fi
-          git fetch --no-tags SpdxHeadData "$HEAD_SHA"
-          if [ "$(git cat-file -t "$BASE_SHA")" != "commit" ]; then
+          git -C SpdxHeadData fetch --no-tags "$GITHUB_WORKSPACE" "$BASE_SHA"
+          if [ "$(git -C SpdxHeadData cat-file -t "$BASE_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$(git cat-file -t "$HEAD_SHA")" != "commit" ]; then
+          if [ "$(git -C SpdxHeadData cat-file -t "$HEAD_SHA")" != "commit" ]; then
             exit 1
           fi
           echo "head-target=$HeadTarget" >> "$GITHUB_OUTPUT"
