@@ -73,7 +73,7 @@ jobs:
         run: uv run bandit -q -r src tools .github/scripts -x .venv,examples,Parashell,modules,re,tests -s B101,B105,B314,B404,B405,B603,B607
 
       - name: Run Semgrep SAST
-        run: uv run semgrep scan --config=p/default --error --metrics=off --exclude=.venv --exclude=examples --exclude=Parashell --exclude=modules --exclude=re
+        run: uv run semgrep scan --config=p/default --error --metrics=off --timeout=30 --exclude=.venv --exclude=examples --exclude=Parashell --exclude=modules --exclude=re
 
       - name: Run pip-audit SCA
         run: |

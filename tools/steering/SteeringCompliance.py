@@ -12,7 +12,6 @@ import argparse as Argparse
 import ast as AstLib
 import io as IoStream
 import re as Regex
-import subprocess as Subprocess
 import sys as System
 import tokenize as Tokenize
 from dataclasses import dataclass as DataClass
@@ -1320,28 +1319,6 @@ def CheckPaths(PathValues: list[FilePath | str]) -> list[Finding]:
     return CheckFiles(ResolvePaths(PathValues))
 
 
-# git object loading gives pull requests a stable migration baseline without temporary checkouts
-def CheckGitRef(RefValue: str) -> list[Finding]:
-    PathResult = Subprocess.run(
-        ["git", "ls-tree", "-r", "--name-only", RefValue, "--", "*.py"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    FindingList: list[Finding] = []
-    for PathText in PathResult.stdout.splitlines():
-        SourceResult = Subprocess.run(
-            ["git", "show", f"{RefValue}:{PathText}"],
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="strict",
-        )
-        FindingList.extend(CheckSource(FilePath(PathText), SourceResult.stdout))
-    return sorted(FindingList)
-
-
 # semantic fingerprints ignore line movement while preserving each distinct policy failure
 def FindingKey(FindingInfo: Finding) -> tuple[str, str, str]:
     try:
@@ -1372,14 +1349,26 @@ def GetNewFindings(
     return NewFindings
 
 
+# baseline loading keeps accepted migration debt reviewable as stable tab separated fingerprints
+def LoadBaseline(SourcePath: FilePath) -> list[Finding]:
+    FindingList: list[Finding] = []
+    for LineText in SourcePath.read_text(encoding="utf-8").splitlines():
+        if not LineText or LineText.startswith("#"):
+            continue
+        PathText, RuleCode, MsgText = LineText.split("\t", 2)
+        FindingList.append(Finding(FilePath(PathText), 1, 1, RuleCode, MsgText))
+    return FindingList
+
+
 # argument parsing requires at least one explicit target so accidental broad scans cannot happen
 def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
     ParserInfo = Argparse.ArgumentParser(
         description="check python files against repository steering conventions"
     )
     ParserInfo.add_argument(
-        "--baseline-ref",
-        help="git revision whose existing findings are accepted as migration debt",
+        "--baseline-file",
+        type=FilePath,
+        help="tab separated finding fingerprints accepted as migration debt",
     )
     ParserInfo.add_argument(
         "PathValues",
@@ -1408,16 +1397,11 @@ def MainRun(ArgValues: list[str] | None = None) -> int:
     try:
         FilePaths = ResolvePaths(NamespaceInfo.PathValues)
         FindingList = CheckFiles(FilePaths)
-        if NamespaceInfo.baseline_ref:
+        if NamespaceInfo.baseline_file:
             FindingList = GetNewFindings(
-                FindingList, CheckGitRef(NamespaceInfo.baseline_ref)
+                FindingList, LoadBaseline(NamespaceInfo.baseline_file)
             )
-    except (
-        OSError,
-        Subprocess.CalledProcessError,
-        UnicodeError,
-        ValueError,
-    ) as ErrorInfo:
+    except (OSError, UnicodeError, ValueError) as ErrorInfo:
         print(f"steering compliance input error: {ErrorInfo}", file=System.stderr)
         return 2
     for FindingInfo in FindingList:

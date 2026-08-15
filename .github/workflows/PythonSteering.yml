@@ -31,7 +31,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up uv
@@ -45,15 +44,11 @@ jobs:
         run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Verify tracked Python sources
-        env:
-          BASELINE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
           mapfile -d '' PythonFiles < <(git ls-files -z -- '*.py')
-          Arguments=()
-          if [[ -n "$BASELINE_REF" && ! "$BASELINE_REF" =~ ^0+$ ]]; then
-            Arguments+=(--baseline-ref "$BASELINE_REF")
-          fi
-          uv run python -m tools.steering.SteeringCompliance "${Arguments[@]}" "${PythonFiles[@]}"
+          uv run python -m tools.steering.SteeringCompliance \
+            --baseline-file tools/steering/SteeringBaseline.txt \
+            "${PythonFiles[@]}"
 
       - name: Verify Python formatting
         run: uv run black --check .
