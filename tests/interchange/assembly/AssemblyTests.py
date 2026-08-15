@@ -11,12 +11,12 @@ from dataclasses import replace as ReplaceValue
 import pytest as PytestLib
 from interchange import (
     CadDocument,
-    DocumentError,
-    ComponentInst,
-    TransformMatrix,
-    SurfaceMesh,
     SpaceVector,
 )
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.TransformMatrix import TransformMatrix
+from interchange.document.models.DocumentError import DocumentError
+from interchange.mesh.SurfaceMesh import SurfaceMesh
 from tests.interchange.document.DocumentTests import BuildDocument
 from tests.interchange.fixtures.AssemblyFixture import (
     BuildAssembly as BuildFixtureAssembly,

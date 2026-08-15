@@ -6,19 +6,18 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from interchange import CadDocument
-from interchange import CadSource
-from interchange import Capability
-from interchange import Configuration
-from interchange import DesignBody
-from interchange import FeatureKind
-from interchange import FeatureStep
-from interchange import LineGeometry
-from interchange import PlaneVector
-from interchange import Sketch
-from interchange import SketchEntity
-from interchange import SupportPlane
-from interchange import Transform
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.enums.EnumDocument import Capability
+from interchange.enums.EnumFeatures import FeatureKind
+from interchange.features.FeatureBody import DesignBody
+from interchange.features.FeatureStep import FeatureStep
+from interchange.geometry.models.GeometryCurves import LineGeometry
+from interchange.geometry.models.Sketch import Sketch, SketchEntity
+from interchange.geometry.models.SupportPlane import SupportPlane
+from interchange.geometry.models.Transform import Transform
+from interchange.geometry.models.VectorPlane import PlaneVector
+from interchange.records.RecordConfig import Configuration
+from interchange.records.RecordSource import CadSource
 
 
 # the canonical document fixture keeps domain tests independent from test modules

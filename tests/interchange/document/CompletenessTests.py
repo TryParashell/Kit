@@ -17,6 +17,7 @@ from importlib import import_module as ImportModule
 from typing import get_args as GetTypeArgs
 from typing import get_origin as GetTypeOrigin
 from typing import get_type_hints as GetTypeHints
+from typing import cast as CastValue
 import pytest as PytestLib
 from interchange import geometry as GeometryModule
 from interchange import (
@@ -25,9 +26,6 @@ from interchange import (
     CadDocument,
     CadSource,
     Capability,
-    ComponentDef,
-    ComponentDoc,
-    ComponentInst,
     ComponentKind,
     Configuration,
     Expression,
@@ -37,7 +35,6 @@ from interchange import (
     MateEntity,
     MateEntityKind,
     MateKind,
-    SurfaceMesh,
     Parameter,
     ParameterValue,
     PayloadRole,
@@ -45,11 +42,16 @@ from interchange import (
     Selection,
     SelectionPathElement,
     SpaceVector,
-    InferCaps,
 )
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentDocument import ComponentDoc
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.document.models.DocumentCaps import InferCaps
 from interchange.document.models.DocumentIdentity import GetIdFields
 from interchange.geometry import Geometry
-from interchange.serialization import FromData, ToData
+from interchange.mesh.SurfaceMesh import SurfaceMesh
+from interchange.serialization.Deserialize import FromData
+from interchange.serialization.EncodeData import ToData
 from interchange.serialization.Wire import GetWireField
 from tests.interchange.document.DocumentTests import BuildDocument
 
@@ -123,7 +125,10 @@ def CheckFeatures() -> None:
     )
     assert isinstance(StepValue.Definition, FeatureDefinition)
     with PytestLib.raises(TypeError, match="feature definition"):
-        ReplaceValue(StepValue, Definition={"type": "unregistered"})
+        ReplaceValue(
+            StepValue,
+            Definition=CastValue(FeatureDefinition, {"type": "unregistered"}),
+        )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors

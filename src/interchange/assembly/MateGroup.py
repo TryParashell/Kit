@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -18,15 +18,24 @@ from interchange.records.RecordProvenance import Provenance
 
 # mate groups retain source ordering and hierarchy for editable organization
 @ModelDataMut(
-    DefaultMap={"ParentGroupId": "", "Order": 0, "Provenance": None},
-    FactoryMap={"Attributes": FreezeMapping},
+    DefaultMap={"parent_group_id": "", "order": 0, "provenance": None},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class MateGroup(ModelBase):
-    EntityId: str
-    EntityName: str
-    OwnerDefinitionId: str
-    MateIds: tuple[str, ...]
-    ParentGroupId: str
-    Order: int
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    owner_definition_id: str
+    mate_ids: tuple[str, ...]
+    parent_group_id: str
+    order: int
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        OwnerDefinitionId: ClassVar[str]
+        MateIds: ClassVar[tuple[str, ...]]
+        ParentGroupId: ClassVar[str]
+        Order: ClassVar[int]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

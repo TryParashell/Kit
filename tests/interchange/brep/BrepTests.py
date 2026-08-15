@@ -32,9 +32,9 @@ from interchange import (
     PlaneSurface,
     Transform,
     SpaceVector,
-    FilterDocument,
-    InferCaps,
 )
+from interchange.document.models.DocumentCaps import InferCaps
+from interchange.document.models.DocumentFilter import FilterDocument
 from tests.interchange.document.DocumentTests import BuildDocument
 
 # dynamic package loading lets reflection inspect the facade without mixed import forms

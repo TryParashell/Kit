@@ -6,20 +6,18 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from interchange import AssemblyData
-from interchange import CadDocument
-from interchange import CadSource
-from interchange import Capability
-from interchange import ComponentDef
-from interchange import ComponentDoc
-from interchange import ComponentInst
-from interchange import ComponentKind
-from interchange import Configuration
-from interchange import MateConstraint
-from interchange import MateEntity
-from interchange import MateEntityKind
-from interchange import MateKind
-from interchange import TransformMatrix
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyEnums import ComponentKind, MateEntityKind, MateKind
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentDocument import ComponentDoc
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.TransformMatrix import TransformMatrix
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.enums.EnumDocument import Capability
+from interchange.records.RecordConfig import Configuration
+from interchange.records.RecordSource import CadSource
 from tests.interchange.fixtures.DocumentFixture import BuildDocument
 
 

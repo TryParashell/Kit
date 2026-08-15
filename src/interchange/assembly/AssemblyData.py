@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar
 from typing import Mapping as TypeMap
 from typing import TYPE_CHECKING as IsTypeCheck
 
@@ -27,45 +27,54 @@ if IsTypeCheck:
 
 # assembly data composes occurrences documents and mates into one portable graph
 @ModelDataMut(
-    DefaultMap={"Documents": (), "MateEntities": (), "Mates": (), "MateGroups": ()},
-    FactoryMap={"Attributes": FreezeMapping},
+    DefaultMap={"documents": (), "mate_entities": (), "mates": (), "mate_groups": ()},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class AssemblyData(ModelBase):
-    RootDefinitionId: str
-    Definitions: tuple[ComponentDef, ...]
-    Instances: tuple[ComponentInst, ...]
-    Documents: tuple[ComponentDoc, ...]
-    MateEntities: tuple[MateEntity, ...]
-    Mates: tuple[MateConstraint, ...]
-    MateGroups: tuple[MateGroup, ...]
-    Attributes: TypeMap[str, AnyValue]
+    root_definition_id: str
+    definitions: tuple[ComponentDef, ...]
+    instances: tuple[ComponentInst, ...]
+    documents: tuple[ComponentDoc, ...]
+    mate_entities: tuple[MateEntity, ...]
+    mates: tuple[MateConstraint, ...]
+    mate_groups: tuple[MateGroup, ...]
+    attributes: TypeMap[str, object]
+    if IsTypeCheck:
+        RootDefinitionId: ClassVar[str]
+        Definitions: ClassVar[tuple[ComponentDef, ...]]
+        Instances: ClassVar[tuple[ComponentInst, ...]]
+        Documents: ClassVar[tuple[ComponentDoc, ...]]
+        MateEntities: ClassVar[tuple[MateEntity, ...]]
+        Mates: ClassVar[tuple[MateConstraint, ...]]
+        MateGroups: ClassVar[tuple[MateGroup, ...]]
+        Attributes: ClassVar[TypeMap[str, object]]
 
     # definition lookup gives callers one consistent missing identifier failure mode
     def GetDefinition(self, EntityId: str) -> ComponentDef:
-        for DefinitionValue in self.Definitions:
-            if DefinitionValue.EntityId == EntityId:
+        for DefinitionValue in self.definitions:
+            if DefinitionValue.id == EntityId:
                 return DefinitionValue
         raise KeyError(f"unknown component definition id {EntityId!r}")
 
     # embedded document lookup avoids exposing storage details to assembly consumers
     def GetDocument(self, EntityId: str) -> CadDocument:
-        for DocumentValue in self.Documents:
-            if DocumentValue.EntityId == EntityId:
-                return DocumentValue.Document
+        for DocumentValue in self.documents:
+            if DocumentValue.id == EntityId:
+                return DocumentValue.document
         raise KeyError(f"unknown component document id {EntityId!r}")
 
     # child ordering stays deterministic when source order values contain ties
     def GetChildren(self, DefinitionId: str) -> tuple[ComponentInst, ...]:
         ChildValues = (
             InstanceValue
-            for InstanceValue in self.Instances
-            if InstanceValue.OwnerDefinitionId == DefinitionId
+            for InstanceValue in self.instances
+            if InstanceValue.owner_definition_id == DefinitionId
         )
 
         # stable tie ordering preserves reproducible assembly output across adapters
         return tuple(
             sorted(
                 ChildValues,
-                key=lambda InstanceValue: (InstanceValue.Order, InstanceValue.EntityId),
+                key=lambda InstanceValue: (InstanceValue.order, InstanceValue.id),
             )
         )

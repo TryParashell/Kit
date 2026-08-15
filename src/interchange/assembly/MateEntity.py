@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyEnums import MateEntityKind
@@ -21,22 +21,33 @@ from interchange.assembly.TransformMatrix import TransformMatrix
 # mate entities resolve constraint geometry through occurrence paths and optional frames
 @ModelDataMut(
     DefaultMap={
-        "SourceEntityId": "",
-        "SelectionId": "",
-        "Frame": None,
-        "Radius": None,
-        "Provenance": None,
+        "source_entity_id": "",
+        "selection_id": "",
+        "frame": None,
+        "radius": None,
+        "provenance": None,
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class MateEntity(ModelBase):
-    EntityId: str
-    OwnerDefinitionId: str
-    InstancePath: tuple[str, ...]
-    EntityKind: MateEntityKind | str
-    SourceEntityId: str
-    SelectionId: str
-    Frame: TransformMatrix | None
-    Radius: float | None
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    owner_definition_id: str
+    instance_path: tuple[str, ...]
+    kind: MateEntityKind | str
+    source_entity_id: str
+    selection_id: str
+    frame: TransformMatrix | None
+    radius: float | None
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        OwnerDefinitionId: ClassVar[str]
+        InstancePath: ClassVar[tuple[str, ...]]
+        EntityKind: ClassVar[MateEntityKind | str]
+        SourceEntityId: ClassVar[str]
+        SelectionId: ClassVar[str]
+        Frame: ClassVar[TransformMatrix | None]
+        Radius: ClassVar[float | None]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

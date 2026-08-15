@@ -16,29 +16,31 @@ import os as OsSystem
 from pathlib import Path as FilePath
 import subprocess as Subprocess
 import sys as System
+from typing import cast as CastValue
 import pytest as PytestLib
 from interchange import (
     AssemblyData,
-    DesignBody,
     CadDocument,
     Diagnostic,
-    DocumentError,
-    CadSource,
     Capability,
-    ComponentDef,
-    ComponentInst,
     ComponentKind,
     FeatureKind,
     FeatureStep,
     PayloadRole,
-    FilterDocument,
-    InferCaps,
 )
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.document.models.DocumentCaps import InferCaps
+from interchange.document.models.DocumentError import DocumentError
+from interchange.document.models.DocumentFilter import FilterDocument
+from interchange.features.FeatureBody import DesignBody
 from interchange.payloads.PayloadMigrate import GetLegacyFields
 from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.payloads.PayloadRules import KLegacyPayloadRules
 from interchange.payloads.PayloadRuleModel import PayloadRule
-from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, ToData
+from interchange.serialization.Deserialize import FromData
+from interchange.serialization.EncodeData import ToData
+from interchange.serialization.TypeRegistry import KTypeRegistry, RegisterTypes
 from tests.interchange.fixtures.DocumentFixture import (
     BuildDocument as BuildFixtureDocument,
 )
@@ -96,10 +98,12 @@ def CheckRegistry() -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckDuplicate() -> None:
-    ConflictType = EnumBase("CadSource", {"VALUE": "value"})
+    CadSource = EnumBase("CadSource", {"VALUE": "value"})
     with PytestLib.raises(ValueError, match="duplicate interchange type name"):
-        RegisterTypes(ConflictType)
-    RegisterTypes(CadSource)
+        RegisterTypes(CadSource)
+    from interchange.records.RecordSource import CadSource as CadSourceModel
+
+    RegisterTypes(CadSourceModel)
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -402,7 +406,10 @@ def CheckFiltering() -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckCapTypes() -> None:
-    InvalidValue = ReplaceValue(BuildDocument(), capabilities=frozenset({"parameters"}))
+    InvalidValue = ReplaceValue(
+        BuildDocument(),
+        capabilities=frozenset({CastValue(Capability, "parameters")}),
+    )
     with PytestLib.raises(DocumentError, match="Capability values"):
         InvalidValue.assert_valid()
 
