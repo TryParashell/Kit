@@ -653,62 +653,8 @@ RELATIONSHIPS_STREAM = RelationshipsStream
 # this binding exists because shared behavior needs one stable value
 SldprtFormatError = SldprtFormat
 
-# this binding exists because shared behavior needs one stable value
-_ARCHIVE_OFFSET = KArchiveOffset
-
-# this binding exists because shared behavior needs one stable value
-_DEFAULT_FILE_ID = KDefaultFileIdA
-
-# this binding exists because shared behavior needs one stable value
-_DEFAULT_TYPE_ID = KDefaultTypeId
-
-# this binding exists because shared behavior needs one stable value
-_LOCAL_SIGNATURE_PREFIX = KLocalSignaturePrefix
-
-# this binding exists because shared behavior needs one stable value
-_LOCAL_SIGNATURE_SIZE = KLocalSignatureSize
-
-# this binding exists because shared behavior needs one stable value
-_MAX_ARCHIVE_OFFSET = KMaxArchiveOffset
-
-# this binding exists because shared behavior needs one stable value
-_MAX_DIRECTORY_STREAM_COUNT = KMaxFolderStreamCount
-
-# this binding exists because shared behavior needs one stable value
-_MAX_NAME_BYTES = KMaxNameBytes
-
-# this binding exists because shared behavior needs one stable value
-_MAX_STREAM_COUNT = KMaxStreamCount
-
-# this binding exists because shared behavior needs one stable value
-_MAX_UNCOMPRESSED_STREAM = KMaxUncompressedStream
-
-# this binding exists because shared behavior needs one stable value
-_TYPE_IDS_BY_NAME = KTypeIdsByName
-
-# this binding exists because shared behavior needs one stable value
-_decode_scanned_candidate = DecodeScanned
-
-# this binding exists because shared behavior needs one stable value
-_encode_directory_entry = EncodeFolder
-
-# this binding exists because shared behavior needs one stable value
-_encode_record = EncodeRecord
-
-# this binding exists because shared behavior needs one stable value
-_encoded_name = EncodedName
-
-# this binding exists because shared behavior needs one stable value
-_end_signature = EndSignature
-
-# this binding exists because shared behavior needs one stable value
-_nibble_swap = NibbleSwap
-
-# this binding exists because shared behavior needs one stable value
-_scan_records = ScanRecords
-
-# this binding exists because shared behavior needs one stable value
-_template_fields = TemplateFields
+# reverse engineering tools still consume this private compatibility boundary
+_template_fields = TemplateFields  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
 annotations = Annotations

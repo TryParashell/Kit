@@ -342,12 +342,6 @@ SOLID_BODY_FEATURE_TYPES = KSolidBodyFeatureTypes
 SUFFIX_BY_FORMAT_ID = KSuffixByFormatId
 
 # this binding exists because shared behavior needs one stable value
-_RESOLVED_LANE_PREFIX = KResolvedLanePrefix
-
-# this binding exists because shared behavior needs one stable value
-_RESOLVED_LANE_SUFFIX = KResolvedLaneSuffix
-
-# this binding exists because shared behavior needs one stable value
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value

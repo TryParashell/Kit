@@ -93,9 +93,6 @@ KAllValue = (
 )
 
 # this binding exists because shared behavior needs one stable value
-_decode_partition_stream = DecodePartMut
-
-# this binding exists because shared behavior needs one stable value
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value

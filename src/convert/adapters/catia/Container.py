@@ -820,54 +820,6 @@ MAGIC = KMagic
 OSMX_MAGIC = KOsmxMagic
 
 # this binding exists because shared behavior needs one stable value
-_MAX_OSMX_SYMBOLS = KMaxOsmxSymbols
-
-# this binding exists because shared behavior needs one stable value
-_MAX_OSMX_SYMBOL_BYTES = KMaxOsmxSymbolBytes
-
-# this binding exists because shared behavior needs one stable value
-_contiguous_stream_range = ContiguousRange
-
-# this binding exists because shared behavior needs one stable value
-_decode_osmx_symbols = DecodeOsmx
-
-# this binding exists because shared behavior needs one stable value
-_descriptor = BuildDescriptor
-
-# this binding exists because shared behavior needs one stable value
-_descriptor_name = DescriptorName
-
-# this binding exists because shared behavior needs one stable value
-_nested_directories = FindNested
-
-# this binding exists because shared behavior needs one stable value
-_osmx_symbol_candidates = OsmxSymbolA
-
-# this binding exists because shared behavior needs one stable value
-_parse_declarations = Parse
-
-# this binding exists because shared behavior needs one stable value
-_parse_directory = ParseFolder
-
-# this binding exists because shared behavior needs one stable value
-_sequential_name = SequentialName
-
-# this binding exists because shared behavior needs one stable value
-_sequential_streams = ReadSequential
-
-# this binding exists because shared behavior needs one stable value
-_u32be = UThreeTwobe
-
-# this binding exists because shared behavior needs one stable value
-_validate_class_name = ValidateClass
-
-# this binding exists because shared behavior needs one stable value
-_validate_extent_layout = ValidateExtent
-
-# this binding exists because shared behavior needs one stable value
-_validate_stream_name = ValidateStream
-
-# this binding exists because shared behavior needs one stable value
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value

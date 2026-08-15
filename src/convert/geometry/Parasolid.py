@@ -9100,34 +9100,6 @@ KLegacyExportIndia: dict[str, object] = {
 # this binding provides a statically inspectable decoder at the public geometry boundary
 decode_brep_model = DecodeBrepMut
 
-# static compatibility bindings keep established parser tests visible to strict analyzers
-_ENTITY_MAGIC = KEntityMagic
-_RecordTables = RecordTables
-_TopologyRecord = TopologyRecord
-_array_record_fields = ArrayFields
-_curve_parameter_domain = CurveParamRange
-_curve_point_at_parameter = CurvePoint
-_linked_subset_order = LinkedOrder
-_nurbs_curve_point = NurbsCurvePoint
-_nurbs_surface_point = NurbsSurfPoint
-_parasolid_header = ParaHeaderData
-_parse_b_curve_record = ParseBCurve
-_parse_chart_record = ParseChart
-_parse_coedge = ParseCoedge
-_parse_intersection_data_record = ParseInterData
-_parse_intersection_record = ParseInterRec
-_parse_nurbs_curve_record = ParseNurbsCurve
-_parse_nurbs_surface_record = ParseNurbsSurf
-_parse_trimmed_curve_record = ParseTrimCurve
-_record_start = RecordStart
-_resolve_trimmed_curve = ResolveTrimCurv
-_scan_partition_records = ScanPartRecords
-_solidworks_face_data = SolidFaceData
-_u16 = ReadShort
-_walk_coedge_ring = WalkCoedgeRing
-_write_nurbs_curve = WriteNurbsMut
-_write_nurbs_surface = WriteNurbsSMut
-_xmt = XmtData
 decode_partition_stream = DecodePartMut
 encode_blank_partition_stream = EncodeBlankApi
 encode_brep_model = EncodeBrepMut

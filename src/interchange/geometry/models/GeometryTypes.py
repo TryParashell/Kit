@@ -26,7 +26,7 @@ from interchange.geometry.models.GeometryCurves import (
 )
 
 # exhaustive geometry typing prevents new classes from escaping sketch validation
-KGeometryTypes: TypeAlias = (
+KGeometryTypes: TypeAlias = (  # lgtm[py/unused-global-variable]
     PointGeometry
     | LineGeometry
     | CircleGeometry

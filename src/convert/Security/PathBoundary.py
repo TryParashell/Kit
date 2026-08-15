@@ -9,6 +9,9 @@
 from __future__ import annotations as Annotations
 
 from os import PathLike as PathLikeValue
+from os import sep as PathSeparator
+from os.path import normcase as NormalizeCase
+from os.path import realpath as RealPath
 from pathlib import Path as PathInfo
 import tempfile as Tempfile
 
@@ -21,16 +24,20 @@ class UnsafePath(ValueError):
     __slots__ = ()
 
 
-# normalized containment prevents traversal and symlink escapes before filesystem access
+# canonical containment prevents traversal and symlink escapes before protected filesystem operations
 def ResolveWithin(
     PathValue: str | PathLikeValue[str],
     RootValue: str | PathLikeValue[str],
     RequireFile: bool = False,
 ) -> PathInfo:
-    RootPath = PathInfo(RootValue).resolve()
-    ResultPath = PathInfo(PathValue).resolve()
-    if not ResultPath.is_relative_to(RootPath):
-        raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}")
+    RootText = RealPath(RootValue)
+    ResultText = RealPath(PathValue)
+    RootCheck = NormalizeCase(RootText)
+    ResultCheck = NormalizeCase(ResultText)
+    RootPrefix = RootCheck.rstrip(PathSeparator) + PathSeparator
+    if ResultCheck != RootCheck and not ResultCheck.startswith(RootPrefix):
+        raise UnsafePath(f"path escapes trusted root {RootText!r}")
+    ResultPath = PathInfo(ResultText)
     if RequireFile and not ResultPath.is_file():
         raise FileNotFoundError(ResultPath)
     return ResultPath

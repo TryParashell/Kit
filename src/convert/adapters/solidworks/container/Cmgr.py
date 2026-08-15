@@ -1435,63 +1435,6 @@ VISUAL_PROPERTIES = KVisualProperties
 ZERO_STAMP = KZeroStamp
 
 # this binding exists because shared behavior needs one stable value
-_ConnectedAtomTable = ConnectedAtom
-
-# this binding exists because shared behavior needs one stable value
-_ConnectedFourLinkParts = ConnectedFour
-
-# this binding exists because shared behavior needs one stable value
-_ConnectedLinkParts = ConnectedLink
-
-# this binding exists because shared behavior needs one stable value
-_TerminalLinkBody = TerminalLink
-
-# this binding exists because shared behavior needs one stable value
-_atom_head = AtomHead
-
-# this binding exists because shared behavior needs one stable value
-_atom_table = AtomTable
-
-# this binding exists because shared behavior needs one stable value
-_display_state = DisplayState
-
-# this binding exists because shared behavior needs one stable value
-_display_state_full = DisplayStateA
-
-# this binding exists because shared behavior needs one stable value
-_identity_block = IdentityBlock
-
-# this binding exists because shared behavior needs one stable value
-_link_body = LinkBody
-
-# this binding exists because shared behavior needs one stable value
-_link_head = LinkHead
-
-# this binding exists because shared behavior needs one stable value
-_manager_head = ManagerHead
-
-# this binding exists because shared behavior needs one stable value
-_node_name = NodeName
-
-# this binding exists because shared behavior needs one stable value
-_pack = PackAction
-
-# this binding exists because shared behavior needs one stable value
-_reverse_table = ReverseTable
-
-# this binding exists because shared behavior needs one stable value
-_stamp_list = StampList
-
-# this binding exists because shared behavior needs one stable value
-_string_handle_body = StringHandle
-
-# this binding exists because shared behavior needs one stable value
-_table = Table
-
-# this binding exists because shared behavior needs one stable value
-_visual_properties = Visual
-
-# this binding exists because shared behavior needs one stable value
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value

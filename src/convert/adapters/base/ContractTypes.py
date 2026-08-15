@@ -46,7 +46,7 @@ class TextWriter(Protocol):
 
 
 # reader contracts accept paths memory payloads and caller owned streams
-KSourceType: TypeAlias = (
+KSourceType: TypeAlias = (  # lgtm[py/unused-global-variable]
     str | FilePath | bytes | bytearray | BinaryReceiver | TextReceiver
 )
 

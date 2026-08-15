@@ -3231,48 +3231,6 @@ TAIL_RUN = KTailRun
 Tag = TagAction
 
 # this binding exists because shared behavior needs one stable value
-_Frame = Frame
-
-# this binding exists because shared behavior needs one stable value
-_advance = Advance
-
-# this binding exists because shared behavior needs one stable value
-_class_layout = ClassLayoutA
-
-# this binding exists because shared behavior needs one stable value
-_declared_slot_class = DeclaredSlot
-
-# this binding exists because shared behavior needs one stable value
-_element_length = ElemLength
-
-# this binding exists because shared behavior needs one stable value
-_external_name = OuterName
-
-# this binding exists because shared behavior needs one stable value
-_group_element_length = GroupElemLength
-
-# this binding exists because shared behavior needs one stable value
-_group_open = GroupOpenMut
-
-# this binding exists because shared behavior needs one stable value
-_group_trailer_length = GroupTrailer
-
-# this binding exists because shared behavior needs one stable value
-_repeat_total = RepeatTotal
-
-# this binding exists because shared behavior needs one stable value
-_run_group = RunGroupA
-
-# this binding exists because shared behavior needs one stable value
-_run_length = RunLength
-
-# this binding exists because shared behavior needs one stable value
-_scalar = Scalar
-
-# this binding exists because shared behavior needs one stable value
-_segment_walk = SegmentWalkMut
-
-# this binding exists because shared behavior needs one stable value
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value

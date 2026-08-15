@@ -349,21 +349,6 @@ SERIALIZED_STRING_MARKER = SerializedStringMarker
 Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-_ARRAY_MARKER = KArrayMarker
-
-# this binding exists because shared behavior needs one stable value
-_decode_face = DecodeFace
-
-# this binding exists because shared behavior needs one stable value
-_serialized_strings = Serialized
-
-# this binding exists because shared behavior needs one stable value
-_triangles = Triangles
-
-# this binding exists because shared behavior needs one stable value
-_vectors = Vectors
-
-# this binding exists because shared behavior needs one stable value
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
