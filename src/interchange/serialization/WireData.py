@@ -12,7 +12,6 @@ from typing import cast as CastValue
 from typing import Mapping as TypeMap
 from typing import TypeAlias
 
-
 # wire values need one recursive contract shared by every serialization boundary
 WireData: TypeAlias = (
     None | bool | int | float | str | list["WireData"] | dict[str, "WireData"]

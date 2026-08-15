@@ -20,7 +20,6 @@ import sys as SysModule
 from typing import Callable, cast, Protocol, TypeAlias
 import unittest as UnitTest
 
-
 # manifest digest entries need one exact shape so generated evidence remains statically checkable
 DigestStat: TypeAlias = tuple[str, int, str]
 

@@ -20,7 +20,6 @@ from interchange.compatibility.PythonCompatMethods import (
     MakeLegacySig,
 )
 
-
 # document compatibility rows share one concrete shape so empty metadata remains typed
 CompatMethod: TypeAlias = tuple[
     str,

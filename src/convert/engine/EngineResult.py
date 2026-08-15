@@ -18,7 +18,6 @@ from interchange.enums.EnumDocument import Capability
 from convert.adapters.base.TransferContract import CapTransfer as CapabilityTransfer
 from convert.adapters.base.WriteResult import WriteResult
 
-
 # reflected getters need their public package owner without replacing concrete descriptors
 GetterType = TypeVar("GetterType", bound=Callable[..., object])
 
