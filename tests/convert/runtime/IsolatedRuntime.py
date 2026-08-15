@@ -90,7 +90,7 @@ cases = (
     (output / "conversion_0.FCStd", ".CATPart"),
     (root / "examples" / ".CATPart" / "Banjo.CATPart", ".SLDPRT"),
     (
-        root / "examples" / "Random" / "Pistons" / "Piston.SLDASM",
+        root / "examples" / "Random" / "V8_engine.FCStd",
         ".CATProduct",
     ),
     (
