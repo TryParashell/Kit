@@ -119,8 +119,8 @@ jobs:
           echo "head=$HeadSha" >> "$GITHUB_OUTPUT"
 
       # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
-      # lgtm[actions/untrusted-checkout] Exact SHA checkout is credentialless data for trusted base code.
-      - name: Checkout pull request head as detached data
+      # Exact SHA checkout is credentialless data for trusted base code.
+      - name: Checkout pull request head as detached data # lgtm[actions/untrusted-checkout]
         if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -222,8 +222,8 @@ jobs:
       - name: Synchronize the locked trusted environment
         run: uv sync --frozen --python 3.11
 
-      # lgtm[actions/untrusted-checkout] Same-repo exact SHA is validated before a lease-protected push.
-      - name: Checkout pull request head as detached data
+      # Same-repo exact SHA is validated before a lease-protected push.
+      - name: Checkout pull request head as detached data # lgtm[actions/untrusted-checkout]
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
