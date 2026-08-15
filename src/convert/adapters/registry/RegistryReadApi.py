@@ -18,6 +18,7 @@ from convert.adapters.base.ContractTypes import KSourceType
 from convert.adapters.base.ReadOptions import ReadOptions
 from convert.adapters.registry.RegistrySelect import SelectReader
 from convert.adapters.staging.SourceReplay import GetReplayMut
+from convert.adapters.staging.SourceReplay import ReplaySource as SeekableSource
 
 # historical source annotations need local resolution after public methods move to the registry facade
 Source = KSourceType
@@ -110,13 +111,13 @@ class ReadApi(ReadLookup):
         FormatId, OptionsData = GetReadArgs(NamedValues)
         ReplaySource = GetReplayMut(SourceData)
         StreamPos = 0
-        if not isinstance(ReplaySource, (str, FilePath, bytes, bytearray)):
+        if isinstance(ReplaySource, SeekableSource):
             StreamPos = ReplaySource.tell()
         AdapterData = (
             self.GetReader(FormatId) if FormatId else self.PickReader(ReplaySource)
         )
-        if not isinstance(ReplaySource, (str, FilePath, bytes, bytearray)):
+        if isinstance(ReplaySource, SeekableSource):
             ReplaySource.seek(StreamPos)
         DocumentData = AdapterData.read(ReplaySource, OptionsData)
-        DocumentData.assert_valid()
+        DocumentData.AssertValid()
         return DocumentData, AdapterData

@@ -33,7 +33,7 @@ from convert.api.ApiContext import GetRegistry
 from convert.api.ApiConvert import ConvertFile
 from convert.api.ApiOpen import OpenDocument
 from convert.api.ApiWrite import WriteDocument
-from convert.engine import ConversionResult as KConversionResult
+from convert.engine.EngineResult import ConversionResult as KConversionResult
 
 AdapterInfo = KAdapterInfo
 AdapterRegistry = KAdapterRegistryType

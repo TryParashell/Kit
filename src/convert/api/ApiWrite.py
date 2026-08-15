@@ -32,23 +32,15 @@ def WriteDocument(
     AllowCarrier: bool = True,
     InputValues: TypeMap[str, AnyValue] | None = None,
 ) -> WriteResult:
-    EngineCall = getattr(KConvertEngine, "write", None)
     WriteOpts = WriteOptions(
         configuration=Configuration,
         overwrite=Overwrite,
         validate=ValidateData,
         values=BuildWriteVals(InputValues, AllowCarrier),
     )
-    if EngineCall is not None:
-        return EngineCall(
-            DocumentData,
-            TargetData,
-            format_id=DestFormat,
-            options=WriteOpts,
-        )
-    return KConvertEngine.WriteTarget(
+    return KConvertEngine.write(
         DocumentData,
         TargetData,
-        FormatId=DestFormat,
-        WriteOpts=WriteOpts,
+        format_id=DestFormat,
+        options=WriteOpts,
     )

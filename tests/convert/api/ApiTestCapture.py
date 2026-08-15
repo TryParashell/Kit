@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+from convert.adapters.base.ContractTypes import KTargetType as Destination
 from convert.adapters.base.ReadOptions import ReadOptions
 from convert.adapters.base.WriteOptions import WriteOptions
+from interchange.document.models.DocumentModel import CadDocument
 
 
 # capture behavior isolates enforced public options from adapter and filesystem side effects
@@ -34,6 +36,20 @@ class CaptureEngine:
         WriteOpts: WriteOptions,
     ) -> object:
         self.CapturedVals.append(dict(WriteOpts.values))
+        return self.SentinelValue
+
+    # direct write interception keeps tests aligned with the concrete engine contract
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        *,
+        format_id: str | None = None,
+        options: WriteOptions | None = None,
+    ) -> object:
+        if options is None:
+            raise TypeError("write options are required for write capture")
+        self.CapturedVals.append(dict(options.OptionValues))
         return self.SentinelValue
 
     # conversion interception exists because combined calls build their own write options

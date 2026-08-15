@@ -123,7 +123,7 @@ class WriteApi(WriteLookup):
                 f"{AdapterData.info.FormatId} does not support the destination"
             )
         if SelectedOpts.Validate:
-            DocumentData.assert_valid()
+            DocumentData.AssertValid()
         UnsupportedCaps = GetDocumentCaps(DocumentData) - AdapterData.info.Capabilities
         if UnsupportedCaps:
             raise CapLossError(AdapterData.info.FormatId, UnsupportedCaps)

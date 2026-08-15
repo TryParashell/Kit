@@ -12,6 +12,7 @@ from typing import Iterable as TypeIterable
 from typing import Protocol
 
 from convert.adapters.registry.RegistryDiscover import FindAdapters
+from convert.adapters.registry.RegistryBinding import AdapterBinding
 from convert.adapters.registry.RegistryErrors import DiscoveryError
 from convert.adapters.registry.RegistryRegisterApi import IsReplaceFlag
 from convert.adapters.registry.RegistryState import CopyState
@@ -72,6 +73,8 @@ class ExtendHost(RegistryHost, Protocol):
 
 # bulk api ownership isolates all or nothing extension from single adapter registration
 class ExtendApi(ExtendHost):
+    BindingMap: dict[str, AdapterBinding]
+    AliasMap: dict[str, str]
 
     # complete rollback prevents earlier adapters from surviving a later registration failure
     def ExtendAll(
