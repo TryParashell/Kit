@@ -14,7 +14,7 @@ import math as MathValue
 import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
-from typing import Any as AnyValue, Iterable, Mapping, Sequence
+from typing import Any as AnyValue, Iterable, Mapping, Sequence, cast as CastValue
 import xml.etree.ElementTree as XmlTree
 from interchange import (
     AssemblyData as AsmData,
@@ -562,10 +562,10 @@ class AsmEncodePlan:
     DefinitionById: Mapping[str, ComponentDefinition]
     SelectedConfigs: tuple[Configuration, ...]
     SourcePaths: Mapping[str, str]
-    FileKeys: Mapping[str, tuple[str, str]]
-    UniqueFileKeys: tuple[tuple[str, str], ...]
+    FileKeys: Mapping[str, tuple[str, str | int, str]]
+    UniqueFileKeys: tuple[tuple[str, str | int, str], ...]
     DefinitionIds: Mapping[str, int]
-    FileIds: Mapping[tuple[str, str], int]
+    FileIds: Mapping[tuple[str, str | int, str], int]
     ItemIds: Mapping[str, int]
     ConfigIds: Mapping[str, int]
 
@@ -575,8 +575,8 @@ def BuildObjPrefs(
     Definitions: tuple[ComponentDefinition, ...],
     Instances: tuple[ComponentInstance, ...],
     Configs: tuple[Configuration, ...],
-    FileKeys: Mapping[str, tuple[str, str]],
-    UniqueKeys: tuple[tuple[str, str], ...],
+    FileKeys: Mapping[str, tuple[str, str | int, str]],
+    UniqueKeys: tuple[tuple[str, str | int, str], ...],
 ) -> dict[tuple[str, str], int | None]:
     FilePrefs = {
         KeyValue: next(
@@ -1046,6 +1046,8 @@ def IntegerAttr(
     Value = ItemValue.attributes.get(NameValue, Default)
     if isinstance(Value, bool):
         return Default
+    if not isinstance(Value, (int, str, bytes, bytearray)):
+        return Default
     try:
         return int(Value)
     except (TypeError, ValueError):
@@ -1053,8 +1055,10 @@ def IntegerAttr(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ConfigInteger(Value: Any) -> int:
+def ConfigInteger(Value: object) -> int:
     if isinstance(Value, bool):
+        return 0
+    if not isinstance(Value, (int, str, bytes, bytearray)):
         return 0
     try:
         return int(Value)
@@ -1459,7 +1463,7 @@ def ExpectedGroup(
     Result: dict[int, tuple[MateGroup, tuple[int, ...]]] = {}
     Starts = [
         Index
-        for Index, (RoleValue, Ignored) in enumerate(Layout)
+        for Index, (RoleValue, _) in enumerate(Layout)
         if RoleValue == "group_start"
     ]
     for Position, Index in enumerate(Starts):
@@ -1526,8 +1530,13 @@ def NativeGroup(Group: MateGroup) -> str:
     Lowered = Group.name.casefold()
     for Record in Candidates:
         if any((Lowered.startswith(Prefix) for Prefix in Record.name_prefixes)):
-            return Record.class_names[0]
-    return Candidates[0].class_names[0]
+            ClassName = Record.class_names[0]
+            if isinstance(ClassName, str):
+                return ClassName
+    ClassName = Candidates[0].class_names[0]
+    if not isinstance(ClassName, str):
+        raise TypeError("native mate class name must be text")
+    return ClassName
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1684,10 +1693,15 @@ def NativeMateClass(MateValue: MateConstraint) -> tuple[str, str]:
 # reference extraction stays separate because persistent tokens have an independent validity contract
 def GetEntityRefs(Entity: MateEntity) -> tuple[str, ...] | None:
     Persistent = Entity.attributes.get("persistent_references")
-    if isinstance(Persistent, tuple) and all(
-        (isinstance(Value, str) for Value in Persistent)
+    PersistentValues = (
+        CastValue(tuple[object, ...], Persistent)
+        if isinstance(Persistent, tuple)
+        else ()
+    )
+    if PersistentValues and all(
+        (isinstance(Value, str) for Value in PersistentValues)
     ):
-        References = Persistent
+        References = CastValue(tuple[str, ...], Persistent)
     elif Entity.source_entity_id:
         References = (Entity.source_entity_id,)
     else:
@@ -1824,18 +1838,20 @@ def ResolvedMate(
     if not MathValue.isfinite(Number):
         return None
     Dimensions = MateValue.attributes.get("native_dimensions")
-    Names = (
-        tuple(
-            (
-                ItemValue.get("name", "")
-                for ItemValue in Dimensions
-                if isinstance(ItemValue, Mapping)
-                and isinstance(ItemValue.get("name", ""), str)
-            )
-        )
+    DimensionValues = (
+        CastValue(tuple[object, ...], Dimensions)
         if isinstance(Dimensions, tuple)
         else ()
     )
+    NamesList: list[str] = []
+    for ItemValue in DimensionValues:
+        if not isinstance(ItemValue, Mapping):
+            continue
+        ItemMap = CastValue(Mapping[str, object], ItemValue)
+        NameValue = ItemMap.get("name", "")
+        if isinstance(NameValue, str):
+            NamesList.append(NameValue)
+    Names = tuple(NamesList)
     FirstName = Names[0] if Names and Names[0] else "D1"
     if Semantic == "length" and Value.kind is ValueKind.LENGTH:
         Factor = {"": 1.0, "mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}.get(
@@ -1849,12 +1865,13 @@ def ResolvedMate(
         return ((FirstName, Number * Factor),) if Factor is not None else None
     if Semantic == "ratio" and Value.kind is ValueKind.NUMBER:
         Denominator = 1.0
-        if isinstance(Dimensions, tuple) and len(Dimensions) >= 2:
-            Choice = Dimensions[1]
-            if isinstance(Choice, Mapping) and isinstance(
-                Choice.get("value"), (int, float)
-            ):
-                Denominator = float(Choice["value"])
+        if len(DimensionValues) >= 2:
+            Choice = DimensionValues[1]
+            if isinstance(Choice, Mapping):
+                ChoiceMap = CastValue(Mapping[str, object], Choice)
+                ChoiceValue = ChoiceMap.get("value")
+                if isinstance(ChoiceValue, (int, float)):
+                    Denominator = float(ChoiceValue)
         if not MathValue.isfinite(Denominator) or Denominator == 0.0:
             return None
         SecondName = Names[1] if len(Names) > 1 and Names[1] else "D2"
@@ -1879,7 +1896,7 @@ def IsEncodedMate(
     AsmValue: AssemblyData,
     Definitions: Mapping[str, ComponentDefinition],
 ) -> bool:
-    NativeKind, Ignored = NativeMateClass(Source)
+    NativeKind, _ = NativeMateClass(Source)
     if Target.name != Source.name or Target.kind != NativeKind:
         return False
     ExpectedEntities: list[tuple[str, str]] = []
@@ -1903,7 +1920,7 @@ def IsEncodedMate(
     ExpectedAlignment = MateAlignmentB(Source.alignment)
     if len(Source.entity_ids) == 2 and Target.alignment_code != ExpectedAlignment:
         return False
-    Dimensions, Ignored = MateDimension(Source, NativeKind)
+    Dimensions, _ = MateDimension(Source, NativeKind)
     if len(Dimensions) != len(Target.dimensions):
         return False
     return all(
@@ -1923,7 +1940,10 @@ def IsEncodedMate(
 def DecodeNativeAsm(
     Archive: SldprtArchive, *, IncludeTessellation: bool = False, **LegacyValues: object
 ) -> NativeAsm:
-    IncludeTessellation = LegacyValues.get("include_tessellation", IncludeTessellation)
+    IncludeValue = LegacyValues.get("include_tessellation", IncludeTessellation)
+    if not isinstance(IncludeValue, bool):
+        raise TypeError("include_tessellation must be a boolean")
+    IncludeTessellation = IncludeValue
     UnknownValues = set(LegacyValues) - {"include_tessellation"}
     if UnknownValues:
         Unexpected = next(iter(UnknownValues))
@@ -1990,7 +2010,7 @@ def ParseMatePlan(DataValue: bytes, Stream: str) -> MateParsePlan:
     Serialized = PrefixedStrings(DataValue, NamePrefix)
     ScalarTokens = {
         Token
-        for Offset, Ignored, NameEnd in Serialized
+        for Offset, _, NameEnd in Serialized
         if DimensionScalarValue(DataValue, NameEnd, len(DataValue)) is not None
         for Token in (ClassRefToken(DataValue, Offset - 2),)
         if Token is not None
@@ -2006,7 +2026,7 @@ def ParseMatePlan(DataValue: bytes, Stream: str) -> MateParsePlan:
             f"mate count mismatch in {Stream}: expected {DeclaredCount}, decoded {len(Candidates)}"
         )
     Starts = tuple(
-        (MateRecordStart(DataValue, Offset) for Offset, Ignored, Ignored in Candidates)
+        (MateRecordStart(DataValue, Offset) for Offset, _, _ in Candidates)
     )
     return MateParsePlan(NativeId, DeclaredCount, tuple(Candidates), Starts)
 
@@ -2014,7 +2034,7 @@ def ParseMatePlan(DataValue: bytes, Stream: str) -> MateParsePlan:
 # record decoding remains separate because byte boundaries and class inference change independently
 def BuildMateRecs(DataValue: bytes, PlanValue: MateParsePlan) -> tuple[MateRecord, ...]:
     Records: list[MateRecord] = []
-    for Order, ((Ignored, NameValue, NameEnd), Start) in enumerate(
+    for Order, ((_, NameValue, NameEnd), Start) in enumerate(
         zip(PlanValue.Candidates, PlanValue.Starts)
     ):
         EndValue = (
@@ -2068,7 +2088,12 @@ def MakeNativeMates(
             KindValue = MateKind(Record.name, Record.class_name)
             ClassName = Record.class_name
         else:
-            KindValue = TokenKinds.get(Record.class_token, MateKind(Record.name))
+            ClassToken = Record.class_token
+            KindValue = (
+                TokenKinds.get(ClassToken, MateKind(Record.name))
+                if ClassToken is not None
+                else MateKind(Record.name)
+            )
             InferredClasses = ClassesByKind.get(KindValue, set())
             ClassName = next(iter(InferredClasses)) if len(InferredClasses) == 1 else ""
         Mates.append(
@@ -2449,14 +2474,15 @@ def ClassRefToken(DataValue: bytes, Offset: int) -> int | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateTokenKinds(Records: list[_MateRecord]) -> dict[int | None, str]:
+def MateTokenKinds(Records: Sequence[_MateRecord]) -> dict[int, str]:
     Candidates: dict[int, set[str]] = {}
     for Record in Records:
-        if Record.class_name or Record.class_token is None:
+        ClassToken = Record.class_token
+        if Record.class_name or ClassToken is None:
             continue
         KindValue = MateKind(Record.name)
         if KindValue != "native":
-            Candidates.setdefault(Record.class_token, set()).add(KindValue)
+            Candidates.setdefault(ClassToken, set()).add(KindValue)
     return {
         Token: next(iter(Kinds))
         for Token, Kinds in Candidates.items()
@@ -2552,7 +2578,7 @@ def MateDimensions(
     DataValue: bytes, Start: int, EndValue: int
 ) -> tuple[NativeMateB, ...]:
     Result: list[NativeMateB] = []
-    for Ignored, NameValue, StringEnd in SerializedA(DataValue, Start, EndValue):
+    for _, NameValue, StringEnd in SerializedA(DataValue, Start, EndValue):
         ValueOffset = DimensionScalarValue(DataValue, StringEnd, EndValue)
         if ValueOffset is None:
             continue
@@ -2566,7 +2592,7 @@ def MateDimensions(
 def RecordStrings(DataValue: bytes, Start: int, EndValue: int) -> tuple[str, ...]:
     Values = [
         (Offset, Value)
-        for Offset, Value, Ignored in SerializedA(DataValue, Start, EndValue)
+        for Offset, Value, _ in SerializedA(DataValue, Start, EndValue)
         if Value
     ]
     for Match in KWideText.finditer(DataValue, Start, EndValue):
@@ -2575,7 +2601,7 @@ def RecordStrings(DataValue: bytes, Start: int, EndValue: int) -> tuple[str, ...
     # this callback exists because local behavior needs one focused transformation
     Values.sort(key=lambda ItemValue: ItemValue[0])
     Result: list[str] = []
-    for Ignored, Value in Values:
+    for _, Value in Values:
         if not Result or Result[-1] != Value:
             Result.append(Value)
     return tuple(Result)
@@ -2587,7 +2613,8 @@ def BoundingBox(
 ) -> tuple[float, float, float, float, float, float] | None:
     if not Value:
         return None
-    return FloatTuple(Value, 6)
+    Result = FloatTuple(Value, 6)
+    return (Result[0], Result[1], Result[2], Result[3], Result[4], Result[5])
 
 
 # this definition exists because focused behavior needs one stable owner

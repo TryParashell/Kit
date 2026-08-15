@@ -10,7 +10,7 @@ from __future__ import annotations as Annotations
 from dataclasses import dataclass as Dataclass
 from pathlib import Path as FilePath
 import struct as Struct
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, cast as CastValue
 import zlib as ZlibValue
 from convert.adapters.solidworks.container.Format import (
     CONTENT_TYPES_STREAM as ContentTypesStream,
@@ -77,7 +77,7 @@ def Signature(FileId: int) -> tuple[bytes, bytes, bytes] | None:
 # this definition exists because focused behavior needs one stable owner
 def Container(BlobValue: bytes | bytearray) -> tuple[bytes, bytes, bytes]:
     DataValue = bytes(BlobValue)
-    Signatures, Ignored = TemplateFields(DataValue, SldprtArchive.from_bytes(DataValue))
+    Signatures, _ = TemplateFields(DataValue, SldprtArchive.from_bytes(DataValue))
     return Signatures
 
 
@@ -105,64 +105,64 @@ class SldprtArchive:
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def OpenAction(
-        ClassType: type[SldprtArchive], SourcePath: str | FilePath
+        cls: type[SldprtArchive], SourcePath: str | FilePath
     ) -> SldprtArchive:
-        return OpenArchive(ClassType, SourcePath)
+        return OpenArchive(cls, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromBytes(
-        ClassType: type[SldprtArchive],
+        cls: type[SldprtArchive],
         BlobValue: bytes | bytearray,
         SourcePath: str | FilePath = "<memory>",
     ) -> SldprtArchive:
-        return ParseArchive(ClassType, BlobValue, SourcePath)
+        return ParseArchive(cls, BlobValue, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def Streams(Instance) -> dict[str, bytes]:
-        return {Record.name: Record.data for Record in Instance.records}
+    def Streams(self) -> dict[str, bytes]:
+        return {Record.name: Record.data for Record in self.records}
 
     # this definition exists because focused behavior needs one stable owner
-    def GetAction(Instance, NameValue: str) -> bytes | None:
+    def GetAction(self, NameValue: str) -> bytes | None:
         return next(
-            (Record.data for Record in Instance.records if Record.name == NameValue),
+            (Record.data for Record in self.records if Record.name == NameValue),
             None,
         )
 
     # this definition exists because focused behavior needs one stable owner
-    def Require(Instance, NameValue: str) -> bytes:
-        DataValue = Instance.GetAction(NameValue)
+    def Require(self, NameValue: str) -> bytes:
+        DataValue = self.GetAction(NameValue)
         if DataValue is None:
             raise SldprtFormat(f"required stream is missing: {NameValue}")
         return DataValue
 
     @classmethod
     def from_bytes(
-        ClassType: type[SldprtArchive],
+        cls: type[SldprtArchive],
         BlobValue: bytes | bytearray,
         SourcePath: str | FilePath = "<memory>",
     ) -> SldprtArchive:
-        return ClassType.FromBytes(BlobValue, SourcePath)
+        return cls.FromBytes(BlobValue, SourcePath)
 
     # compatibility callers require the conventional archive open spelling
     @classmethod
     def open(
-        ClassType: type[SldprtArchive], SourcePath: str | FilePath
+        cls: type[SldprtArchive], SourcePath: str | FilePath
     ) -> SldprtArchive:
-        return ClassType.OpenAction(SourcePath)
+        return cls.OpenAction(SourcePath)
 
     # compatibility callers require stream lookup through the conventional spelling
-    def get(Instance, NameValue: str) -> bytes | None:
-        return Instance.GetAction(NameValue)
+    def get(self, NameValue: str) -> bytes | None:
+        return self.GetAction(NameValue)
 
     # compatibility callers require stream lookup through the conventional spelling
-    def require(Instance, NameValue: str) -> bytes:
-        return Instance.Require(NameValue)
+    def require(self, NameValue: str) -> bytes:
+        return self.Require(NameValue)
 
     @property
-    def streams(Instance) -> dict[str, bytes]:
-        return Instance.Streams
+    def streams(self) -> dict[str, bytes]:
+        return self.Streams
 
 
 # this definition exists because archive loading needs one filesystem boundary
@@ -205,19 +205,48 @@ def BuildSldprt(
     **Options: object,
 ) -> bytes:
     OptionsMap = dict(Options)
-    FileId = OptionsMap.pop("file_id", FileId)
-    FormatVersion = OptionsMap.pop("format_version", FormatVersion)
-    Template = OptionsMap.pop("template", Template)
-    Signatures = OptionsMap.pop("signatures", Signatures)
+    FileIdValue = OptionsMap.pop("file_id", FileId)
+    VersionValue = OptionsMap.pop("format_version", FormatVersion)
+    TemplateValue = OptionsMap.pop("template", Template)
+    SignatureValue = OptionsMap.pop("signatures", Signatures)
     if OptionsMap:
         Unknown = next(iter(OptionsMap))
         raise TypeError(f"BuildSldprt() got an unexpected keyword argument '{Unknown}'")
+    if FileIdValue is not None and not isinstance(FileIdValue, int):
+        raise TypeError("file_id must be an integer or None")
+    if not isinstance(VersionValue, int):
+        raise TypeError("format_version must be an integer")
+    if TemplateValue is not None and not isinstance(TemplateValue, (bytes, bytearray)):
+        raise TypeError("template must be bytes or None")
+    if SignatureValue is not None:
+        if not isinstance(SignatureValue, tuple):
+            raise TypeError("signatures must contain three byte values")
+        SignatureObjects = CastValue(tuple[object, ...], SignatureValue)
+        if len(SignatureObjects) != 3 or not all(
+            isinstance(Value, (bytes, bytearray)) for Value in SignatureObjects
+        ):
+            raise TypeError("signatures must contain three byte values")
+        SignatureItems = CastValue(tuple[bytes | bytearray, ...], SignatureValue)
+        Signatures = (
+            bytes(SignatureItems[0]),
+            bytes(SignatureItems[1]),
+            bytes(SignatureItems[2]),
+        )
+    else:
+        Signatures = None
+    FileId = FileIdValue
+    FormatVersion = VersionValue
+    Template = TemplateValue
     FileId, SignatureSet, TypeIds = ResolveBuild(FileId, Template, Signatures)
     if not 0 <= FileId <= 4294967295:
         raise ValueError("SLDPRT file id must fit in 32 bits")
     if FormatVersion not in ContainerVersions:
         raise ValueError("SLDPRT container version must be 3 or 4")
-    Items = list(Streams.items() if isinstance(Streams, Mapping) else Streams)
+    if isinstance(Streams, Mapping):
+        StreamMap = CastValue(Mapping[str, bytes], Streams)
+        Items = list(StreamMap.items())
+    else:
+        Items = list(Streams)
     ValidateStreams(Items)
     return EmitSldprt(Items, FileId, FormatVersion, SignatureSet, TypeIds)
 
@@ -236,7 +265,11 @@ def ResolveBuild(
             raise ValueError("SLDPRT signatures must be three four byte values")
         if FileId is None:
             raise ValueError("SLDPRT signatures require the paired file id")
-        Signatures = tuple((bytes(Value) for Value in Signatures))
+        Signatures = (
+            bytes(Signatures[0]),
+            bytes(Signatures[1]),
+            bytes(Signatures[2]),
+        )
     elif Template is None:
         if FileId is None:
             FileId = KDefaultFileId
@@ -260,7 +293,7 @@ def ResolveBuild(
 
 # this definition exists because stream validation must precede any emitted bytes
 def ValidateStreams(Items: list[tuple[str, bytes]]) -> None:
-    Names = [NameValue for NameValue, Ignored in Items]
+    Names = [NameValue for NameValue, _ in Items]
     if len(Names) != len(set(Names)):
         raise ValueError("SLDPRT stream names must be unique")
     if len(Items) > KMaxFolderStreamCount:
