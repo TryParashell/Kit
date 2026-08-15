@@ -29,6 +29,9 @@ concurrency:
     }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   verify-headers:
     name: Verify changed file headers
