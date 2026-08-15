@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from math import isfinite as IsFiniteNum
+from typing import ClassVar, TYPE_CHECKING
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
@@ -14,7 +15,7 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 # homogeneous matrices preserve assembly placement without assuming vendor conventions
 @ModelDataMut(
     DefaultMap={
-        "Values": (
+        "values": (
             1.0,
             0.0,
             0.0,
@@ -35,23 +36,25 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
     }
 )
 class TransformMatrix(ModelBase):
-    Values: tuple[float, ...]
+    values: tuple[float, ...]
+    if TYPE_CHECKING:
+        Values: ClassVar[tuple[float, ...]]
 
     # matrix consumers need validated rows before indexing the homogeneous layout
     def GetRows(self) -> tuple[tuple[float, float, float, float], ...]:
-        if len(self.Values) != 16:
+        if len(self.values) != 16:
             raise ValueError("matrix does not contain 16 values")
         return (
-            self.Values[0:4],
-            self.Values[4:8],
-            self.Values[8:12],
-            self.Values[12:16],
+            (self.values[0], self.values[1], self.values[2], self.values[3]),
+            (self.values[4], self.values[5], self.values[6], self.values[7]),
+            (self.values[8], self.values[9], self.values[10], self.values[11]),
+            (self.values[12], self.values[13], self.values[14], self.values[15]),
         )
 
     # invalid placement numbers must be rejected before geometry reaches targets
     def IsFinite(self) -> bool:
-        return len(self.Values) == 16 and all(
-            IsFiniteNum(NumberValue) for NumberValue in self.Values
+        return len(self.values) == 16 and all(
+            IsFiniteNum(NumberValue) for NumberValue in self.values
         )
 
     # point transformation centralizes the canonical row major placement convention

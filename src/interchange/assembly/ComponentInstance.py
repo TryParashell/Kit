@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -20,34 +20,51 @@ from interchange.assembly.TransformMatrix import TransformMatrix
 # component instances preserve placement order suppression and configuration choices
 @ModelDataMut(
     DefaultMap={
-        "Transform": TransformMatrix(),
-        "Order": 0,
-        "ReferenceNumber": "",
-        "ConfigurationName": "",
-        "ConfigurationId": "",
-        "IsSuppressed": False,
-        "IsHidden": False,
-        "IsFixed": False,
-        "IsFlexible": False,
-        "IsExcludedBom": False,
-        "Provenance": None,
+        "transform": TransformMatrix(),
+        "order": 0,
+        "reference_number": "",
+        "configuration_name": "",
+        "configuration_id": "",
+        "suppressed": False,
+        "hidden": False,
+        "fixed": False,
+        "flexible": False,
+        "exclude_from_bom": False,
+        "provenance": None,
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class ComponentInst(ModelBase):
-    EntityId: str
-    EntityName: str
-    DefinitionId: str
-    OwnerDefinitionId: str
-    Transform: TransformMatrix
-    Order: int
-    ReferenceNumber: str
-    ConfigurationName: str
-    ConfigurationId: str
-    IsSuppressed: bool
-    IsHidden: bool
-    IsFixed: bool
-    IsFlexible: bool
-    IsExcludedBom: bool
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    definition_id: str
+    owner_definition_id: str
+    transform: TransformMatrix
+    order: int
+    reference_number: str
+    configuration_name: str
+    configuration_id: str
+    suppressed: bool
+    hidden: bool
+    fixed: bool
+    flexible: bool
+    exclude_from_bom: bool
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        DefinitionId: ClassVar[str]
+        OwnerDefinitionId: ClassVar[str]
+        Transform: ClassVar[TransformMatrix]
+        Order: ClassVar[int]
+        ReferenceNumber: ClassVar[str]
+        ConfigurationName: ClassVar[str]
+        ConfigurationId: ClassVar[str]
+        IsSuppressed: ClassVar[bool]
+        IsHidden: ClassVar[bool]
+        IsFixed: ClassVar[bool]
+        IsFlexible: ClassVar[bool]
+        IsExcludedBom: ClassVar[bool]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

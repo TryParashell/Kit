@@ -32,55 +32,55 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 # boundary models aggregate analytic geometry and incidence into one neutral graph
 @ModelDataMut(
     DefaultMap={
-        "Curves": (),
-        "Pcurves": (),
-        "Surfaces": (),
-        "Vertices": (),
-        "Edges": (),
-        "Coedges": (),
-        "Loops": (),
-        "Wires": (),
-        "Faces": (),
-        "FaceUses": (),
-        "Shells": (),
-        "ShellUses": (),
-        "Regions": (),
-        "Bodies": (),
-        "SchemaVersion": "1.0",
+        "curves": (),
+        "pcurves": (),
+        "surfaces": (),
+        "vertices": (),
+        "edges": (),
+        "coedges": (),
+        "loops": (),
+        "wires": (),
+        "faces": (),
+        "face_uses": (),
+        "shells": (),
+        "shell_uses": (),
+        "regions": (),
+        "bodies": (),
+        "schema_version": "1.0",
     }
 )
 class BrepModel(ModelBase):
-    Curves: tuple[BrepCurve, ...]
-    Pcurves: tuple[BrepPcurve, ...]
-    Surfaces: tuple[BrepSurface, ...]
-    Vertices: tuple[BrepVertex, ...]
-    Edges: tuple[BrepEdge, ...]
-    Coedges: tuple[BrepCoedge, ...]
-    Loops: tuple[BrepLoop, ...]
-    Wires: tuple[BrepWire, ...]
-    Faces: tuple[BrepFace, ...]
-    FaceUses: tuple[BrepFaceUse, ...]
-    Shells: tuple[BrepShell, ...]
-    ShellUses: tuple[BrepShellUse, ...]
-    Regions: tuple[BrepRegion, ...]
-    Bodies: tuple[BrepBody, ...]
-    SchemaVersion: str
+    curves: tuple[BrepCurve, ...]
+    pcurves: tuple[BrepPcurve, ...]
+    surfaces: tuple[BrepSurface, ...]
+    vertices: tuple[BrepVertex, ...]
+    edges: tuple[BrepEdge, ...]
+    coedges: tuple[BrepCoedge, ...]
+    loops: tuple[BrepLoop, ...]
+    wires: tuple[BrepWire, ...]
+    faces: tuple[BrepFace, ...]
+    face_uses: tuple[BrepFaceUse, ...]
+    shells: tuple[BrepShell, ...]
+    shell_uses: tuple[BrepShellUse, ...]
+    regions: tuple[BrepRegion, ...]
+    bodies: tuple[BrepBody, ...]
+    schema_version: str
     if TYPE_CHECKING:
-        curves: ClassVar[tuple[BrepCurve, ...]]
-        pcurves: ClassVar[tuple[BrepPcurve, ...]]
-        surfaces: ClassVar[tuple[BrepSurface, ...]]
-        vertices: ClassVar[tuple[BrepVertex, ...]]
-        edges: ClassVar[tuple[BrepEdge, ...]]
-        coedges: ClassVar[tuple[BrepCoedge, ...]]
-        loops: ClassVar[tuple[BrepLoop, ...]]
-        wires: ClassVar[tuple[BrepWire, ...]]
-        faces: ClassVar[tuple[BrepFace, ...]]
-        face_uses: ClassVar[tuple[BrepFaceUse, ...]]
-        shells: ClassVar[tuple[BrepShell, ...]]
-        shell_uses: ClassVar[tuple[BrepShellUse, ...]]
-        regions: ClassVar[tuple[BrepRegion, ...]]
-        bodies: ClassVar[tuple[BrepBody, ...]]
-        schema_version: ClassVar[str]
+        Curves: ClassVar[tuple[BrepCurve, ...]]
+        Pcurves: ClassVar[tuple[BrepPcurve, ...]]
+        Surfaces: ClassVar[tuple[BrepSurface, ...]]
+        Vertices: ClassVar[tuple[BrepVertex, ...]]
+        Edges: ClassVar[tuple[BrepEdge, ...]]
+        Coedges: ClassVar[tuple[BrepCoedge, ...]]
+        Loops: ClassVar[tuple[BrepLoop, ...]]
+        Wires: ClassVar[tuple[BrepWire, ...]]
+        Faces: ClassVar[tuple[BrepFace, ...]]
+        FaceUses: ClassVar[tuple[BrepFaceUse, ...]]
+        Shells: ClassVar[tuple[BrepShellUse, ...]]
+        ShellUses: ClassVar[tuple[BrepShellUse, ...]]
+        Regions: ClassVar[tuple[BrepRegion, ...]]
+        Bodies: ClassVar[tuple[BrepBody, ...]]
+        SchemaVersion: ClassVar[str]
 
     # model validation delegates because topology checks change independently from storage
     def GetErrors(self, DesignBodyIds: frozenset[str] = frozenset()) -> tuple[str, ...]:

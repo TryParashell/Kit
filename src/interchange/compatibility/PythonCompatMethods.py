@@ -74,6 +74,7 @@ def BindAliasMut(
     SignatureInfo: FuncSig,
 ) -> None:
     DescriptorValue = GetAliasSource(ClassType, SourceName, LegacyName)
+    LegacyValue: object
     if isinstance(DescriptorValue, classmethod):
         MethodValue = GetMethodFunc(CastValue(object, DescriptorValue), SourceName)
         LegacyValue = classmethod(

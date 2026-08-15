@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING as IsTypeCheck
+from typing import ClassVar, TYPE_CHECKING as IsTypeCheck
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
@@ -19,5 +19,8 @@ if IsTypeCheck:
 # component documents embed linked portable documents without weakening graph typing
 @ModelDataMut
 class ComponentDoc(ModelBase):
-    EntityId: str
-    Document: CadDocument
+    id: str
+    document: CadDocument
+    if IsTypeCheck:
+        EntityId: ClassVar[str]
+        Document: ClassVar[CadDocument]
