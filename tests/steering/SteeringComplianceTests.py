@@ -14,7 +14,7 @@ import tempfile as Tempfile
 import unittest as Unittest
 from pathlib import Path as FilePath
 
-from tools.steering.SteeringCompliance import CheckPaths
+from tools.steering.SteeringCompliance import CheckPaths, Finding, GetNewFindings
 
 # fixtures reuse the production notice so tests isolate every other compliance rule
 KPythonHeader = """# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
@@ -596,6 +596,27 @@ KValidValue = 1
             ValidResult.returncode, 0, ValidResult.stdout + ValidResult.stderr
         )
         CaseSelf.assertEqual(InvalidResult.returncode, 2)
+
+
+# baseline fixtures stay focused because line movement must not hide new semantic violations
+class TestBaseline(Unittest.TestCase):
+
+    # duplicate accounting matters because repeated violations must not collapse into one allowance
+    @staticmethod
+    def CheckBaseline() -> None:
+        CaseSelf = KAssertions
+        SourcePath = FilePath("sample.py")
+        BaselineList = [Finding(SourcePath, 1, 1, "NAM001", "same")]
+        FindingList = [
+            Finding(SourcePath, 20, 1, "NAM001", "same"),
+            Finding(SourcePath, 30, 1, "NAM001", "same"),
+            Finding(SourcePath, 40, 1, "SPL001", "new"),
+        ]
+        NewFindings = GetNewFindings(FindingList, BaselineList)
+        CaseSelf.assertEqual(
+            [(FindingInfo.RuleCode, FindingInfo.MsgText) for FindingInfo in NewFindings],
+            [("NAM001", "same"), ("SPL001", "new")],
+        )
 
 
 # path filtering stays focused because local analysis databases are not repository source
