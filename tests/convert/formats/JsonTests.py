@@ -262,6 +262,8 @@ def TestPublicSdk() -> None:
 def TestPublicSdkA(Binary: bool) -> None:
     Value = DocValue()
     Serialized = Value.to_json() + "\n"
+    SourceData: NonSeekable[bytes] | NonSeekable[str]
+    ConvertData: NonSeekable[bytes] | NonSeekable[str]
     if Binary:
         SourceData = NonSeekable(Serialized.encode("utf-8"))
         ConvertData = NonSeekable(Serialized.encode("utf-8"))

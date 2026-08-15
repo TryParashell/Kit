@@ -17,14 +17,14 @@ from interchange import CadSource
 def TestPkgImports() -> None:
     assert (
         CadDocument(
-            Source=CadSource(FormatId="smoke", FilePath=None, SourceDigest=None),
-            Configurations=(),
-            Parameters=(),
-            SupportPlanes=(),
-            Sketches=(),
-            Selections=(),
-            FeatureTimeline=(),
-            Bodies=(),
+            source=CadSource(FormatId="smoke", FilePath=None, SourceDigest=None),
+            configurations=(),
+            parameters=(),
+            support_planes=(),
+            sketches=(),
+            selections=(),
+            feature_timeline=(),
+            bodies=(),
         ).schema_version
         == "1.0"
     )

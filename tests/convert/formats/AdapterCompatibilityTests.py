@@ -118,10 +118,11 @@ def CheckInfo() -> None:
     for ProtocolValue in range(Pickle.HIGHEST_PROTOCOL + 1):
         EncodedData = Pickle.dumps(InfoData, protocol=ProtocolValue)
         assert Pickle.loads(EncodedData) == InfoData
-    assert (
-        DataClasses.replace(InfoData, format_id="format.other").format_id
-        == "format.other"
+    ReplacedInfo = Typing.cast(
+        AdapterInfo,
+        CallCompat(DataClasses.replace, InfoData, format_id="format.other"),
     )
+    assert ReplacedInfo.format_id == "format.other"
     assert (
         str(Inspect.signature(AdapterInfo.__init__))
         == "(self, format_id: 'str', name: 'str', version: 'str', extensions: 'tuple[str, ...]', aliases: 'tuple[str, ...]' = (), capabilities: 'frozenset[Capability]' = frozenset(), media_types: 'tuple[str, ...]' = (), native_capabilities: 'frozenset[Capability]' = frozenset(), part_extensions: 'tuple[str, ...]' = (), assembly_extensions: 'tuple[str, ...]' = ()) -> None"
