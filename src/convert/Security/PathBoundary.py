@@ -9,9 +9,10 @@
 from __future__ import annotations as Annotations
 
 from os import PathLike as PathLikeValue
-from os.path import abspath as AbsolutePath
 from pathlib import Path as PathInfo
 import tempfile as Tempfile
+
+from convert.Security.LexicalBoundary import ResolveLexical
 
 # command argument paths permit only inert characters after fixed root resolution
 KCommandPathCharacters = frozenset(" ._-/\\:")
@@ -22,19 +23,6 @@ class UnsafePath(ValueError):
     __slots__ = ()
 
 
-# lexical containment blocks traversal before candidate paths reach filesystem operations
-def ResolveLexical(PathValue: str | PathLikeValue[str], RootPath: PathInfo) -> PathInfo:
-    CandidatePath = PathInfo(PathValue)
-    if not CandidatePath.is_absolute():
-        CandidatePath = RootPath / CandidatePath
-    LexicalPath = PathInfo(AbsolutePath(CandidatePath))
-    try:
-        LexicalPath.relative_to(RootPath)
-    except ValueError as ErrorInfo:
-        raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
-    return LexicalPath
-
-
 # canonical containment prevents traversal and symlink escapes before protected filesystem operations
 def ResolveWithin(
     PathValue: str | PathLikeValue[str],
@@ -42,7 +30,10 @@ def ResolveWithin(
     RequireFile: bool = False,
 ) -> PathInfo:
     RootPath = PathInfo(RootValue).resolve(strict=True)
-    CandidatePath = ResolveLexical(PathValue, RootPath)
+    try:
+        CandidatePath = ResolveLexical(PathValue, RootPath)
+    except ValueError as ErrorInfo:
+        raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
     ResultPath = CandidatePath.resolve(strict=RequireFile)
     try:
         ResultPath.relative_to(RootPath)

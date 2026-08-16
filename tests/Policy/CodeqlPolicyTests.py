@@ -27,7 +27,7 @@ KCorePathBarriers = frozenset(
     (
         (
             "convert",
-            "Member[Security].Member[PathBoundary].Member[ResolveLexical].ReturnValue",
+            "Member[Security].Member[LexicalBoundary].Member[ResolveLexical].ReturnValue",
         ),
         (
             "convert",

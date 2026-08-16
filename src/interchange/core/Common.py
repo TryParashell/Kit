@@ -33,9 +33,9 @@ def FreezeMapping() -> TypeMap[str, object]: ...  # lgtm[py/ineffectual-statemen
 
 # populated immutable mappings retain their precise member type for model fields
 @TypeOverload
-def FreezeMapping(  # lgtm[py/ineffectual-statement]
+def FreezeMapping(
     SourceValues: TypeMap[str, MapValue],
-) -> TypeMap[str, MapValue]: ...
+) -> TypeMap[str, MapValue]: ...  # lgtm[py/ineffectual-statement]
 
 
 # immutable mappings prevent accidental mutation of frozen interchange records
