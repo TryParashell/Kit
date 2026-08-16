@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING as IsTypeCheck
 from interchange.core.Common import FreezeMapping
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.ComponentDocument import (
-    ComponentDoc,
-)  # lgtm[py/unsafe-cyclic-import]
+    ComponentDoc,  # lgtm[py/unsafe-cyclic-import]
+)
 from interchange.assembly.ComponentInstance import ComponentInst
 from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateEntity import MateEntity
@@ -25,8 +25,8 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 if IsTypeCheck:
     from interchange.document.models.DocumentModel import (
-        CadDocument,
-    )  # lgtm[py/unsafe-cyclic-import]
+        CadDocument,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # assembly data composes occurrences documents and mates into one portable graph

@@ -14,12 +14,12 @@ from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateEntity import MateEntity
 from interchange.assembly.MateGroup import MateGroup
 from interchange.document.models.DocumentIdentity import GetIdGroups
-from interchange.document.models.DocumentModel import (
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
     CadDocument,
-)  # lgtm[py/cyclic-import]
-from interchange.document.validation.DocumentBoundary import (
+)
+from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
     GetDocument,
-)  # lgtm[py/cyclic-import]
+)
 
 
 # assembly validation composes focused graph link mesh and mate checks deterministically
@@ -30,21 +30,21 @@ def GetAssemblyErrs(
         GetDefLinkErrs,
         GetDocLinkErrs,
     )
-    from interchange.document.validation.DocumentGraphValidate import (
+    from interchange.document.validation.DocumentGraphValidate import (  # lgtm[py/cyclic-import]
         GetGraphErrors,
-    )  # lgtm[py/cyclic-import]
+    )
     from interchange.document.validation.DocumentMateEntityValidate import (  # lgtm[py/cyclic-import]
         GetMateEntErrs,
     )
-    from interchange.document.validation.DocumentMateGroupValidate import (
+    from interchange.document.validation.DocumentMateGroupValidate import (  # lgtm[py/cyclic-import]
         GetMateGroups,
-    )  # lgtm[py/cyclic-import]
-    from interchange.document.validation.DocumentMateValidate import (
+    )
+    from interchange.document.validation.DocumentMateValidate import (  # lgtm[py/cyclic-import]
         GetMateErrors,
-    )  # lgtm[py/cyclic-import]
-    from interchange.document.validation.DocumentMeshValidate import (
+    )
+    from interchange.document.validation.DocumentMeshValidate import (  # lgtm[py/cyclic-import]
         GetMeshErrors,
-    )  # lgtm[py/cyclic-import]
+    )
 
     AssemblyValue = DocumentValue.assembly
     if AssemblyValue is None:

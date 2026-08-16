@@ -20,9 +20,9 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     ReplayAssembly,
 )
 
-from .Registry import (
-    FieldOwners as FieldOwners,  # lgtm[py/unused-import]
-    KFieldOwners as KFieldOwners,  # lgtm[py/unused-import]
+from .Registry import (  # lgtm[py/unused-import]
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
     StreamPrograms as StreamPrograms,
 )
 

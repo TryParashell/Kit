@@ -11,11 +11,11 @@ from __future__ import annotations
 from operator import itemgetter as ItemGetter
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
-from convert.adapters.solidworks.programs.Common.ProgramContract import (
+from convert.adapters.solidworks.programs.Common.ProgramContract import (  # lgtm[py/unused-import]
     FieldOp,
     MethodPrograms,
     OwnedOp,
-    OwnerKey,  # lgtm[py/unused-import]
+    OwnerKey,
     StreamPrograms,
 )
 

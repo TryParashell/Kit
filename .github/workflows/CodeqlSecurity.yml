@@ -33,9 +33,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language:
-          - actions
-          - python
+        include:
+          - language: actions
+            queries: ""
+          - language: python
+            queries: +codeql/python-queries:AlertSuppression.ql
     steps:
       - name: Checkout repository
         # yamllint disable-line rule:comments
@@ -56,6 +58,7 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: none
           config-file: ./.github/CodeQL/CodeqlConfig.yml
+          queries: ${{ matrix.queries }}
 
       - name: Analyze repository
         id: analysis
@@ -77,13 +80,17 @@ jobs:
             exit 1
           fi
           FindingCount="$(
-            jq -s '[.[].runs[]?.results[]?] | length' "${SarifFiles[@]}"
+            jq -s '[
+              .[].runs[]?.results[]?
+              | select(any(.suppressions[]?; .kind == "inSource") | not)
+            ] | length' "${SarifFiles[@]}"
           )"
           if [ "$FindingCount" -ne 0 ]; then
             jq -rs '
               .[]
               | .runs[]?
               | .results[]?
+              | select(any(.suppressions[]?; .kind == "inSource") | not)
               | {
                   Rule: (.ruleId // "unknown-rule"),
                   Level: (.level // "warning"),

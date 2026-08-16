@@ -27,6 +27,10 @@ KCorePathBarriers = frozenset(
     (
         (
             "convert",
+            "Member[Security].Member[PathBoundary].Member[ResolveLexical].ReturnValue",
+        ),
+        (
+            "convert",
             "Member[Security].Member[PathBoundary].Member[ResolveInput].ReturnValue",
         ),
         (
@@ -111,8 +115,10 @@ def TestFlowScope() -> None:
     assert "config-file: ./.github/CodeQL/CodeqlConfig.yml" in SourceText
     assert "cp -R .github/CodeQL/extensions .github/codeql/extensions" in SourceText
     assert "paths-ignore:\n  - re/**" in ConfigText
+    assert "+codeql/python-queries:AlertSuppression.ql" in SourceText
+    assert 'select(any(.suppressions[]?; .kind == "inSource") | not)' in SourceText
     for LanguageName in ("actions", "python"):
-        assert f"- {LanguageName}" in SourceText
+        assert f"language: {LanguageName}" in SourceText
     assert "- java-kotlin" not in SourceText
 
 

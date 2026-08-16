@@ -9,12 +9,12 @@
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
-from interchange.document.models.DocumentModel import (
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
     CadDocument,
-)  # lgtm[py/cyclic-import]
-from interchange.document.validation.DocumentBoundary import (
+)
+from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
     GetDocument,
-)  # lgtm[py/cyclic-import]
+)
 
 
 # embedded document checks prevent invalid recursive ownership and surface child failures

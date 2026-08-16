@@ -14,8 +14,8 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 if IsTypeCheck:
     from interchange.document.models.DocumentModel import (
-        CadDocument,
-    )  # lgtm[py/unsafe-cyclic-import]
+        CadDocument,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # component documents embed linked portable documents without weakening graph typing

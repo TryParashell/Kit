@@ -13,12 +13,12 @@ class DocumentValid:
 
     # validation remains concrete so callers receive the runtime tuple contract directly
     def validate(self) -> tuple[str, ...]:
-        from interchange.document.validation.DocumentValidate import (
+        from interchange.document.validation.DocumentValidate import (  # lgtm[py/cyclic-import]
             GetDocErrors,
-        )  # lgtm[py/cyclic-import]
-        from interchange.document.validation.DocumentBoundary import (
+        )
+        from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
             GetDocument,
-        )  # lgtm[py/cyclic-import]
+        )
 
         DocumentValue = GetDocument(self)
         if DocumentValue is None:
@@ -27,12 +27,12 @@ class DocumentValid:
 
     # assertion remains concrete so callers avoid object returning compatibility lookup
     def assert_valid(self) -> None:
-        from interchange.document.validation.DocumentValidate import (
+        from interchange.document.validation.DocumentValidate import (  # lgtm[py/cyclic-import]
             AssertValid,
-        )  # lgtm[py/cyclic-import]
-        from interchange.document.validation.DocumentBoundary import (
+        )
+        from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
             GetDocument,
-        )  # lgtm[py/cyclic-import]
+        )
 
         DocumentValue = GetDocument(self)
         if DocumentValue is None:

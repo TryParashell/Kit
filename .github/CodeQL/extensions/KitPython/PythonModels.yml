@@ -13,6 +13,9 @@ extensions:
       extensible: barrierModel
     data:
       - - "convert"
+        - "Member[Security].Member[PathBoundary].Member[ResolveLexical].ReturnValue"
+        - "path-injection"
+      - - "convert"
         - "Member[Security].Member[PathBoundary].Member[ResolveInput].ReturnValue"
         - "path-injection"
       - - "convert"

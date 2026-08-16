@@ -33,9 +33,9 @@ from convert.adapters.solidworks.container.Container import (
     SldprtArchive,
     SldprtFormatError,
 )
-from convert.adapters.solidworks.core.Display import (
+from convert.adapters.solidworks.core.Display import (  # lgtm[py/unused-import]
     NativeDisplayComponent as NativeDisplayComponent,
-    NativeTessellationFace as NativeTessellationFace,  # lgtm[py/unused-import]
+    NativeTessellationFace as NativeTessellationFace,
     decode_display_lists as DecodeDisplayLists,
     decode_tessellation_faces as DecodeTessellationFaces,
 )

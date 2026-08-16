@@ -8,9 +8,9 @@
 
 from interchange.document.behavior.DocumentIoBehavior import DocumentIo
 from interchange.document.behavior.DocumentLookupBehavior import DocumentLookup
-from interchange.document.behavior.DocumentValidBehavior import (
+from interchange.document.behavior.DocumentValidBehavior import (  # lgtm[py/cyclic-import]
     DocumentValid,
-)  # lgtm[py/cyclic-import]
+)
 
 
 # focused method contracts keep the immutable document schema independently reviewable
