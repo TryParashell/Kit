@@ -115,7 +115,7 @@ def TestFlowScope() -> None:
     assert "config-file: ./.github/CodeQL/CodeqlConfig.yml" in SourceText
     assert "cp -R .github/CodeQL/extensions .github/codeql/extensions" in SourceText
     assert "paths-ignore:\n  - re/**" in ConfigText
-    assert "+codeql/python-queries:AlertSuppression.ql" in SourceText
+    assert "queries: ./.github/CodeQL/PythonMaximal.qls" in SourceText
     assert 'select(any(.suppressions[]?; .kind == "inSource") | not)' in SourceText
     for LanguageName in ("actions", "python"):
         assert f"language: {LanguageName}" in SourceText

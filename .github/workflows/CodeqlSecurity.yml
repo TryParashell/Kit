@@ -37,7 +37,7 @@ jobs:
           - language: actions
             queries: ""
           - language: python
-            queries: +codeql/python-queries:AlertSuppression.ql
+            queries: ./.github/CodeQL/PythonMaximal.qls
     steps:
       - name: Checkout repository
         # yamllint disable-line rule:comments
