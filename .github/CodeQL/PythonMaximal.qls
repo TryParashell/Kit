@@ -12,7 +12,7 @@
   from: codeql/python-queries
 - apply: codeql-suites/python-security-experimental.qls
   from: codeql/python-queries
-- queries: AlertSuppression.ql
+- query: AlertSuppression.ql
   from: codeql/python-queries
 - exclude:
     id:

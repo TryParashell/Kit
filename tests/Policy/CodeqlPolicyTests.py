@@ -112,10 +112,12 @@ def ModelRows(SourceText: str) -> frozenset[tuple[str, str, str]]:
 def TestFlowScope() -> None:
     SourceText = LoadText(".github/workflows/CodeqlSecurity.yml")
     ConfigText = LoadText(".github/CodeQL/CodeqlConfig.yml")
+    SuiteText = LoadText(".github/CodeQL/PythonMaximal.qls")
     assert "config-file: ./.github/CodeQL/CodeqlConfig.yml" in SourceText
     assert "cp -R .github/CodeQL/extensions .github/codeql/extensions" in SourceText
     assert "paths-ignore:\n  - re/**" in ConfigText
     assert "queries: ./.github/CodeQL/PythonMaximal.qls" in SourceText
+    assert "- query: AlertSuppression.ql" in SuiteText
     assert 'select(any(.suppressions[]?; .kind == "inSource") | not)' in SourceText
     for LanguageName in ("actions", "python"):
         assert f"language: {LanguageName}" in SourceText
