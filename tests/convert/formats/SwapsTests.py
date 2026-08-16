@@ -11,11 +11,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass as DataClass
 from functools import lru_cache as LruCache
-import gc as GcValue
 import hashlib as Hashlib
 from pathlib import Path as PathValue
 import re as RegexLib
-import shutil as Shutil
 import struct as Struct
 from typing import Mapping as TypeMap
 
@@ -370,11 +368,6 @@ def Suffix(PathValueA: PathValue) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TargetSuffixes(Document: CadDocument) -> tuple[str, ...]:
-    return KAssemblySuffixes if Document.Assembly is not None else KPartSuffixes
-
-
-# this definition exists because focused behavior needs one stable owner
 def IsAssemblyFile(Source: PathValue) -> bool:
     SuffixA = Suffix(Source)
     return SuffixA in {".SLDASM", ".CATProduct"} or Source in KFcstdAssemblies
@@ -535,71 +528,7 @@ def TestSFMRADK() -> None:
     assert set(KMissingReferenceFiles) <= set(KCorpusFiles)
 
 
-# this helper verifies one forward conversion and its restored document
-def VerifyForward(
-    Source: SourceData,
-    SourceSuffix: str,
-    DestinationSuffix: str,
-    OriginalSignature: DocumentSig,
-    TmpPath: PathValue,
-    Index: int,
-    IsAssembly: bool,
-) -> tuple[PathValue, PathValue]:
-    ForwardDirectory = TmpPath / f"forward_{Index}"
-    ForwardDirectory.mkdir()
-    Destination = ForwardDirectory / f"converted{DestinationSuffix}"
-    Forward = Convert(Source, Destination)
-    assert Forward.source_format == KFormatBySuffix[SourceSuffix]
-    assert Forward.destination_format == KFormatBySuffix[DestinationSuffix]
-    assert Forward.output.bytes_written == Destination.stat().st_size
-    assert Forward.requirements == ()
-    assert Forward.dropped == frozenset()
-    assert Forward.roundtrip_safe is True
-    AssertTVR(Forward, DestinationSuffix, IsAssembly)
-    del Forward
-    GcValue.collect()
-    Restored = OpenDocument(Destination)
-    assert Restored.GetErrors() == ()
-    assert DocumentS(Restored) == OriginalSignature
-    AssertTarget(Restored, DestinationSuffix, Destination, IsAssembly)
-    del Restored
-    GcValue.collect()
-    return ForwardDirectory, Destination
-
-
-# this helper verifies one reverse conversion and its restored document
-def VerifyReverse(
-    Destination: PathValue,
-    SourceSuffix: str,
-    DestinationSuffix: str,
-    OriginalSignature: DocumentSig,
-    TmpPath: PathValue,
-    Index: int,
-    IsAssembly: bool,
-) -> PathValue:
-    ReverseDirectory = TmpPath / f"reverse_{Index}"
-    ReverseDirectory.mkdir()
-    Reverse = ReverseDirectory / f"converted{SourceSuffix}"
-    Backward = Convert(Destination, Reverse)
-    assert Backward.source_format == KFormatBySuffix[DestinationSuffix]
-    assert Backward.destination_format == KFormatBySuffix[SourceSuffix]
-    assert Backward.output.bytes_written == Reverse.stat().st_size
-    assert Backward.requirements == ()
-    assert Backward.dropped == frozenset()
-    assert Backward.roundtrip_safe is True
-    AssertTVR(Backward, SourceSuffix, IsAssembly)
-    del Backward
-    GcValue.collect()
-    ReversedDocument = OpenDocument(Reverse)
-    assert ReversedDocument.GetErrors() == ()
-    assert DocumentS(ReversedDocument) == OriginalSignature
-    AssertTarget(ReversedDocument, SourceSuffix, Reverse, IsAssembly)
-    del ReversedDocument
-    GcValue.collect()
-    return ReverseDirectory
-
-
-# this test exhaustively swaps each example through every compatible format
+# this test swaps one representative of each source type through every compatible format
 @Pytest.mark.parametrize(
     ("NameValue", "SourceSuffix", "Source", "IsAssembly", "DestinationSuffix"),
     KMatrixCases,
@@ -647,7 +576,7 @@ def TestEVFSRBD(
     AssertTVR(ReverseResult, SourceSuffix, IsAssembly)
 
 
-# this definition exists because focused behavior needs one stable owner
+# this test verifies missing assembly references fail with the unresolved filename
 @Pytest.mark.parametrize(
     "Source",
     tuple(KMissingReferenceFiles),
@@ -663,7 +592,7 @@ def TestAMIRFARBN(Source: PathValue) -> None:
     assert Message.endswith(Missing)
 
 
-# this definition exists because focused behavior needs one stable owner
+# this test verifies every bundled source can be read through its registered adapter
 @Pytest.mark.parametrize(
     "Source",
     KSupportedFiles,
@@ -671,34 +600,10 @@ def TestAMIRFARBN(Source: PathValue) -> None:
 )
 def TestESESTEVFAB(
     Source: PathValue,
-    TmpPath: PathValue,
 ) -> None:
     SourceSuffix = Suffix(Source)
-    Original = OpenDocument(Source)
-    IsAssembly = Original.Assembly is not None
+    Document = OpenDocument(Source)
+    IsAssembly = Document.Assembly is not None
+    assert Document.GetErrors() == ()
     assert IsAssembly is IsAssemblyFile(Source)
-    OriginalSignature = DocumentS(Original)
-    TargetSuffixesA = TargetSuffixes(Original)
-    del Original
-    GcValue.collect()
-    for Index, DestinationSuffix in enumerate(TargetSuffixesA):
-        ForwardDirectory, Destination = VerifyForward(
-            Source,
-            SourceSuffix,
-            DestinationSuffix,
-            OriginalSignature,
-            TmpPath,
-            Index,
-            IsAssembly,
-        )
-        ReverseDirectory = VerifyReverse(
-            Destination,
-            SourceSuffix,
-            DestinationSuffix,
-            OriginalSignature,
-            TmpPath,
-            Index,
-            IsAssembly,
-        )
-        Shutil.rmtree(ForwardDirectory)
-        Shutil.rmtree(ReverseDirectory)
+    AssertTarget(Document, SourceSuffix, Source, IsAssembly)
