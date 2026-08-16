@@ -69,7 +69,7 @@ class TestDiffGuard(UnitTestCase):
 
 
 # byte focused fixtures protect untouched content from newline normalization during repair
-class TestByteRepair(UnitTest.TestCase):
+class TestByteRepair(UnitTestCase):
 
     # inserted headers must retain existing newline bytes and preserve unterminated shebang content
     def TestMissBytes(self) -> None:
@@ -94,7 +94,7 @@ class TestByteRepair(UnitTest.TestCase):
 
 
 # span focused fixtures prevent damaged notices from consuming neighboring source documentation
-class TestSpanRepair(UnitTest.TestCase):
+class TestSpanRepair(UnitTestCase):
 
     # recognizable fragments may be replaced but adjacent documentation must make repair fail closed
     def TestBoundRepair(self) -> None:
@@ -132,7 +132,7 @@ class TestSpanRepair(UnitTest.TestCase):
 
 
 # format focused fixtures allow proven legacy styles without authorizing style guesses
-class TestStyleGuard(UnitTest.TestCase):
+class TestStyleGuard(UnitTestCase):
 
     # unknown formats may retain a proven marker but must never receive a guessed missing style
     def TestUnkStyle(self) -> None:
@@ -175,7 +175,7 @@ class TestStyleGuard(UnitTest.TestCase):
 
 
 # text focused fixtures keep malformed known source files inside the enforcement boundary
-class TestTextGuard(UnitTest.TestCase):
+class TestTextGuard(UnitTestCase):
 
     # known source formats must report invalid utf eight instead of being silently treated as binary
     def TestInvalidText(self) -> None:
@@ -192,7 +192,7 @@ class TestTextGuard(UnitTest.TestCase):
 
 
 # path focused fixtures keep filesystem traversal limited to regular worktree files
-class TestPathGuard(UnitTest.TestCase):
+class TestPathGuard(UnitTestCase):
 
     # regular candidates pass while missing directories and lexical links never reach content checks
     def TestPathBound(self) -> None:
@@ -215,7 +215,7 @@ class TestPathGuard(UnitTest.TestCase):
 
 
 # skill focused fixtures preserve agent metadata while restoring its distinct license contract
-class TestSkillGuard(UnitTest.TestCase):
+class TestSkillGuard(UnitTestCase):
 
     # agent skill repair stays inside the selected worktree and preserves all nonlicense frontmatter
     def TestSkillField(self) -> None:
@@ -237,7 +237,7 @@ class TestSkillGuard(UnitTest.TestCase):
 
 
 # revision focused fixtures bind materialized files to one exact commit identity
-class TestHeadGuard(UnitTest.TestCase):
+class TestHeadGuard(UnitTestCase):
 
     # exact commit and worktree checks prevent symbolic revisions or a stale materialized head
     def TestExactHead(self) -> None:

@@ -14862,154 +14862,154 @@ _parse_scalars = ParseScalars  # lgtm[py/unused-global-variable]
 _parse_xml = ParseXml  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_plane_frame_block = PlaneFrameBlock
+_plane_frame_block = PlaneFrameBlock  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_plane_payload = PlanePayload
+_plane_payload = PlanePayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_plane_reference = PlaneRef
+_plane_reference = PlaneRef  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_primary_dimension = Primary
+_primary_dimension = Primary  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_principal_plane_frames = PrincipalPlaneA
+_principal_plane_frames = PrincipalPlaneA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_principal_plane_ids = PrincipalPlaneB
+_principal_plane_ids = PrincipalPlaneB  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_profiles = DecodeProfiles
+_profiles = DecodeProfiles  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_proved_write_capabilities = ProvedWrite
+_proved_write_capabilities = ProvedWrite  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_read_class = ReadClass
+_read_class = ReadClass  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_read_serialized_string = ReadSerialized
+_read_serialized_string = ReadSerialized  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_read_sketch_plane_reference = ReadSketchPlane
+_read_sketch_plane_reference = ReadSketchPlane  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_record_class = RecordClass
+_record_class = RecordClass  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_record_class_name = RecordClassName
+_record_class_name = RecordClassName  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_rectangle_coordinates = Rectangle
+_rectangle_coordinates = Rectangle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_reference_plane_ids = RefPlaneIds
+_reference_plane_ids = RefPlaneIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_repair_plane_object_ids = RepairPlaneIMut
+_repair_plane_object_ids = RepairPlaneIMut  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_resolve_profile_operation = ResolveProfile
+_resolve_profile_operation = ResolveProfile  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_resolved_base_map_index = ResolvedBaseMap
+_resolved_base_map_index = ResolvedBaseMap  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_resolved_payload = ResolvedPayload
+_resolved_payload = ResolvedPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_revolution_axis_marker = RevolutionAxis
+_revolution_axis_marker = RevolutionAxis  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_same_point = IsSamePoint
+_same_point = IsSamePoint  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_scalar_owners = ScalarOwners
+_scalar_owners = ScalarOwners  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_scalar_record = ScalarRecord
+_scalar_record = ScalarRecord  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_scalar_trailer = ScalarTrailer
+_scalar_trailer = ScalarTrailer  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_semantic_dimensions = Semantic
+_semantic_dimensions = Semantic  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_serializable_name = IsSerializable
+_serializable_name = IsSerializable  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_serialized_string = Serialized
+_serialized_string = Serialized  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_sketch_payload = EncodeSketch
+_sketch_payload = EncodeSketch  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_sketch_plane_reference = SketchPlaneRef
+_sketch_plane_reference = SketchPlaneRef  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_sketch_support_kind = SketchSupport
+_sketch_support_kind = SketchSupport  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_solid_feature_tree_ids = SolidFeatureIds
+_solid_feature_tree_ids = SolidFeatureIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_stable_creation_stamp = StableCreation
+_stable_creation_stamp = StableCreation  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_stable_u32 = StableUThreeTwo
+_stable_u32 = StableUThreeTwo  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_structural_circle_profiles = Structural
+_structural_circle_profiles = Structural  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_structural_rectangle_profiles = StructuralA
+_structural_rectangle_profiles = StructuralA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_support_plane_reference = SupportPlaneRef
+_support_plane_reference = SupportPlaneRef  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_tree_node_flags = TreeNodeFlags
+_tree_node_flags = TreeNodeFlags  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_version_history_payload = VersionHistory
+_version_history_payload = VersionHistory  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_circle_profile = WriteCircle
+_write_circle_profile = WriteCircle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_dimensions = WriteDimensions
+_write_dimensions = WriteDimensions  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_feature = WriteFeature
+_write_feature = WriteFeature  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_feature_type = WriteFeatureA
+_write_feature_type = WriteFeatureA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_object_ids = WriteObjectIds
+_write_object_ids = WriteObjectIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_objects = WriteObjects
+_write_objects = WriteObjects  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_rectangle_bounds = WriteRectangle
+_write_rectangle_bounds = WriteRectangle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_write_sketch = WriteSketch
+_write_sketch = WriteSketch  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_xml_attribute = XmlAttr
+_xml_attribute = XmlAttr  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_xml_document = XmlDoc
+_xml_document = XmlDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_xml_element = XmlElem
+_xml_element = XmlElem  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-_xml_text = XmlText
+_xml_text = XmlText  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
 annotations = Annotations
