@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Pull request size label
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label-size:
+    name: Label changed LOC ratio
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted base revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Classify changed LOC ratio
+        id: classification
+        env:
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+        shell: bash
+        run: |
+          python - <<'PYTHON'
+          import os as OsTools
+          import subprocess as Subprocess
+          from pathlib import Path as FilePath
+
+          PathData = Subprocess.check_output(
+              ["git", "ls-files", "-z", "--", ".", ":(exclude)re/**"]
+          )
+          LineCount = 0
+          for PathBytes in PathData.split(b"\0"):
+              if not PathBytes:
+                  continue
+              FileData = FilePath(OsTools.fsdecode(PathBytes)).read_bytes()
+              if b"\0" in FileData:
+                  continue
+              LineCount += len(FileData.splitlines())
+
+          ChangedLines = int(OsTools.environ["ADDITIONS"]) + int(
+              OsTools.environ["DELETIONS"]
+          )
+          ChangedPercent = (
+              ChangedLines * 100 / LineCount
+              if LineCount
+              else (100.0 if ChangedLines else 0.0)
+          )
+          if ChangedPercent < 1:
+              SelectedLabel = "LOW"
+          elif ChangedPercent < 5:
+              SelectedLabel = "MEDIUM"
+          elif ChangedPercent < 15:
+              SelectedLabel = "HIGH"
+          else:
+              SelectedLabel = "EXTREME"
+
+          with open(OsTools.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as OutputFile:
+              OutputFile.write(f"label={SelectedLabel}\n")
+              OutputFile.write(f"percentage={ChangedPercent:.4f}\n")
+          print(
+              f"{ChangedLines} changed lines / {LineCount} base lines "
+              f"= {ChangedPercent:.4f}% ({SelectedLabel})"
+          )
+          PYTHON
+
+      - name: Apply size label
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SELECTED_LABEL: ${{ steps.classification.outputs.label }}
+        with:
+          script: |
+            const LabelColors = {
+              LOW: "2da44e",
+              MEDIUM: "bf8700",
+              HIGH: "bc4c00",
+              EXTREME: "cf222e",
+            };
+            const SelectedLabel = process.env.SELECTED_LABEL;
+            const PullNumber = context.payload.pull_request.number;
+            const ExistingLabels = new Set(
+              context.payload.pull_request.labels.map((LabelInfo) => LabelInfo.name),
+            );
+
+            for (const [LabelName, LabelColor] of Object.entries(LabelColors)) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: LabelName,
+                });
+              } catch (ErrorInfo) {
+                if (ErrorInfo.status !== 404) throw ErrorInfo;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: LabelName,
+                  color: LabelColor,
+                });
+              }
+            }
+
+            if (!ExistingLabels.has(SelectedLabel)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: PullNumber,
+                labels: [SelectedLabel],
+              });
+            }
+
+            for (const LabelName of Object.keys(LabelColors)) {
+              if (LabelName === SelectedLabel || !ExistingLabels.has(LabelName)) continue;
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: PullNumber,
+                name: LabelName,
+              });
+            }
