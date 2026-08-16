@@ -9,16 +9,13 @@
 name: Pull request size label
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] Labels API metadata without executing PR code.
     types:
       - opened
       - reopened
       - synchronize
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -29,6 +26,10 @@ jobs:
     name: Label changed LOC ratio
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read # Checks out only the trusted base revision for the LOC denominator.
+      issues: write # Creates missing size labels.
+      pull-requests: write # Applies and removes size labels.
     steps:
       - name: Checkout trusted base revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

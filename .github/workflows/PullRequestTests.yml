@@ -9,16 +9,13 @@
 name: Pull request tests label
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] Labels API metadata without executing PR code.
     types:
       - opened
       - reopened
       - synchronize
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -29,6 +26,10 @@ jobs:
     name: Label test changes
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read # Reads changed paths through GitHub's API.
+      issues: write # Creates the tests label when missing.
+      pull-requests: write # Applies and removes the tests label.
     steps:
       - name: Apply tests label
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
