@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Pull request dependencies label
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label-dependencies:
+    name: Label dependency changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Apply dependencies label
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const LabelName = "Dependencies";
+            const PullNumber = context.payload.pull_request.number;
+            const DependencyFiles = new Set([
+              "Cargo.lock",
+              "Cargo.toml",
+              "Gemfile",
+              "Gemfile.lock",
+              "build.gradle",
+              "build.gradle.kts",
+              "composer.json",
+              "composer.lock",
+              "go.mod",
+              "go.sum",
+              "package-lock.json",
+              "package.json",
+              "pixi.lock",
+              "pixi.toml",
+              "pnpm-lock.yaml",
+              "pom.xml",
+              "pyproject.toml",
+              "uv.lock",
+              "yarn.lock",
+            ]);
+            const FileList = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: PullNumber,
+              per_page: 100,
+            });
+            const IsMatched = FileList.some((FileInfo) => {
+              const PathText = FileInfo.filename;
+              const FileName = PathText.split("/").at(-1);
+              return (
+                !PathText.startsWith("re/") &&
+                (DependencyFiles.has(FileName) || PathText === ".github/dependabot.yml")
+              );
+            });
+
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: LabelName,
+              });
+            } catch (ErrorInfo) {
+              if (ErrorInfo.status !== 404) throw ErrorInfo;
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: LabelName,
+                color: "0366d6",
+              });
+            }
+
+            if (IsMatched) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: PullNumber,
+                labels: [LabelName],
+              });
+            } else {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: PullNumber,
+                  name: LabelName,
+                });
+              } catch (ErrorInfo) {
+                if (ErrorInfo.status !== 404) throw ErrorInfo;
+              }
+            }
