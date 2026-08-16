@@ -118,17 +118,28 @@ jobs:
           echo "base=$BaseSha" >> "$GITHUB_OUTPUT"
           echo "head=$HeadSha" >> "$GITHUB_OUTPUT"
 
-      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
-      # Exact SHA checkout is credentialless data for trusted base code.
-      - name: Checkout pull request head as detached data # lgtm[actions/untrusted-checkout]
+      - name: Materialize pull request head as detached data
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ steps.refs.outputs.head }}
-          path: SpdxHeadData
-          fetch-depth: 0
-          persist-credentials: false
+        env:
+          HEAD_SHA: ${{ steps.refs.outputs.head }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 1
+          fi
+          if ! [[ "$PULL_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            exit 1
+          fi
+          PullRef="refs/pull/$PULL_NUMBER/head"
+          git fetch --no-tags origin "$PullRef"
+          FetchedSha="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+          if [ "$FetchedSha" != "$HEAD_SHA" ]; then
+            echo "::error::Fetched pull request data does not match the event SHA."
+            exit 1
+          fi
+          git worktree add --detach "$GITHUB_WORKSPACE/SpdxHeadData" "$HEAD_SHA"
 
       - name: Materialize the exact untrusted head
         id: source
@@ -222,15 +233,27 @@ jobs:
       - name: Synchronize the locked trusted environment
         run: uv sync --frozen --python 3.11
 
-      # Same-repo exact SHA is validated before a lease-protected push.
-      - name: Checkout pull request head as detached data # lgtm[actions/untrusted-checkout]
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ needs.verify-headers.outputs.head }}
-          path: SpdxHeadData
-          fetch-depth: 0
-          persist-credentials: false
+      - name: Materialize pull request head as detached data
+        env:
+          HEAD_SHA: ${{ needs.verify-headers.outputs.head }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 1
+          fi
+          if ! [[ "$PULL_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            exit 1
+          fi
+          PullRef="refs/pull/$PULL_NUMBER/head"
+          git fetch --no-tags origin "$PullRef"
+          FetchedSha="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+          if [ "$FetchedSha" != "$HEAD_SHA" ]; then
+            echo "::error::Fetched pull request data does not match the event SHA."
+            exit 1
+          fi
+          git worktree add --detach "$GITHUB_WORKSPACE/SpdxHeadData" "$HEAD_SHA"
 
       - name: Validate the repair target
         id: target
