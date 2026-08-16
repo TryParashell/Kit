@@ -21,8 +21,8 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 )
 
 from .Registry import (
-    FieldOwners as FieldOwners,
-    KFieldOwners as KFieldOwners,
+    FieldOwners as FieldOwners,  # lgtm[py/unused-import]
+    KFieldOwners as KFieldOwners,  # lgtm[py/unused-import]
     StreamPrograms as StreamPrograms,
 )
 

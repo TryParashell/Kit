@@ -1049,7 +1049,9 @@ def MeshCoord(Value: object) -> float:
 
 
 # this definition exists because mesh indexing requires exactly three validated integer offsets
-def IsMeshTriangle(Value: object) -> TypeGuard[tuple[int, int, int]]:
+def IsMeshTriangle(  # lgtm[py/mixed-returns]
+    Value: object,
+) -> TypeGuard[tuple[int, int, int]]:
     match Value:
         case (int(), int(), int()):
             return True

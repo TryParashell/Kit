@@ -75,7 +75,7 @@ class CapTransfer(ContractBase):
             capability: Capability,
             mode: TransferMode,
             carrier_reason: CarrierReason | None = None,
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # canonical keywords remain typed because dataclass replacement reconstructs evidence from storage fields
         @Overload
@@ -84,10 +84,10 @@ class CapTransfer(ContractBase):
             CapabilityData: Capability,
             TransferModeData: TransferMode,
             CarrierCause: CarrierReason | None = None,
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # invalid combinations are rejected here so every writer result stays truthful
     def __post_init__(self) -> None:

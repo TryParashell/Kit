@@ -110,7 +110,7 @@ def PayloadStrMap(Value: object) -> Mapping[str, str] | None:
 
 
 # trusted brep keys require six concrete text fields before archive reuse
-def IsBrepKey(Value: object) -> TypeGuard[KNativeBrepKey]:
+def IsBrepKey(Value: object) -> TypeGuard[KNativeBrepKey]:  # lgtm[py/mixed-returns]
     match Value:
         case (str(), str(), str(), str(), str(), str()):
             return True
@@ -2550,7 +2550,7 @@ def AddFixedMut(State: RuleState) -> None:
 
 
 # this definition exists because constraint records need canonical freecad xml attributes
-def IntPair(Value: object) -> tuple[int, int]:
+def IntPair(Value: object) -> tuple[int, int]:  # lgtm[py/mixed-returns]
     match Value:
         case (int() as First, int() as Second):
             return (First, Second)

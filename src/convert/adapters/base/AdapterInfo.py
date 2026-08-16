@@ -75,7 +75,7 @@ class AdapterInfo(ContractBase):
             native_capabilities: frozenset[Capability] = frozenset(),
             part_extensions: tuple[str, ...] = (),
             assembly_extensions: tuple[str, ...] = (),
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # canonical keywords remain typed because dataclass replacement constructs records from storage fields
         @Overload
@@ -91,18 +91,18 @@ class AdapterInfo(ContractBase):
             NativeCaps: frozenset[Capability] = frozenset(),
             PartExts: tuple[str, ...] = (),
             AssemblyExts: tuple[str, ...] = (),
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # both keyword eras remain visible because document routing callers upgraded independently
         @Overload
-        def extensions_for(self, *, assembly: bool) -> tuple[str, ...]: ...
+        def extensions_for(self, *, assembly: bool) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
 
         # both keyword eras remain visible because document routing callers upgraded independently
         @Overload
-        def extensions_for(self, *, Assembly: bool) -> tuple[str, ...]: ...
+        def extensions_for(self, *, Assembly: bool) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
 
         # dynamic dispatch still validates collisions while overloads describe every supported spelling
         def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:

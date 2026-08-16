@@ -24,7 +24,7 @@ class Identified(TypeProtocol):
 
     # immutable record identities remain readable during reflective collection validation
     @property
-    def id(self) -> str: ...
+    def id(self) -> str: ...  # lgtm[py/ineffectual-statement]
 
 
 # readable duplicate diagnostics need labels derived consistently from model types

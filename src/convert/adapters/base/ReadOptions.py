@@ -39,7 +39,7 @@ class ReadOptions(ContractBase):
             include_tessellation: bool = True,
             strict: bool = True,
             values: TypeMap[str, object] = FreezeMapping(),
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # canonical keywords remain typed because dataclass replacement reconstructs policies from storage fields
         @Overload
@@ -50,10 +50,10 @@ class ReadOptions(ContractBase):
             IncludeMesh: bool = True,
             StrictMode: bool = True,
             OptionValues: TypeMap[str, object] = FreezeMapping(),
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # historical configuration access remains typed because readers consume this public selection field
     @property

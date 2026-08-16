@@ -9,11 +9,11 @@
 from math import isfinite as IsFiniteNum
 from typing import Mapping as TypeMap
 
-from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.ComponentInstance import ComponentInst
 from interchange.assembly.MateEntity import MateEntity
-from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
 
 
 # runtime model construction can bypass annotations so radii need an explicit numeric boundary

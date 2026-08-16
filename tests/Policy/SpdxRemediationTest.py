@@ -12,7 +12,7 @@ from importlib.util import module_from_spec as BuildModule
 from importlib.util import spec_from_file_location as BuildSpec
 import pathlib as Pathlib
 import tempfile as Tempfile
-import unittest as UnitTest
+from unittest import TestCase as UnitTestCase
 from typing import Callable as CallType
 from typing import Protocol
 from typing import cast as TypeCast
@@ -46,7 +46,7 @@ def LoadRepair() -> RepairContract:
 
 
 # adversarial diff fixtures prove automation accepts only canonical repository destinations
-class TestDiffGuard(UnitTest.TestCase):
+class TestDiffGuard(UnitTestCase):
 
     # nul records must preserve rename destinations while rejecting every ambiguous path spelling
     def TestDiffParse(self) -> None:

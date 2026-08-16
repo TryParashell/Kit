@@ -15,7 +15,7 @@ from convert.adapters.solidworks.programs.Common.ProgramContract import (
     FieldOp,
     MethodPrograms,
     OwnedOp,
-    OwnerKey,
+    OwnerKey,  # lgtm[py/unused-import]
     StreamPrograms,
 )
 

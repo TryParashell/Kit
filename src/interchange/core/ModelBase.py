@@ -78,7 +78,7 @@ def ModelDataMut(
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = frozenset(),
-) -> type[ModelValue]: ...
+) -> type[ModelValue]: ...  # lgtm[py/ineffectual-statement]
 
 
 # configured decoration retains concrete model types after defaults are installed
@@ -89,7 +89,7 @@ def ModelDataMut(
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = frozenset(),
-) -> ValueFactory[[type[ModelValue]], type[ModelValue]]: ...
+) -> ValueFactory[[type[ModelValue]], type[ModelValue]]: ...  # lgtm[py/ineffectual-statement]
 
 
 # dynamic defaults keep instance fields distinct from true class constants during static checks

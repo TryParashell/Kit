@@ -34,7 +34,7 @@ class DiscoveryHost(Protocol):
         self,
         AdapterValues: TypeIterable[object],
         **NamedValues: object,
-    ) -> None: ...
+    ) -> None: ...  # lgtm[py/ineffectual-statement]
 
 
 # discovery api ownership isolates package introspection from ordinary registry operations
@@ -68,7 +68,7 @@ class ExtendHost(RegistryHost, Protocol):
         self,
         AdapterData: object,
         **NamedValues: object,
-    ) -> None: ...
+    ) -> None: ...  # lgtm[py/ineffectual-statement]
 
 
 # bulk api ownership isolates all or nothing extension from single adapter registration

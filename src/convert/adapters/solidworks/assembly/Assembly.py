@@ -35,7 +35,7 @@ from convert.adapters.solidworks.container.Container import (
 )
 from convert.adapters.solidworks.core.Display import (
     NativeDisplayComponent as NativeDisplayComponent,
-    NativeTessellationFace as NativeTessellationFace,
+    NativeTessellationFace as NativeTessellationFace,  # lgtm[py/unused-import]
     decode_display_lists as DecodeDisplayLists,
     decode_tessellation_faces as DecodeTessellationFaces,
 )

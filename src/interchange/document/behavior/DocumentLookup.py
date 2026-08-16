@@ -21,7 +21,7 @@ class Identified(TypeProtocol):
 
     # immutable model identities remain readable through the narrow lookup contract
     @property
-    def id(self) -> str: ...
+    def id(self) -> str: ...  # lgtm[py/ineffectual-statement]
 
 
 # generic lookup results remain the exact model type stored by each collection

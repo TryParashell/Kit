@@ -17,11 +17,11 @@ class FeaturePayload(Protocol):
 
     # audit metadata must remain readable across immutable feature implementations
     @property
-    def attributes(self) -> Mapping[str, object]: ...
+    def attributes(self) -> Mapping[str, object]: ...  # lgtm[py/ineffectual-statement]
 
     # unsupported grammar reporting accepts every concrete feature kind representation
     @property
-    def kind(self) -> object: ...
+    def kind(self) -> object: ...  # lgtm[py/ineffectual-statement]
 
 
 # documents expose this narrow timeline contract so audit code avoids parser implementation details
@@ -29,7 +29,7 @@ class DocumentPayload(Protocol):
 
     # read only sequencing permits concrete feature timelines through covariance
     @property
-    def feature_timeline(self) -> Sequence[FeaturePayload]: ...
+    def feature_timeline(self) -> Sequence[FeaturePayload]: ...  # lgtm[py/ineffectual-statement]
 
 
 # decoded extension metadata needs validated keys before typed lookups can be trusted

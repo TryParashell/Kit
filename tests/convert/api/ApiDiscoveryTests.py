@@ -27,7 +27,7 @@ class InfoReplacer(Protocol):
         self,
         InfoData: AdapterInfo,
         **NamedValues: object,
-    ) -> AdapterInfo: ...
+    ) -> AdapterInfo: ...  # lgtm[py/ineffectual-statement]
 
 
 # the runtime dataclass helper retains legacy reflected names behind the typed test boundary

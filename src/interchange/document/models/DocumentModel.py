@@ -12,10 +12,10 @@ from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
-from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/unsafe-cyclic-import]
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.core.Common import FreezeMapping
-from interchange.document.behavior.DocumentBehavior import DocumentApi
+from interchange.document.behavior.DocumentBehavior import DocumentApi  # lgtm[py/cyclic-import]
 from interchange.document.models.DocumentRoot import DocumentRoot
 from interchange.enums.EnumDocument import Capability
 from interchange.enums.EnumUnits import UnitSystem

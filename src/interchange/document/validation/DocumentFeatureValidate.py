@@ -8,7 +8,7 @@
 
 from typing import Mapping as TypeMap
 
-from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
 
 
 # timeline checks protect ordering and every feature dependency from invalid references

@@ -6,7 +6,7 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
 
 
 # nested records can be malformed at runtime so validators narrow them before use

@@ -9,9 +9,6 @@
 from __future__ import annotations as Annotations
 
 from os import PathLike as PathLikeValue
-from os import sep as PathSeparator
-from os.path import normcase as NormalizeCase
-from os.path import realpath as RealPath
 from pathlib import Path as PathInfo
 import tempfile as Tempfile
 
@@ -30,14 +27,15 @@ def ResolveWithin(
     RootValue: str | PathLikeValue[str],
     RequireFile: bool = False,
 ) -> PathInfo:
-    RootText = RealPath(RootValue)
-    ResultText = RealPath(PathValue)
-    RootCheck = NormalizeCase(RootText)
-    ResultCheck = NormalizeCase(ResultText)
-    RootPrefix = RootCheck.rstrip(PathSeparator) + PathSeparator
-    if ResultCheck != RootCheck and not ResultCheck.startswith(RootPrefix):
-        raise UnsafePath(f"path escapes trusted root {RootText!r}")
-    ResultPath = PathInfo(ResultText)
+    RootPath = PathInfo(RootValue).resolve(strict=True)
+    CandidatePath = PathInfo(PathValue)
+    if not CandidatePath.is_absolute():
+        CandidatePath = RootPath / CandidatePath
+    ResultPath = CandidatePath.resolve(strict=RequireFile)
+    try:
+        ResultPath.relative_to(RootPath)
+    except ValueError as ErrorInfo:
+        raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
     if RequireFile and not ResultPath.is_file():
         raise FileNotFoundError(ResultPath)
     return ResultPath

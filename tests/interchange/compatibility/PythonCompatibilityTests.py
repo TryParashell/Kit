@@ -83,7 +83,7 @@ class CompatDataclass(Protocol):
 class MethodDescriptor(Protocol):
 
     @property
-    def __func__(self) -> FuncType: ...
+    def __func__(self) -> FuncType: ...  # lgtm[py/ineffectual-statement]
 
 
 # top level names are contractual because adapters historically imported them without module qualification

@@ -27,24 +27,24 @@ Source = KSourceType
 class ReadCatalog(Protocol):
 
     # selection requires deterministic access to every registered reader
-    def GetReaders(self) -> tuple[CadReaderAdapter, ...]: ...
+    def GetReaders(self) -> tuple[CadReaderAdapter, ...]: ...  # lgtm[py/ineffectual-statement]
 
 
 # read orchestration needs only lookup selection and adapter aware reading from its host
 class ReadLookup(Protocol):
 
     # explicit format requests need canonical reader lookup from the composed registry
-    def GetReader(self, FormatId: str) -> CadReaderAdapter: ...
+    def GetReader(self, FormatId: str) -> CadReaderAdapter: ...  # lgtm[py/ineffectual-statement]
 
     # implicit format requests need probe based selection from the composed registry
-    def PickReader(self, SourceData: KSourceType) -> CadReaderAdapter: ...
+    def PickReader(self, SourceData: KSourceType) -> CadReaderAdapter: ...  # lgtm[py/ineffectual-statement]
 
     # document convenience reads delegate to the adapter aware operation on the same host
     def ReadAdapter(
         self,
         SourceData: KSourceType,
         **NamedValues: object,
-    ) -> tuple[CadDocument, CadReaderAdapter]: ...
+    ) -> tuple[CadDocument, CadReaderAdapter]: ...  # lgtm[py/ineffectual-statement]
 
 
 # historical read keywords stay centralized because callers pass explicit source format and options

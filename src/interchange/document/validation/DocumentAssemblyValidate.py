@@ -14,25 +14,25 @@ from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateEntity import MateEntity
 from interchange.assembly.MateGroup import MateGroup
 from interchange.document.models.DocumentIdentity import GetIdGroups
-from interchange.document.models.DocumentModel import CadDocument
-from interchange.document.validation.DocumentBoundary import GetDocument
+from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
+from interchange.document.validation.DocumentBoundary import GetDocument  # lgtm[py/cyclic-import]
 
 
 # assembly validation composes focused graph link mesh and mate checks deterministically
 def GetAssemblyErrs(
     DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
-    from interchange.document.validation.DocumentComponentValidate import (
+    from interchange.document.validation.DocumentComponentValidate import (  # lgtm[py/cyclic-import]
         GetDefLinkErrs,
         GetDocLinkErrs,
     )
-    from interchange.document.validation.DocumentGraphValidate import GetGraphErrors
-    from interchange.document.validation.DocumentMateEntityValidate import (
+    from interchange.document.validation.DocumentGraphValidate import GetGraphErrors  # lgtm[py/cyclic-import]
+    from interchange.document.validation.DocumentMateEntityValidate import (  # lgtm[py/cyclic-import]
         GetMateEntErrs,
     )
-    from interchange.document.validation.DocumentMateGroupValidate import GetMateGroups
-    from interchange.document.validation.DocumentMateValidate import GetMateErrors
-    from interchange.document.validation.DocumentMeshValidate import GetMeshErrors
+    from interchange.document.validation.DocumentMateGroupValidate import GetMateGroups  # lgtm[py/cyclic-import]
+    from interchange.document.validation.DocumentMateValidate import GetMateErrors  # lgtm[py/cyclic-import]
+    from interchange.document.validation.DocumentMeshValidate import GetMeshErrors  # lgtm[py/cyclic-import]
 
     AssemblyValue = DocumentValue.assembly
     if AssemblyValue is None:

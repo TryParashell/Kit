@@ -28,12 +28,14 @@ MapValue = TypeVar("MapValue")
 
 # empty immutable mappings provide a concrete object value contract for default factories
 @TypeOverload
-def FreezeMapping() -> TypeMap[str, object]: ...
+def FreezeMapping() -> TypeMap[str, object]: ...  # lgtm[py/ineffectual-statement]
 
 
 # populated immutable mappings retain their precise member type for model fields
 @TypeOverload
-def FreezeMapping(SourceValues: TypeMap[str, MapValue]) -> TypeMap[str, MapValue]: ...
+def FreezeMapping(  # lgtm[py/ineffectual-statement]
+    SourceValues: TypeMap[str, MapValue],
+) -> TypeMap[str, MapValue]: ...
 
 
 # immutable mappings prevent accidental mutation of frozen interchange records

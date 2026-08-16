@@ -61,7 +61,7 @@ class WriteResult(ContractBase):
             requirements: tuple[str, ...] = (),
             application_usable: bool = False,
             vendor_loadable: bool = False,
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # canonical keywords remain typed because dataclass replacement reconstructs results from storage fields
         @Overload
@@ -77,10 +77,10 @@ class WriteResult(ContractBase):
             Requirements: tuple[str, ...] = (),
             IsAppUsable: bool = False,
             IsVendorLoadable: bool = False,
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # historical path access remains typed because staging consumers inspect this public field
     @property

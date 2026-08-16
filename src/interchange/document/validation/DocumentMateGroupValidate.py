@@ -8,7 +8,7 @@
 
 from typing import Mapping as TypeMap
 
-from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateGroup import MateGroup

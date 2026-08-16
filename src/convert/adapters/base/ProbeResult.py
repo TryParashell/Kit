@@ -31,7 +31,7 @@ class ProbeResult(ContractBase):
             format_id: str,
             confidence: float,
             reason: str = "",
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # canonical keywords remain typed because dataclass replacement reconstructs evidence from storage fields
         @Overload
@@ -40,10 +40,10 @@ class ProbeResult(ContractBase):
             FormatId: str,
             Confidence: float,
             ReasonText: str = "",
-        ) -> None: ...
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...
+        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # historical format access remains typed because selector diagnostics consume this public field
     @property
