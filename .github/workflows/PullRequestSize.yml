@@ -27,36 +27,50 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: read # Checks out only the trusted base revision for the LOC denominator.
+      contents: read # Downloads only the trusted base revision for the LOC denominator.
       issues: write # Creates missing size labels.
       pull-requests: write # Applies and removes size labels.
     steps:
-      - name: Checkout trusted base revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          persist-credentials: false
+      - name: Download trusted base revision
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/base"
+          gh api \
+            --method GET \
+            --header "Accept: application/vnd.github+json" \
+            "/repos/$REPOSITORY/tarball/$BASE_SHA" \
+            > "$RUNNER_TEMP/base.tar.gz"
+          tar -xzf "$RUNNER_TEMP/base.tar.gz" \
+            -C "$RUNNER_TEMP/base" \
+            --strip-components=1
 
       - name: Classify changed LOC ratio
         id: classification
         env:
           ADDITIONS: ${{ github.event.pull_request.additions }}
+          BASE_PATH: ${{ runner.temp }}/base
           DELETIONS: ${{ github.event.pull_request.deletions }}
         shell: bash
         run: |
           python - <<'PYTHON'
           import os as OsTools
-          import subprocess as Subprocess
           from pathlib import Path as FilePath
 
-          PathData = Subprocess.check_output(
-              ["git", "ls-files", "-z", "--", ".", ":(exclude)re/**"]
-          )
+          BasePath = FilePath(OsTools.environ["BASE_PATH"])
           LineCount = 0
-          for PathBytes in PathData.split(b"\0"):
-              if not PathBytes:
+          for SourcePath in BasePath.rglob("*"):
+              RelativePath = SourcePath.relative_to(BasePath)
+              if (
+                  not SourcePath.is_file()
+                  or SourcePath.is_symlink()
+                  or RelativePath.parts[0] == "re"
+              ):
                   continue
-              FileData = FilePath(OsTools.fsdecode(PathBytes)).read_bytes()
+              FileData = SourcePath.read_bytes()
               if b"\0" in FileData:
                   continue
               LineCount += len(FileData.splitlines())
