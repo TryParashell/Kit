@@ -13,7 +13,9 @@ from typing import TypeGuard
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.document.models.DocumentError import DocumentError
 from interchange.document.models.DocumentIdentity import GetIdGroups
-from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
+from interchange.document.models.DocumentModel import (
+    CadDocument,
+)  # lgtm[py/cyclic-import]
 from interchange.enums.EnumDocument import Capability
 
 
@@ -32,9 +34,15 @@ def IsBrepModel(SourceValue: object) -> TypeGuard[BrepModel]:
 
 # validation orchestration preserves diagnostic order while focused checks evolve independently
 def GetDocErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
-    from interchange.document.validation.DocumentAssemblyValidate import GetAssemblyErrs  # lgtm[py/cyclic-import]
-    from interchange.document.validation.DocumentFeatureValidate import GetFeatureErrs  # lgtm[py/cyclic-import]
-    from interchange.document.validation.DocumentReferenceValidate import GetRefErrors  # lgtm[py/cyclic-import]
+    from interchange.document.validation.DocumentAssemblyValidate import (
+        GetAssemblyErrs,
+    )  # lgtm[py/cyclic-import]
+    from interchange.document.validation.DocumentFeatureValidate import (
+        GetFeatureErrs,
+    )  # lgtm[py/cyclic-import]
+    from interchange.document.validation.DocumentReferenceValidate import (
+        GetRefErrors,
+    )  # lgtm[py/cyclic-import]
 
     ErrorValues: list[str] = []
     if not HasValidCaps(DocumentValue.capabilities):

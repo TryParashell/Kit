@@ -13,7 +13,9 @@ from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-imp
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.ComponentInstance import ComponentInst
 from interchange.assembly.MateEntity import MateEntity
-from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
+from interchange.document.models.DocumentModel import (
+    CadDocument,
+)  # lgtm[py/cyclic-import]
 
 
 # runtime model construction can bypass annotations so radii need an explicit numeric boundary

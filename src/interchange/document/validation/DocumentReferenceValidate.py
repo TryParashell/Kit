@@ -8,7 +8,9 @@
 
 from typing import Mapping as TypeMap
 
-from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
+from interchange.document.models.DocumentModel import (
+    CadDocument,
+)  # lgtm[py/cyclic-import]
 
 
 # configuration checks protect inheritance and override links from dangling identifiers

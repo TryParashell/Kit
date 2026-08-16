@@ -80,7 +80,9 @@ class WriteResult(ContractBase):
         ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
+        def __init__(
+            self, *ArgValues: object, **NamedValues: object
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # historical path access remains typed because staging consumers inspect this public field
     @property

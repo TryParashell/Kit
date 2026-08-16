@@ -34,14 +34,18 @@ Destination = KTargetType
 class WriteCatalog(Protocol):
 
     # selection requires deterministic access to every registered writer
-    def GetWriters(self) -> tuple[CadWriterAdapter, ...]: ...  # lgtm[py/ineffectual-statement]
+    def GetWriters(
+        self,
+    ) -> tuple[CadWriterAdapter, ...]: ...  # lgtm[py/ineffectual-statement]
 
 
 # write orchestration needs only lookup and destination selection from its composed host
 class WriteLookup(Protocol):
 
     # explicit format requests need canonical writer lookup from the composed registry
-    def GetWriter(self, FormatId: str) -> CadWriterAdapter: ...  # lgtm[py/ineffectual-statement]
+    def GetWriter(
+        self, FormatId: str
+    ) -> CadWriterAdapter: ...  # lgtm[py/ineffectual-statement]
 
     # implicit format requests need destination selection from the composed registry
     def PickWriter(

@@ -53,7 +53,9 @@ class ReadOptions(ContractBase):
         ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
+        def __init__(
+            self, *ArgValues: object, **NamedValues: object
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # historical configuration access remains typed because readers consume this public selection field
     @property

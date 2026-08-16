@@ -94,15 +94,21 @@ class AdapterInfo(ContractBase):
         ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
+        def __init__(
+            self, *ArgValues: object, **NamedValues: object
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # both keyword eras remain visible because document routing callers upgraded independently
         @Overload
-        def extensions_for(self, *, assembly: bool) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
+        def extensions_for(
+            self, *, assembly: bool
+        ) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
 
         # both keyword eras remain visible because document routing callers upgraded independently
         @Overload
-        def extensions_for(self, *, Assembly: bool) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
+        def extensions_for(
+            self, *, Assembly: bool
+        ) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
 
         # dynamic dispatch still validates collisions while overloads describe every supported spelling
         def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:

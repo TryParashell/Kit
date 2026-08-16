@@ -29,7 +29,9 @@ class DocumentPayload(Protocol):
 
     # read only sequencing permits concrete feature timelines through covariance
     @property
-    def feature_timeline(self) -> Sequence[FeaturePayload]: ...  # lgtm[py/ineffectual-statement]
+    def feature_timeline(
+        self,
+    ) -> Sequence[FeaturePayload]: ...  # lgtm[py/ineffectual-statement]
 
 
 # decoded extension metadata needs validated keys before typed lookups can be trusted

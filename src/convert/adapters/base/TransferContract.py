@@ -87,7 +87,9 @@ class CapTransfer(ContractBase):
         ) -> None: ...  # lgtm[py/ineffectual-statement]
 
         # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(self, *ArgValues: object, **NamedValues: object) -> None: ...  # lgtm[py/ineffectual-statement]
+        def __init__(
+            self, *ArgValues: object, **NamedValues: object
+        ) -> None: ...  # lgtm[py/ineffectual-statement]
 
     # invalid combinations are rejected here so every writer result stays truthful
     def __post_init__(self) -> None:

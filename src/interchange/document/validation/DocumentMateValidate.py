@@ -11,7 +11,9 @@ from typing import Mapping as TypeMap
 from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.MateEntity import MateEntity
-from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
+from interchange.document.models.DocumentModel import (
+    CadDocument,
+)  # lgtm[py/cyclic-import]
 
 
 # mate checks protect entity ownership and parameter references across component documents

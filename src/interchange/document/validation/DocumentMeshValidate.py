@@ -8,7 +8,9 @@
 
 from math import isfinite as IsFiniteNum
 
-from interchange.document.models.DocumentModel import CadDocument  # lgtm[py/cyclic-import]
+from interchange.document.models.DocumentModel import (
+    CadDocument,
+)  # lgtm[py/cyclic-import]
 
 
 # mesh validation protects assembly geometry consumers from malformed numeric topology
