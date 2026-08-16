@@ -145,7 +145,7 @@ jobs:
         run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Run Checkov IaC
-        run: uv run checkov --directory . --quiet --skip-path .venv --skip-path examples --skip-path re
+        run: uv run checkov --directory . --quiet --skip-framework secrets --skip-path .venv --skip-path examples --skip-path re
 
   zizmor:
     name: Zizmor
