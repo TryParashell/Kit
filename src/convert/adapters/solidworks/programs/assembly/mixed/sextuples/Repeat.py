@@ -528,15 +528,15 @@ HeaderExtWidth = KHeaderExtWidth
 HeaderFileStart = KHeaderFileStart
 HeaderFileWidth = KHeaderFileWidth
 HeaderTailStart = KHeaderTailStart
-_EmitOps = EncodeOps
-_SliceOps = SliceOps
-_PathKey = PathKey
-_UniqueItems = UniqueItems
-_PathIndex = PathIndex
-_EncodeCMgr = EncodeCmgr
-_EncodeConfig = EncodeConfig
-_EncodeResolved = EncodeResolved
-_EncodeHeader = EncodeHeader
+_EmitOps = EncodeOps  # lgtm[py/unused-global-variable]
+_SliceOps = SliceOps  # lgtm[py/unused-global-variable]
+_PathKey = PathKey  # lgtm[py/unused-global-variable]
+_UniqueItems = UniqueItems  # lgtm[py/unused-global-variable]
+_PathIndex = PathIndex  # lgtm[py/unused-global-variable]
+_EncodeCMgr = EncodeCmgr  # lgtm[py/unused-global-variable]
+_EncodeConfig = EncodeConfig  # lgtm[py/unused-global-variable]
+_EncodeResolved = EncodeResolved  # lgtm[py/unused-global-variable]
+_EncodeHeader = EncodeHeader  # lgtm[py/unused-global-variable]
 
 
 # canonical mixed programs scale repeated paths without opaque vendor payloads

@@ -434,14 +434,14 @@ ConfigShiftRefs = KConfigShiftRefs
 ResolvedShift8 = KResolvedShiftEight
 ResolvedShift4 = KResolvedShiftFour
 HeaderShiftRefs = KHeaderShiftRefs
-_IsIdentityBasis = IsIdentityBasis
-_EmitOps = EncodeOps
-_SliceOps = SliceOps
-_OccurHash = OccurHash
-_EncodeCMgr = EncodeCmgr
-_EncodeConfig = EncodeConfig
-_EncodeResolved = EncodeResolved
-_EncodeHeader = EncodeHeader
+_IsIdentityBasis = IsIdentityBasis  # lgtm[py/unused-global-variable]
+_EmitOps = EncodeOps  # lgtm[py/unused-global-variable]
+_SliceOps = SliceOps  # lgtm[py/unused-global-variable]
+_OccurHash = OccurHash  # lgtm[py/unused-global-variable]
+_EncodeCMgr = EncodeCmgr  # lgtm[py/unused-global-variable]
+_EncodeConfig = EncodeConfig  # lgtm[py/unused-global-variable]
+_EncodeResolved = EncodeResolved  # lgtm[py/unused-global-variable]
+_EncodeHeader = EncodeHeader  # lgtm[py/unused-global-variable]
 
 
 # canonical repeat assembly programs scale one shared component file to map limit
