@@ -55,8 +55,8 @@ def RunModule(
     )
 
 
-# process level coverage protects diff scoping exclusions and revision flag validation
-class TestCommand(UnitTest.TestCase):
+# diff coverage proves the gate fails only for violations a reviewed change deepens
+class TestDiffGate(UnitTest.TestCase):
 
     # diff gates must fail only for violations the reviewed change introduces or deepens
     def CheckDiffGate(self) -> None:
@@ -88,6 +88,10 @@ class TestCommand(UnitTest.TestCase):
         self.assertEqual(ResultInfo.returncode, 1, ResultInfo.stderr)
         self.assertIn("Alpha.py", ResultInfo.stdout)
 
+
+# scope coverage proves excluded trees and non python edits never trigger failures
+class TestScopeGate(UnitTest.TestCase):
+
     # full tree mode proves tracked exclusions keep vendored debt out of scope
     def CheckFullPass(self) -> None:
         with Tempfile.TemporaryDirectory() as TmpPath:
@@ -95,7 +99,7 @@ class TestCommand(UnitTest.TestCase):
             FixtureInfo = RepoFixture(RootPath)
             FixtureInfo.WriteFile("Alpha.py", KCleanSource)
             FixtureInfo.WriteFile("re/Nested.py", KBadSource)
-            FixtureInfo.CommitAll("base")
+            _ = FixtureInfo.CommitAll("base")
             ResultInfo = RunModule(RootPath)
         self.assertEqual(ResultInfo.returncode, 0, ResultInfo.stdout)
         self.assertIn("passed", ResultInfo.stdout)
@@ -112,6 +116,10 @@ class TestCommand(UnitTest.TestCase):
             HeadRef = FixtureInfo.CommitAll("head")
             ResultInfo = RunModule(RootPath, BaseRef, HeadRef)
         self.assertEqual(ResultInfo.returncode, 0, ResultInfo.stdout)
+
+
+# argument coverage proves partial revision flags fail fast before any comparison
+class TestArgGate(UnitTest.TestCase):
 
     # partial revision flags must fail fast so automation never compares half ranges
     def CheckBadArgs(self) -> None:

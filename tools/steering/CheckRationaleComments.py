@@ -135,10 +135,8 @@ def MainRun(ArgList: list[str] | None = None) -> int:
             file=System.stderr,
         )
         return 1
-    print(
-        f"rationale compliance passed in {ModeText} mode "
-        f"for {len(TargetPaths)} python files"
-    )
+    PassedText = f"rationale compliance passed in {ModeText} mode"
+    print(f"{PassedText} for {len(TargetPaths)} python files")
     return 0
 
 
