@@ -614,19 +614,21 @@ def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
 # command orchestration stays small because policy helpers own classification and validation details
 def MainRun(ArgValues: list[str] | None = None) -> int:
     ArgsInfo = ParseArgs(ArgValues)
-    if not IsCommit(ArgsInfo.BaseRef) or not IsCommit(ArgsInfo.HeadRef):
-        print(
-            "Base and head must be full commit object identifiers", file=System.stderr
-        )
-        return 1
     WorktreeRoot, WorktreeReason = CheckWorktree(
         ArgsInfo.WorktreeRoot, ArgsInfo.HeadRef
     )
     if WorktreeRoot is None:
         print(WorktreeReason, file=System.stderr)
         return 1
+    if not IsCommit(ArgsInfo.BaseRef, WorktreeRoot) or not IsCommit(
+        ArgsInfo.HeadRef, WorktreeRoot
+    ):
+        print(
+            "Base and head must be full commit object identifiers", file=System.stderr
+        )
+        return 1
     CanonLines = LoadCanon()
-    ChangedPaths = GetDiffFiles(ArgsInfo.BaseRef, ArgsInfo.HeadRef)
+    ChangedPaths = GetDiffFiles(ArgsInfo.BaseRef, ArgsInfo.HeadRef, WorktreeRoot)
     if ArgsInfo.FixMissing:
         return RepairFilesMut(ChangedPaths, CanonLines, WorktreeRoot)
     return CheckFiles(ChangedPaths, CanonLines, WorktreeRoot)

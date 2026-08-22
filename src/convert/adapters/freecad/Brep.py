@@ -11,15 +11,25 @@ from collections import deque as Deque
 from collections.abc import Sequence
 from dataclasses import dataclass as Dataclass
 import math as MathValue
-from typing import Any as AnyValue, Mapping
+from typing import (
+    Mapping,
+    Protocol,
+    runtime_checkable,
+    SupportsFloat,
+    TypeAlias,
+    TypeGuard,
+)
 from interchange import (
     BrepCoedge,
+    BrepCurve,
     BrepEdge,
     BrepFace,
     BrepFaceUse,
     BrepLoop,
     BrepModel,
+    BrepPcurve,
     BrepShell,
+    BrepSurface,
     BrepVertex,
     CircleCurve,
     CirclePcurve,
@@ -44,10 +54,8 @@ from interchange import (
     Vector3 as VectorThree,
 )
 from convert.adapters.freecad.BrepGraph import (
-    BindOnceMut,
     FreeCadBrep,
     ModelGraph,
-    RequireOwned,
     Unsupported,
 )
 
@@ -63,53 +71,83 @@ KGeomValue = tuple[
 ]
 
 
+# point like runtime objects need typed coordinates without weakening mesh inputs
+@runtime_checkable
+class PointSource(Protocol):
+    x: SupportsFloat
+    y: SupportsFloat
+    z: SupportsFloat
+
+
+# mesh collection checks need concrete object members before coordinate validation
+def IsObjectSeq(SourceValue: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(SourceValue, Sequence)
+
+
+# coordinate conversion rejects unsupported objects before numeric mesh validation begins
+def FloatCoord(SourceValue: object) -> float:
+    if isinstance(SourceValue, str) or isinstance(SourceValue, SupportsFloat):
+        return float(SourceValue)
+    raise TypeError("coordinate value must be numeric")
+
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ShapeRecord:
-    locals().setdefault("__annotations__", {})
-    __annotations__["key"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["geometry"] = "tuple[str, ...]"
-    __annotations__["flags"] = "str"
-    __annotations__["children"] = "tuple[tuple[str, bool], ...]"
+    key: str
+    kind: str
+    geometry: tuple[str, ...]
+    flags: str
+    children: tuple[tuple[str, bool], ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class EdgePcurve:
-    locals().setdefault("__annotations__", {})
-    __annotations__["index"] = "int"
-    __annotations__["first"] = "float"
-    __annotations__["last"] = "float"
+    index: int
+    first: float
+    last: float
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class GeneratedPcurve:
-    locals().setdefault("__annotations__", {})
-    __annotations__["record"] = "str"
-    __annotations__["first"] = "float"
-    __annotations__["last"] = "float"
-    __annotations__["start"] = "tuple[float, float]"
-    __annotations__["end"] = "tuple[float, float]"
+    record: str
+    first: float
+    last: float
+    start: tuple[float, float]
+    end: tuple[float, float]
+
+
+# seam helpers exchange one validated native topology arrangement
+KSeamValue = tuple[
+    BrepCoedge,
+    BrepCoedge,
+    GeneratedPcurve,
+    GeneratedPcurve,
+    bool,
+    bool,
+    KPoint,
+    KPoint,
+    float,
+]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SeamBand:
-    locals().setdefault("__annotations__", {})
-    __annotations__["face_id"] = "str"
-    __annotations__["loop_ids"] = "tuple[str, str]"
-    __annotations__["low_coedge_id"] = "str"
-    __annotations__["high_coedge_id"] = "str"
-    __annotations__["low_reversed"] = "bool"
-    __annotations__["high_reversed"] = "bool"
-    __annotations__["low_vertex_id"] = "str"
-    __annotations__["high_vertex_id"] = "str"
-    __annotations__["curve_record"] = "str"
-    __annotations__["length"] = "float"
-    __annotations__["first_pcurve_index"] = "int"
-    __annotations__["second_pcurve_index"] = "int"
+    face_id: str
+    loop_ids: tuple[str, str]
+    low_coedge_id: str
+    high_coedge_id: str
+    low_reversed: bool
+    high_reversed: bool
+    low_vertex_id: str
+    high_vertex_id: str
+    curve_record: str
+    length: float
+    first_pcurve_index: int
+    second_pcurve_index: int
 
 
 # native write state stays immutable because every emission phase must share one proven index map
@@ -139,18 +177,28 @@ def Number(Value: float) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Point(Value: Any) -> KPoint:
-    if all((hasattr(Value, AxisValue) for AxisValue in ("x", "y", "z"))):
-        Point = (float(Value.x), float(Value.y), float(Value.z))
+def ParsePoint(Value: object) -> KPoint:
+    if isinstance(Value, PointSource):
+        Components: tuple[object, ...] = (Value.x, Value.y, Value.z)
     else:
         try:
-            Point = tuple((float(Component) for Component in Value))
-        except (TypeError, ValueError) as ErrorInfo:
+            Components = tuple(Value) if IsObjectSeq(Value) else ()
+        except TypeError as ErrorInfo:
             raise ValueError(
                 "each vertex must contain three finite coordinates"
             ) from ErrorInfo
-        if len(Point) != 3:
-            raise ValueError("each vertex must contain three finite coordinates")
+    if len(Components) != 3:
+        raise ValueError("each vertex must contain three finite coordinates")
+    try:
+        Point = (
+            FloatCoord(Components[0]),
+            FloatCoord(Components[1]),
+            FloatCoord(Components[2]),
+        )
+    except (TypeError, ValueError) as ErrorInfo:
+        raise ValueError(
+            "each vertex must contain three finite coordinates"
+        ) from ErrorInfo
     if not all((MathValue.isfinite(Component) for Component in Point)):
         raise ValueError("each vertex must contain three finite coordinates")
     return Point
@@ -158,7 +206,11 @@ def Point(Value: Any) -> KPoint:
 
 # this definition exists because focused behavior needs one stable owner
 def Subtract(LeftValue: Point, Right: Point) -> KPoint:
-    return tuple((LeftValue[Index] - Right[Index] for Index in range(3)))
+    return (
+        LeftValue[0] - Right[0],
+        LeftValue[1] - Right[1],
+        LeftValue[2] - Right[2],
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -182,7 +234,7 @@ def GetLength(Vector: Point) -> float:
 
 # this definition exists because focused behavior needs one stable owner
 def ScaleVector(Vector: Point, Factor: float) -> KPoint:
-    return tuple((Component * Factor for Component in Vector))
+    return Vector[0] * Factor, Vector[1] * Factor, Vector[2] * Factor
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -191,17 +243,19 @@ def Values(Values: Sequence[float]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParseTriangle(Value: Any, VertexCount: int) -> KTriangle:
-    try:
-        Indices = tuple(Value)
-    except TypeError as ErrorInfo:
-        raise ValueError(
-            "each triangle must contain three vertex indices"
-        ) from ErrorInfo
-    if len(Indices) != 3 or any(
-        (isinstance(Index, bool) or not isinstance(Index, int) for Index in Indices)
+def ParseTriangle(Value: object, VertexCount: int) -> KTriangle:
+    if not IsObjectSeq(Value) or len(Value) != 3:
+        raise ValueError("each triangle must contain three vertex indices")
+    First, Middle, LastValue = Value
+    if any(
+        isinstance(Index, bool) or not isinstance(Index, int)
+        for Index in (First, Middle, LastValue)
     ):
         raise ValueError("each triangle must contain three vertex indices")
+    assert isinstance(First, int)
+    assert isinstance(Middle, int)
+    assert isinstance(LastValue, int)
+    Indices = (First, Middle, LastValue)
     if len(set(Indices)) != 3 or any(
         (Index < 0 or Index >= VertexCount for Index in Indices)
     ):
@@ -225,14 +279,16 @@ def IsFacetBad(Points: tuple[Point, ...], Facet: Triangle, Tolerance: float) -> 
 # this definition exists because focused behavior needs one stable owner
 def GeomAction(
     Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float
-):
+) -> tuple[KGeomValue, ...]:
     Result: list[KGeomValue] = []
     for Triangle in Facets:
-        Corners = tuple((Points[Index] for Index in Triangle))
-        Edges = tuple(
-            (Subtract(Corners[(Index + 1) % 3], Corners[Index]) for Index in range(3))
+        Corners = (Points[Triangle[0]], Points[Triangle[1]], Points[Triangle[2]])
+        Edges = (
+            Subtract(Corners[1], Corners[0]),
+            Subtract(Corners[2], Corners[1]),
+            Subtract(Corners[0], Corners[2]),
         )
-        Lengths = tuple((GetLength(EdgeValue) for EdgeValue in Edges))
+        Lengths = (GetLength(Edges[0]), GetLength(Edges[1]), GetLength(Edges[2]))
         if min(Lengths) <= Tolerance:
             raise ValueError("triangle edges must exceed the BRep tolerance")
         NormalVector = Cross(Edges[0], Subtract(Corners[2], Corners[0]))
@@ -247,12 +303,14 @@ def GeomAction(
 
 
 # this definition exists because focused behavior needs one stable owner
-def EdgeUses(Facets: tuple[Triangle, ...]):
+def EdgeUses(
+    Facets: tuple[Triangle, ...],
+) -> dict[tuple[int, int], list[tuple[int, int]]]:
     Result: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for FacetIndex, Facet in enumerate(Facets):
         for Index in range(3):
             PairValue = (Facet[Index], Facet[(Index + 1) % 3])
-            KeyValue = tuple(sorted(PairValue))
+            KeyValue = min(PairValue), max(PairValue)
             Result.setdefault(KeyValue, []).append(
                 (FacetIndex, 1 if PairValue == KeyValue else -1)
             )
@@ -260,7 +318,9 @@ def EdgeUses(Facets: tuple[Triangle, ...]):
 
 
 # facet adjacency stays isolated because manifold validation precedes orientation traversal
-def BuildNeighbors(Facets: tuple[Triangle, ...]):
+def BuildNeighbors(
+    Facets: tuple[Triangle, ...],
+) -> dict[int, list[tuple[int, int]]] | None:
     UsesValue = EdgeUses(Facets)
     if any(len(EdgeFaces) > 2 for EdgeFaces in UsesValue.values()):
         return None
@@ -278,7 +338,9 @@ def BuildNeighbors(Facets: tuple[Triangle, ...]):
 
 
 # component traversal stays isolated because contradictory facet parity invalidates the whole mesh
-def GetComponents(FacetCount: int, Neighbors: Mapping[int, list[tuple[int, int]]]):
+def GetComponents(
+    FacetCount: int, Neighbors: Mapping[int, list[tuple[int, int]]]
+) -> tuple[list[int], tuple[tuple[int, ...], ...]] | None:
     Flips = [0] * FacetCount
     Components: list[tuple[int, ...]] = []
     for StartIndex in range(FacetCount):
@@ -323,7 +385,7 @@ def GetClosedMut(
     Closed = [True] * len(Components)
     for EdgeFaces in EdgeUses(tuple(Oriented)).values():
         if len(EdgeFaces) != 2:
-            for FacetIndex, Ignored in EdgeFaces:
+            for FacetIndex, _ in EdgeFaces:
                 Closed[ComponentByFacet[FacetIndex]] = False
     for ComponentIndex, Component in enumerate(Components):
         IsClosed = Closed[ComponentIndex]
@@ -356,7 +418,7 @@ def GetClosedMut(
 # facet orientation composes adjacency parity and volume phases because each has one failure mode
 def OrientFacets(
     Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float
-):
+) -> tuple[tuple[KTriangle, ...], tuple[tuple[int, ...], ...], tuple[bool, ...]] | None:
     Neighbors = BuildNeighbors(Facets)
     if Neighbors is None:
         return None
@@ -376,7 +438,7 @@ def Header(
     Facets: tuple[Triangle, ...],
     Edges: tuple[tuple[int, int], ...],
     GeomValue: tuple[Geometry, ...],
-):
+) -> list[str]:
     Lines = [
         "DBRep_DrawableShape",
         "",
@@ -392,7 +454,7 @@ def Header(
     Lines.extend(
         ["Polygon3D 0", "PolygonOnTriangulations 0", f"Surfaces {len(Facets)}"]
     )
-    for Corners, Ignored, Normal, XDirection, YDirection in GeomValue:
+    for Corners, _, Normal, XDirection, YDirection in GeomValue:
         Lines.append(f"1 {Values(Corners[0] + Normal + XDirection + YDirection)} ")
     Lines.extend(["Triangulations 0", ""])
     return Lines
@@ -443,7 +505,15 @@ def BuildOrdinals(
     FacetCount: int,
     Components: tuple[tuple[int, ...], ...],
     Closed: tuple[bool, ...],
-):
+) -> tuple[
+    dict[int, int],
+    dict[tuple[int, int], int],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    dict[int, int],
+    int,
+]:
     Ordinal = 1
     VertexOrdinals: dict[int, int] = {}
     for Index in VertexIndices:
@@ -523,7 +593,7 @@ def AddFacetsMut(
         EdgeValues: list[str] = []
         for Index in range(3):
             PairValue = (Facet[Index], Facet[(Index + 1) % 3])
-            EdgeValue = tuple(sorted(PairValue))
+            EdgeValue = min(PairValue), max(PairValue)
             SignValue = "+" if PairValue == EdgeValue else "-"
             RecordRef = GetRecordRef(ShapeCount, EdgeOrdinals[EdgeValue])
             EdgeValues.append(f"{SignValue}{RecordRef} 0")
@@ -641,11 +711,11 @@ def IndependentBrep(
     ShapeCount = len(Facets) * 8 + 1
     Lines.append(f"TShapes {ShapeCount}")
     ToleranceText = Number(Tolerance)
-    FaceReferences = []
+    FaceReferences: list[int] = []
     CurveIndex = 1
     RecordIndex = 1
-    for Facet, FacetGeom in zip(Facets, GeomValue):
-        Corners, Lengths, Ignored, Ignored, Ignored = FacetGeom
+    for FacetGeom in GeomValue:
+        Corners, Lengths, _, _, _ = FacetGeom
         References = tuple(
             (ShapeCount - (RecordIndex + Offset) + 1 for Offset in range(8))
         )
@@ -733,8 +803,8 @@ def UnitThree(Value: Vector3, Label: str) -> tuple[KPoint, float]:
 def Frame(
     AxisValue: Vector3, RefValue: Vector3, Label: str
 ) -> tuple[KPoint, KPoint, KPoint]:
-    NormalizedAxis, Ignored = UnitThree(AxisValue, Label)
-    NormalizedRef, Ignored = UnitThree(RefValue, Label)
+    NormalizedAxis, _ = UnitThree(AxisValue, Label)
+    NormalizedRef, _ = UnitThree(RefValue, Label)
     if abs(DotAction(NormalizedAxis, NormalizedRef)) > 1e-09:
         Unsupported(f"{Label} axis and reference direction are not orthogonal")
     YDirection = Cross(NormalizedAxis, NormalizedRef)
@@ -779,7 +849,7 @@ def BsplineLayout(
 
 
 # this definition exists because focused behavior needs one stable owner
-def CurveRecord(Value: object) -> tuple[str, float]:
+def CurveRecord(Value: BrepCurve) -> tuple[str, float]:
     if isinstance(Value, LineCurve):
         Direction, Scale = UnitThree(Value.direction, f"line curve {Value.id}")
         return (f"1 {Values(VectorThreeA(Value.origin) + Direction)} ", Scale)
@@ -840,7 +910,7 @@ def CurveRecord(Value: object) -> tuple[str, float]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PcurveRecord(Value: object) -> tuple[str, float]:
+def PcurveRecord(Value: BrepPcurve) -> tuple[str, float]:
     if isinstance(Value, LinePcurve):
         Direction, Scale = UnitTwo(Value.direction, f"line pcurve {Value.id}")
         return (f"1 {Values(VectorTwoA(Value.origin) + Direction)} ", Scale)
@@ -890,7 +960,7 @@ def PcurveRecord(Value: object) -> tuple[str, float]:
 
 
 # elementary surface encoding stays isolated because analytic frames share one compact dispatch
-def EncodeBasic(Value: object) -> str | None:
+def EncodeBasic(Value: BrepSurface) -> str | None:
     if isinstance(Value, PlaneSurface):
         AxisValue, RefValue, YDirection = Frame(
             Value.normal, Value.reference_direction, f"plane surface {Value.id}"
@@ -994,7 +1064,9 @@ def EncodeNurbs(Value: NurbsSurface) -> str:
 
 # surface dispatch stays small because each representation owns its focused encoder and validation
 def SurfaceRecord(
-    Value: object, Surfaces: Mapping[str, object], Active: frozenset[str] = frozenset()
+    Value: BrepSurface,
+    Surfaces: Mapping[str, BrepSurface],
+    Active: frozenset[str] = frozenset(),
 ) -> str:
     BasicRecord = EncodeBasic(Value)
     if BasicRecord is not None:
@@ -1015,36 +1087,38 @@ def SurfaceRecord(
 
 
 # this definition exists because focused behavior needs one stable owner
-def CurvePoint(Value: object, Param: float) -> KPoint | None:
+def CurvePoint(Value: BrepCurve, Param: float) -> KPoint | None:
     if isinstance(Value, LineCurve):
-        return tuple(
-            (
-                Origin + Param * Direction
-                for Origin, Direction in zip(
-                    VectorThreeA(Value.origin), VectorThreeA(Value.direction)
-                )
-            )
+        Origin = VectorThreeA(Value.origin)
+        Direction = VectorThreeA(Value.direction)
+        return (
+            Origin[0] + Param * Direction[0],
+            Origin[1] + Param * Direction[1],
+            Origin[2] + Param * Direction[2],
         )
     if isinstance(Value, (CircleCurve, EllipseCurve)):
-        AxisValue, RefValue, YDirection = Frame(
+        _, RefValue, YDirection = Frame(
             Value.axis, Value.reference_direction, f"curve {Value.id}"
         )
         Major = Value.radius if isinstance(Value, CircleCurve) else Value.major_radius
         Minor = Value.radius if isinstance(Value, CircleCurve) else Value.minor_radius
         Center = VectorThreeA(Value.center)
-        return tuple(
-            (
-                Center[Index]
-                + Major * MathValue.cos(Param) * RefValue[Index]
-                + Minor * MathValue.sin(Param) * YDirection[Index]
-                for Index in range(3)
-            )
+        return (
+            Center[0]
+            + Major * MathValue.cos(Param) * RefValue[0]
+            + Minor * MathValue.sin(Param) * YDirection[0],
+            Center[1]
+            + Major * MathValue.cos(Param) * RefValue[1]
+            + Minor * MathValue.sin(Param) * YDirection[1],
+            Center[2]
+            + Major * MathValue.cos(Param) * RefValue[2]
+            + Minor * MathValue.sin(Param) * YDirection[2],
         )
     return None
 
 
 # this definition exists because focused behavior needs one stable owner
-def SurfacePeriods(Value: object) -> tuple[float | None, float | None]:
+def SurfacePeriods(Value: BrepSurface) -> tuple[float | None, float | None]:
     if isinstance(Value, (CylinderSurface, ConeSurface, SphereSurface)):
         return (MathValue.tau, None)
     if isinstance(Value, TorusSurface):
@@ -1074,7 +1148,7 @@ def UnwrapPeriodic(
 
 # this definition exists because focused behavior needs one stable owner
 def UnwrapSurfaceUv(
-    Values: Sequence[tuple[float, float]], Surface: object
+    Values: Sequence[tuple[float, float]], Surface: BrepSurface
 ) -> tuple[tuple[float, float], ...]:
     if not isinstance(Surface, SphereSurface) or not Values:
         return UnwrapPeriodic(Values, SurfacePeriods(Surface))
@@ -1093,9 +1167,9 @@ def UnwrapSurfaceUv(
             UValue,
         )
         Resolved[Index] = (Neighbor, VValue)
-    Result = [Resolved[0]]
+    Result: list[tuple[float, float]] = [Resolved[0]]
     for UValue, VValue in Resolved[1:]:
-        Candidates = []
+        Candidates: list[tuple[float, float]] = []
         for UTurn in range(-3, 4):
             ChoiceU = UValue + UTurn * MathValue.pi
             BaseV = VValue if UTurn % 2 == 0 else MathValue.pi - VValue
@@ -1115,7 +1189,7 @@ def UnwrapSurfaceUv(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SurfaceUv(Value: object, Point: Point) -> tuple[float, float] | None:
+def SurfaceUv(Value: BrepSurface, Point: Point) -> tuple[float, float] | None:
     if isinstance(Value, PlaneSurface):
         AxisValue, RefValue, YDirection = Frame(
             Value.normal, Value.reference_direction, f"plane surface {Value.id}"
@@ -1168,9 +1242,9 @@ def SurfaceUv(Value: object, Point: Point) -> tuple[float, float] | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SurfaceResidual(Value: object, Point: Point) -> float | None:
+def SurfaceResidual(Value: BrepSurface, Point: Point) -> float | None:
     if isinstance(Value, PlaneSurface):
-        AxisValue, Ignored, Ignored = Frame(
+        AxisValue, _, _ = Frame(
             Value.normal, Value.reference_direction, f"plane surface {Value.id}"
         )
         return abs(DotAction(Subtract(Point, VectorThreeA(Value.origin)), AxisValue))
@@ -1211,7 +1285,7 @@ def SurfaceResidual(Value: object, Point: Point) -> float | None:
 
 # this definition exists because focused behavior needs one stable owner
 def PlaneConic(
-    Curve: object, Surface: PlaneSurface, EdgeValue: BrepEdge, Tolerance: float
+    Curve: BrepCurve, Surface: PlaneSurface, EdgeValue: BrepEdge, Tolerance: float
 ) -> GeneratedPcurve | None:
     if not isinstance(Curve, (CircleCurve, EllipseCurve)):
         return None
@@ -1290,8 +1364,8 @@ def IsLinearUv(
 
 # this definition exists because focused behavior needs one stable owner
 def LinearSurface(
-    Curve: object,
-    Surface: object,
+    Curve: BrepCurve,
+    Surface: BrepSurface,
     EdgeValue: BrepEdge,
     Tolerance: float,
     Offset: tuple[float, float],
@@ -1345,8 +1419,8 @@ def LinearSurface(
 
 # this definition exists because focused behavior needs one stable owner
 def GeneratedPcurvA(
-    Curve: object,
-    Surface: object,
+    Curve: BrepCurve,
+    Surface: BrepSurface,
     EdgeValue: BrepEdge,
     Tolerance: float,
     Offset: tuple[float, float],
@@ -1366,7 +1440,16 @@ def GeneratedPcurvA(
 
 
 # seam inputs stay isolated because only paired circular loops on ruled surfaces qualify
-def GetSeamInputs(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float):
+def GetSeamInputs(FaceValue: BrepFace, Graph: ModelGraph, Tolerance: float) -> (
+    tuple[
+        CylinderSurface | ConeSurface,
+        tuple[BrepCoedge, BrepCoedge],
+        tuple[BrepEdge, BrepEdge],
+        tuple[CircleCurve, CircleCurve],
+        float,
+    ]
+    | None
+):
     Surface = Graph.surfaces[FaceValue.surface_id]
     if not isinstance(Surface, (CylinderSurface, ConeSurface)):
         return None
@@ -1380,7 +1463,13 @@ def GetSeamInputs(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float):
         return None
     Edges = tuple(Graph.edges[Coedge.edge_id] for Coedge in Coedges)
     Curves = tuple(Graph.curves[EdgeValue.curve_id] for EdgeValue in Edges)
-    if any(not isinstance(Curve, CircleCurve) for Curve in Curves):
+    if (
+        len(Coedges) != 2
+        or len(Edges) != 2
+        or len(Curves) != 2
+        or not isinstance(Curves[0], CircleCurve)
+        or not isinstance(Curves[1], CircleCurve)
+    ):
         return None
     Allowed = (
         max(
@@ -1400,16 +1489,37 @@ def GetSeamInputs(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float):
         > Allowed
         for EdgeValue in Edges
     )
-    return None if IsInvalid else (Surface, Coedges, Edges, Curves, Allowed)
+    return (
+        None
+        if IsInvalid
+        else (
+            Surface,
+            (Coedges[0], Coedges[1]),
+            (Edges[0], Edges[1]),
+            (Curves[0], Curves[1]),
+            Allowed,
+        )
+    )
 
 
 # seam alignment stays isolated because periodic pcurves must meet at matching unwrapped endpoints
 def AlignSeam(
-    Curves: tuple[object, ...],
-    Surface: object,
-    Edges: tuple[BrepEdge, ...],
+    Curves: tuple[CircleCurve, CircleCurve],
+    Surface: CylinderSurface | ConeSurface,
+    Edges: tuple[BrepEdge, BrepEdge],
     Tolerance: float,
     Allowed: float,
+) -> (
+    tuple[
+        int,
+        int,
+        GeneratedPcurve,
+        GeneratedPcurve,
+        bool,
+        bool,
+        tuple[float, float],
+    ]
+    | None
 ):
     Generated = tuple(
         GeneratedPcurvA(Curve, Surface, EdgeValue, Tolerance, (0.0, 0.0))
@@ -1420,7 +1530,10 @@ def AlignSeam(
         or abs(Value.end[1] - Value.start[1]) > Allowed
         for Value in Generated
     )
-    Means = tuple((Value.start[1] + Value.end[1]) / 2.0 for Value in Generated)
+    Means = (
+        (Generated[0].start[1] + Generated[0].end[1]) / 2.0,
+        (Generated[1].start[1] + Generated[1].end[1]) / 2.0,
+    )
     if HasBadSpan or abs(Means[0] - Means[1]) <= Allowed:
         return None
     LowIndex = 0 if Means[0] < Means[1] else 1
@@ -1456,14 +1569,14 @@ def AlignSeam(
 
 # seam span validation stays isolated because connector geometry must remain on the supporting surface
 def GetSeamSpan(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     Edges: tuple[BrepEdge, ...],
-    Surface: object,
+    Surface: CylinderSurface | ConeSurface,
     LowIndex: int,
     HighIndex: int,
-    Means: tuple[float, ...],
+    Means: tuple[float, float],
     Allowed: float,
-):
+) -> tuple[KPoint, KPoint, float] | None:
     LowPoint = VectorThreeA(Graph.vertices[Edges[LowIndex].start_vertex_id].point)
     HighPoint = VectorThreeA(Graph.vertices[Edges[HighIndex].start_vertex_id].point)
     SpanVector = Subtract(HighPoint, LowPoint)
@@ -1476,9 +1589,10 @@ def GetSeamSpan(
     Residuals = (
         SurfaceResidual(
             Surface,
-            tuple(
-                LowPoint[AxisValue] + SpanVector[AxisValue] * Ratio
-                for AxisValue in range(3)
+            (
+                LowPoint[0] + SpanVector[0] * Ratio,
+                LowPoint[1] + SpanVector[1] * Ratio,
+                LowPoint[2] + SpanVector[2] * Ratio,
             ),
         )
         or 0.0
@@ -1492,7 +1606,7 @@ def GetSeamSpan(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
+def SeamBandA(FaceValue: BrepFace, Graph: ModelGraph, Tolerance: float) -> (
     tuple[
         BrepCoedge,
         BrepCoedge,
@@ -1513,8 +1627,15 @@ def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
     AlignData = AlignSeam(Curves, Surface, Edges, Tolerance, Allowed)
     if AlignData is None:
         return None
-    LowIndex, HighIndex, LowGenerated, HighGenerated = AlignData[:4]
-    LowReversed, HighReversed, Means = AlignData[4:]
+    (
+        LowIndex,
+        HighIndex,
+        LowGenerated,
+        HighGenerated,
+        LowReversed,
+        HighReversed,
+        Means,
+    ) = AlignData
     SpanData = GetSeamSpan(Graph, Edges, Surface, LowIndex, HighIndex, Means, Allowed)
     if SpanData is None:
         return None
@@ -1538,8 +1659,8 @@ def AddSeamMut(
     Result: dict[str, EdgePcurve],
     SeamBands: dict[str, SeamBand],
     FaceValue: BrepFace,
-    Graph: _ModelGraph,
-    SeamValue: tuple,
+    Graph: ModelGraph,
+    SeamValue: KSeamValue,
 ) -> None:
     LowCoedge, HighCoedge, LowGenerated, HighGenerated = SeamValue[:4]
     LowReversed, HighReversed, LowPoint, HighPoint, Length = SeamValue[4:]
@@ -1592,8 +1713,8 @@ def GetUvOffset(
 def AddCoedgeMut(
     Records: list[str],
     Result: dict[str, EdgePcurve],
-    Graph: _ModelGraph,
-    Surface: object,
+    Graph: ModelGraph,
+    Surface: BrepSurface,
     Coedge: BrepCoedge,
     Tolerance: float,
     ExplicitIndexes: Mapping[str, int],
@@ -1629,9 +1750,9 @@ def AddCoedgeMut(
 def AddLoopMut(
     Records: list[str],
     Result: dict[str, EdgePcurve],
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     LoopId: str,
-    Surface: object,
+    Surface: BrepSurface,
     Tolerance: float,
     ExplicitIndexes: Mapping[str, int],
     ExplicitScales: Mapping[str, float],
@@ -1655,10 +1776,10 @@ def AddLoopMut(
 
 # edge pcurve assembly composes focused seam and loop writers because their continuity rules differ
 def EdgePcurveA(
-    Model: BrepModel, Graph: _ModelGraph, Tolerance: float
+    Model: BrepModel, Graph: ModelGraph, Tolerance: float
 ) -> tuple[tuple[str, ...], Mapping[str, EdgePcurve], Mapping[str, SeamBand]]:
     PcurveData = tuple(PcurveRecord(ItemValue) for ItemValue in Model.pcurves)
-    Records = [RecordText for RecordText, ScaleValue in PcurveData]
+    Records = [RecordText for RecordText, _ in PcurveData]
     ExplicitIndexes = {
         ItemValue.id: Index for Index, ItemValue in enumerate(Model.pcurves, 1)
     }
@@ -1690,7 +1811,7 @@ def EdgePcurveA(
 
 # this definition exists because focused behavior needs one stable owner
 def LoopUvPoints(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop
 ) -> tuple[tuple[float, float], ...] | None:
     Surface = Graph.surfaces[FaceValue.surface_id]
     Values: list[tuple[float, float]] = []
@@ -1716,7 +1837,7 @@ def LoopUvPoints(
 
 # this definition exists because focused behavior needs one stable owner
 def FaceLoop(
-    Graph: _ModelGraph, FaceValue: BrepFace, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, Tolerance: float
 ) -> dict[str, bool]:
     AreaTolerance = max(Tolerance * Tolerance, 1e-10)
     LoopPoints = {
@@ -1760,8 +1881,8 @@ def HasCoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
 
 # planar point extraction stays isolated because line and surface evidence must precede polygon tests
 def GetPlanarPoints(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
-):
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+) -> tuple[tuple[tuple[float, float], ...], float] | None:
     if len(LoopValue.coedge_ids) < 3:
         return None
     Surface = Graph.surfaces[FaceValue.surface_id]
@@ -1858,7 +1979,7 @@ def HasCrossings(Points: tuple[tuple[float, float], ...], Epsilon: float) -> boo
 
 # planar loop proof composes point convexity and crossing evidence because each can reject independently
 def IsPlanarLoop(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
 ) -> bool:
     PointData = GetPlanarPoints(Graph, FaceValue, LoopValue, Tolerance)
     if PointData is None:
@@ -1875,7 +1996,7 @@ def IsPlanarLoop(
 
 # this definition exists because focused behavior needs one stable owner
 def PlanarCircle(
-    Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
+    Graph: ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
 ) -> tuple[tuple[float, float], float] | None:
     if len(LoopValue.coedge_ids) != 1:
         return None
@@ -1894,10 +2015,10 @@ def PlanarCircle(
         > Allowed
     ):
         return None
-    SurfaceAxis, Ignored, Ignored = Frame(
+    SurfaceAxis, _, _ = Frame(
         Surface.normal, Surface.reference_direction, f"plane surface {Surface.id}"
     )
-    CurveAxis, Ignored, Ignored = Frame(
+    CurveAxis, _, _ = Frame(
         Curve.axis, Curve.reference_direction, f"circle curve {Curve.id}"
     )
     if abs(abs(DotAction(SurfaceAxis, CurveAxis)) - 1.0) > Allowed:
@@ -1911,10 +2032,10 @@ def PlanarCircle(
 
 # this definition exists because focused behavior needs one stable owner
 def FaceIsProven(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceValue: BrepFace,
     Tolerance: float,
-    SeamBands: Mapping[str, _SeamBand],
+    SeamBands: Mapping[str, SeamBand],
 ) -> None:
     if FaceValue.id in SeamBands:
         return
@@ -1943,10 +2064,10 @@ def FaceIsProven(
 
 # this definition exists because focused behavior needs one stable owner
 def FaceEdge(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceValue: BrepFace,
     LoopReversals: Mapping[str, bool],
-    SeamBands: Mapping[str, _SeamBand],
+    SeamBands: Mapping[str, SeamBand],
 ) -> tuple[tuple[str, bool], ...]:
     BandValue = SeamBands.get(FaceValue.id)
     if BandValue is not None:
@@ -1971,7 +2092,7 @@ def FaceEdge(
 
 
 # shell face collection stays isolated because repeated faces invalidate native shell topology
-def GetFaceUses(Shell: BrepShell, Graph: _ModelGraph) -> tuple[BrepFaceUse, ...]:
+def GetFaceUses(Shell: BrepShell, Graph: ModelGraph) -> tuple[BrepFaceUse, ...]:
     FaceUses = tuple(Graph.face_uses[ValueId] for ValueId in Shell.face_use_ids)
     FaceIds = tuple(Value.face_id for Value in FaceUses)
     if len(FaceIds) != len(set(FaceIds)):
@@ -2043,7 +2164,7 @@ def AddFaceCompMut(
 
 # preferred orientation mutates one component because geometric face sense chooses global parity
 def SetFaceSenseMut(
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceUses: tuple[BrepFaceUse, ...],
     Component: tuple[str, ...],
     Assigned: dict[str, bool],
@@ -2063,7 +2184,7 @@ def SetFaceSenseMut(
 # shell orientation composes incidence traversal and geometric sense because each proves one constraint
 def OrientShell(
     Shell: BrepShell,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]],
 ) -> dict[str, bool]:
     FaceUses = GetFaceUses(Shell, Graph)
@@ -2081,7 +2202,7 @@ def OrientShell(
 # shell face assembly stays small because each shell owns an independent orientation graph
 def ShellFace(
     Model: BrepModel,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]],
 ) -> dict[str, bool]:
     Result: dict[str, bool] = {}
@@ -2091,7 +2212,7 @@ def ShellFace(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ShellUse(Model: BrepModel, Graph: _ModelGraph) -> dict[str, bool]:
+def ShellUse(Model: BrepModel, Graph: ModelGraph) -> dict[str, bool]:
     Result: dict[str, bool] = {}
     for Region in Model.regions:
         if Region.solid:
@@ -2112,7 +2233,7 @@ def ShellUse(Model: BrepModel, Graph: _ModelGraph) -> dict[str, bool]:
 # this definition exists because focused behavior needs one stable owner
 def CheckEdgeGeom(
     EdgeValue: BrepEdge,
-    Curve: object,
+    Curve: BrepCurve,
     Vertices: Mapping[str, BrepVertex],
     Tolerance: float,
 ) -> None:
@@ -2133,9 +2254,7 @@ def CheckEdgeGeom(
 
 
 # coedge grouping stays isolated because wire and surface uses follow different native contracts
-def GroupCoedges(
-    EdgeValue: BrepEdge, Graph: _ModelGraph
-) -> dict[str, list[BrepCoedge]]:
+def GroupCoedges(EdgeValue: BrepEdge, Graph: ModelGraph) -> dict[str, list[BrepCoedge]]:
     Grouped: dict[str, list[BrepCoedge]] = {}
     for CoedgeId in Graph.edge_uses[EdgeValue.id]:
         Coedge = Graph.coedges[CoedgeId]
@@ -2152,7 +2271,7 @@ def GroupCoedges(
 def GetPcurveReps(
     EdgeId: str,
     Grouped: Mapping[str, list[BrepCoedge]],
-    EdgePcurves: Mapping[str, _EdgePcurve],
+    EdgePcurves: Mapping[str, EdgePcurve],
     SurfaceIndexes: Mapping[str, int],
 ) -> tuple[str, ...]:
     Representations: list[str] = []
@@ -2187,10 +2306,10 @@ def GetPcurveReps(
 # edge geometry composition stays small because grouping and pcurve encoding own their validation
 def EdgeGeom(
     EdgeValue: BrepEdge,
-    Graph: _ModelGraph,
+    Graph: ModelGraph,
     CurveIndexes: Mapping[str, int],
     CurveScales: Mapping[str, float],
-    EdgePcurves: Mapping[str, _EdgePcurve],
+    EdgePcurves: Mapping[str, EdgePcurve],
     SurfaceIndexes: Mapping[str, int],
     Tolerance: float,
 ) -> tuple[str, ...]:
@@ -2226,7 +2345,7 @@ def EdgeGeom(
 
 # this definition exists because focused behavior needs one stable owner
 def ShapeLines(
-    Records: Sequence[_ShapeRecord], RootValue: tuple[str, bool]
+    Records: Sequence[ShapeRecord], RootValue: tuple[str, bool]
 ) -> list[str]:
     Ordinals = {Record.key: Index for Index, Record in enumerate(Records, 1)}
     Count = len(Records)
@@ -2260,8 +2379,6 @@ def ShapeLines(
 
 # model validation stays isolated because type geometry and transform failures precede all emission
 def ValidateBrep(Model: BrepModel, Tolerance: float) -> None:
-    if not isinstance(Model, BrepModel):
-        raise TypeError("model must be a BrepModel")
     if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
     DesignIds = frozenset(
@@ -2613,8 +2730,6 @@ def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
 
 # this definition exists because focused behavior needs one stable owner
 def ProvenAsciiBrep(DataValue: bytes) -> bytes | None:
-    if not isinstance(DataValue, bytes):
-        raise TypeError("data must be bytes")
     from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
 
     Model = DecodeAsciiBrep(DataValue, id_prefix="freecad:proof")
@@ -2628,11 +2743,13 @@ def ProvenAsciiBrep(DataValue: bytes) -> bytes | None:
 
 # this definition exists because focused behavior needs one stable owner
 def TriangleMesh(
-    Vertices: Sequence[Any], Triangles: Sequence[Any], Tolerance: float = 1e-07
+    Vertices: Sequence[object],
+    Triangles: Sequence[object],
+    Tolerance: float = 1e-07,
 ) -> bytes:
     if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
-    Points = tuple((Point(Vertex) for Vertex in Vertices))
+    Points = tuple((ParsePoint(Vertex) for Vertex in Vertices))
     Declared = tuple((ParseTriangle(Triangle, len(Points)) for Triangle in Triangles))
     if not Declared:
         raise ValueError("at least one triangle is required")
@@ -2649,217 +2766,40 @@ def TriangleMesh(
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+FreeCADBrepWriteError = FreeCadBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["FreeCADBrepWriteError"] = FreeCadBrep
+Geometry = KGeomValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Geometry"] = KGeomValue
+Point: TypeAlias = KPoint
 
 # this binding exists because shared behavior needs one stable value
-globals()["Point"] = KPoint
+Triangle = KTriangle
 
 # this binding exists because shared behavior needs one stable value
-globals()["Triangle"] = KTriangle
+Vector2 = VectorTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector2"] = VectorTwo
+Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector3"] = VectorThree
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EdgePcurve"] = EdgePcurve
+brep_model_brep = BrepModelBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_GeneratedPcurve"] = GeneratedPcurve
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ModelGraph"] = ModelGraph
+deque = Deque
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SeamBand"] = SeamBand
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ShapeRecord"] = ShapeRecord
+proven_ascii_brep = ProvenAsciiBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bind_once"] = BindOnceMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_bspline_layout"] = BsplineLayout
-
-# this binding exists because shared behavior needs one stable value
-globals()["_check_edge_geometry"] = CheckEdgeGeom
-
-# this binding exists because shared behavior needs one stable value
-globals()["_coedge_shape_reversed"] = HasCoedgeShape
-
-# this binding exists because shared behavior needs one stable value
-globals()["_cross"] = Cross
-
-# this binding exists because shared behavior needs one stable value
-globals()["_curve_point"] = CurvePoint
-
-# this binding exists because shared behavior needs one stable value
-globals()["_curve_record"] = CurveRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_dot"] = DotAction
-
-# this binding exists because shared behavior needs one stable value
-globals()["_edge_geometry"] = EdgeGeom
-
-# this binding exists because shared behavior needs one stable value
-globals()["_edge_pcurve_records"] = EdgePcurveA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_edge_record"] = EdgeRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_edge_uses"] = EdgeUses
-
-# this binding exists because shared behavior needs one stable value
-globals()["_face_edge_orientations"] = FaceEdge
-
-# this binding exists because shared behavior needs one stable value
-globals()["_face_is_proven"] = FaceIsProven
-
-# this binding exists because shared behavior needs one stable value
-globals()["_face_loop_reversals"] = FaceLoop
-
-# this binding exists because shared behavior needs one stable value
-globals()["_facet_is_degenerate"] = IsFacetBad
-
-# this binding exists because shared behavior needs one stable value
-globals()["_frame"] = Frame
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_pcurve"] = GeneratedPcurvA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_geometry"] = GeomAction
-
-# this binding exists because shared behavior needs one stable value
-globals()["_header"] = Header
-
-# this binding exists because shared behavior needs one stable value
-globals()["_independent_brep"] = IndependentBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_length"] = GetLength
-
-# this binding exists because shared behavior needs one stable value
-globals()["_linear_surface_pcurve"] = LinearSurface
-
-# this binding exists because shared behavior needs one stable value
-globals()["_loop_uv_points"] = LoopUvPoints
-
-# this binding exists because shared behavior needs one stable value
-globals()["_number"] = Number
-
-# this binding exists because shared behavior needs one stable value
-globals()["_oriented_components"] = OrientFacets
-
-# this binding exists because shared behavior needs one stable value
-globals()["_pcurve_record"] = PcurveRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_planar_circle_loop"] = PlanarCircle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_planar_line_loop_is_proven"] = IsPlanarLoop
-
-# this binding exists because shared behavior needs one stable value
-globals()["_plane_conic_pcurve"] = PlaneConic
-
-# this binding exists because shared behavior needs one stable value
-globals()["_point"] = Point
-
-# this binding exists because shared behavior needs one stable value
-globals()["_require_owned"] = RequireOwned
-
-# this binding exists because shared behavior needs one stable value
-globals()["_scale"] = ScaleVector
-
-# this binding exists because shared behavior needs one stable value
-globals()["_seam_band"] = SeamBandA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_shape_lines"] = ShapeLines
-
-# this binding exists because shared behavior needs one stable value
-globals()["_shared_brep"] = SharedBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_shell_face_orientations"] = ShellFace
-
-# this binding exists because shared behavior needs one stable value
-globals()["_shell_use_orientations"] = ShellUse
-
-# this binding exists because shared behavior needs one stable value
-globals()["_subtract"] = Subtract
-
-# this binding exists because shared behavior needs one stable value
-globals()["_surface_periods"] = SurfacePeriods
-
-# this binding exists because shared behavior needs one stable value
-globals()["_surface_record"] = SurfaceRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_surface_residual"] = SurfaceResidual
-
-# this binding exists because shared behavior needs one stable value
-globals()["_surface_uv"] = SurfaceUv
-
-# this binding exists because shared behavior needs one stable value
-globals()["_triangle"] = ParseTriangle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unit2"] = UnitTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unit3"] = UnitThree
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unsupported"] = Unsupported
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unwrap_periodic"] = UnwrapPeriodic
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unwrap_surface_uv"] = UnwrapSurfaceUv
-
-# this binding exists because shared behavior needs one stable value
-globals()["_values"] = Values
-
-# this binding exists because shared behavior needs one stable value
-globals()["_vector2"] = VectorTwoA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_vector3"] = VectorThreeA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_vertex_record"] = VertexRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["brep_model_brep"] = BrepModelBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
-
-# this binding exists because shared behavior needs one stable value
-globals()["deque"] = Deque
-
-# this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["proven_ascii_brep"] = ProvenAsciiBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["triangle_mesh_brep"] = TriangleMesh
+triangle_mesh_brep = TriangleMesh

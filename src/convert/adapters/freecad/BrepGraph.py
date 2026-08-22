@@ -9,20 +9,34 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyInfo
+from typing import Any as AnyInfo, Never
 
-from interchange import BrepFace, BrepModel
+from interchange import (
+    BrepBody,
+    BrepCoedge,
+    BrepCurve,
+    BrepEdge,
+    BrepFace,
+    BrepFaceUse,
+    BrepLoop,
+    BrepModel,
+    BrepPcurve,
+    BrepRegion,
+    BrepShell,
+    BrepShellUse,
+    BrepSurface,
+    BrepVertex,
+    BrepWire,
+)
 
 
 # writer errors retain one stable reason because adapter fallbacks inspect the public marker
 class FreeCadBrep(ValueError):
-    KSlots = ()
-    KReason = "writer_unimplemented"
-    locals()["reason"] = KReason
+    reason: str = "writer_unimplemented"
 
 
 # unsupported topology fails explicitly because silent approximation would violate lossless output
-def Unsupported(MessageText: str) -> None:
+def Unsupported(MessageText: str) -> Never:
     raise FreeCadBrep(f"writer_unimplemented: {MessageText}")
 
 
@@ -196,7 +210,7 @@ def BindCoedge(Instance: AnyInfo, CoedgeId: str, KindValue: str, OwnerId: str) -
 
 
 # face lookup remains a graph method because wire coedges intentionally have no owning face
-def GetFace(Instance: AnyInfo, CoedgeId: str) -> BrepFace | None:
+def GetFace(Instance: ModelGraph, CoedgeId: str) -> BrepFace | None:
     KindValue, OwnerId = Instance.coedge_owner[CoedgeId]
     if KindValue == "wire":
         return None
@@ -205,10 +219,57 @@ def GetFace(Instance: AnyInfo, CoedgeId: str) -> BrepFace | None:
 
 # graph state stays focused because native topology validation shares one indexed ownership view
 class ModelGraph:
-    KSlots = tuple(
-        "bodies coedge_owner coedges curves edge_uses edges face_uses faces loop_face loops pcurves region_body regions shell_owners shell_uses shells surfaces vertices wire_body wires".split()
+    __slots__ = (
+        "bodies",
+        "coedge_owner",
+        "coedges",
+        "curves",
+        "edge_uses",
+        "edges",
+        "face_uses",
+        "faces",
+        "loop_face",
+        "loops",
+        "pcurves",
+        "region_body",
+        "regions",
+        "shell_owners",
+        "shell_uses",
+        "shells",
+        "surfaces",
+        "vertices",
+        "wire_body",
+        "wires",
     )
-    locals()["__slots__"] = KSlots
-    locals()["__init__"] = InitGraph
-    locals()["_bind_coedge"] = BindCoedge
-    locals()["face_for_coedge"] = GetFace
+    bodies: dict[str, BrepBody]
+    coedge_owner: dict[str, tuple[str, str]]
+    coedges: dict[str, BrepCoedge]
+    curves: dict[str, BrepCurve]
+    edge_uses: dict[str, list[str]]
+    edges: dict[str, BrepEdge]
+    face_uses: dict[str, BrepFaceUse]
+    faces: dict[str, BrepFace]
+    loop_face: dict[str, str]
+    loops: dict[str, BrepLoop]
+    pcurves: dict[str, BrepPcurve]
+    region_body: dict[str, str]
+    regions: dict[str, BrepRegion]
+    shell_owners: dict[str, list[tuple[str, str]]]
+    shell_uses: dict[str, BrepShellUse]
+    shells: dict[str, BrepShell]
+    surfaces: dict[str, BrepSurface]
+    vertices: dict[str, BrepVertex]
+    wire_body: dict[str, str]
+    wires: dict[str, BrepWire]
+
+    # graph consumers need initialized ownership indexes before topology queries begin
+    def __init__(self, Model: BrepModel) -> None:
+        InitGraph(self, Model)
+
+    # graph construction keeps this binding private so parent ownership cannot diverge
+    def _bind_coedge(self, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
+        BindCoedge(self, CoedgeId, KindValue, OwnerId)
+
+    # topology emitters need one typed route from coedges back to faces
+    def face_for_coedge(self, CoedgeId: str) -> BrepFace | None:
+        return GetFace(self, CoedgeId)

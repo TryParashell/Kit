@@ -44,30 +44,28 @@ def GetTriangles(FaceValue: NativeFace) -> tuple[tuple[int, int, int], ...]:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeFace:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["record_length"] = "int"
-    __annotations__["face_id"] = "int"
-    __annotations__["strip_lengths"] = "tuple[int, ...]"
-    __annotations__["positions_mm"] = "tuple[tuple[float, float, float], ...]"
-    __annotations__["normals"] = "tuple[tuple[float, float, float], ...]"
-    __annotations__["triangle_indices"] = "tuple[tuple[int, int, int], ...]"
+    offset: int
+    record_length: int
+    face_id: int
+    strip_lengths: tuple[int, ...]
+    positions_mm: tuple[tuple[float, float, float], ...]
+    normals: tuple[tuple[float, float, float], ...]
+    triangle_indices: tuple[tuple[int, int, int], ...]
 
-    locals()["Positions"] = property(GetPositions)
-    locals()["Triangles"] = GetTriangles
-    locals()["positions"] = locals()["Positions"]
-    locals()["triangles"] = locals()["Triangles"]
+    Positions = property(GetPositions)
+    Triangles = GetTriangles
+    positions = Positions
+    triangles = Triangles
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeDisplay:
-    locals().setdefault("__annotations__", {})
-    __annotations__["occurrence_path"] = "str"
-    __annotations__["source_path"] = "str"
-    __annotations__["record_offset"] = "int"
-    __annotations__["record_length"] = "int"
-    __annotations__["faces"] = "tuple[NativeTessellationFace, ...]"
+    occurrence_path: str
+    source_path: str
+    record_offset: int
+    record_length: int
+    faces: tuple[NativeFace, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -115,7 +113,7 @@ def DecodeDisplay(DataValue: bytes) -> tuple[NativeDisplay, ...]:
         )
         Records.append((Offset, Value, SourcePath))
     Offsets = [Record[0] for Record in Records]
-    Grouped: list[list[NativeFace]] = list(map(list, ((),) * len(Records)))
+    Grouped: list[list[NativeFace]] = [[] for _ in Records]
     for FaceValue in Faces:
         Index = BisectRight(Offsets, FaceValue.offset) - 1
         if Index >= 0:
@@ -330,70 +328,55 @@ def Serialized(DataValue: bytes) -> tuple[tuple[int, str, int], ...]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_FORMAT_ID"] = AsmFormatId
+ASSEMBLY_FORMAT_ID = AsmFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_LISTS_STREAM"] = DisplayListsStream
+DISPLAY_LISTS_STREAM = DisplayListsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["Mesh"] = MeshValue
+Mesh = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeDisplayComponent"] = NativeDisplay
+NativeDisplayComponent = NativeDisplay
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeTessellationFace"] = NativeFace
+NativeTessellationFace = NativeFace
 
 # this binding exists because shared behavior needs one stable value
-globals()["SERIALIZED_STRING_MARKER"] = SerializedStringMarker
+SERIALIZED_STRING_MARKER = SerializedStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector3"] = VectorThree
+Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ARRAY_MARKER"] = KArrayMarker
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decode_face"] = DecodeFace
+bisect_right = BisectRight
 
 # this binding exists because shared behavior needs one stable value
-globals()["_serialized_strings"] = Serialized
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_triangles"] = Triangles
+decode_display_lists = DecodeDisplay
 
 # this binding exists because shared behavior needs one stable value
-globals()["_vectors"] = Vectors
+decode_tessellation_faces = DecodeFaces
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+frozen_mapping = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()["bisect_right"] = BisectRight
+is_cad_path = IsCadPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+is_component_path = IsComponentPath
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_display_lists"] = DecodeDisplay
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_tessellation_faces"] = DecodeFaces
+neutral_meshes = NeutralMeshes
 
 # this binding exists because shared behavior needs one stable value
-globals()["frozen_mapping"] = FrozenMapping
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_cad_path"] = IsCadPath
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_component_path"] = IsComponentPath
-
-# this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["neutral_meshes"] = NeutralMeshes
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct

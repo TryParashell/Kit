@@ -19,7 +19,6 @@ import pytest as Pytest
 
 from tools.skills.SkillPaths import GetSourcePath
 
-
 # command tests need repository context because migration inputs are checked in assets
 KRootPath = FilePath(__file__).resolve().parents[2]
 
@@ -150,13 +149,11 @@ def CheckAliases(
 ) -> None:
     ProbePath = KRootPath / "tests" / "test_fixture_aliases_probe.py"
     ProbePath.write_text(
-        Textwrap.dedent(
-            """
+        Textwrap.dedent("""
             def test_fixture_aliases(tmp_path, TmpPath, monkeypatch, MonkeyPatch):
                 assert TmpPath is tmp_path
                 assert MonkeyPatch is monkeypatch
-            """
-        ),
+            """),
         encoding="utf-8",
     )
     MonkeyPatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")

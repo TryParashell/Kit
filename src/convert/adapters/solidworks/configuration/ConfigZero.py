@@ -8,6 +8,8 @@
 
 from __future__ import annotations as Annotations
 import struct as Struct
+from collections.abc import Mapping
+from typing import TypeGuard, cast as Cast
 from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
 )
@@ -112,7 +114,7 @@ def GetHighWater(
     if HighWater is None:
         if not Atoms:
             raise SldprtFormatError("Contents/Config-0 needs at least one atom record")
-        HighestId = max((AtomId for AtomId, TreeId in Atoms))
+        HighestId = max((AtomId for AtomId, _ in Atoms))
         return (HighestId, HighestId + 2 * len(Atoms))
     return HighWater
 
@@ -191,7 +193,7 @@ def AddSecondView(
 
 # legacy keyword normalization maps supported names and rejects every unknown name
 def MapLegacy(
-    CurrentValues: dict[str, object], LegacyValues: dict[str, object]
+    CurrentValues: Mapping[str, object], LegacyValues: Mapping[str, object]
 ) -> dict[str, object]:
     UnknownNames = sorted(set(LegacyValues).difference(KLegacyKwargs))
     if UnknownNames:
@@ -203,6 +205,80 @@ def MapLegacy(
     for LegacyName, LegacyValue in LegacyValues.items():
         MappedValues[KLegacyKwargs[LegacyName]] = LegacyValue
     return MappedValues
+
+
+# atom records require paired integer identities before construction reaches the recovered writer
+def IsAtomRecords(Value: object) -> TypeGuard[tuple[tuple[int, int], ...]]:
+    if not isinstance(Value, tuple):
+        return False
+    ObjectRecords = Cast(tuple[object, ...], Value)
+    for Record in ObjectRecords:
+        if not isinstance(Record, tuple):
+            return False
+        ObjectRecord = Cast(tuple[object, ...], Record)
+        if (
+            len(ObjectRecord) != 2
+            or not isinstance(ObjectRecord[0], int)
+            or not isinstance(ObjectRecord[1], int)
+        ):
+            return False
+    return True
+
+
+# high water marks need an exact integer pair before they can govern atom allocation
+def IsHighWater(Value: object) -> TypeGuard[tuple[int, int] | None]:
+    if Value is None:
+        return True
+    if not isinstance(Value, tuple):
+        return False
+    ObjectValues = Cast(tuple[object, ...], Value)
+    return (
+        len(ObjectValues) == 2
+        and isinstance(ObjectValues[0], int)
+        and isinstance(ObjectValues[1], int)
+    )
+
+
+# compatibility inputs cross this boundary before the recovered writer receives concrete values
+def BuildLegacyConfig(MappedValues: Mapping[str, object]) -> bytes:
+    MappedPartName = MappedValues["PartName"]
+    MappedAtoms = MappedValues["Atoms"]
+    MappedSessionStamp = MappedValues["SessionStamp"]
+    MappedGeneration = MappedValues["Generation"]
+    MappedDualLengthUnits = MappedValues["DualLengthUnits"]
+    MappedHighWater = MappedValues["HighWater"]
+    MappedPartRecordBody = MappedValues["PartRecordBody"]
+    MappedAnnotationViewCount = MappedValues["AnnotationViewCount"]
+    MappedTerminalParentTreeId = MappedValues["TerminalParentTreeId"]
+    MappedAnnotationViewVariant = MappedValues["AnnotationViewVariant"]
+    if (
+        not isinstance(MappedPartName, str)
+        or not IsAtomRecords(MappedAtoms)
+        or not isinstance(MappedSessionStamp, int)
+        or not isinstance(MappedGeneration, int)
+        or not isinstance(MappedDualLengthUnits, bool)
+        or not IsHighWater(MappedHighWater)
+        or not (MappedPartRecordBody is None or isinstance(MappedPartRecordBody, bytes))
+        or not isinstance(MappedAnnotationViewCount, int)
+        or not (
+            MappedTerminalParentTreeId is None
+            or isinstance(MappedTerminalParentTreeId, int)
+        )
+        or not isinstance(MappedAnnotationViewVariant, str)
+    ):
+        raise TypeError("EncodeConfig() received an invalid keyword value")
+    return BuildConfig(
+        PartName=MappedPartName,
+        Atoms=MappedAtoms,
+        SessionStamp=MappedSessionStamp,
+        Generation=MappedGeneration,
+        DualLengthUnits=MappedDualLengthUnits,
+        HighWater=MappedHighWater,
+        PartRecordBody=MappedPartRecordBody,
+        AnnotationViewCount=MappedAnnotationViewCount,
+        TerminalParentTreeId=MappedTerminalParentTreeId,
+        AnnotationViewVariant=MappedAnnotationViewVariant,
+    )
 
 
 # validated configuration construction composes allocation terminal history and annotations
@@ -273,24 +349,24 @@ def EncodeConfig(
         "TerminalParentTreeId": TerminalParentTreeId,
         "AnnotationViewVariant": AnnotationViewVariant,
     }
-    MappedValues = MapLegacy(CurrentValues, LegacyValues)
-    return BuildConfig(
-        PartName=MappedValues["PartName"],
-        Atoms=MappedValues["Atoms"],
-        SessionStamp=MappedValues["SessionStamp"],
-        Generation=MappedValues["Generation"],
-        DualLengthUnits=MappedValues["DualLengthUnits"],
-        HighWater=MappedValues["HighWater"],
-        PartRecordBody=MappedValues["PartRecordBody"],
-        AnnotationViewCount=MappedValues["AnnotationViewCount"],
-        TerminalParentTreeId=MappedValues["TerminalParentTreeId"],
-        AnnotationViewVariant=MappedValues["AnnotationViewVariant"],
-    )
+    return BuildLegacyConfig(MapLegacy(CurrentValues, LegacyValues))
 
 
 # this definition exists because focused behavior needs one stable owner
 def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
-    StreamData = EncodeConfig(**KwargValues)
+    CurrentValues: dict[str, object] = {
+        "PartName": KRefPartName,
+        "Atoms": ((KRefAtomId, KRefTreeId),),
+        "SessionStamp": KRefSessionStamp,
+        "Generation": KMoVersion,
+        "DualLengthUnits": True,
+        "HighWater": None,
+        "PartRecordBody": None,
+        "AnnotationViewCount": 1,
+        "TerminalParentTreeId": None,
+        "AnnotationViewVariant": "default",
+    }
+    StreamData = BuildLegacyConfig(MapLegacy(CurrentValues, KwargValues))
     return {
         "stream_bytes": len(StreamData),
         "typed": len(StreamData),
@@ -302,88 +378,88 @@ def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIG_FIELD_COUNT"] = KConfigFieldCount
+CONFIG_FIELD_COUNT = KConfigFieldCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIG_OPAQUE_BYTES"] = KConfigOpaqueBytes
+CONFIG_OPAQUE_BYTES = KConfigOpaqueBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIG_OWNER_COUNT"] = KConfigOwnerCount
+CONFIG_OWNER_COUNT = KConfigOwnerCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeFilletAnnotationManager"] = EncodeFilletAnnotation
+EncodeFilletAnnotationManager = EncodeFilletAnnotation
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodePatternAnnotationManager"] = EncodePatternAnnotation
+EncodePatternAnnotationManager = EncodePatternAnnotation
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeTwoViewAnnotationManager"] = EncodeTwoViewAnnotation
+EncodeTwoViewAnnotationManager = EncodeTwoViewAnnotation
 
 # this binding exists because shared behavior needs one stable value
-globals()["FILLET_ANNOTATION_BYTES"] = KFilletAnnotationBytes
+FILLET_ANNOTATION_BYTES = KFilletAnnotationBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["FILLET_ATOM_LINK_STAMP"] = KFilletAtomLinkStamp
+FILLET_ATOM_LINK_STAMP = KFilletAtomLinkStamp
 
 # this binding exists because shared behavior needs one stable value
-globals()["FILLET_ATOM_LINK_STAMP_RELATIVES"] = KFilletAtomLinkStampA
+FILLET_ATOM_LINK_STAMP_RELATIVES = KFilletAtomLinkStampA
 
 # this binding exists because shared behavior needs one stable value
-globals()["FILLET_ATOM_PARENT_RELATIVE"] = KFilletAtomParentRelative
+FILLET_ATOM_PARENT_RELATIVE = KFilletAtomParentRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["MEASURED_VOLUME_MM3"] = KMeasuredVolumeMmThree
+MEASURED_VOLUME_MM3 = KMeasuredVolumeMmThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["MO_VERSION"] = KMoVersion
+MO_VERSION = KMoVersion
 
 # this binding exists because shared behavior needs one stable value
-globals()["PATTERN_ANNOTATION_BYTES"] = KPatternAnnotationBytes
+PATTERN_ANNOTATION_BYTES = KPatternAnnotationBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["PER_FEATURE_ATOM_BYTES"] = KPerFeatureAtomBytes
+PER_FEATURE_ATOM_BYTES = KPerFeatureAtomBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["PER_SOLID_BODY_BYTES"] = KPerSolidBodyBytes
+PER_SOLID_BODY_BYTES = KPerSolidBodyBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_ATOM_ID"] = KRefAtomId
+REFERENCE_ATOM_ID = KRefAtomId
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_HIGH_WATER"] = KRefHighWater
+REFERENCE_HIGH_WATER = KRefHighWater
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_LENGTH"] = KRefLength
+REFERENCE_LENGTH = KRefLength
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_PART_NAME"] = KRefPartName
+REFERENCE_PART_NAME = KRefPartName
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_SESSION_STAMP"] = KRefSessionStamp
+REFERENCE_SESSION_STAMP = KRefSessionStamp
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_SHA256"] = KRefShaTwoFiveSix
+REFERENCE_SHA256 = KRefShaTwoFiveSix
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_TREE_ID"] = KRefTreeId
+REFERENCE_TREE_ID = KRefTreeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["SINGLE_LENGTH_UNIT_LENGTH"] = KSingleLengthUnitLength
+SINGLE_LENGTH_UNIT_LENGTH = KSingleLengthUnitLength
 
 # this binding exists because shared behavior needs one stable value
-globals()["TWO_VIEW_ANNOTATION_BYTES"] = KTwoViewAnnotationBytes
+TWO_VIEW_ANNOTATION_BYTES = KTwoViewAnnotationBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["declared_opaque_split"] = DeclaredOpaque
+declared_opaque_split = DeclaredOpaque
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_class_definition"] = EncodeClassDefinition
+encode_class_definition = EncodeClassDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_config0_stream"] = EncodeConfig
+encode_config0_stream = EncodeConfig
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct

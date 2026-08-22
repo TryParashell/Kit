@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
+from collections.abc import Sequence as ValueSequence
 import base64 as BaseSixFour
 import copy as CopyValue
 from dataclasses import dataclass as Dataclass, field as Field
@@ -21,8 +22,9 @@ import uuid as UuidValue
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import zlib as ZlibValue
-from typing import Any as AnyValue, Mapping
+from typing import Iterator, Mapping, TypeGuard
 from interchange import CadDocument as CadDoc
+from interchange.serialization.WireData import ValidateWireMap
 from convert.adapters.freecad.Brep import (
     FreeCADBrepWriteError as FreeCadBrepWriteError,
     brep_model_brep as BrepModelBrep,
@@ -60,6 +62,73 @@ from convert.adapters.freecad.Protocol import (
     SPLINE_CONTROL_TAGS as SplineControlTags,
     STRING_HASHER_TAGS as StringHasherTags,
 )
+
+
+# mapping payloads require string keys before archive fields can be inspected safely
+def IsPayloadMap(Value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(Value, Mapping)
+
+
+# sequence payloads require a concrete element contract before archive fields are traversed
+def IsPayloadSeq(Value: object) -> TypeGuard[list[object] | tuple[object, ...]]:
+    return isinstance(Value, (list, tuple))
+
+
+# frozenset payloads need a concrete element boundary before key validation
+def IsPayloadSet(Value: object) -> TypeGuard[frozenset[object]]:
+    return isinstance(Value, frozenset)
+
+
+# nested archive maps require every child record to satisfy the payload map contract
+def PayloadMapMap(
+    Value: object,
+) -> Mapping[str, Mapping[str, object]] | None:
+    if Value is None:
+        return None
+    if not IsPayloadMap(Value):
+        raise TypeError("external links must be a mapping")
+    Result: dict[str, Mapping[str, object]] = {}
+    for NameValue, ItemValue in Value.items():
+        if not IsPayloadMap(ItemValue):
+            raise TypeError("external link records must be mappings")
+        Result[NameValue] = ItemValue
+    return Result
+
+
+# native external link maps require string paths for every source key
+def PayloadStrMap(Value: object) -> Mapping[str, str] | None:
+    if Value is None:
+        return None
+    if not IsPayloadMap(Value):
+        raise TypeError("native external links must be a mapping")
+    Result: dict[str, str] = {}
+    for NameValue, ItemValue in Value.items():
+        if not isinstance(ItemValue, str):
+            raise TypeError("native external link paths must be strings")
+        Result[NameValue] = ItemValue
+    return Result
+
+
+# trusted brep keys require six concrete text fields before archive reuse
+def IsBrepKey(Value: object) -> TypeGuard[KNativeBrepKey]:  # lgtm[py/mixed-returns]
+    match Value:
+        case (str(), str(), str(), str(), str(), str()):
+            return True
+        case _:
+            return False
+
+
+# trusted brep sets require every member to satisfy the fixed key contract
+def PayloadBrepKeys(Value: object) -> frozenset[KNativeBrepKey]:
+    if not IsPayloadSet(Value):
+        raise TypeError("trusted native breps must be a frozenset")
+    Result: set[KNativeBrepKey] = set()
+    for ItemValue in Value:
+        if not IsBrepKey(ItemValue):
+            raise TypeError("trusted native brep keys are malformed")
+        Result.add(ItemValue)
+    return frozenset(Result)
+
 
 # this binding exists because shared behavior needs one stable value
 KManifestEntry = "interchange/document.json"
@@ -407,18 +476,18 @@ def ValidatedDocXml(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ManifestMapping(RawValue: bytes) -> dict[str, AnyValue]:
+def ManifestMapping(RawValue: bytes) -> dict[str, object]:
     try:
-        Value = JsonValue.loads(RawValue)
+        Value: object = JsonValue.loads(RawValue)
     except RecursionError as ErrorInfo:
         raise ValueError(
             "embedded Kit interchange document JSON nesting exceeds safe limits"
         ) from ErrorInfo
     except (UnicodeDecodeError, JsonValue.JSONDecodeError) as ErrorInfo:
         raise ValueError("embedded Kit interchange document is corrupt") from ErrorInfo
-    if not isinstance(Value, dict):
+    if not IsPayloadMap(Value):
         raise ValueError("embedded Kit document is not a mapping")
-    Stack = [(iter((Value,)), 0)]
+    Stack: list[tuple[Iterator[object], int]] = [(iter((Value,)), 0)]
     while Stack:
         Values, ParentDepth = Stack[-1]
         try:
@@ -426,80 +495,78 @@ def ManifestMapping(RawValue: bytes) -> dict[str, AnyValue]:
         except StopIteration:
             Stack.pop()
             continue
-        if isinstance(ItemValue, dict):
+        if IsPayloadMap(ItemValue):
             Depth = ParentDepth + 1
             if Depth > KMaxManifestJsonDepth:
                 raise ValueError(
                     "embedded Kit interchange document JSON nesting exceeds safe limits"
                 )
             Stack.append((iter(ItemValue.values()), Depth))
-        elif isinstance(ItemValue, list):
+        elif IsPayloadSeq(ItemValue):
             Depth = ParentDepth + 1
             if Depth > KMaxManifestJsonDepth:
                 raise ValueError(
                     "embedded Kit interchange document JSON nesting exceeds safe limits"
                 )
             Stack.append((iter(ItemValue), Depth))
-    return Value
+    return dict(Value)
 
 
 # this definition exists because focused behavior needs one stable owner
-def EnumAction(Value: Any) -> AnyValue:
-    if isinstance(Value, Mapping) and "$enum" in Value:
+def EnumAction(Value: object) -> object:
+    if IsPayloadMap(Value) and "$enum" in Value:
         return Value.get("value")
     return Value
 
 
 # this definition exists because focused behavior needs one stable owner
-def Items(Value: Any) -> list[dict[str, AnyValue]]:
-    if isinstance(Value, Mapping):
+def Items(Value: object) -> list[dict[str, object]]:
+    if IsPayloadMap(Value):
         for Marker in ("$tuple", "$frozenset", "$set"):
             if Marker in Value:
                 return Items(Value[Marker])
         if "$type" in Value:
             return [dict(Value)]
         return [
-            dict(ItemValue)
-            for ItemValue in Value.values()
-            if isinstance(ItemValue, Mapping)
+            dict(ItemValue) for ItemValue in Value.values() if IsPayloadMap(ItemValue)
         ]
-    if isinstance(Value, (list, tuple)):
-        return [
-            dict(ItemValue) for ItemValue in Value if isinstance(ItemValue, Mapping)
-        ]
+    if IsPayloadSeq(Value):
+        return [dict(ItemValue) for ItemValue in Value if IsPayloadMap(ItemValue)]
     return []
 
 
 # this definition exists because focused behavior needs one stable owner
-def Sequence(Value: Any) -> list[AnyValue]:
-    if isinstance(Value, Mapping):
+def Sequence(Value: object) -> list[object]:
+    if IsPayloadMap(Value):
         for Marker in ("$tuple", "$frozenset", "$set"):
             if Marker in Value:
                 return Sequence(Value[Marker])
         return []
-    if isinstance(Value, (list, tuple)):
+    if IsPayloadSeq(Value):
         return list(Value)
     return []
 
 
 # this definition exists because focused behavior needs one stable owner
-def Number(Value: Any, Default: float = 0.0) -> float:
+def Number(Value: object, Default: float = 0.0) -> float:
     Value = EnumAction(Value)
-    if isinstance(Value, Mapping):
+    if IsPayloadMap(Value):
         for KeyValue in ("value", "value_mm", "length_mm", "radius", "radius_mm"):
             if KeyValue in Value:
                 return Number(Value[KeyValue], Default)
         return Default
     if isinstance(Value, bool):
         return float(Value)
-    try:
-        return float(Value)
-    except (TypeError, ValueError):
-        return Default
+    if isinstance(Value, (int, float, str)):
+        try:
+            return float(Value)
+        except ValueError:
+            return Default
+    return Default
 
 
 # this definition exists because focused behavior needs one stable owner
-def TextAction(Value: Any, Default: str = "") -> str:
+def TextAction(Value: object, Default: str = "") -> str:
     Value = EnumAction(Value)
     if Value is None:
         return Default
@@ -507,12 +574,12 @@ def TextAction(Value: Any, Default: str = "") -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FmtAction(Value: Any) -> str:
+def FmtAction(Value: object) -> str:
     return f"{Number(Value):.16f}"
 
 
 # this definition exists because focused behavior needs one stable owner
-def SafeAction(Value: Any, Prefix: str = "Object") -> str:
+def SafeAction(Value: object, Prefix: str = "Object") -> str:
     NameValue = RegexLib.sub("[^A-Za-z0-9_]", "_", TextAction(Value)).strip("_")
     if not NameValue:
         NameValue = Prefix
@@ -523,9 +590,9 @@ def SafeAction(Value: Any, Prefix: str = "Object") -> str:
 
 # this definition exists because focused behavior needs one stable owner
 def Vector(
-    Value: Any, Default: tuple[float, float, float]
+    Value: object, Default: tuple[float, float, float]
 ) -> tuple[float, float, float]:
-    if isinstance(Value, Mapping):
+    if IsPayloadMap(Value):
         if "origin" in Value and (
             not any((KeyValue in Value for KeyValue in ("x", "y", "z")))
         ):
@@ -535,16 +602,16 @@ def Vector(
             Number(Value.get("y"), Default[1]),
             Number(Value.get("z"), Default[2]),
         )
-    if isinstance(Value, (list, tuple)) and len(Value) >= 3:
+    if IsPayloadSeq(Value) and len(Value) >= 3:
         return (Number(Value[0]), Number(Value[1]), Number(Value[2]))
     return Default
 
 
 # this definition exists because focused behavior needs one stable owner
-def PointTwo(Value: Any) -> tuple[float, float]:
-    if isinstance(Value, Mapping):
+def PointTwo(Value: object) -> tuple[float, float]:
+    if IsPayloadMap(Value):
         return (Number(Value.get("x")), Number(Value.get("y")))
-    if isinstance(Value, (list, tuple)) and len(Value) >= 2:
+    if IsPayloadSeq(Value) and len(Value) >= 2:
         return (Number(Value[0]), Number(Value[1]))
     return (0.0, 0.0)
 
@@ -554,12 +621,12 @@ def Normalize(Value: tuple[float, float, float]) -> tuple[float, float, float]:
     Length = MathValue.sqrt(sum((Component * Component for Component in Value)))
     if Length <= 1e-15:
         return (0.0, 0.0, 1.0)
-    return tuple((Component / Length for Component in Value))
+    return (Value[0] / Length, Value[1] / Length, Value[2] / Length)
 
 
 # this definition exists because axis frames need one normalized rotation matrix
 def RotationMatrix(
-    Transform: Mapping[str, Any],
+    Transform: Mapping[str, object],
 ) -> tuple[tuple[float, float, float], ...]:
     XAxis = Normalize(Vector(Transform.get("x_axis"), (1.0, 0.0, 0.0)))
     YAxis = Normalize(Vector(Transform.get("y_axis"), (0.0, 1.0, 0.0)))
@@ -572,7 +639,7 @@ def RotationMatrix(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Quaternion(Transform: Mapping[str, Any]) -> tuple[float, float, float, float]:
+def Quaternion(Transform: Mapping[str, object]) -> tuple[float, float, float, float]:
     Matrix = RotationMatrix(Transform)
     Trace = Matrix[0][0] + Matrix[1][1] + Matrix[2][2]
     if Trace > 0.0:
@@ -635,7 +702,9 @@ def PropAction(
 
 
 # this definition exists because focused behavior needs one stable owner
-def StringProp(NameValue: str, Value: Any, *, Dynamic: bool = False) -> XmlTree.Element:
+def StringProp(
+    NameValue: str, Value: object, *, Dynamic: bool = False
+) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyString", Dynamic=Dynamic)
     XmlTree.SubElement(Result, "String", {"value": TextAction(Value)})
     return Result
@@ -643,7 +712,7 @@ def StringProp(NameValue: str, Value: Any, *, Dynamic: bool = False) -> XmlTree.
 
 # this definition exists because focused behavior needs one stable owner
 def StringListProp(
-    NameValue: str, Values: list[str], *, Dynamic: bool = False
+    NameValue: str, Values: ValueSequence[str], *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyStringList", Dynamic=Dynamic)
     Child = XmlTree.SubElement(Result, "StringList", {"count": str(len(Values))})
@@ -653,7 +722,9 @@ def StringListProp(
 
 
 # this definition exists because focused behavior needs one stable owner
-def BoolProp(NameValue: str, Value: Any, *, Dynamic: bool = False) -> XmlTree.Element:
+def BoolProp(
+    NameValue: str, Value: object, *, Dynamic: bool = False
+) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyBool", Dynamic=Dynamic)
     XmlTree.SubElement(Result, "Bool", {"value": "true" if bool(Value) else "false"})
     return Result
@@ -662,7 +733,7 @@ def BoolProp(NameValue: str, Value: Any, *, Dynamic: bool = False) -> XmlTree.El
 # this definition exists because focused behavior needs one stable owner
 def FloatProp(
     NameValue: str,
-    Value: Any,
+    Value: object,
     PropType: str = "App::PropertyFloat",
     *,
     Dynamic: bool = False,
@@ -674,7 +745,7 @@ def FloatProp(
 
 # this definition exists because focused behavior needs one stable owner
 def IntegerProp(
-    NameValue: str, Value: Any, *, Dynamic: bool = False
+    NameValue: str, Value: object, *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyInteger", Dynamic=Dynamic)
     XmlTree.SubElement(Result, "Integer", {"value": str(int(Number(Value)))})
@@ -682,7 +753,7 @@ def IntegerProp(
 
 
 # this definition exists because focused behavior needs one stable owner
-def EnumerationProA(NameValue: str, Value: Any) -> XmlTree.Element:
+def EnumerationProA(NameValue: str, Value: object) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyEnumeration")
     XmlTree.SubElement(Result, "Integer", {"value": str(int(Number(Value)))})
     return Result
@@ -708,7 +779,7 @@ def VectorProp(
 # this definition exists because focused behavior needs one stable owner
 def MakePlacement(
     NameValue: str,
-    Transform: Mapping[str, Any],
+    Transform: Mapping[str, object],
     *,
     Dynamic: bool = False,
     Status: str | None = None,
@@ -818,7 +889,7 @@ def XlinkSubProp(
 
 # this definition exists because focused behavior needs one stable owner
 def EnumerationProp(
-    NameValue: str, Choices: list[str], Selected: int, *, Dynamic: bool = False
+    NameValue: str, Choices: ValueSequence[str], Selected: int, *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyEnumeration", Dynamic=Dynamic)
     XmlTree.SubElement(
@@ -846,7 +917,7 @@ def ExpressionProp(Expressions: list[tuple[str, str]]) -> XmlTree.Element:
 
 
 # this definition exists because focused behavior needs one stable owner
-def JsonProp(NameValue: str, Value: Any) -> XmlTree.Element:
+def JsonProp(NameValue: str, Value: object) -> XmlTree.Element:
     return StringProp(
         NameValue,
         JsonValue.dumps(
@@ -859,47 +930,42 @@ def JsonProp(NameValue: str, Value: Any) -> XmlTree.Element:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass
 class Object:
-    locals().setdefault("__annotations__", {})
-    __annotations__["type_id"] = "str"
-    __annotations__["name"] = "str"
-    __annotations__["object_id"] = "str"
-    locals()["object_id"] = ""
-    __annotations__["properties"] = "list[XmlTree.Element]"
-    locals()["properties"] = Field(default_factory=list)
-    __annotations__["transient_properties"] = "list[XmlTree.Element]"
-    locals()["transient_properties"] = Field(default_factory=list)
-    __annotations__["dependencies"] = "list[str]"
-    locals()["dependencies"] = Field(default_factory=list)
-    __annotations__["touched"] = "bool"
-    locals()["touched"] = False
-    __annotations__["extensions"] = "tuple[str, ...]"
-    locals()["extensions"] = ()
+    type_id: str
+    name: str
+    object_id: str = ""
+    properties: list[XmlTree.Element] = Field(default_factory=list[XmlTree.Element])
+    transient_properties: list[XmlTree.Element] = Field(
+        default_factory=list[XmlTree.Element]
+    )
+    dependencies: list[str] = Field(default_factory=list[str])
+    touched: bool = False
+    extensions: tuple[str, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 class ObjectGraph:
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance) -> None:
-        Instance.Objects: list[Object] = []
-        Instance.Names: set[str] = set()
+    def __init__(self) -> None:
+        self.Objects: list[Object] = []
+        self.Names: set[str] = set()
 
     # this definition exists because focused behavior needs one stable owner
-    def Unique(Instance, Requested: Any, Prefix: str = "Object") -> str:
+    def unique(self, Requested: object, Prefix: str = "Object") -> str:
         BaseValue = SafeAction(Requested, Prefix)
         Value = BaseValue
         Suffix = 2
-        while Value in Instance.Names:
+        while Value in self.Names:
             Value = f"{BaseValue}_{Suffix}"
             Suffix += 1
-        Instance.Names.add(Value)
+        self.Names.add(Value)
         return Value
 
     # this definition exists because focused behavior needs one stable owner
-    def AddAction(
-        Instance,
+    def add(
+        self,
         TypeId: str,
-        Requested: Any,
+        Requested: object,
         Prefix: str = "Object",
         *,
         Touched: bool = False,
@@ -907,20 +973,16 @@ class ObjectGraph:
     ) -> Object:
         Result = Object(
             TypeId,
-            Instance.unique(Requested, Prefix),
+            self.unique(Requested, Prefix),
             touched=Touched,
             extensions=Extensions,
         )
-        Instance.Objects.append(Result)
+        self.Objects.append(Result)
         return Result
-
-    locals()["__init__"] = InitAction
-    locals()["add"] = AddAction
-    locals()["unique"] = Unique
 
 
 # this definition exists because parameter aliases need deterministic collision handling
-def InitCatalogMut(Instance, Parameters: list[dict[str, Any]]) -> None:
+def InitCatalogMut(Instance: ParamCatalog, Parameters: list[dict[str, object]]) -> None:
     Instance.Parameters = Parameters
     Instance.ByIdentifier = {
         TextAction(ItemValue.get("id")): ItemValue for ItemValue in Parameters
@@ -942,7 +1004,9 @@ def InitCatalogMut(Instance, Parameters: list[dict[str, Any]]) -> None:
 
 
 # this definition exists because feature properties reference spreadsheet aliases
-def ParamExpression(Instance, ParamId: str, Divisor: float | None = None) -> str | None:
+def ParamExpression(
+    Instance: ParamCatalog, ParamId: str, Divisor: float | None = None
+) -> str | None:
     Alias = Instance.Aliases.get(ParamId)
     if not Alias:
         return None
@@ -953,42 +1017,38 @@ def ParamExpression(Instance, ParamId: str, Divisor: float | None = None) -> str
 
 
 # this predicate exists because source expressions alter feature carrier behavior
-def HasParamSource(Instance, ParamId: str) -> bool:
-    Param = Instance.ByIdentifier.get(ParamId, {})
-    Expression = Param.get("expression", {}) if isinstance(Param, Mapping) else {}
-    return isinstance(Expression, Mapping) and bool(
-        TextAction(Expression.get("source"))
-    )
+def HasParamSource(Instance: ParamCatalog, ParamId: str) -> bool:
+    Param = Instance.ByIdentifier.get(ParamId)
+    Expression = Param.get("expression") if Param is not None else None
+    return IsPayloadMap(Expression) and bool(TextAction(Expression.get("source")))
 
 
 # this definition exists because native expression paths survive neutral translation
-def ParamSource(Instance, ParamId: str) -> str:
-    Param = Instance.ByIdentifier.get(ParamId, {})
-    Attributes = Param.get("attributes", {}) if isinstance(Param, Mapping) else {}
+def ParamSource(Instance: ParamCatalog, ParamId: str) -> str:
+    Param = Instance.ByIdentifier.get(ParamId)
+    Attributes = Param.get("attributes") if Param is not None else None
     return (
-        TextAction(Attributes.get("freecad_path"))
-        if isinstance(Attributes, Mapping)
-        else ""
+        TextAction(Attributes.get("freecad_path")) if IsPayloadMap(Attributes) else ""
     )
 
 
 # this definition exists because feature writers need normalized parameter values
-def ParamValue(Instance, ParamId: str, Default: float = 0.0) -> float:
+def ParamValue(Instance: ParamCatalog, ParamId: str, Default: float = 0.0) -> float:
     Param = Instance.ByIdentifier.get(ParamId)
     if not Param:
         return Default
-    Value = Param.get("value", {})
-    if isinstance(Value, Mapping):
+    Value = Param.get("value")
+    if IsPayloadMap(Value):
         return Number(Value.get("value"), Default)
     return Number(Value, Default)
 
 
 # this definition exists because feature writers need normalized parameter kinds
-def ParamKind(Instance, ParamId: str) -> str:
-    Param = Instance.ByIdentifier.get(ParamId, {})
-    Value = Param.get("value", {}) if isinstance(Param, Mapping) else {}
+def ParamKind(Instance: ParamCatalog, ParamId: str) -> str:
+    Param = Instance.ByIdentifier.get(ParamId)
+    Value = Param.get("value") if Param is not None else None
     return TextAction(
-        EnumAction(Value.get("kind")) if isinstance(Value, Mapping) else "number",
+        EnumAction(Value.get("kind")) if IsPayloadMap(Value) else "number",
         "number",
     )
 
@@ -1023,7 +1083,7 @@ def AllowedExpr() -> set[str]:
 
 # this definition exists because neutral references need spreadsheet alias substitution
 def ReplaceRefsMut(
-    Instance,
+    Instance: ParamCatalog,
     References: list[str],
     Translated: str,
     AllowedNamesMut: set[str],
@@ -1033,7 +1093,7 @@ def ReplaceRefsMut(
         if not Alias:
             return None
         Param = Instance.ByIdentifier.get(ParamId, {})
-        NameValue = TextAction(Param.get("name")) if isinstance(Param, Mapping) else ""
+        NameValue = TextAction(Param.get("name")) if IsPayloadMap(Param) else ""
         Replaced = False
         for Token in (ParamId, NameValue):
             if Token and Token in Translated:
@@ -1046,9 +1106,9 @@ def ReplaceRefsMut(
 
 
 # this definition exists because safe expressions preserve native parametric behavior
-def NativeExpr(Instance, ItemValue: Mapping[str, Any]) -> str | None:
+def NativeExpr(Instance: ParamCatalog, ItemValue: Mapping[str, object]) -> str | None:
     Expression = ItemValue.get("expression", {})
-    if not isinstance(Expression, Mapping):
+    if not IsPayloadMap(Expression):
         return None
     Source = TextAction(Expression.get("source")).strip()
     if not Source or "\n" in Source or "\r" in Source or ";" in Source:
@@ -1075,11 +1135,11 @@ def NativeExpr(Instance, ItemValue: Mapping[str, Any]) -> str | None:
 
 
 # this definition exists because transfer reporting separates native expressions from carriers
-def ExprParts(Instance) -> tuple[int, int]:
+def ExprParts(Instance: ParamCatalog) -> tuple[int, int]:
     NativeCount = 0
     CarrierCount = 0
     for ItemValue in Instance.Parameters:
-        if not isinstance(ItemValue.get("expression"), Mapping):
+        if not IsPayloadMap(ItemValue.get("expression")):
             continue
         if NativeExpr(Instance, ItemValue) is None:
             CarrierCount += 1
@@ -1089,12 +1149,10 @@ def ExprParts(Instance) -> tuple[int, int]:
 
 
 # this definition exists because spreadsheet cells need normalized value syntax
-def ParamContent(Instance, ItemValue: Mapping[str, Any]) -> str:
+def ParamContent(Instance: ParamCatalog, ItemValue: Mapping[str, object]) -> str:
     ValueData = ItemValue.get("value", {})
-    RawValue = ValueData.get("value") if isinstance(ValueData, Mapping) else ValueData
-    UnitValue = (
-        TextAction(ValueData.get("unit")) if isinstance(ValueData, Mapping) else ""
-    )
+    RawValue = ValueData.get("value") if IsPayloadMap(ValueData) else ValueData
+    UnitValue = TextAction(ValueData.get("unit")) if IsPayloadMap(ValueData) else ""
     if isinstance(RawValue, bool):
         Content = "=true" if RawValue else "=false"
     elif isinstance(RawValue, (int, float)):
@@ -1111,7 +1169,10 @@ def ParamContent(Instance, ItemValue: Mapping[str, Any]) -> str:
 
 # this definition exists because each parameter owns a label and value cell
 def AppendParamMut(
-    CellsMut: XmlTree.Element, Instance, RowValue: int, ItemValue: Mapping[str, Any]
+    CellsMut: XmlTree.Element,
+    Instance: ParamCatalog,
+    RowValue: int,
+    ItemValue: Mapping[str, object],
 ) -> None:
     ParamId = TextAction(ItemValue.get("id"), f"parameter_{RowValue}")
     NameValue = TextAction(ItemValue.get("name"), ParamId)
@@ -1130,7 +1191,7 @@ def AppendParamMut(
 
 
 # this definition exists because parameter spreadsheets need canonical layout properties
-def SheetProps(Instance) -> list[XmlTree.Element]:
+def SheetProps(Instance: ParamCatalog) -> list[XmlTree.Element]:
     Result = [
         StringProp("Label", "Parameters"),
         ExpressionProp([]),
@@ -1161,68 +1222,57 @@ def SheetProps(Instance) -> list[XmlTree.Element]:
 class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance, Parameters: list[dict[str, Any]]) -> None:
-        InitCatalogMut(Instance, Parameters)
+    def __init__(self, Parameters: list[dict[str, object]]) -> None:
+        self.Parameters: list[dict[str, object]] = []
+        self.ByIdentifier: dict[str, dict[str, object]] = {}
+        self.Aliases: dict[str, str] = {}
+        InitCatalogMut(self, Parameters)
 
     # this definition exists because focused behavior needs one stable owner
-    def Expression(Instance, ParamId: str, Divisor: float | None = None) -> str | None:
-        return ParamExpression(Instance, ParamId, Divisor)
+    def expression(self, ParamId: str, Divisor: float | None = None) -> str | None:
+        return ParamExpression(self, ParamId, Divisor)
 
     # this definition exists because focused behavior needs one stable owner
-    def HasSource(Instance, ParamId: str) -> bool:
-        return HasParamSource(Instance, ParamId)
+    def has_source_expression(self, ParamId: str) -> bool:
+        return HasParamSource(self, ParamId)
 
     # this definition exists because focused behavior needs one stable owner
-    def SourcePath(Instance, ParamId: str) -> str:
-        return ParamSource(Instance, ParamId)
+    def source_path(self, ParamId: str) -> str:
+        return ParamSource(self, ParamId)
 
     # this definition exists because focused behavior needs one stable owner
-    def Value(Instance, ParamId: str, Default: float = 0.0) -> float:
-        return ParamValue(Instance, ParamId, Default)
+    def value(self, ParamId: str, Default: float = 0.0) -> float:
+        return ParamValue(self, ParamId, Default)
 
     # this definition exists because focused behavior needs one stable owner
-    def KindAction(Instance, ParamId: str) -> str:
-        return ParamKind(Instance, ParamId)
+    def kind(self, ParamId: str) -> str:
+        return ParamKind(self, ParamId)
 
     # this definition exists because focused behavior needs one stable owner
-    def Native(Instance, ItemValue: Mapping[str, Any]) -> str | None:
-        return NativeExpr(Instance, ItemValue)
+    def native_expression(self, ItemValue: Mapping[str, object]) -> str | None:
+        return NativeExpr(self, ItemValue)
 
     # this definition exists because focused behavior needs one stable owner
-    def ExpressionParts(Instance) -> tuple[int, int]:
-        return ExprParts(Instance)
+    def expression_parts(self) -> tuple[int, int]:
+        return ExprParts(self)
 
     # this definition exists because focused behavior needs one stable owner
-    def SheetProperties(Instance) -> list[XmlTree.Element]:
-        return SheetProps(Instance)
-
-    locals()["__init__"] = InitAction
-    locals()["expression"] = Expression
-    locals()["expression_parts"] = ExpressionParts
-    locals()["has_source_expression"] = HasSource
-    locals()["kind"] = KindAction
-    locals()["native_expression"] = Native
-    locals()["sheet_properties"] = SheetProperties
-    locals()["source_path"] = SourcePath
-    locals()["value"] = Value
+    def sheet_properties(self) -> list[XmlTree.Element]:
+        return SheetProps(self)
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeParts(Manifest: Mapping[str, Any]) -> tuple[int, int]:
+def NativeParts(Manifest: Mapping[str, object]) -> tuple[int, int]:
     return ParamCatalog(Items(Manifest.get("parameters", []))).expression_parts()
 
 
 # this definition exists because focused behavior needs one stable owner
-def ElemFromData(Value: Any) -> XmlTree.Element | None:
-    if not isinstance(Value, Mapping):
+def ElemFromData(Value: object) -> XmlTree.Element | None:
+    if not IsPayloadMap(Value):
         return None
     TagValue = Value.get("tag")
     Attributes = Value.get("attributes", {})
-    if (
-        not isinstance(TagValue, str)
-        or not TagValue
-        or (not isinstance(Attributes, Mapping))
-    ):
+    if not isinstance(TagValue, str) or not TagValue or (not IsPayloadMap(Attributes)):
         return None
     ElemValue = XmlTree.Element(
         TagValue,
@@ -1232,7 +1282,7 @@ def ElemFromData(Value: Any) -> XmlTree.Element | None:
     if isinstance(TextValue, str):
         setattr(ElemValue, "text", TextValue)
     Children = Value.get("children", [])
-    if not isinstance(Children, (list, tuple)):
+    if not IsPayloadSeq(Children):
         return None
     for ChildData in Children:
         Child = ElemFromData(ChildData)
@@ -1243,9 +1293,9 @@ def ElemFromData(Value: Any) -> XmlTree.Element | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeA(Value: Mapping[str, Any]) -> list[XmlTree.Element]:
+def NativeA(Value: Mapping[str, object]) -> list[XmlTree.Element]:
     Properties = Value.get("properties", {})
-    if not isinstance(Properties, Mapping):
+    if not IsPayloadMap(Properties):
         return []
     Order = [
         TextAction(NameValue)
@@ -1264,7 +1314,7 @@ def NativeA(Value: Mapping[str, Any]) -> list[XmlTree.Element]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Native(Value: Mapping[str, Any]) -> tuple[str, ...]:
+def Native(Value: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(
         (
             ExtensionType
@@ -1277,9 +1327,9 @@ def Native(Value: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FindLinkProp(Value: Mapping[str, Any]) -> str:
+def FindLinkProp(Value: Mapping[str, object]) -> str:
     Properties = Value.get("properties", {})
-    if not isinstance(Properties, Mapping):
+    if not IsPayloadMap(Properties):
         return ""
     if "LinkedObject" in Properties:
         return "LinkedObject"
@@ -1312,7 +1362,7 @@ def FindLinkProp(Value: Mapping[str, Any]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeObject(Value: Mapping[str, Any]) -> Object:
+def NativeObject(Value: Mapping[str, object]) -> Object:
     NameValue = TextAction(Value.get("name"))
     TypeId = TextAction(Value.get("type_id"))
     if not NameValue or not TypeId:
@@ -1353,18 +1403,16 @@ def MergeNamedMut(Properties: list[ET.Element], Replacement: ET.Element) -> None
 
 # this definition exists because native geometry can arrive through either carrier representation
 def NativeGeomData(
-    Entity: Mapping[str, Any],
-) -> tuple[str, Mapping[str, Any], XmlTree.Element | None, bool]:
+    Entity: Mapping[str, object],
+) -> tuple[str, Mapping[str, object], XmlTree.Element | None, bool]:
     KindValue = TextAction(EnumAction(Entity.get("kind"))).lower()
-    Attributes = Entity.get("attributes", {})
-    GeomValue = Entity.get("geometry", {})
-    if not isinstance(GeomValue, Mapping):
-        GeomValue = {}
-    ElemValue = (
-        ElemFromData(Attributes.get("freecad"))
-        if isinstance(Attributes, Mapping)
-        else None
+    AttributesValue = Entity.get("attributes")
+    Attributes: Mapping[str, object] = (
+        AttributesValue if IsPayloadMap(AttributesValue) else {}
     )
+    GeomData = Entity.get("geometry")
+    GeomValue: Mapping[str, object] = GeomData if IsPayloadMap(GeomData) else {}
+    ElemValue = ElemFromData(Attributes.get("freecad"))
     NativeGeom = TextAction(GeomValue.get("$type")) == "NativeGeometry" or all(
         (KeyValue in GeomValue for KeyValue in ("format_id", "entity_type", "data"))
     )
@@ -1393,7 +1441,7 @@ def IsValidGeom(KindValue: str, ElemValue: XmlTree.Element | None) -> bool:
 
 
 # this definition exists because line carriers must reflect current neutral endpoints
-def PatchLineMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+def PatchLineMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, object]) -> None:
     Value = ElemValue.find("./LineSegment")
     if Value is None:
         return
@@ -1407,7 +1455,7 @@ def PatchLineMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> No
 
 # this definition exists because circular carriers must reflect current neutral dimensions
 def PatchCircleMut(
-    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     Value = ElemValue.find("./Circle" if KindValue == "circle" else "./ArcOfCircle")
     if Value is None:
@@ -1422,7 +1470,7 @@ def PatchCircleMut(
 
 
 # this definition exists because point carriers must reflect the current neutral location
-def PatchPointMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+def PatchPointMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, object]) -> None:
     Value = ElemValue.find("./GeomPoint")
     if Value is None:
         Value = ElemValue.find("./Point")
@@ -1434,7 +1482,9 @@ def PatchPointMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> N
 
 
 # this definition exists because ellipse carriers must reflect current neutral axes
-def PatchEllipseMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+def PatchEllipseMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, object]
+) -> None:
     Value = ElemValue.find("./Ellipse")
     if Value is None:
         return
@@ -1453,7 +1503,7 @@ def PatchEllipseMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) ->
 
 # this definition exists because conic carriers must reflect current neutral parameters
 def PatchConicMut(
-    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     TagValue = {
         "arc_ellipse": "ArcOfEllipse",
@@ -1477,7 +1527,7 @@ def PatchConicMut(
 
 # this definition exists because parabola carriers must reflect current neutral parameters
 def PatchParabMut(
-    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     TagValue = "Parabola" if KindValue == "parabola" else "ArcOfParabola"
     Value = ElemValue.find(f"./{TagValue}")
@@ -1496,8 +1546,8 @@ def PatchParabMut(
 
 # this definition exists because spline poles need one canonical weighted encoding
 def SplinePoints(
-    GeomValue: Mapping[str, Any],
-) -> tuple[list[dict[str, Any]], list[float]]:
+    GeomValue: Mapping[str, object],
+) -> tuple[list[dict[str, object]], list[float]]:
     Points = Items(GeomValue.get("control_points", []))
     Weights = [Number(Value, 1.0) for Value in Sequence(GeomValue.get("weights", []))]
     if len(Weights) != len(Points):
@@ -1507,7 +1557,7 @@ def SplinePoints(
 
 # this definition exists because spline knot defaults must remain deterministic
 def SplineKnots(
-    GeomValue: Mapping[str, Any], PointCount: int
+    GeomValue: Mapping[str, object], PointCount: int
 ) -> tuple[int, list[float], list[int]]:
     Degree = max(
         1, min(int(Number(GeomValue.get("degree"), 3)), max(1, PointCount - 1))
@@ -1525,7 +1575,7 @@ def SplineKnots(
 
 # this definition exists because spline poles must retain their original ordering
 def AddPolesMut(
-    Curve: XmlTree.Element, Points: list[dict[str, Any]], Weights: list[float]
+    Curve: XmlTree.Element, Points: list[dict[str, object]], Weights: list[float]
 ) -> None:
     for Point, Weight in zip(Points, Weights, strict=True):
         FirstCoord, SecondCoord = PointTwo(Point)
@@ -1555,7 +1605,7 @@ def AddKnotsMut(
 
 # this definition exists because spline carriers must reflect current neutral controls
 def PatchSplineMut(
-    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     Curve = ElemValue.find(
         "./BezierCurve" if KindValue == "bezier" else "./BSplineCurve"
@@ -1577,7 +1627,7 @@ def PatchSplineMut(
 
 # this definition exists because carrier patching dispatches each geometry family explicitly
 def PatchNativeMut(
-    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     if KindValue == "line":
         PatchLineMut(ElemValue, GeomValue)
@@ -1596,7 +1646,7 @@ def PatchNativeMut(
 
 
 # this definition exists because native sketch geometry must preserve valid vendor markup
-def NativeGeomElem(Entity: Mapping[str, Any]) -> XmlTree.Element | None:
+def NativeGeomElem(Entity: Mapping[str, object]) -> XmlTree.Element | None:
     KindValue, GeomValue, ElemValue, NativeGeom = NativeGeomData(Entity)
     if not IsValidGeom(KindValue, ElemValue):
         return None
@@ -1610,7 +1660,7 @@ def NativeGeomElem(Entity: Mapping[str, Any]) -> XmlTree.Element | None:
 
 
 # this definition exists because profile geometry needs a reusable closed membership index
-def ClosedGeomIds(Sketch: Mapping[str, Any]) -> set[str]:
+def ClosedGeomIds(Sketch: Mapping[str, object]) -> set[str]:
     return {
         TextAction(EntityId)
         for Profile in Sequence(Sketch.get("closed_profile_entity_ids", []))
@@ -1622,7 +1672,7 @@ def ClosedGeomIds(Sketch: Mapping[str, Any]) -> set[str]:
 # this definition exists because unsupported sketch geometry needs structured transfer evidence
 def GeomDiagnostic(
     EntityId: str, KindValue: str, GeomType: str, TypeId: str | None
-) -> dict[str, AnyValue]:
+) -> dict[str, object]:
     ExpectedType = NeutralGeomTypeByKind.get(KindValue)
     SourceOpaque = GeomType == "NativeGeometry" or bool(
         TypeId is not None and GeomType and GeomType != ExpectedType
@@ -1639,7 +1689,7 @@ def GeomDiagnostic(
 
 
 # this definition exists because neutral line geometry needs canonical freecad coordinates
-def AddLineGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+def AddLineGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, object]) -> None:
     Start = PointTwo(GeomValue.get("start"))
     EndValue = PointTwo(GeomValue.get("end"))
     XmlTree.SubElement(
@@ -1658,7 +1708,7 @@ def AddLineGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> 
 
 # this definition exists because neutral circle geometry needs canonical freecad coordinates
 def AddCircleMut(
-    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     Center = PointTwo(GeomValue.get("center"))
     Attributes = {
@@ -1680,7 +1730,7 @@ def AddCircleMut(
 
 
 # this definition exists because neutral ellipse geometry needs canonical freecad coordinates
-def AddEllipseMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+def AddEllipseMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, object]) -> None:
     Center = PointTwo(GeomValue.get("center"))
     MajorAxis = PointTwo(GeomValue.get("major_axis"))
     XmlTree.SubElement(
@@ -1702,7 +1752,7 @@ def AddEllipseMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> N
 
 # this definition exists because neutral conic geometry needs canonical freecad coordinates
 def AddConicGeomMut(
-    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     Center = PointTwo(GeomValue.get("center"))
     MajorAxis = PointTwo(GeomValue.get("major_axis"))
@@ -1730,7 +1780,7 @@ def AddConicGeomMut(
 
 # this definition exists because neutral parabola geometry needs canonical freecad coordinates
 def AddParabGeomMut(
-    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     Center = PointTwo(GeomValue.get("center"))
     AxisValue = PointTwo(GeomValue.get("axis"))
@@ -1753,7 +1803,7 @@ def AddParabGeomMut(
 
 # this definition exists because neutral spline geometry needs canonical freecad controls
 def AddSplineMut(
-    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     Points, Weights = SplinePoints(GeomValue)
     if KindValue == "bezier":
@@ -1778,7 +1828,9 @@ def AddSplineMut(
 
 
 # this definition exists because neutral point geometry needs canonical freecad coordinates
-def AddPointGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+def AddPointGeomMut(
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, object]
+) -> None:
     Point = PointTwo(GeomValue.get("point", GeomValue.get("center")))
     XmlTree.SubElement(
         ItemValue,
@@ -1789,7 +1841,7 @@ def AddPointGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) ->
 
 # this definition exists because neutral geometry dispatch must remain explicit and exhaustive
 def AddGeomBodyMut(
-    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, object], KindValue: str
 ) -> None:
     if KindValue == "line":
         AddLineGeomMut(ItemValue, GeomValue)
@@ -1810,10 +1862,10 @@ def AddGeomBodyMut(
 # this definition exists because every neutral geometry item needs canonical extension metadata
 def AddNeutralMut(
     GeomList: XmlTree.Element,
-    Entity: Mapping[str, Any],
+    Entity: Mapping[str, object],
     EntityId: str,
     KindValue: str,
-    GeomValue: Mapping[str, Any],
+    GeomValue: Mapping[str, object],
     TypeId: str,
     ClosedIds: set[str],
 ) -> None:
@@ -1847,10 +1899,10 @@ def AddNeutralMut(
 def AppendGeomMut(
     GeomList: XmlTree.Element,
     IndicesMut: dict[str, int],
-    DiagnosticsMut: list[dict[str, AnyValue]],
+    DiagnosticsMut: list[dict[str, object]],
     ClosedIds: set[str],
     SourceIndex: int,
-    Entity: Mapping[str, Any],
+    Entity: Mapping[str, object],
 ) -> None:
     EntityId = TextAction(Entity.get("id"), str(SourceIndex))
     KindValue = TextAction(EnumAction(Entity.get("kind"))).lower()
@@ -1859,9 +1911,8 @@ def AppendGeomMut(
         IndicesMut[EntityId] = len(GeomList)
         GeomList.append(NativeItem)
         return
-    GeomValue = Entity.get("geometry", {})
-    if not isinstance(GeomValue, Mapping):
-        GeomValue = {}
+    GeomData = Entity.get("geometry")
+    GeomValue: Mapping[str, object] = GeomData if IsPayloadMap(GeomData) else {}
     GeomType = TextAction(GeomValue.get("$type"))
     TypeId = NeutralGeomTypeIdByKind.get(KindValue)
     ExpectedType = NeutralGeomTypeByKind.get(KindValue)
@@ -1878,12 +1929,12 @@ def AppendGeomMut(
 
 # this definition exists because sketch geometry property assembly coordinates native and neutral items
 def GeomProp(
-    Sketch: Mapping[str, Any],
-) -> tuple[XmlTree.Element, dict[str, int], list[dict[str, AnyValue]]]:
+    Sketch: Mapping[str, object],
+) -> tuple[XmlTree.Element, dict[str, int], list[dict[str, object]]]:
     Result = PropAction("Geometry", "Part::PropertyGeometryList", Status="8192")
     GeomList = XmlTree.SubElement(Result, "GeometryList", {"count": "0"})
     Indices: dict[str, int] = {}
-    Diagnostics: list[dict[str, AnyValue]] = []
+    Diagnostics: list[dict[str, object]] = []
     ClosedIds = ClosedGeomIds(Sketch)
     for SourceIndex, Entity in enumerate(Items(Sketch.get("entities", []))):
         AppendGeomMut(GeomList, Indices, Diagnostics, ClosedIds, SourceIndex, Entity)
@@ -1892,13 +1943,13 @@ def GeomProp(
 
 
 # this definition exists because focused behavior needs one stable owner
-def RefPoint(Value: Any) -> int:
+def RefPoint(Value: object) -> int:
     Point = TextAction(Value).lower()
     return RulePointIndexByName.get(Point, 0)
 
 
 # this definition exists because focused behavior needs one stable owner
-def NeutralRefPoint(RuleKind: str, Entity: Mapping[str, Any], Value: Any) -> int:
+def NeutralRefPoint(RuleKind: str, Entity: Mapping[str, object], Value: object) -> int:
     Point = RefPoint(Value)
     if Point:
         return Point
@@ -1917,7 +1968,7 @@ def NeutralRefPoint(RuleKind: str, Entity: Mapping[str, Any], Value: Any) -> int
 
 
 # this definition exists because focused behavior needs one stable owner
-def RawRuleSlots(Attributes: Mapping[str, Any]) -> list[tuple[int, int]]:
+def RawRuleSlots(Attributes: Mapping[str, object]) -> list[tuple[int, int]]:
     ElemIds = TextAction(Attributes.get("ElementIds"))
     ElemPositions = TextAction(Attributes.get("ElementPositions"))
     Slots: list[tuple[int, int]] = []
@@ -1943,9 +1994,9 @@ def RawRuleSlots(Attributes: Mapping[str, Any]) -> list[tuple[int, int]]:
 
 # this definition exists because two reference midpoint rules need directional line detection
 def MidpointPair(
-    References: list[dict[str, Any]],
+    References: list[dict[str, object]],
     Indices: Mapping[str, int],
-    Entities: Mapping[str, Mapping[str, Any]],
+    Entities: Mapping[str, Mapping[str, object]],
 ) -> list[tuple[int, int]] | None:
     for LineRef, PointRef in (
         (References[0], References[1]),
@@ -1981,9 +2032,9 @@ def MidpointPair(
 
 # this definition exists because three reference midpoint rules need explicit endpoint grouping
 def MidpointTriple(
-    References: list[dict[str, Any]],
+    References: list[dict[str, object]],
     Indices: Mapping[str, int],
-    Entities: Mapping[str, Mapping[str, Any]],
+    Entities: Mapping[str, Mapping[str, object]],
 ) -> list[tuple[int, int]] | None:
     Resolved = [
         (TextAction(RefValue.get("entity_id")), RefPoint(RefValue.get("point")))
@@ -2018,9 +2069,9 @@ def MidpointTriple(
 
 # this definition exists because midpoint constraints accept two native reference layouts
 def MidpointSlots(
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     Indices: Mapping[str, int],
-    Entities: Mapping[str, Mapping[str, Any]],
+    Entities: Mapping[str, Mapping[str, object]],
 ) -> list[tuple[int, int]] | None:
     References = Items(RuleValue.get("references", []))
     if len(References) == 2:
@@ -2032,7 +2083,7 @@ def MidpointSlots(
 
 # this definition exists because focused behavior needs one stable owner
 def RuleDiag(
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     KindValue: str,
     CodeValue: str,
     ModeValue: str,
@@ -2040,8 +2091,8 @@ def RuleDiag(
     Severity: str,
     NativeKind: str = "",
     CarrierReason: str = "",
-) -> dict[str, AnyValue]:
-    Result = {
+) -> dict[str, object]:
+    Result: dict[str, object] = {
         "code": CodeValue,
         "constraint_id": TextAction(RuleValue.get("id")),
         "kind": KindValue,
@@ -2057,10 +2108,10 @@ def RuleDiag(
 
 
 # this definition exists because focused behavior needs one stable owner
-def RuleCarrier(RuleValue: Mapping[str, Any], NativeRule: bool) -> str:
+def RuleCarrier(RuleValue: Mapping[str, object], NativeRule: bool) -> str:
     KindValue = TextAction(EnumAction(RuleValue.get("kind"))).casefold()
     Attributes = RuleValue.get("attributes", {})
-    HasNativeAttributes = isinstance(Attributes, Mapping) and any(
+    HasNativeAttributes = IsPayloadMap(Attributes) and any(
         (
             TextAction(KeyValue).casefold().startswith("native_")
             for KeyValue in Attributes
@@ -2076,12 +2127,12 @@ def RuleCarrier(RuleValue: Mapping[str, Any], NativeRule: bool) -> str:
 # this class exists because constraint conversion coordinates correlated mutable collections
 @Dataclass
 class RuleState:
-    EntityItems: list[dict[str, Any]]
-    Entities: dict[str, Mapping[str, Any]]
-    Encoded: list[dict[str, AnyValue]]
+    EntityItems: list[dict[str, object]]
+    Entities: Mapping[str, Mapping[str, object]]
+    Encoded: list[dict[str, object]]
     Expressions: list[tuple[str, str]]
     Dependencies: list[str]
-    Diagnostics: list[dict[str, AnyValue]]
+    Diagnostics: list[dict[str, object]]
     RuleNames: set[str]
     FixedEntities: set[str]
     ProfileIds: set[str]
@@ -2092,7 +2143,7 @@ class RuleState:
 
 # this definition exists because constraint conversion state must share one entity index
 def CreateRuleState(
-    Sketch: Mapping[str, Any],
+    Sketch: Mapping[str, object],
     Indices: Mapping[str, int],
     Parameters: _Parameters,
     ProfileOnly: bool,
@@ -2123,9 +2174,9 @@ def CreateRuleState(
 
 # this definition exists because profile replay activates only statically proven constraints
 def IsProfileRule(
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     KindValue: str,
-    References: list[dict[str, Any]],
+    References: list[dict[str, object]],
     State: RuleState,
 ) -> bool:
     if not State.ProfileOnly:
@@ -2159,14 +2210,12 @@ def IsProfileRule(
 
 # this definition exists because native constraint metadata has two supported layouts
 def RuleSources(
-    RuleValue: Mapping[str, Any],
-) -> tuple[Mapping[str, Any], Mapping[str, Any], Any, bool]:
-    SourceAttrs = RuleValue.get("attributes", {})
-    if not isinstance(SourceAttrs, Mapping):
-        SourceAttrs = {}
-    RawAttrs = SourceAttrs.get("freecad", {})
-    if not isinstance(RawAttrs, Mapping):
-        RawAttrs = {}
+    RuleValue: Mapping[str, object],
+) -> tuple[Mapping[str, object], Mapping[str, object], object, bool]:
+    SourceValue = RuleValue.get("attributes")
+    SourceAttrs: Mapping[str, object] = SourceValue if IsPayloadMap(SourceValue) else {}
+    RawValue = SourceAttrs.get("freecad")
+    RawAttrs: Mapping[str, object] = RawValue if IsPayloadMap(RawValue) else {}
     SourceCode = SourceAttrs.get("freecad_type_code", RawAttrs.get("Type"))
     return (SourceAttrs, RawAttrs, SourceCode, SourceCode is not None or bool(RawAttrs))
 
@@ -2174,7 +2223,7 @@ def RuleSources(
 # this definition exists because constraint carrier diagnostics share one stable schema
 def AddRuleDiagMut(
     State: RuleState,
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     KindValue: str,
     Reason: str,
     NativeRule: bool,
@@ -2194,9 +2243,9 @@ def AddRuleDiagMut(
 
 # this definition exists because midpoint rules require a composed native type
 def RuleCodeData(
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     KindValue: str,
-    SourceCode: Any,
+    SourceCode: object,
     State: RuleState,
 ) -> tuple[int | None, list[tuple[int, int]] | None, tuple[str, str] | None, str]:
     if KindValue == "midpoint" and SourceCode is None:
@@ -2226,7 +2275,7 @@ def RuleCodeData(
 
 # this definition exists because stored reference slots need one normalized tuple representation
 def StoredRuleSlots(
-    SourceAttrs: Mapping[str, Any], RawAttrs: Mapping[str, Any]
+    SourceAttrs: Mapping[str, object], RawAttrs: Mapping[str, object]
 ) -> list[tuple[int, int, str]]:
     SourceSlots = Items(SourceAttrs.get("freecad_reference_slots", []))
     if SourceSlots:
@@ -2267,7 +2316,7 @@ def ResolveStored(
 
 # this definition exists because neutral references must map through the emitted geometry index
 def ResolveNeutral(
-    References: list[dict[str, Any]], KindValue: str, State: RuleState
+    References: list[dict[str, object]], KindValue: str, State: RuleState
 ) -> list[tuple[int, int]]:
     Resolved: list[tuple[int, int]] = []
     for RefValue in References:
@@ -2306,8 +2355,8 @@ def ComposeRule(
 
 # this definition exists because every encoded constraint needs a collision free name
 def RuleNameMut(
-    RuleValue: Mapping[str, Any],
-    RawAttrs: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
+    RawAttrs: Mapping[str, object],
     NativeRule: bool,
     RuleNamesMut: set[str],
 ) -> str:
@@ -2327,13 +2376,13 @@ def RuleNameMut(
 
 # this definition exists because encoded rule records feed both xml and expression assembly
 def RuleRecord(
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     CodeValue: int,
     Value: float,
     NameValue: str,
     Resolved: list[tuple[int, int]],
-    RawAttrs: Mapping[str, Any],
-) -> dict[str, AnyValue]:
+    RawAttrs: Mapping[str, object],
+) -> dict[str, object]:
     Elements = Resolved + [(-2000, 0)] * max(0, 3 - len(Resolved))
     Values = Elements[:3]
     return {
@@ -2353,7 +2402,7 @@ def RuleRecord(
 # this definition exists because dimensional rules can remain linked to parameter expressions
 def AddRuleExprMut(
     State: RuleState,
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     ParamId: str,
     CodeValue: int,
     NameValue: str,
@@ -2379,7 +2428,7 @@ def AddRuleExprMut(
 
 
 # this definition exists because one source constraint updates all correlated transfer state
-def AppendRuleMut(State: RuleState, RuleValue: Mapping[str, Any]) -> None:
+def AppendRuleMut(State: RuleState, RuleValue: Mapping[str, object]) -> None:
     KindValue = TextAction(EnumAction(RuleValue.get("kind"))).lower()
     References = Items(RuleValue.get("references", []))
     if not IsProfileRule(RuleValue, KindValue, References, State):
@@ -2434,10 +2483,10 @@ def AppendRuleMut(State: RuleState, RuleValue: Mapping[str, Any]) -> None:
 # this definition exists because successful constraint encoding updates values diagnostics and links
 def AddEncodedMut(
     State: RuleState,
-    RuleValue: Mapping[str, Any],
+    RuleValue: Mapping[str, object],
     KindValue: str,
-    SourceAttrs: Mapping[str, Any],
-    RawAttrs: Mapping[str, Any],
+    SourceAttrs: Mapping[str, object],
+    RawAttrs: Mapping[str, object],
     NativeRule: bool,
     CodeValue: int,
     Resolved: list[tuple[int, int]],
@@ -2501,16 +2550,32 @@ def AddFixedMut(State: RuleState) -> None:
 
 
 # this definition exists because constraint records need canonical freecad xml attributes
-def RuleXmlAttrs(ItemValue: Mapping[str, Any]) -> dict[str, str]:
-    First, Second, Third = (
-        ItemValue["first"],
-        ItemValue["second"],
-        ItemValue["third"],
+def IntPair(Value: object) -> tuple[int, int]:  # lgtm[py/mixed-returns]
+    match Value:
+        case (int() as First, int() as Second):
+            return (First, Second)
+        case _:
+            raise ValueError("constraint reference slot must contain two integers")
+
+
+# this definition exists because constraint records require validated reference slot sequences
+def IntPairs(Value: object) -> list[tuple[int, int]]:
+    if not IsPayloadSeq(Value):
+        raise ValueError("constraint reference slots must be a sequence")
+    return [IntPair(ItemValue) for ItemValue in Value]
+
+
+# this definition exists because constraint records need canonical freecad xml attributes
+def RuleXmlAttrs(ItemValue: Mapping[str, object]) -> dict[str, str]:
+    First = IntPair(ItemValue.get("first"))
+    Second = IntPair(ItemValue.get("second"))
+    Third = IntPair(ItemValue.get("third"))
+    Elements = IntPairs(ItemValue.get("elements"))
+    AttributeValue = ItemValue.get("attributes")
+    AttributeMap: Mapping[str, object] = (
+        AttributeValue if IsPayloadMap(AttributeValue) else {}
     )
-    Elements = ItemValue["elements"]
-    Attributes = {
-        str(KeyValue): str(Value) for KeyValue, Value in ItemValue["attributes"].items()
-    }
+    Attributes = {KeyValue: str(Value) for KeyValue, Value in AttributeMap.items()}
     if not Attributes:
         Attributes.update(
             {
@@ -2524,11 +2589,11 @@ def RuleXmlAttrs(ItemValue: Mapping[str, Any]) -> dict[str, str]:
         )
     Attributes.update(
         {
-            "Name": ItemValue["name"],
+            "Name": TextAction(ItemValue.get("name")),
             "Type": str(ItemValue["type"]),
             "Value": FmtAction(ItemValue["value"]),
-            "IsDriving": "1" if ItemValue["driving"] else "0",
-            "IsActive": "1" if ItemValue["active"] else "0",
+            "IsDriving": "1" if bool(ItemValue.get("driving")) else "0",
+            "IsActive": "1" if bool(ItemValue.get("active")) else "0",
             "First": str(First[0]),
             "FirstPos": str(First[1]),
             "Second": str(Second[0]),
@@ -2543,7 +2608,7 @@ def RuleXmlAttrs(ItemValue: Mapping[str, Any]) -> dict[str, str]:
 
 
 # this definition exists because encoded constraints need one ordered property container
-def BuildRuleProp(Encoded: list[dict[str, AnyValue]]) -> XmlTree.Element:
+def BuildRuleProp(Encoded: list[dict[str, object]]) -> XmlTree.Element:
     Result = PropAction("Constraints", "Sketcher::PropertyConstraintList")
     RuleList = XmlTree.SubElement(
         Result, "ConstraintList", {"count": str(len(Encoded))}
@@ -2555,13 +2620,11 @@ def BuildRuleProp(Encoded: list[dict[str, AnyValue]]) -> XmlTree.Element:
 
 # this definition exists because sketch constraints coordinate native encoding diagnostics and links
 def ConstraintsProp(
-    Sketch: Mapping[str, Any],
+    Sketch: Mapping[str, object],
     Indices: Mapping[str, int],
     Parameters: _Parameters,
     ProfileOnly: bool = False,
-) -> tuple[
-    XmlTree.Element, list[tuple[str, str]], list[str], list[dict[str, AnyValue]]
-]:
+) -> tuple[XmlTree.Element, list[tuple[str, str]], list[str], list[dict[str, object]]]:
     State = CreateRuleState(Sketch, Indices, Parameters, ProfileOnly)
     for RuleValue in Items(Sketch.get("constraints", [])):
         AppendRuleMut(State, RuleValue)
@@ -2575,18 +2638,18 @@ def ConstraintsProp(
 
 
 # this definition exists because native sketch metadata may be absent or malformed
-def SketchCarrier(Sketch: Mapping[str, Any]) -> Mapping[str, Any]:
-    SketchAttrs = Sketch.get("attributes", {})
-    NativeObject = (
-        SketchAttrs.get("freecad", {}) if isinstance(SketchAttrs, Mapping) else {}
-    )
-    return NativeObject if isinstance(NativeObject, Mapping) else {}
+def SketchCarrier(Sketch: Mapping[str, object]) -> Mapping[str, object]:
+    SketchAttrs = Sketch.get("attributes")
+    if not IsPayloadMap(SketchAttrs):
+        return {}
+    NativeObject = SketchAttrs.get("freecad")
+    return NativeObject if IsPayloadMap(NativeObject) else {}
 
 
 # this definition exists because sketch transfer warnings share one optional property
 def SketchDiagProp(
-    GeomDiagnostics: list[dict[str, AnyValue]],
-    RuleDiagnostics: list[dict[str, AnyValue]],
+    GeomDiagnostics: list[dict[str, object]],
+    RuleDiagnostics: list[dict[str, object]],
 ) -> XmlTree.Element | None:
     Diagnostics = [*GeomDiagnostics, *RuleDiagnostics]
     return JsonProp("KitSketchDiagnosticsJSON", Diagnostics) if Diagnostics else None
@@ -2617,10 +2680,10 @@ def SketchLinks(Properties: list[XmlTree.Element], PlaneName: str) -> list[str]:
 
 # this definition exists because native sketch properties need selective semantic replacement
 def PatchSketchMut(
-    Sketch: Mapping[str, Any],
-    NativeObject: Mapping[str, Any],
+    Sketch: Mapping[str, object],
+    NativeObject: Mapping[str, object],
     PlaneName: str,
-    Transform: Mapping[str, Any],
+    Transform: Mapping[str, object],
     GeomValue: XmlTree.Element,
     Constraints: XmlTree.Element,
     DiagnosticsProp: XmlTree.Element | None,
@@ -2658,9 +2721,9 @@ def PatchSketchMut(
 
 # this definition exists because neutral sketches need one canonical property sequence
 def NeutralSketch(
-    Sketch: Mapping[str, Any],
+    Sketch: Mapping[str, object],
     PlaneName: str,
-    Transform: Mapping[str, Any],
+    Transform: Mapping[str, object],
     GeomValue: XmlTree.Element,
     Constraints: XmlTree.Element,
     Expressions: list[tuple[str, str]],
@@ -2688,17 +2751,16 @@ def NeutralSketch(
 
 # this definition exists because sketch assembly coordinates geometry constraints and plane links
 def BuildSketch(
-    Sketch: Mapping[str, Any],
-    Plane: Mapping[str, Any],
+    Sketch: Mapping[str, object],
+    Plane: Mapping[str, object],
     PlaneName: str,
     Parameters: _Parameters,
     PreserveNative: bool = False,
     ProfileConstraintsOnly: bool = False,
 ) -> tuple[list[XmlTree.Element], list[str]]:
-    Transform = (
-        Plane.get("transform", {})
-        if isinstance(Plane.get("transform"), Mapping)
-        else {}
+    TransformValue = Plane.get("transform")
+    Transform: Mapping[str, object] = (
+        TransformValue if IsPayloadMap(TransformValue) else {}
     )
     GeomValue, Indices, GeomDiagnostics = GeomProp(Sketch)
     Constraints, Expressions, Dependencies, RuleDiagnostics = ConstraintsProp(
@@ -2706,10 +2768,8 @@ def BuildSketch(
     )
     DiagnosticsProp = SketchDiagProp(GeomDiagnostics, RuleDiagnostics)
     NativeObject = SketchCarrier(Sketch)
-    NativeProperties = (
-        NativeObject.get("properties", {}) if isinstance(NativeObject, Mapping) else {}
-    )
-    if isinstance(NativeProperties, Mapping) and NativeProperties:
+    NativeProperties = NativeObject.get("properties")
+    if IsPayloadMap(NativeProperties) and NativeProperties:
         return PatchSketchMut(
             Sketch,
             NativeObject,
@@ -2738,18 +2798,18 @@ def BuildSketch(
 
 # this definition exists because focused behavior needs one stable owner
 def NativeSketch(
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
 ) -> tuple[tuple[int, int, frozenset[str]], ...]:
     Parameters = ParamCatalog(Items(Manifest.get("parameters", [])))
     Source = Manifest.get("source", {})
     ProfileConstraintsOnly = (
-        isinstance(Source, Mapping)
+        IsPayloadMap(Source)
         and TextAction(Source.get("format_id")) == "solidworks.sldprt"
     )
     Result: list[tuple[int, int, frozenset[str]]] = []
     for Sketch in Items(Manifest.get("sketches", [])):
         GeomValue, Indices, GeomDiagnostics = GeomProp(Sketch)
-        Constraints, Ignored, Ignored, RuleDiagnostics = ConstraintsProp(
+        Constraints, _, _, RuleDiagnostics = ConstraintsProp(
             Sketch, Indices, Parameters, ProfileOnly=ProfileConstraintsOnly
         )
         Diagnostics = (*GeomDiagnostics, *RuleDiagnostics)
@@ -2780,8 +2840,8 @@ def NativeSketch(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeClosed(Sketch: Mapping[str, Any]) -> int:
-    Ignored, Indices, Ignored = GeomProp(Sketch)
+def NativeClosed(Sketch: Mapping[str, object]) -> int:
+    _, Indices, _ = GeomProp(Sketch)
     Emitted = set(Indices)
     Result = 0
     for Value in Sequence(Sketch.get("closed_profile_entity_ids", [])):
@@ -2869,12 +2929,12 @@ def HasSegmentTouch(
 
 # this definition exists because profile lines need validated nondegenerate endpoints
 def ProfileSegments(
-    Entities: list[Mapping[str, Any]],
+    Entities: ValueSequence[Mapping[str, object]],
 ) -> list[tuple[tuple[float, float], tuple[float, float]]] | None:
     Segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
     for Entity in Entities:
         GeomValue = Entity.get("geometry", {})
-        if not isinstance(GeomValue, Mapping):
+        if not IsPayloadMap(GeomValue):
             return None
         Start = PointTwo(GeomValue.get("start"))
         EndValue = PointTwo(GeomValue.get("end"))
@@ -2936,7 +2996,7 @@ def HasProfileCross(Points: list[tuple[float, float]]) -> bool:
 
 # this definition exists because profile validation must reject gaps degeneracy and intersections
 def LineProfile(
-    Entities: list[Mapping[str, Any]],
+    Entities: ValueSequence[Mapping[str, object]],
 ) -> tuple[tuple[float, float], ...] | None:
     Segments = ProfileSegments(Entities)
     if Segments is None:
@@ -2970,15 +3030,34 @@ def PointSegment(
     return MathValue.hypot(Point[0] - Projection[0], Point[1] - Projection[1])
 
 
+# this definition exists because circle profiles require validated center and radius values
+def CircleProfile(Value: object) -> tuple[tuple[float, float], float] | None:
+    if not IsPayloadSeq(Value) or len(Value) != 2:
+        return None
+    return (PointTwo(Value[0]), Number(Value[1]))
+
+
+# this definition exists because polygon profiles require at least three validated points
+def PolygonProfile(Value: object) -> tuple[tuple[float, float], ...] | None:
+    if not IsPayloadSeq(Value):
+        return None
+    PointsValue = tuple(PointTwo(ItemValue) for ItemValue in Value)
+    return PointsValue if len(PointsValue) >= 3 else None
+
+
 # this definition exists because focused behavior needs one stable owner
 def IsProfile(
-    First: tuple[str, Any], Second: tuple[str, Any], Tolerance: float = 1e-07
+    First: tuple[str, object], Second: tuple[str, object], Tolerance: float = 1e-07
 ) -> bool:
     FirstKind, FirstValue = First
     SecondKind, SecondValue = Second
     if FirstKind == "circle" and SecondKind == "circle":
-        FirstCenter, FirstRadius = FirstValue
-        SecondCenter, SecondRadius = SecondValue
+        FirstCircle = CircleProfile(FirstValue)
+        SecondCircle = CircleProfile(SecondValue)
+        if FirstCircle is None or SecondCircle is None:
+            return False
+        FirstCenter, FirstRadius = FirstCircle
+        SecondCenter, SecondRadius = SecondCircle
         Distance = MathValue.hypot(
             FirstCenter[0] - SecondCenter[0], FirstCenter[1] - SecondCenter[1]
         )
@@ -2988,21 +3067,27 @@ def IsProfile(
             <= FirstRadius + SecondRadius + Tolerance
         )
     if FirstKind == "polygon" and SecondKind == "polygon":
+        FirstPolygon = PolygonProfile(FirstValue)
+        SecondPolygon = PolygonProfile(SecondValue)
+        if FirstPolygon is None or SecondPolygon is None:
+            return False
         FirstSegments = list(
-            zip(FirstValue, FirstValue[1:] + FirstValue[:1], strict=True)
+            zip(FirstPolygon, FirstPolygon[1:] + FirstPolygon[:1], strict=True)
         )
         SecondSegments = list(
-            zip(SecondValue, SecondValue[1:] + SecondValue[:1], strict=True)
+            zip(SecondPolygon, SecondPolygon[1:] + SecondPolygon[:1], strict=True)
         )
         return any(
             (
-                HasSegmentTouch(*FirstSegment, *SecondSegment, Tolerance)
+                HasSegmentTouch(*FirstSegment, *SecondSegment, Tolerance=Tolerance)
                 for FirstSegment in FirstSegments
                 for SecondSegment in SecondSegments
             )
         )
-    Circle = FirstValue if FirstKind == "circle" else SecondValue
-    Polygon = FirstValue if FirstKind == "polygon" else SecondValue
+    Circle = CircleProfile(FirstValue if FirstKind == "circle" else SecondValue)
+    Polygon = PolygonProfile(FirstValue if FirstKind == "polygon" else SecondValue)
+    if Circle is None or Polygon is None:
+        return False
     Center, Radius = Circle
     return any(
         (
@@ -3018,14 +3103,14 @@ def IsProfile(
 
 
 # this definition exists because focused behavior needs one stable owner
-def HasNativeProf(Sketch: Mapping[str, Any]) -> bool:
-    Ignored, Indices, Ignored = GeomProp(Sketch)
+def HasNativeProf(Sketch: Mapping[str, object]) -> bool:
+    _, Indices, _ = GeomProp(Sketch)
     Entities = {
         TextAction(Entity.get("id")): Entity
         for Entity in Items(Sketch.get("entities", []))
         if TextAction(Entity.get("id"))
     }
-    Profiles: list[tuple[str, AnyValue]] = []
+    Profiles: list[tuple[str, object]] = []
     for RawProfile in Sequence(Sketch.get("closed_profile_entity_ids", [])):
         Identifiers = [
             TextAction(Value) for Value in Sequence(RawProfile) if TextAction(Value)
@@ -3039,7 +3124,7 @@ def HasNativeProf(Sketch: Mapping[str, Any]) -> bool:
         ]
         if Kinds == ["circle"]:
             GeomValue = ProfileEntities[0].get("geometry", {})
-            if not isinstance(GeomValue, Mapping):
+            if not IsPayloadMap(GeomValue):
                 return False
             Radius = abs(Number(GeomValue.get("radius")))
             if Radius <= 1e-09:
@@ -3065,11 +3150,9 @@ def HasNativeProf(Sketch: Mapping[str, Any]) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeShape(Manifest: Mapping[str, Any]) -> int:
+def NativeShape(Manifest: Mapping[str, object]) -> int:
     Source = Manifest.get("source", {})
-    SourceFormatId = (
-        TextAction(Source.get("format_id")) if isinstance(Source, Mapping) else ""
-    )
+    SourceFormatId = TextAction(Source.get("format_id")) if IsPayloadMap(Source) else ""
     Sketches = {
         TextAction(Sketch.get("id")): Sketch
         for Sketch in Items(Manifest.get("sketches", []))
@@ -3083,12 +3166,14 @@ def NativeShape(Manifest: Mapping[str, Any]) -> int:
             EnumAction(Feature.get("kind"))
         ).casefold() != "extrusion" or bool(Feature.get("suppressed")):
             continue
-        Definition = Feature.get("definition", {})
-        Attributes = Feature.get("attributes", {})
-        if not isinstance(Definition, Mapping):
-            Definition = {}
-        if not isinstance(Attributes, Mapping):
-            Attributes = {}
+        DefinitionValue = Feature.get("definition")
+        Definition: Mapping[str, object] = (
+            DefinitionValue if IsPayloadMap(DefinitionValue) else {}
+        )
+        AttributeValue = Feature.get("attributes")
+        Attributes: Mapping[str, object] = (
+            AttributeValue if IsPayloadMap(AttributeValue) else {}
+        )
         if (
             max(
                 abs(
@@ -3111,20 +3196,18 @@ def NativeShape(Manifest: Mapping[str, Any]) -> int:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeSketchB(Manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
-    return tuple(
-        ((Native, Carrier) for Native, Carrier, Ignored in NativeSketch(Manifest))
-    )
+def NativeSketchB(Manifest: Mapping[str, object]) -> tuple[tuple[int, int], ...]:
+    return tuple(((Native, Carrier) for Native, Carrier, _ in NativeSketch(Manifest)))
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeSketchA(Manifest: Mapping[str, Any]) -> tuple[frozenset[str], ...]:
-    return tuple((Reasons for Ignored, Ignored, Reasons in NativeSketch(Manifest)))
+def NativeSketchA(Manifest: Mapping[str, object]) -> tuple[frozenset[str], ...]:
+    return tuple((Reasons for _, _, Reasons in NativeSketch(Manifest)))
 
 
 # this definition exists because focused behavior needs one stable owner
 def FeatureParam(
-    Feature: Mapping[str, Any], Parameters: _Parameters, Expected: float
+    Feature: Mapping[str, object], Parameters: _Parameters, Expected: float
 ) -> str:
     IdsValue = [
         TextAction(Value) for Value in Sequence(Feature.get("parameter_ids", []))
@@ -3147,7 +3230,7 @@ def FeatureParam(
 
 
 # this definition exists because focused behavior needs one stable owner
-def FeatureMeta(Feature: Mapping[str, Any], RoleValue: str) -> list[XmlTree.Element]:
+def FeatureMeta(Feature: Mapping[str, object], RoleValue: str) -> list[XmlTree.Element]:
     return [
         StringProp("KitId", Feature.get("id"), Dynamic=True),
         StringProp("KitRole", RoleValue, Dynamic=True),
@@ -3160,7 +3243,7 @@ def FeatureMeta(Feature: Mapping[str, Any], RoleValue: str) -> list[XmlTree.Elem
 
 
 # this definition exists because focused behavior needs one stable owner
-def DefinitionProp(NameValue: str, Value: Any) -> XmlTree.Element | None:
+def DefinitionProp(NameValue: str, Value: object) -> XmlTree.Element | None:
     PropName = "Definition" + SafeAction(NameValue, "Value")
     if isinstance(Value, bool):
         return BoolProp(PropName, Value, Dynamic=True)
@@ -3170,7 +3253,7 @@ def DefinitionProp(NameValue: str, Value: Any) -> XmlTree.Element | None:
         return FloatProp(PropName, Value, Dynamic=True)
     if isinstance(Value, str):
         return StringProp(PropName, Value, Dynamic=True)
-    if isinstance(Value, Mapping):
+    if IsPayloadMap(Value):
         ValueType = TextAction(Value.get("$type"))
         if ValueType == "ParameterValue":
             RawValue = Value.get("value")
@@ -3190,15 +3273,17 @@ def DefinitionProp(NameValue: str, Value: Any) -> XmlTree.Element | None:
         KeysValue = set(Value)
         if {"x", "y", "z"} <= KeysValue:
             return VectorProp(PropName, Vector(Value, (0.0, 0.0, 0.0)), Dynamic=True)
-    if isinstance(Value, (list, tuple)) and all(
-        (isinstance(ItemValue, str) for ItemValue in Value)
-    ):
-        return StringListProp(PropName, list(Value), Dynamic=True)
+    if IsPayloadSeq(Value) and all((isinstance(ItemValue, str) for ItemValue in Value)):
+        return StringListProp(
+            PropName,
+            [ItemValue for ItemValue in Value if isinstance(ItemValue, str)],
+            Dynamic=True,
+        )
     return None
 
 
 # this definition exists because focused behavior needs one stable owner
-def DefinitionProps(Definition: Mapping[str, Any]) -> list[XmlTree.Element]:
+def DefinitionProps(Definition: Mapping[str, object]) -> list[XmlTree.Element]:
     Result: list[XmlTree.Element] = []
     for NameValue, Value in Definition.items():
         if NameValue in {"$type", "object_data"}:
@@ -3245,9 +3330,9 @@ def FilletEdgesData(EdgeIndices: list[int], Radius: float) -> bytes:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadBytes(Payload: Mapping[str, Any]) -> bytes | None:
+def PayloadBytes(Payload: Mapping[str, object]) -> bytes | None:
     DataValue = Payload.get("data")
-    if isinstance(DataValue, Mapping):
+    if IsPayloadMap(DataValue):
         if "$bytes" in DataValue:
             try:
                 return BaseSixFour.b64decode(
@@ -3271,7 +3356,7 @@ def PayloadBytes(Payload: Mapping[str, Any]) -> bytes | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadSuffix(Payload: Mapping[str, Any]) -> str:
+def PayloadSuffix(Payload: Mapping[str, object]) -> str:
     Declared = TextAction(Payload.get("file_extension"))
     if RegexLib.fullmatch("\\.[A-Za-z0-9_]{1,16}", Declared):
         return Declared
@@ -3282,22 +3367,22 @@ def PayloadSuffix(Payload: Mapping[str, Any]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadRole(Payload: Mapping[str, Any]) -> str:
+def PayloadRole(Payload: Mapping[str, object]) -> str:
     return TextAction(EnumAction(Payload.get("role"))).lower()
 
 
 # this definition exists because focused behavior needs one stable owner
 def BuildBrepKey(
-    Payload: Mapping[str, Any], DataValue: bytes, NativeDocShaTwoFiveSix: str
+    Payload: Mapping[str, object], DataValue: bytes, NativeDocShaTwoFiveSix: str
 ) -> KNativeBrepKey | None:
     Provenance = Payload.get("provenance")
-    if not isinstance(Provenance, Mapping):
+    if not IsPayloadMap(Provenance):
         return None
     NativeId = TextAction(Provenance.get("native_id"))
     if not NativeDocShaTwoFiveSix or not NativeId:
         return None
     Attributes = Payload.get("attributes", {})
-    if not isinstance(Attributes, Mapping):
+    if not IsPayloadMap(Attributes):
         return None
     Binding = {
         "format_id": Payload.get("format_id"),
@@ -3337,8 +3422,8 @@ def BuildBrepKey(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeDocShaTwo(Manifest: Mapping[str, Any]) -> str:
-    Matches = []
+def NativeDocShaTwo(Manifest: Mapping[str, object]) -> str:
+    Matches: list[str] = []
     for Payload in Items(
         Manifest.get("brep_payloads", Manifest.get("native_payloads", []))
     ):
@@ -3359,9 +3444,9 @@ def NativeDocShaTwo(Manifest: Mapping[str, Any]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadNative(Payload: Mapping[str, Any]) -> str:
+def PayloadNative(Payload: Mapping[str, object]) -> str:
     Attributes = Payload.get("attributes", {})
-    if not isinstance(Attributes, Mapping):
+    if not IsPayloadMap(Attributes):
         return ""
     Value = TextAction(Attributes.get(KNativeDocShaTwoFiveSix)).casefold()
     return Value if RegexLib.fullmatch("[0-9a-f]{64}", Value) is not None else ""
@@ -3369,7 +3454,7 @@ def PayloadNative(Payload: Mapping[str, Any]) -> str:
 
 # this definition exists because focused behavior needs one stable owner
 def FreecadBrep(
-    Payload: Mapping[str, Any],
+    Payload: Mapping[str, object],
     DataValue: bytes,
     NativeDocShaTwoFiveSix: str,
     TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
@@ -3406,21 +3491,21 @@ KIdentityMatrix = (
 
 
 # this definition exists because focused behavior needs one stable owner
-def AsmData(Manifest: Mapping[str, Any]) -> Mapping[str, AnyValue] | None:
+def AsmData(Manifest: Mapping[str, object]) -> Mapping[str, object] | None:
     Value = Manifest.get("assembly")
-    if isinstance(Value, Mapping):
+    if IsPayloadMap(Value):
         return Value
     MetaValue = Manifest.get("metadata", {})
-    if isinstance(MetaValue, Mapping):
+    if IsPayloadMap(MetaValue):
         Value = MetaValue.get("assembly")
-        if isinstance(Value, Mapping):
+        if IsPayloadMap(Value):
             return Value
     return None
 
 
 # this definition exists because focused behavior needs one stable owner
-def MatrixValues(Value: Any) -> tuple[float, ...]:
-    if isinstance(Value, Mapping):
+def MatrixValues(Value: object) -> tuple[float, ...]:
+    if IsPayloadMap(Value):
         Value = Value.get("values", Value.get("matrix", Value))
     Values = tuple((Number(ItemValue) for ItemValue in Sequence(Value)))
     return Values if len(Values) == 16 else KIdentityMatrix
@@ -3445,7 +3530,7 @@ def MatrixProduct(
 
 
 # this definition exists because focused behavior needs one stable owner
-def MatrixTransform(Values: tuple[float, ...]) -> dict[str, AnyValue]:
+def MatrixTransform(Values: tuple[float, ...]) -> dict[str, object]:
     return {
         "origin": {"x": Values[3], "y": Values[7], "z": Values[11]},
         "x_axis": {"x": Values[0], "y": Values[4], "z": Values[8]},
@@ -3456,22 +3541,19 @@ def MatrixTransform(Values: tuple[float, ...]) -> dict[str, AnyValue]:
 
 # this definition exists because focused behavior needs one stable owner
 def MatrixScale(Values: tuple[float, ...]) -> tuple[float, float, float]:
-    return tuple(
-        (
-            MathValue.sqrt(
-                sum((Values[RowValue * 4 + Column] ** 2 for RowValue in range(3)))
-            )
-            for Column in range(3)
-        )
+    return (
+        MathValue.sqrt(sum((Values[RowValue * 4] ** 2 for RowValue in range(3)))),
+        MathValue.sqrt(sum((Values[RowValue * 4 + 1] ** 2 for RowValue in range(3)))),
+        MathValue.sqrt(sum((Values[RowValue * 4 + 2] ** 2 for RowValue in range(3)))),
     )
 
 
 # this definition exists because focused behavior needs one stable owner
 def Expanded(
-    AsmValue: Mapping[str, Any],
-) -> list[tuple[dict[str, AnyValue], tuple[str, ...], tuple[float, ...], bool]]:
+    AsmValue: Mapping[str, object],
+) -> list[tuple[dict[str, object], tuple[str, ...], tuple[float, ...], bool]]:
     Instances = Items(AsmValue.get("instances", AsmValue.get("components", [])))
-    Children: dict[str, list[dict[str, AnyValue]]] = {}
+    Children: dict[str, list[dict[str, object]]] = {}
     for Instance in Instances:
         Owner = TextAction(Instance.get("owner_definition_id"))
         Children.setdefault(Owner, []).append(Instance)
@@ -3485,9 +3567,9 @@ def Expanded(
             )
         )
     RootId = TextAction(AsmValue.get("root_definition_id"))
-    Result: list[
-        tuple[dict[str, AnyValue], tuple[str, ...], tuple[float, ...], bool]
-    ] = []
+    Result: list[tuple[dict[str, object], tuple[str, ...], tuple[float, ...], bool]] = (
+        []
+    )
 
     # this definition exists because focused behavior needs one stable owner
     def Visit(
@@ -3522,7 +3604,7 @@ def MeshProp(FileName: str) -> XmlTree.Element:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Points(Value: Any) -> list[tuple[float, float, float]]:
+def Points(Value: object) -> list[tuple[float, float, float]]:
     Values = Sequence(Value)
     if Values and all((isinstance(ItemValue, (int, float)) for ItemValue in Values)):
         return [
@@ -3537,11 +3619,11 @@ def Points(Value: Any) -> list[tuple[float, float, float]]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TriangleIndices(Value: Any) -> tuple[int, int, int] | None:
+def TriangleIndices(Value: object) -> tuple[int, int, int] | None:
     Marked = Sequence(Value)
     if Marked:
         Values = Marked
-    elif isinstance(Value, Mapping):
+    elif IsPayloadMap(Value):
         Source = Value.get("indices", Value.get("vertices", Value.get("points", [])))
         Values = Sequence(Source)
         if not Values:
@@ -3550,7 +3632,11 @@ def TriangleIndices(Value: Any) -> tuple[int, int, int] | None:
         Values = Sequence(Value)
     if len(Values) < 3:
         return None
-    return tuple((int(Number(ItemValue)) for ItemValue in Values[:3]))
+    return (
+        int(Number(Values[0])),
+        int(Number(Values[1])),
+        int(Number(Values[2])),
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3574,23 +3660,27 @@ def IsTriangleValid(
 
 # this definition exists because focused behavior needs one stable owner
 def Tessellation(
-    Value: Any,
+    Value: object,
 ) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]:
-    if not isinstance(Value, Mapping):
+    if not IsPayloadMap(Value):
         return ([], [])
-    Vertices = Points(Value.get("vertices", Value.get("positions_mm", [])))
-    Triangles = [
+    DirectVertices = Points(Value.get("vertices", Value.get("positions_mm", [])))
+    DirectTriangles = [
         Triangle
         for ItemValue in Sequence(Value.get("triangles", []))
         if (Triangle := TriangleIndices(ItemValue)) is not None
     ]
-    if Vertices and Triangles:
+    if DirectVertices and DirectTriangles:
         return (
-            Vertices,
-            [Triangle for Triangle in Triangles if IsTriangleValid(Vertices, Triangle)],
+            DirectVertices,
+            [
+                Triangle
+                for Triangle in DirectTriangles
+                if IsTriangleValid(DirectVertices, Triangle)
+            ],
         )
-    Vertices = []
-    Triangles = []
+    Vertices: list[tuple[float, float, float]] = []
+    Triangles: list[tuple[int, int, int]] = []
     Faces = Items(Value.get("faces", []))
     for FaceValue in Faces:
         FaceVertices = Points(
@@ -3626,25 +3716,25 @@ def Tessellation(
 
 
 # this definition exists because focused behavior needs one stable owner
-def DefinitionA(Definition: Mapping[str, Any]) -> AnyValue:
+def DefinitionA(Definition: Mapping[str, object]) -> object:
     Direct = Definition.get("tessellation")
-    if isinstance(Direct, Mapping):
+    if IsPayloadMap(Direct):
         return Direct
     Attributes = Definition.get("attributes", {})
-    if isinstance(Attributes, Mapping):
+    if IsPayloadMap(Attributes):
         return Attributes.get("tessellation", {})
     return {}
 
 
 # this definition exists because focused behavior needs one stable owner
 def DefinitionMesh(
-    Manifest: Mapping[str, Any], Definition: Mapping[str, Any]
-) -> list[Mapping[str, AnyValue]]:
+    Manifest: Mapping[str, object], Definition: Mapping[str, object]
+) -> list[Mapping[str, object]]:
     Meshes = {
         TextAction(ItemValue.get("id")): ItemValue
         for ItemValue in Items(Manifest.get("meshes", []))
     }
-    Result = [
+    Result: list[Mapping[str, object]] = [
         Meshes[MeshId]
         for MeshId in (
             TextAction(Value) for Value in Sequence(Definition.get("mesh_ids", []))
@@ -3652,15 +3742,17 @@ def DefinitionMesh(
         if MeshId in Meshes
     ]
     Inline = DefinitionA(Definition)
-    if isinstance(Inline, Mapping) and Inline:
+    if IsPayloadMap(Inline) and Inline:
         Result.append(Inline)
     return Result
 
 
 # this definition exists because mesh triangles need deterministic manifold adjacency metadata
 def MeshNeighbors(Triangles: list[tuple[int, int, int]]) -> list[list[int]]:
-    Neighbors = [[-1, -1, -1] for Ignored in Triangles]
-    EdgeUses: dict[tuple[int, int], tuple[int, ...] | None] = {}
+    Neighbors: list[list[int]] = [[-1, -1, -1] for _ in Triangles]
+    EdgeUses: dict[
+        tuple[int, int], tuple[int, int] | tuple[int, int, int, int] | None
+    ] = {}
     for TriangleIndex, Triangle in enumerate(Triangles):
         for EdgeIndex, EdgeValue in enumerate(
             (
@@ -3669,9 +3761,12 @@ def MeshNeighbors(Triangles: list[tuple[int, int, int]]) -> list[list[int]]:
                 (Triangle[2], Triangle[0]),
             )
         ):
-            KeyValue = tuple(sorted(EdgeValue))
-            Previous = EdgeUses.get(KeyValue, ())
-            if Previous == ():
+            KeyValue = (
+                min(EdgeValue[0], EdgeValue[1]),
+                max(EdgeValue[0], EdgeValue[1]),
+            )
+            Previous = EdgeUses.get(KeyValue)
+            if KeyValue not in EdgeUses:
                 EdgeUses[KeyValue] = (TriangleIndex, EdgeIndex)
             elif Previous is None:
                 continue
@@ -3759,7 +3854,7 @@ def RenamePropLinks(
         elif ElemValue.tag == "LinkSub" and ElemValue.get("value") in Names:
             ElemValue.set("value", Names[ElemValue.get("value", "")])
         FileName = ElemValue.get("file")
-        if FileName in Files:
+        if FileName is not None and FileName in Files:
             ElemValue.set("file", Files[FileName])
         Expression = ElemValue.get("expression")
         if Expression:
@@ -3776,7 +3871,7 @@ def RenamePropLinks(
 
 # this definition exists because imported components must be rendered through the same document writer
 def ImportArchive(
-    DocValue: Mapping[str, Any], TrustedNativeBreps: frozenset[KNativeBrepKey]
+    DocValue: Mapping[str, object], TrustedNativeBreps: frozenset[KNativeBrepKey]
 ) -> tuple[XmlTree.Element, dict[str, bytes]]:
     Canonical = JsonValue.dumps(
         DocValue, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -3925,7 +4020,7 @@ def ImportTarget(
 # this definition exists because component import coordinates names payloads links and target selection
 def ImportCompMut(
     Graph: _Graph,
-    DocValue: Mapping[str, Any],
+    DocValue: Mapping[str, object],
     Prefix: str,
     PayloadEntries: dict[str, bytes],
     TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
@@ -3941,19 +4036,19 @@ def ImportCompMut(
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateJointType(KindValue: Any) -> str | None:
+def MateJointType(KindValue: object) -> str | None:
     return JointTypeByMateKind.get(TextAction(EnumAction(KindValue)).lower())
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateScalar(Value: Any) -> float:
-    if isinstance(Value, Mapping):
+def MateScalar(Value: object) -> float:
+    if IsPayloadMap(Value):
         return Number(Value.get("value"))
     return Number(Value)
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateSubelements(Entity: Mapping[str, Any]) -> list[str]:
+def MateSubelements(Entity: Mapping[str, object]) -> list[str]:
     for Value in (
         TextAction(Entity.get("source_entity_id")),
         TextAction(Entity.get("selection_id")),
@@ -3964,11 +4059,11 @@ def MateSubelements(Entity: Mapping[str, Any]) -> list[str]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Without(Value: Mapping[str, Any]) -> dict[str, AnyValue]:
+def Without(Value: Mapping[str, object]) -> dict[str, object]:
     Result = dict(Value)
     Result.pop("tessellation", None)
     Attributes = Result.get("attributes")
-    if isinstance(Attributes, Mapping):
+    if IsPayloadMap(Attributes):
         Cleaned = dict(Attributes)
         Cleaned.pop("tessellation", None)
         Result["attributes"] = Cleaned
@@ -3976,7 +4071,7 @@ def Without(Value: Mapping[str, Any]) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def AddOriginMut(Graph: _Graph, AsmValue: _Object) -> str:
+def AddOriginMut(Graph: _Graph, AsmValue: Object) -> str:
     Origin = Graph.add(
         "App::Origin",
         f"{AsmValue.name}_Origin",
@@ -4206,9 +4301,9 @@ def GroundJointMut(
     Component: str,
     Label: str,
     Placement: tuple[float, ...],
-    Source: Mapping[str, Any] | None = None,
+    Source: Mapping[str, object] | None = None,
 ) -> Object:
-    Source = Source if isinstance(Source, Mapping) else {}
+    Source = Source if IsPayloadMap(Source) else {}
     Joint = Graph.add(
         TextAction(Source.get("type_id"), "App::FeaturePython"),
         Source.get("name", f"Grounded_{Label}"),
@@ -4239,27 +4334,27 @@ def ReplaceNameMut(
 @Dataclass
 class AsmContext:
     Graph: _Graph
-    Manifest: Mapping[str, Any]
+    Manifest: Mapping[str, object]
     PayloadEntries: dict[str, bytes]
-    OuterLinks: Mapping[str, Mapping[str, Any]]
+    OuterLinks: Mapping[str, Mapping[str, object]]
     TrustedBreps: frozenset[KNativeBrepKey]
-    Assembly: Mapping[str, Any]
+    Assembly: Mapping[str, object]
     Parameters: _Parameters
-    Definitions: list[dict[str, Any]]
-    Documents: dict[str, Any]
+    Definitions: list[dict[str, object]]
+    Documents: dict[str, object]
     RootDefId: str
-    DefinitionsById: dict[str, dict[str, Any]]
-    InstancesById: dict[str, dict[str, Any]]
+    DefinitionsById: dict[str, dict[str, object]]
+    InstancesById: dict[str, dict[str, object]]
 
 
 # this class exists because assembly root objects share native source metadata
 @Dataclass
 class AsmRoot:
     RootLabel: str
-    NativeRoot: Mapping[str, Any]
-    GroupItems: list[dict[str, Any]]
-    NativeJointGroup: Mapping[str, Any] | None
-    NativeJoint: Mapping[str, Any]
+    NativeRoot: Mapping[str, object]
+    GroupItems: list[dict[str, object]]
+    NativeJointGroup: Mapping[str, object] | None
+    NativeJoint: Mapping[str, object]
     RootObject: Object
     RootOrigin: str
     DefinitionsGroup: Object
@@ -4273,13 +4368,13 @@ class AsmRoot:
 class AsmItems:
     DefinitionObjects: list[str]
     DefinitionTargets: dict[str, str]
-    DefinitionOuter: dict[str, Mapping[str, AnyValue]]
-    DirectInstances: list[dict[str, Any]]
+    DefinitionOuter: dict[str, Mapping[str, object]]
+    DirectInstances: list[dict[str, object]]
     ItemObjects: list[str]
     ItemByPath: dict[tuple[str, ...], str]
     ItemByNativeName: dict[str, str]
     ProxyChainByPath: dict[tuple[str, ...], tuple[str, ...]]
-    AsmLinkRecords: list[tuple[tuple[str, ...], Object, Mapping[str, AnyValue]]]
+    AsmLinkRecords: list[tuple[tuple[str, ...], Object, Mapping[str, object]]]
     RigidInstanceIds: set[str]
     GroundedObjects: list[str]
 
@@ -4287,12 +4382,12 @@ class AsmItems:
 # this class exists because mate transfer shares entity component and object indexes
 @Dataclass
 class AsmMates:
-    EntityItems: list[dict[str, Any]]
+    EntityItems: list[dict[str, object]]
     EntityObjects: list[str]
     EntityNames: dict[str, str]
     EntityComponents: dict[str, str]
     EntityPrefixes: dict[str, str]
-    MateItems: list[dict[str, Any]]
+    MateItems: list[dict[str, object]]
     MateObjects: list[str]
     MateNames: dict[str, str]
 
@@ -4305,9 +4400,9 @@ def CreateAsmItems() -> AsmItems:
 # this definition exists because assembly conversion needs one validated indexed source context
 def BuildAsmContext(
     Graph: _Graph,
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     PayloadEntries: dict[str, bytes],
-    OuterLinks: Mapping[str, Mapping[str, Any]],
+    OuterLinks: Mapping[str, Mapping[str, object]],
     TrustedBreps: frozenset[KNativeBrepKey],
 ) -> AsmContext | None:
     Assembly = AsmData(Manifest)
@@ -4317,7 +4412,7 @@ def BuildAsmContext(
     Documents = {
         TextAction(Value.get("id")): Value.get("document")
         for Value in Items(Assembly.get("documents", []))
-        if isinstance(Value.get("document"), Mapping)
+        if IsPayloadMap(Value.get("document"))
     }
     RootDefId = TextAction(Assembly.get("root_definition_id"))
     DefinitionsById = {TextAction(Value.get("id")): Value for Value in Definitions}
@@ -4342,12 +4437,12 @@ def BuildAsmContext(
 
 
 # this definition exists because ordered assembly records share the same stable sort key
-def OrderedSource(Value: Mapping[str, Any]) -> tuple[int, str]:
+def OrderedSource(Value: Mapping[str, object]) -> tuple[int, str]:
     return (int(Number(Value.get("order"))), TextAction(Value.get("id")))
 
 
 # this definition exists because root mate groups require deterministic source ordering
-def RootGroupItems(Context: AsmContext) -> list[dict[str, Any]]:
+def RootGroupItems(Context: AsmContext) -> list[dict[str, object]]:
     return sorted(
         (
             Group
@@ -4361,23 +4456,31 @@ def RootGroupItems(Context: AsmContext) -> list[dict[str, Any]]:
 
 
 # this definition exists because root objects must preserve native assembly and joint metadata
+def NativeGroupData(Group: Mapping[str, object]) -> Mapping[str, object] | None:
+    Attributes = Group.get("attributes")
+    if not IsPayloadMap(Attributes):
+        return None
+    NativeValue = Attributes.get("freecad")
+    return NativeValue if IsPayloadMap(NativeValue) else None
+
+
+# this definition exists because root objects must preserve native assembly and joint metadata
 def BuildAsmRootMut(Context: AsmContext) -> AsmRoot:
     RootDefinition = Context.DefinitionsById.get(Context.RootDefId, {})
     RootLabel = TextAction(RootDefinition.get("name"), "Assembly")
-    AsmAttrs = Context.Assembly.get("attributes", {})
-    NativeRoot = AsmAttrs.get("freecad", {}) if isinstance(AsmAttrs, Mapping) else {}
-    NativeRoot = NativeRoot if isinstance(NativeRoot, Mapping) else {}
+    AsmAttrValue = Context.Assembly.get("attributes")
+    AsmAttrs: Mapping[str, object] = AsmAttrValue if IsPayloadMap(AsmAttrValue) else {}
+    NativeRootValue = AsmAttrs.get("freecad")
+    NativeRoot: Mapping[str, object] = (
+        NativeRootValue if IsPayloadMap(NativeRootValue) else {}
+    )
     GroupItems = RootGroupItems(Context)
     NativeGroup = next(
-        (
-            Group
-            for Group in GroupItems
-            if isinstance(Group.get("attributes"), Mapping)
-            and isinstance(Group["attributes"].get("freecad"), Mapping)
-        ),
+        (Group for Group in GroupItems if NativeGroupData(Group) is not None),
         None,
     )
-    NativeJoint = NativeGroup["attributes"]["freecad"] if NativeGroup else {}
+    NativeJointValue = NativeGroupData(NativeGroup) if NativeGroup is not None else None
+    NativeJoint: Mapping[str, object] = NativeJointValue or {}
     RootObject = Context.Graph.add(
         TextAction(NativeRoot.get("type_id"), AsmRootTypeId),
         NativeRoot.get("name", RootLabel),
@@ -4421,12 +4524,12 @@ def BuildAsmRootMut(Context: AsmContext) -> AsmRoot:
 # this definition exists because embedded component documents need isolated object and payload import
 def ImportDefMut(
     Context: AsmContext,
-    Definition: Mapping[str, Any],
+    Definition: Mapping[str, object],
     DefinitionPrefix: str,
     ComponentKind: str,
 ) -> tuple[str, list[str]]:
     DocValue = Context.Documents.get(TextAction(Definition.get("document_id")))
-    if not isinstance(DocValue, Mapping):
+    if not IsPayloadMap(DocValue):
         return ("", [])
     ImportedDoc = DocValue
     if ComponentKind == "assembly":
@@ -4452,7 +4555,7 @@ def ImportDefMut(
 
 # this definition exists because component meshes aggregate every declared tessellation source
 def DefMeshData(
-    Context: AsmContext, Definition: Mapping[str, Any]
+    Context: AsmContext, Definition: Mapping[str, object]
 ) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]:
     Vertices: list[tuple[float, float, float]] = []
     Triangles: list[tuple[int, int, int]] = []
@@ -4461,7 +4564,12 @@ def DefMeshData(
         Offset = len(Vertices)
         Vertices.extend(MeshVertices)
         Triangles.extend(
-            tuple(Index + Offset for Index in Triangle) for Triangle in MeshTriangles
+            (
+                Triangle[0] + Offset,
+                Triangle[1] + Offset,
+                Triangle[2] + Offset,
+            )
+            for Triangle in MeshTriangles
         )
     return (Vertices, Triangles)
 
@@ -4495,7 +4603,7 @@ def AddDefMeshMut(
 
 # this definition exists because component definition groups need complete source provenance
 def AsmDefProps(
-    Definition: Mapping[str, Any], DefinitionId: str, DefinitionName: str, DocId: str
+    Definition: Mapping[str, object], DefinitionId: str, DefinitionName: str, DocId: str
 ) -> list[XmlTree.Element]:
     return [
         StringProp("Label", DefinitionName),
@@ -4524,7 +4632,7 @@ def AsmDefProps(
 
 # this definition exists because one component definition coordinates import mesh and group state
 def AddDefMut(
-    Context: AsmContext, ItemsState: AsmItems, Definition: Mapping[str, Any]
+    Context: AsmContext, ItemsState: AsmItems, Definition: Mapping[str, object]
 ) -> None:
     DefinitionId = TextAction(Definition.get("id"))
     DefinitionName = TextAction(Definition.get("name"), DefinitionId)
@@ -4572,7 +4680,7 @@ def AddDefsMut(Context: AsmContext, ItemsState: AsmItems) -> None:
 
 
 # this definition exists because direct component occurrences require deterministic source ordering
-def DirectAsmItems(Context: AsmContext) -> list[dict[str, Any]]:
+def DirectAsmItems(Context: AsmContext) -> list[dict[str, object]]:
     return sorted(
         (
             Instance
@@ -4588,25 +4696,25 @@ def DirectAsmItems(Context: AsmContext) -> list[dict[str, Any]]:
 
 
 # this definition exists because occurrence metadata may omit or malformed native data
-def InstanceNative(Instance: Mapping[str, Any]) -> Mapping[str, Any]:
-    Attributes = Instance.get("attributes", {})
-    NativeValue = (
-        Attributes.get("freecad", {}) if isinstance(Attributes, Mapping) else {}
-    )
-    return NativeValue if isinstance(NativeValue, Mapping) else {}
+def InstanceNative(Instance: Mapping[str, object]) -> Mapping[str, object]:
+    Attributes = Instance.get("attributes")
+    if not IsPayloadMap(Attributes):
+        return {}
+    NativeValue = Attributes.get("freecad")
+    return NativeValue if IsPayloadMap(NativeValue) else {}
 
 
 # this definition exists because native link metadata selects the compatible component object type
 def AsmLinkData(
-    NativeValue: Mapping[str, Any],
-    Outer: Mapping[str, Any] | None,
+    NativeValue: Mapping[str, object],
+    Outer: Mapping[str, object] | None,
     ComponentKind: str,
 ) -> tuple[str, bool, str]:
-    NativeProps = NativeValue.get("properties", {})
-    LinkFields = (
+    NativeProps = NativeValue.get("properties")
+    LinkFields: set[str] = (
         {TextAction(NameValue) for NameValue in NativeProps if TextAction(NameValue)}
-        if isinstance(NativeProps, Mapping)
-        else set()
+        if IsPayloadMap(NativeProps)
+        else set[str]()
     )
     LinkPropName = FindLinkProp(NativeValue)
     HasNativeLink = bool(LinkPropName)
@@ -4625,13 +4733,13 @@ def AsmLinkData(
 
 # this definition exists because direct occurrence links need canonical native component properties
 def InstanceProps(
-    Instance: Mapping[str, Any],
+    Instance: Mapping[str, object],
     Label: str,
     InstanceId: str,
     DefinitionId: str,
     PathValue: tuple[str, ...],
     Target: str,
-    Outer: Mapping[str, Any] | None,
+    Outer: Mapping[str, object] | None,
     LinkPropName: str,
     IsAssembly: bool,
     PlacementMatrix: tuple[float, ...],
@@ -4710,11 +4818,11 @@ def InstanceProps(
 def RecordItemMut(
     Context: AsmContext,
     ItemsState: AsmItems,
-    Instance: Mapping[str, Any],
-    NativeValue: Mapping[str, Any],
+    Instance: Mapping[str, object],
+    NativeValue: Mapping[str, object],
     Component: Object,
     PathValue: tuple[str, ...],
-    Outer: Mapping[str, Any] | None,
+    Outer: Mapping[str, object] | None,
     IsAssembly: bool,
     Fixed: bool,
     Label: str,
@@ -4729,10 +4837,11 @@ def RecordItemMut(
         ItemsState.AsmLinkRecords.append((PathValue, Component, Outer))
     if not Fixed:
         return
-    Attributes = Instance.get("attributes", {})
-    GroundedSource = (
-        Attributes.get("grounded_joint", {}) if isinstance(Attributes, Mapping) else {}
+    Attributes = Instance.get("attributes")
+    GroundedValue = (
+        Attributes.get("grounded_joint") if IsPayloadMap(Attributes) else None
     )
+    GroundedSource = GroundedValue if IsPayloadMap(GroundedValue) else None
     Grounded = GroundJointMut(
         Context.Graph, Component.name, Label, PlacementMatrix, GroundedSource
     )
@@ -4741,7 +4850,7 @@ def RecordItemMut(
 
 # this definition exists because one direct occurrence coordinates link placement visibility and state
 def AddInstanceMut(
-    Context: AsmContext, ItemsState: AsmItems, Instance: Mapping[str, Any]
+    Context: AsmContext, ItemsState: AsmItems, Instance: Mapping[str, object]
 ) -> None:
     InstanceId = TextAction(Instance.get("id"))
     PathValue = (InstanceId,)
@@ -4814,11 +4923,11 @@ def AddInstancesMut(Context: AsmContext, ItemsState: AsmItems) -> None:
 
 # this definition exists because outer occurrence data overrides neutral occurrence fields selectively
 def OuterField(
-    Record: Mapping[str, Any],
-    Neutral: Mapping[str, Any],
+    Record: Mapping[str, object],
+    Neutral: Mapping[str, object],
     NameValue: str,
-    Default: Any = "",
-) -> AnyValue:
+    Default: object = "",
+) -> object:
     return (
         Record.get(NameValue)
         if NameValue in Record
@@ -4828,7 +4937,7 @@ def OuterField(
 
 # this definition exists because outer occurrence paths may be absolute or parent relative
 def OuterSourcePath(
-    Record: Mapping[str, Any],
+    Record: Mapping[str, object],
     InstanceId: str,
     ParentSource: tuple[str, ...],
 ) -> tuple[str, ...]:
@@ -4846,9 +4955,9 @@ def OuterSourcePath(
 
 # this definition exists because outer proxy links need canonical placement and occurrence metadata
 def OuterProps(
-    Record: Mapping[str, Any],
-    Neutral: Mapping[str, Any],
-    Outer: Mapping[str, Any],
+    Record: Mapping[str, object],
+    Neutral: Mapping[str, object],
+    Outer: Mapping[str, object],
     Label: str,
     InstanceId: str,
     FullPath: tuple[str, ...],
@@ -4961,8 +5070,8 @@ def CreateOuterMut(
     Context: AsmContext,
     RootPath: tuple[str, ...],
     Parent: Object,
-    Outer: Mapping[str, Any],
-    Record: Mapping[str, Any],
+    Outer: Mapping[str, object],
+    Record: Mapping[str, object],
     ParentSource: tuple[str, ...],
 ) -> tuple[Object, tuple[str, ...], tuple[str, ...], bool] | None:
     Target = TextAction(Record.get("target"))
@@ -5018,8 +5127,8 @@ def AddOuterMut(
     ItemsState: AsmItems,
     RootPath: tuple[str, ...],
     Parent: Object,
-    Outer: Mapping[str, Any],
-    Records: Any,
+    Outer: Mapping[str, object],
+    Records: object,
     ParentSource: tuple[str, ...] = (),
     ParentChain: tuple[str, ...] = (),
 ) -> list[str]:
@@ -5113,7 +5222,7 @@ def AddEntityMut(
     RootData: AsmRoot,
     ItemsState: AsmItems,
     MatesState: AsmMates,
-    Entity: Mapping[str, Any],
+    Entity: Mapping[str, object],
 ) -> None:
     EntityId = TextAction(Entity.get("id"))
     OwnerId = TextAction(Entity.get("owner_definition_id"))
@@ -5138,7 +5247,7 @@ def AddEntityMut(
         BoolProp("Visibility", False),
     ]
     Frame = Entity.get("frame")
-    if isinstance(Frame, Mapping):
+    if IsPayloadMap(Frame):
         Properties.append(
             MakePlacement(
                 "ConnectorFrame", MatrixTransform(MatrixValues(Frame)), Dynamic=True
@@ -5174,20 +5283,20 @@ def AddEntitiesMut(
 
 # this definition exists because mate metadata supports native properties and connector references
 def MateAttributes(
-    MateValue: Mapping[str, Any],
-) -> tuple[Mapping[str, Any], Mapping[str, Any], list[dict[str, Any]]]:
-    Attributes = MateValue.get("attributes", {})
-    if not isinstance(Attributes, Mapping):
-        Attributes = {}
-    NativeMate = Attributes.get("freecad", {})
-    if not isinstance(NativeMate, Mapping):
-        NativeMate = {}
+    MateValue: Mapping[str, object],
+) -> tuple[Mapping[str, object], Mapping[str, object], list[dict[str, object]]]:
+    AttributeValue = MateValue.get("attributes")
+    Attributes: Mapping[str, object] = (
+        AttributeValue if IsPayloadMap(AttributeValue) else {}
+    )
+    NativeValue = Attributes.get("freecad")
+    NativeMate: Mapping[str, object] = NativeValue if IsPayloadMap(NativeValue) else {}
     return (Attributes, NativeMate, Items(Attributes.get("references", [])))
 
 
 # this definition exists because connector references may declare their native side explicitly
 def MateRefGroups(
-    EntityIds: list[str], EntityById: Mapping[str, Mapping[str, Any]]
+    EntityIds: list[str], EntityById: Mapping[str, Mapping[str, object]]
 ) -> list[list[str]]:
     RefEntityIds: list[list[str]] = [[], []]
     for EntityId in EntityIds:
@@ -5195,7 +5304,7 @@ def MateRefGroups(
         Attributes = Entity.get("attributes", {})
         PropName = (
             TextAction(Attributes.get("reference_property"))
-            if isinstance(Attributes, Mapping)
+            if IsPayloadMap(Attributes)
             else ""
         )
         RefIndex = JointRefIndexByProp.get(PropName)
@@ -5210,7 +5319,7 @@ def MateRefGroups(
 # this definition exists because neutral mate entities resolve to emitted component objects
 def ConnectorTarget(
     EntityId: str,
-    EntityById: Mapping[str, Mapping[str, Any]],
+    EntityById: Mapping[str, Mapping[str, object]],
     RootData: AsmRoot,
     ItemsState: AsmItems,
     MatesState: AsmMates,
@@ -5227,7 +5336,7 @@ def ConnectorTarget(
 
 # this definition exists because native connector references need rewritten object and subelement names
 def NativeRefData(
-    NativeRef: Mapping[str, Any], RootData: AsmRoot, ItemsState: AsmItems
+    NativeRef: Mapping[str, object], RootData: AsmRoot, ItemsState: AsmItems
 ) -> tuple[str, list[str]]:
     SourceTarget = TextAction(NativeRef.get("name"))
     NativeRootName = TextAction(RootData.NativeRoot.get("name"))
@@ -5236,7 +5345,7 @@ def NativeRefData(
         if SourceTarget == NativeRootName
         else ItemsState.ItemByNativeName.get(SourceTarget, SourceTarget)
     )
-    Subelements = []
+    Subelements: list[str] = []
     for Value in Sequence(NativeRef.get("subelements", [])):
         SourceValue = TextAction(Value)
         Prefix, Separator, Suffix = SourceValue.partition(".")
@@ -5248,7 +5357,7 @@ def NativeRefData(
 # this definition exists because neutral connector references need geometric subelement reconstruction
 def NeutralRefData(
     GroupedIds: list[str],
-    EntityById: Mapping[str, Mapping[str, Any]],
+    EntityById: Mapping[str, Mapping[str, object]],
     RootData: AsmRoot,
     ItemsState: AsmItems,
     MatesState: AsmMates,
@@ -5270,9 +5379,9 @@ def NeutralRefData(
 
 # this definition exists because each mate needs two resolved connector sides
 def MateConnectors(
-    NativeReferences: list[dict[str, Any]],
+    NativeReferences: list[dict[str, object]],
     RefEntityIds: list[list[str]],
-    EntityById: Mapping[str, Mapping[str, Any]],
+    EntityById: Mapping[str, Mapping[str, object]],
     RootData: AsmRoot,
     ItemsState: AsmItems,
     MatesState: AsmMates,
@@ -5298,7 +5407,7 @@ def ConnectorProps(
     RefEntityIds: list[list[str]],
     ConnectorTargets: list[str],
     ConnectorSubelements: list[list[str]],
-    EntityById: Mapping[str, Mapping[str, Any]],
+    EntityById: Mapping[str, Mapping[str, object]],
     MatesState: AsmMates,
 ) -> list[XmlTree.Element]:
     Properties: list[XmlTree.Element] = []
@@ -5323,7 +5432,7 @@ def ConnectorProps(
             XlinkSubProp(f"Reference{Index}", ComponentName, Subelements, Dynamic=True)
         )
         Frame = Entity.get("frame")
-        Matrix = MatrixValues(Frame) if isinstance(Frame, Mapping) else KIdentityMatrix
+        Matrix = MatrixValues(Frame) if IsPayloadMap(Frame) else KIdentityMatrix
         Properties.extend(
             [
                 MakePlacement(
@@ -5334,7 +5443,7 @@ def ConnectorProps(
                 ),
                 BoolProp(
                     f"Detach{Index}",
-                    isinstance(Frame, Mapping) and not HasRealSubelements,
+                    IsPayloadMap(Frame) and not HasRealSubelements,
                     Dynamic=True,
                 ),
             ]
@@ -5344,7 +5453,7 @@ def ConnectorProps(
 
 # this definition exists because mate carriers need complete neutral provenance and links
 def MateMetaProps(
-    MateValue: Mapping[str, Any],
+    MateValue: Mapping[str, object],
     MateId: str,
     OwnerId: str,
     EntityIds: list[str],
@@ -5383,7 +5492,7 @@ def MateMetaProps(
 
 # this definition exists because mate dimensions may originate from several named parameters
 def MateParamValues(
-    MateValue: Mapping[str, Any], Parameters: _Parameters
+    MateValue: Mapping[str, object], Parameters: _Parameters
 ) -> dict[str, float]:
     return {
         PathValue: Parameters.value(ParamId)
@@ -5397,7 +5506,7 @@ def MateParamValues(
 # this definition exists because unsupported mates must remain editable carrier objects
 def AddCarrierMut(
     ObjValue: Object,
-    NativeMate: Mapping[str, Any],
+    NativeMate: Mapping[str, object],
     MateName: str,
     JointType: str | None,
     MetaProperties: list[XmlTree.Element],
@@ -5421,8 +5530,8 @@ def AddCarrierMut(
 
 # this definition exists because native joint objects need selective property replacement
 def NativeMateProps(
-    NativeMate: Mapping[str, Any],
-    MateValue: Mapping[str, Any],
+    NativeMate: Mapping[str, object],
+    MateValue: Mapping[str, object],
     MateName: str,
     JointType: str,
     HasConnectorPair: bool,
@@ -5432,10 +5541,13 @@ def NativeMateProps(
     MetaProperties: list[XmlTree.Element],
     ConnectorProperties: list[XmlTree.Element],
 ) -> list[XmlTree.Element]:
-    NativeProperties = NativeMate.get("properties", {})
+    NativeProperties = NativeMate.get("properties")
+    NativePropertyMap: Mapping[str, object] = (
+        NativeProperties if IsPayloadMap(NativeProperties) else {}
+    )
     Properties = [
         ElemValue
-        for Value in NativeProperties.values()
+        for Value in NativePropertyMap.values()
         if (ElemValue := ElemFromData(Value)) is not None
         and ElemValue.tag == "Property"
     ]
@@ -5470,7 +5582,7 @@ def NativeMateProps(
 
 # this definition exists because neutral joints need the complete standard assembly property set
 def NeutralJoint(
-    MateValue: Mapping[str, Any],
+    MateValue: Mapping[str, object],
     MateName: str,
     JointType: str,
     HasConnectorPair: bool,
@@ -5553,8 +5665,8 @@ def AddMateMut(
     RootData: AsmRoot,
     ItemsState: AsmItems,
     MatesState: AsmMates,
-    EntityById: Mapping[str, Mapping[str, Any]],
-    MateValue: Mapping[str, Any],
+    EntityById: Mapping[str, Mapping[str, object]],
+    MateValue: Mapping[str, object],
 ) -> None:
     MateId = TextAction(MateValue.get("id"))
     MateName = TextAction(MateValue.get("name"), MateId)
@@ -5562,7 +5674,7 @@ def AddMateMut(
     EntityIds = [
         TextAction(Value) for Value in Sequence(MateValue.get("entity_ids", []))
     ]
-    Ignored, NativeMate, NativeReferences = MateAttributes(MateValue)
+    _, NativeMate, NativeReferences = MateAttributes(MateValue)
     LinkedEntities = [
         MatesState.EntityNames[Value]
         for Value in EntityIds
@@ -5637,7 +5749,7 @@ def AddMateMut(
             MetaProperties,
             ConnectorProperties,
         )
-        if isinstance(NativeProperties, Mapping) and NativeProperties
+        if IsPayloadMap(NativeProperties) and NativeProperties
         else NeutralJoint(
             MateValue,
             MateName,
@@ -5676,7 +5788,7 @@ def AddMatesMut(
 
 
 # this definition exists because nested mate groups need a stable parent lookup
-def GroupParent(GroupId: str, GroupItems: list[dict[str, Any]]) -> str:
+def GroupParent(GroupId: str, GroupItems: list[dict[str, object]]) -> str:
     return TextAction(
         next(
             (
@@ -5852,9 +5964,9 @@ def FinalizeAsmMut(
 # this definition exists because assembly conversion coordinates each ordered transfer phase
 def AddAsmMut(
     Graph: _Graph,
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     PayloadEntries: dict[str, bytes],
-    OuterLinks: Mapping[str, Mapping[str, Any]],
+    OuterLinks: Mapping[str, Mapping[str, object]],
     TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
 ) -> tuple[str, int, int]:
     Context = BuildAsmContext(
@@ -5877,7 +5989,7 @@ def AddAsmMut(
 # this definition exists because focused behavior needs one stable owner
 def AddMeshesMut(
     Graph: _Graph,
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     PayloadEntries: dict[str, bytes],
     ParametricTarget: str,
 ) -> list[str]:
@@ -5951,14 +6063,14 @@ def AddMeshesMut(
 # this definition exists because focused behavior needs one stable owner
 def AddBrepMut(
     Graph: _Graph,
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     PayloadEntries: dict[str, bytes],
     ParametricTarget: str,
 ) -> tuple[list[str], str]:
     if Manifest.get("brep") is None:
         return ([], "")
     try:
-        DocValue = CadDoc.from_dict(Manifest)
+        DocValue = CadDoc.from_dict(ValidateWireMap(Manifest))
     except (KeyError, TypeError, ValueError, RecursionError) as ErrorInfo:
         raise ValueError("neutral B-rep manifest data is invalid") from ErrorInfo
     if DocValue.brep is None:
@@ -6015,7 +6127,7 @@ def DocProperties(Label: str, DocId: str, DocTimestamp: str) -> XmlTree.Element:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SerializeObject(Parent: ET.Element, ObjValue: _Object) -> None:
+def SerializeObject(Parent: ET.Element, ObjValue: Object) -> None:
     Attributes = {"name": ObjValue.name}
     if ObjValue.extensions:
         Attributes["Extensions"] = "True"
@@ -6043,9 +6155,7 @@ def SerializeObject(Parent: ET.Element, ObjValue: _Object) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SanitizePayload(
-    Objects: list[_Object], PayloadEntries: Mapping[str, bytes]
-) -> None:
+def SanitizePayload(Objects: list[Object], PayloadEntries: Mapping[str, bytes]) -> None:
     for ObjValue in Objects:
         for PropElem in ObjValue.properties:
             PartValue = PropElem.find("./Part")
@@ -6073,23 +6183,25 @@ def SanitizePayload(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Represented(Manifest: Mapping[str, Any], AsmValue: Mapping[str, Any]) -> set[str]:
+def Represented(
+    Manifest: Mapping[str, object], AsmValue: Mapping[str, object]
+) -> set[str]:
     Result: set[str] = set()
 
     # this definition exists because focused behavior needs one stable owner
-    def Visit(Value: Any) -> None:
-        if isinstance(Value, Mapping):
+    def Visit(Value: object) -> None:
+        if IsPayloadMap(Value):
             Attributes = Value.get("attributes", {})
-            if isinstance(Attributes, Mapping):
+            if IsPayloadMap(Attributes):
                 for KeyValue in ("freecad", "grounded_joint"):
                     Native = Attributes.get(KeyValue, {})
-                    if isinstance(Native, Mapping):
+                    if IsPayloadMap(Native):
                         NameValue = TextAction(Native.get("name"))
                         if NameValue:
                             Result.add(NameValue)
             for Child in Value.values():
                 Visit(Child)
-        elif isinstance(Value, (list, tuple)):
+        elif IsPayloadSeq(Value):
             for Child in Value:
                 Visit(Child)
 
@@ -6101,23 +6213,23 @@ def Represented(Manifest: Mapping[str, Any], AsmValue: Mapping[str, Any]) -> set
 # this class exists because document phases share source native graph and root objects
 @Dataclass
 class DocContext:
-    Manifest: Mapping[str, Any]
+    Manifest: Mapping[str, object]
     ManifestData: str
     ManifestHash: str
-    OuterLinks: Mapping[str, Mapping[str, Any]]
+    OuterLinks: Mapping[str, Mapping[str, object]]
     NativeOuterLinks: Mapping[str, str]
     Timestamp: str
     TrustedBreps: frozenset[KNativeBrepKey]
     NativeDocHash: str
     SourceFormat: str
-    FreecadMeta: Mapping[str, Any]
-    NativeValues: list[dict[str, Any]]
+    FreecadMeta: Mapping[str, object]
+    NativeValues: list[dict[str, object]]
     NativeReplay: bool
-    ReplayValues: list[dict[str, Any]]
+    ReplayValues: list[dict[str, object]]
     Graph: ObjectGraph
     NativeGraph: dict[str, Object]
     NativeTargets: dict[str, str]
-    ParametersData: list[dict[str, Any]]
+    ParametersData: list[dict[str, object]]
     Parameters: _Parameters
     ParamSheet: Object
     MetaObject: Object
@@ -6132,22 +6244,22 @@ class DocContext:
 # this class exists because planes and sketches share support and profile indexes
 @Dataclass
 class DocGeometry:
-    PlaneItems: list[dict[str, Any]]
-    PlaneById: dict[str, dict[str, Any]]
+    PlaneItems: list[dict[str, object]]
+    PlaneById: dict[str, dict[str, object]]
     PlaneNames: dict[str, str]
     PlaneObjects: list[str]
-    SketchItems: list[dict[str, Any]]
+    SketchItems: list[dict[str, object]]
     SketchNames: dict[str, str]
     SketchProfCounts: dict[str, int]
     SketchProfSound: dict[str, bool]
     SketchObjects: list[str]
-    SelectionItems: dict[str, dict[str, Any]]
+    SelectionItems: dict[str, dict[str, object]]
 
 
 # this class exists because document feature phases share emitted names payloads and representations
 @Dataclass
 class DocFeatures:
-    FeatureItems: list[dict[str, Any]]
+    FeatureItems: list[dict[str, object]]
     FeatureNames: dict[str, str]
     SolidNames: dict[str, str]
     FeatureObjects: list[str]
@@ -6159,7 +6271,7 @@ class DocFeatures:
     BodyTargets: dict[str, str]
     SelectionNames: dict[str, str]
     SelectionObjects: list[str]
-    ConfigItems: list[dict[str, Any]]
+    ConfigItems: list[dict[str, object]]
     ConfigNames: dict[str, str]
     ConfigObjects: list[str]
     DocBreps: list[str]
@@ -6171,20 +6283,20 @@ class DocFeatures:
 
 
 # this definition exists because native replay objects need stable source ordering
-def NativeOrder(Value: Mapping[str, Any]) -> int:
+def NativeOrder(Value: Mapping[str, object]) -> int:
     return int(Number(Value.get("order")))
 
 
 # this definition exists because partial native replay must retain a dependency closed object set
 def ReplaySubset(
-    Manifest: Mapping[str, Any],
-    NativeValues: list[dict[str, Any]],
-    AsmValue: Mapping[str, Any] | None,
-) -> tuple[bool, list[dict[str, Any]]]:
+    Manifest: Mapping[str, object],
+    NativeValues: list[dict[str, object]],
+    AsmValue: Mapping[str, object] | None,
+) -> tuple[bool, list[dict[str, object]]]:
     NativeReplay = bool(NativeValues) and AsmValue is None
     if NativeReplay:
         return (True, NativeValues)
-    RepresentedNames = (
+    RepresentedNames: set[str] = (
         Represented(Manifest, AsmValue) if AsmValue is not None else set()
     )
     ReplayValues = [
@@ -6209,7 +6321,7 @@ def ReplaySubset(
 
 # this definition exists because replay objects must seed graph names before generated objects
 def AddReplayMut(
-    Graph: ObjectGraph, ReplayValues: list[dict[str, Any]]
+    Graph: ObjectGraph, ReplayValues: list[dict[str, object]]
 ) -> dict[str, Object]:
     NativeGraph: dict[str, Object] = {}
     for Value in sorted(ReplayValues, key=NativeOrder):
@@ -6225,18 +6337,18 @@ def AddReplayMut(
 
 
 # this definition exists because freecad metadata may be absent or malformed
-def FreecadMetaData(Manifest: Mapping[str, Any]) -> Mapping[str, Any]:
-    ManifestMeta = Manifest.get("metadata", {})
-    FreecadMeta = (
-        ManifestMeta.get("freecad", {}) if isinstance(ManifestMeta, Mapping) else {}
-    )
-    return FreecadMeta if isinstance(FreecadMeta, Mapping) else {}
+def FreecadMetaData(Manifest: Mapping[str, object]) -> Mapping[str, object]:
+    ManifestMeta = Manifest.get("metadata")
+    if not IsPayloadMap(ManifestMeta):
+        return {}
+    FreecadMeta = ManifestMeta.get("freecad")
+    return FreecadMeta if IsPayloadMap(FreecadMeta) else {}
 
 
 # this definition exists because document root groups require a stable creation order
 def AddDocBaseMut(
     Graph: ObjectGraph,
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     ManifestData: str,
     ManifestHash: str,
     Parameters: _Parameters,
@@ -6277,19 +6389,17 @@ def AddDocBaseMut(
 
 # this definition exists because document conversion needs one initialized shared context
 def BuildDocContext(
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     ManifestData: str,
     ManifestHash: str,
-    OuterLinks: Mapping[str, Mapping[str, Any]] | None,
+    OuterLinks: Mapping[str, Mapping[str, object]] | None,
     NativeOuterLinks: Mapping[str, str] | None,
     Timestamp: str,
     TrustedBreps: frozenset[KNativeBrepKey],
 ) -> DocContext:
     SourceData = Manifest.get("source", {})
     SourceFormat = (
-        TextAction(SourceData.get("format_id"))
-        if isinstance(SourceData, Mapping)
-        else ""
+        TextAction(SourceData.get("format_id")) if IsPayloadMap(SourceData) else ""
     )
     FreecadMeta = FreecadMetaData(Manifest)
     NativeValues = Items(FreecadMeta.get("objects", []))
@@ -6349,7 +6459,7 @@ def BuildDocGeom(Context: DocContext) -> DocGeometry:
 
 
 # this definition exists because feature timeline entries need stable source ordering
-def FeatureOrder(Value: Mapping[str, Any]) -> int:
+def FeatureOrder(Value: Mapping[str, object]) -> int:
     return int(Number(Value.get("order")))
 
 
@@ -6421,17 +6531,19 @@ def AddEntryDataMut(Context: DocContext, Features: DocFeatures) -> None:
 
 
 # this definition exists because neutral records may carry optional freecad object metadata
-def FreecadAttrs(Value: Mapping[str, Any]) -> Mapping[str, Any]:
-    Attributes = Value.get("attributes", {})
-    NativeValue = (
-        Attributes.get("freecad", {}) if isinstance(Attributes, Mapping) else {}
-    )
-    return NativeValue if isinstance(NativeValue, Mapping) else {}
+def FreecadAttrs(Value: Mapping[str, object]) -> Mapping[str, object]:
+    Attributes = Value.get("attributes")
+    if not IsPayloadMap(Attributes):
+        return {}
+    NativeValue = Attributes.get("freecad")
+    return NativeValue if IsPayloadMap(NativeValue) else {}
 
 
 # this definition exists because offset planes can retain a direct parameter expression
 def PlaneExprs(
-    Plane: Mapping[str, Any], Transform: Mapping[str, Any], Parameters: _Parameters
+    Plane: Mapping[str, object],
+    Transform: Mapping[str, object],
+    Parameters: _Parameters,
 ) -> list[tuple[str, str]]:
     ParamId = TextAction(Plane.get("offset_parameter_id"))
     if not ParamId:
@@ -6454,7 +6566,7 @@ def PlaneExprs(
 
 # this definition exists because one support plane coordinates native replay placement and indexes
 def AddPlaneMut(
-    Context: DocContext, Geometry: DocGeometry, Plane: Mapping[str, Any]
+    Context: DocContext, Geometry: DocGeometry, Plane: Mapping[str, object]
 ) -> None:
     PlaneId = TextAction(Plane.get("id"))
     NativePlane = FreecadAttrs(Plane)
@@ -6470,14 +6582,13 @@ def AddPlaneMut(
         Context.NativeTargets[NativeName] = ObjValue.name
     Geometry.PlaneNames[PlaneId] = ObjValue.name
     Geometry.PlaneObjects.append(ObjValue.name)
-    Transform = (
-        Plane.get("transform", {})
-        if isinstance(Plane.get("transform"), Mapping)
-        else {}
+    TransformValue = Plane.get("transform")
+    Transform: Mapping[str, object] = (
+        TransformValue if IsPayloadMap(TransformValue) else {}
     )
     Expressions = PlaneExprs(Plane, Transform, Context.Parameters)
     NativeProperties = NativePlane.get("properties", {})
-    if isinstance(NativeProperties, Mapping) and NativeProperties:
+    if IsPayloadMap(NativeProperties) and NativeProperties:
         Properties = NativeA(NativePlane)
         for Replacement in (
             StringProp("Label", Plane.get("name", PlaneId)),
@@ -6516,7 +6627,7 @@ def AddPlanesMut(Context: DocContext, Geometry: DocGeometry) -> None:
 
 # this definition exists because one sketch coordinates profile evidence support and native replay
 def AddSketchMut(
-    Context: DocContext, Geometry: DocGeometry, Sketch: Mapping[str, Any]
+    Context: DocContext, Geometry: DocGeometry, Sketch: Mapping[str, object]
 ) -> None:
     SketchId = TextAction(Sketch.get("id"))
     Geometry.SketchProfCounts[SketchId] = NativeClosed(Sketch)
@@ -6574,37 +6685,43 @@ def AddSketchesMut(Context: DocContext, Geometry: DocGeometry) -> None:
 # this class exists because one feature branch shares parsed source and native metadata
 @Dataclass
 class FeatureData:
-    Source: Mapping[str, Any]
+    Source: Mapping[str, object]
     FeatureId: str
     FeatureName: str
     KindValue: str
     Operation: str
-    Attributes: Mapping[str, Any]
-    Definition: Mapping[str, Any]
-    NativeDef: Mapping[str, Any]
+    Attributes: Mapping[str, object]
+    Definition: Mapping[str, object]
+    NativeDef: Mapping[str, object]
     InputBase: str
     BaseName: str
     SketchId: str
     SketchName: str
-    NativeFeature: Mapping[str, Any]
+    NativeFeature: Mapping[str, object]
     NativeName: str
 
 
 # this definition exists because feature writers need one normalized source record
 def FeatureDataOf(
-    Geometry: DocGeometry, Features: DocFeatures, Feature: Mapping[str, Any]
+    Geometry: DocGeometry, Features: DocFeatures, Feature: Mapping[str, object]
 ) -> FeatureData:
     FeatureId = TextAction(Feature.get("id"))
-    Attributes = Feature.get("attributes", {})
-    Attributes = Attributes if isinstance(Attributes, Mapping) else {}
-    Definition = Feature.get("definition", {})
-    Definition = Definition if isinstance(Definition, Mapping) else {}
-    NativeDef = (
-        Definition.get("object_data", {})
+    AttributeValue = Feature.get("attributes")
+    Attributes: Mapping[str, object] = (
+        AttributeValue if IsPayloadMap(AttributeValue) else {}
+    )
+    DefinitionValue = Feature.get("definition")
+    Definition: Mapping[str, object] = (
+        DefinitionValue if IsPayloadMap(DefinitionValue) else {}
+    )
+    NativeDefValue = (
+        Definition.get("object_data")
         if TextAction(Definition.get("$type")) == "NativeFeatureDefinition"
         and TextAction(Definition.get("format_id")) == FormatId
-        and isinstance(Definition.get("object_data"), Mapping)
-        else {}
+        else None
+    )
+    NativeDef: Mapping[str, object] = (
+        NativeDefValue if IsPayloadMap(NativeDefValue) else {}
     )
     Inputs = [
         TextAction(Value) for Value in Sequence(Feature.get("input_feature_ids", []))
@@ -6618,8 +6735,10 @@ def FeatureDataOf(
         "",
     )
     SketchId = TextAction(Feature.get("sketch_id"))
-    NativeFeature = Attributes.get("freecad", {})
-    NativeFeature = NativeFeature if isinstance(NativeFeature, Mapping) else {}
+    NativeFeatureValue = Attributes.get("freecad")
+    NativeFeature: Mapping[str, object] = (
+        NativeFeatureValue if IsPayloadMap(NativeFeatureValue) else {}
+    )
     return FeatureData(
         Feature,
         FeatureId,
@@ -6814,10 +6933,9 @@ def ExtrudeVector(
         )
     )
     Plane = Geometry.PlaneById.get(PlaneId, {})
-    Transform = (
-        Plane.get("transform", {})
-        if isinstance(Plane.get("transform"), Mapping)
-        else {}
+    TransformValue = Plane.get("transform")
+    Transform: Mapping[str, object] = (
+        TransformValue if IsPayloadMap(TransformValue) else {}
     )
     Normal = Normalize(Vector(Transform.get("z_axis"), (0.0, 0.0, 1.0)))
     Reversed = bool(
@@ -6833,7 +6951,8 @@ def ExtrudeVector(
     Explicit = FeatureInfo.Definition.get("direction")
     if Explicit is not None:
         return Normalize(Vector(Explicit, Normal))
-    return tuple(Component * (-1.0 if Reversed else 1.0) for Component in Normal)
+    Scale = -1.0 if Reversed else 1.0
+    return (Normal[0] * Scale, Normal[1] * Scale, Normal[2] * Scale)
 
 
 # this definition exists because extrusion tools need canonical profile length and expression properties
@@ -7040,8 +7159,8 @@ def FilletIndices(FeatureInfo: FeatureData, Geometry: DocGeometry) -> list[int]:
             )
             if Match:
                 EdgeIndices.append(int(Match.group(1)))
-        Query = Selection.get("query", {})
-        Query = Query if isinstance(Query, Mapping) else {}
+        QueryValue = Selection.get("query")
+        Query: Mapping[str, object] = QueryValue if IsPayloadMap(QueryValue) else {}
         if (
             TextAction(Query.get("topology_role"))
             == "extrusion_terminal_profile_boundary"
@@ -7166,7 +7285,7 @@ def AddFeatureMut(
     Context: DocContext,
     Geometry: DocGeometry,
     Features: DocFeatures,
-    Feature: Mapping[str, Any],
+    Feature: Mapping[str, object],
 ) -> None:
     FeatureInfo = FeatureDataOf(Geometry, Features, Feature)
     if HasReplayMut(Context, Features, FeatureInfo):
@@ -7240,7 +7359,7 @@ def AddBodyMut(
     Context: DocContext,
     Geometry: DocGeometry,
     Features: DocFeatures,
-    BodyValue: Mapping[str, Any],
+    BodyValue: Mapping[str, object],
 ) -> None:
     BodyId = TextAction(BodyValue.get("id"))
     FinalFeatureId = TextAction(BodyValue.get("final_feature_id"))
@@ -7297,7 +7416,7 @@ def AddBodiesMut(
 def SelectTargets(
     Context: DocContext,
     TargetById: Mapping[str, str],
-    Selection: Mapping[str, Any],
+    Selection: Mapping[str, object],
 ) -> tuple[list[tuple[str, str]], list[str]]:
     Targets: list[tuple[str, str]] = []
     EntityKinds: list[str] = []
@@ -7316,7 +7435,7 @@ def AddSelectionMut(
     Context: DocContext,
     Features: DocFeatures,
     TargetById: Mapping[str, str],
-    Selection: Mapping[str, Any],
+    Selection: Mapping[str, object],
 ) -> None:
     SelectionId = TextAction(Selection.get("id"))
     ObjValue = Context.Graph.add(
@@ -7339,7 +7458,7 @@ def AddSelectionMut(
         ObjValue.properties.append(
             VectorProp("SelectionPoint", Vector(Point, (0.0, 0.0, 0.0)), Dynamic=True)
         )
-    ObjValue.dependencies.extend(Target for Target, Ignored in Targets)
+    ObjValue.dependencies.extend(Target for Target, _ in Targets)
     Features.SelectionNames[SelectionId] = ObjValue.name
     Features.SelectionObjects.append(ObjValue.name)
 
@@ -7409,7 +7528,7 @@ def AddSelectMut(
 def SetConfigMut(
     Context: DocContext,
     Features: DocFeatures,
-    Config: Mapping[str, Any],
+    Config: Mapping[str, object],
     ObjectName: str,
 ) -> None:
     ObjValue = next(
@@ -7463,8 +7582,8 @@ def AddConfigsMut(Context: DocContext, Features: DocFeatures) -> None:
 def PayloadTarget(
     Context: DocContext,
     Features: DocFeatures,
-    Payload: Mapping[str, Any],
-    Attributes: Mapping[str, Any],
+    Payload: Mapping[str, object],
+    Attributes: Mapping[str, object],
 ) -> tuple[str, str]:
     FeatureId = TextAction(
         Attributes.get("feature_id", Attributes.get("final_feature_id"))
@@ -7484,8 +7603,8 @@ def PayloadTarget(
 # this definition exists because trusted native breps require their referenced sidecar streams
 def AddSidecarsMut(
     Features: DocFeatures,
-    Payload: Mapping[str, Any],
-    Attributes: Mapping[str, Any],
+    Payload: Mapping[str, object],
+    Attributes: Mapping[str, object],
     TargetName: str,
     PropName: str,
 ) -> dict[str, str]:
@@ -7507,7 +7626,7 @@ def AddSidecarsMut(
 
 # this definition exists because native shape properties need rewritten primary and sidecar files
 def PayloadProp(
-    Attributes: Mapping[str, Any],
+    Attributes: Mapping[str, object],
     ShapeEntry: str,
     PropName: str,
     SidecarEntries: Mapping[str, str],
@@ -7535,8 +7654,8 @@ def PayloadProp(
 def AddNativeMut(
     Context: DocContext,
     Features: DocFeatures,
-    Payload: Mapping[str, Any],
-    Attributes: Mapping[str, Any],
+    Payload: Mapping[str, object],
+    Attributes: Mapping[str, object],
     DataValue: bytes,
     NativeBrep: bytes,
     TargetName: str,
@@ -7583,7 +7702,7 @@ def AddNativeMut(
 def AddPayloadMut(
     Context: DocContext,
     Features: DocFeatures,
-    Payload: Mapping[str, Any],
+    Payload: Mapping[str, object],
     Index: int,
 ) -> None:
     DataValue = PayloadBytes(Payload)
@@ -7594,8 +7713,8 @@ def AddPayloadMut(
         PurePosixPath("interchange", "native", PayloadId + PayloadSuffix(Payload))
     )
     Features.PayloadEntries[Entry] = DataValue
-    RawAttrs = Payload.get("attributes", {})
-    Attributes = RawAttrs if isinstance(RawAttrs, Mapping) else {}
+    RawAttrs = Payload.get("attributes")
+    Attributes: Mapping[str, object] = RawAttrs if IsPayloadMap(RawAttrs) else {}
     TargetName, PropName = PayloadTarget(Context, Features, Payload, Attributes)
     NativeBrep = (
         FreecadBrep(Payload, DataValue, Context.NativeDocHash, Context.TrustedBreps)
@@ -7766,8 +7885,8 @@ def RewriteLinksMut(Context: DocContext) -> None:
 
 # this definition exists because document identity derives from stable source path and digest values
 def DocIdentity(Context: DocContext) -> tuple[str, str]:
-    Source = Context.Manifest.get("source", {})
-    Source = Source if isinstance(Source, Mapping) else {}
+    SourceValue = Context.Manifest.get("source")
+    Source: Mapping[str, object] = SourceValue if IsPayloadMap(SourceValue) else {}
     Label = PurePosixPath(TextAction(Source.get("path"), "Kit")).stem or "Kit"
     return (Label, TextAction(Source.get("sha256"), Context.ManifestHash))
 
@@ -7790,7 +7909,7 @@ def RootXmlAttrs(Context: DocContext) -> dict[str, str]:
         ),
     }
     StringHasher = Context.FreecadMeta.get("string_hasher", {})
-    if isinstance(StringHasher, Mapping):
+    if IsPayloadMap(StringHasher):
         AttrValue = TextAction(StringHasher.get("attribute"))
         if AttrValue:
             Attributes["StringHasher"] = AttrValue
@@ -7802,7 +7921,7 @@ def AddHasherMut(
     Context: DocContext, Features: DocFeatures, RootValue: XmlTree.Element
 ) -> None:
     StringHasher = Context.FreecadMeta.get("string_hasher", {})
-    if not isinstance(StringHasher, Mapping):
+    if not IsPayloadMap(StringHasher):
         return
     for Value in Items(StringHasher.get("nodes", [])):
         NodeValue = ElemFromData(Value)
@@ -7890,16 +8009,18 @@ def SerializeDoc(Context: DocContext, Features: DocFeatures) -> bytes:
     AddObjectsMut(Context.Graph, Objects)
     AddDataMut(Context.Graph, RootValue)
     XmlTree.indent(RootValue, space="  ")
-    XmlValue = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
+    XmlValue: bytes = XmlTree.tostring(
+        RootValue, encoding="utf-8", xml_declaration=True
+    )
     return XmlValue + b"\n"
 
 
 # this definition exists because document conversion coordinates each ordered graph and payload phase
 def BuildDocXml(
-    Manifest: Mapping[str, Any],
+    Manifest: Mapping[str, object],
     ManifestData: str,
     ManifestShaTwoFiveSix: str,
-    OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
+    OuterLinks: Mapping[str, Mapping[str, object]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str = "1980-01-01T00:00:00Z",
     TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
@@ -7940,8 +8061,8 @@ def ZipEntry(NameValue: str, DataValue: bytes) -> tuple[Zipfile.ZipInfo, bytes]:
 
 # this definition exists because focused behavior needs one stable owner
 def BuildFcstd(
-    Manifest: Mapping[str, Any],
-    OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
+    Manifest: Mapping[str, object],
+    OuterLinks: Mapping[str, Mapping[str, object]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str | None = None,
     TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
@@ -7961,15 +8082,12 @@ def BuildFcstd(
     Output = IoStream.BytesIO()
     with Zipfile.ZipFile(Output, "w", allowZip64=True) as Archive:
         Archive.writestr(*ZipEntry(KDocEntry, DocXml))
-        MetaValue = Manifest.get("metadata", {})
-        FreecadMeta = (
-            MetaValue.get("freecad", {}) if isinstance(MetaValue, Mapping) else {}
+        MetaValue = Manifest.get("metadata")
+        FreecadValue = MetaValue.get("freecad") if IsPayloadMap(MetaValue) else None
+        FreecadMeta: Mapping[str, object] = (
+            FreecadValue if IsPayloadMap(FreecadValue) else {}
         )
-        EntryOrder = (
-            Sequence(FreecadMeta.get("entry_order", []))
-            if isinstance(FreecadMeta, Mapping)
-            else []
-        )
+        EntryOrder = Sequence(FreecadMeta.get("entry_order", []))
         Written: set[str] = set()
         for Value in EntryOrder:
             Entry = TextAction(Value)
@@ -7986,18 +8104,25 @@ def BuildFcstd(
 
 # this definition exists because focused behavior needs one stable owner
 def BuildFcstdApi(
-    Manifest: Mapping[str, Any],
-    OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
+    Manifest: Mapping[str, object],
+    OuterLinks: Mapping[str, Mapping[str, object]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str | None = None,
     TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
     **LegacyValues: object,
 ) -> bytes:
     LegacyCopy = dict(LegacyValues)
-    OuterLinks = LegacyCopy.pop("external_links", OuterLinks)
-    NativeOuterLinks = LegacyCopy.pop("native_external_links", NativeOuterLinks)
-    DocTimestamp = LegacyCopy.pop("document_timestamp", DocTimestamp)
-    TrustedNativeBreps = LegacyCopy.pop("trusted_native_breps", TrustedNativeBreps)
+    OuterLinks = PayloadMapMap(LegacyCopy.pop("external_links", OuterLinks))
+    NativeOuterLinks = PayloadStrMap(
+        LegacyCopy.pop("native_external_links", NativeOuterLinks)
+    )
+    TimestampValue = LegacyCopy.pop("document_timestamp", DocTimestamp)
+    if TimestampValue is not None and not isinstance(TimestampValue, str):
+        raise TypeError("document timestamp must be text")
+    DocTimestamp = TimestampValue
+    TrustedNativeBreps = PayloadBrepKeys(
+        LegacyCopy.pop("trusted_native_breps", TrustedNativeBreps)
+    )
     if LegacyCopy:
         Unexpected = next(iter(LegacyCopy))
         raise TypeError(
@@ -8060,17 +8185,17 @@ def DocXmlManifest(RootValue: ET.Element) -> bytes | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalJson(Value: Mapping[str, Any]) -> bytes:
+def CanonicalJson(Value: Mapping[str, object]) -> bytes:
     return JsonValue.dumps(
         Value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
 
 
 # this definition exists because focused behavior needs one stable owner
-def ExtractManifest(DataValue: bytes) -> dict[str, AnyValue]:
+def ExtractManifest(DataValue: bytes) -> dict[str, object]:
     Archive, Members = Validated(DataValue)
     with Archive:
-        RootValue, Ignored = ValidatedDocXml(Archive, Members)
+        RootValue, _ = ValidatedDocXml(Archive, Members)
         XmlManifest = DocXmlManifest(RootValue)
         if KManifestEntry not in Members:
             if XmlManifest is None:
@@ -8100,574 +8225,220 @@ def ExtractManifest(DataValue: bytes) -> dict[str, AnyValue]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["APP_LINK_TYPE_ID"] = AppLinkTypeId
+APP_LINK_TYPE_ID = AppLinkTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_CONNECTOR_PROPERTY_PREFIXES"] = AsmConnectorPropPrefixes
+ASSEMBLY_CONNECTOR_PROPERTY_PREFIXES = AsmConnectorPropPrefixes
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_JOINT_GROUP_TYPE_ID"] = AsmJointGroupTypeId
+ASSEMBLY_JOINT_GROUP_TYPE_ID = AsmJointGroupTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_LINK_TYPE_ID"] = AsmLinkTypeId
+ASSEMBLY_LINK_TYPE_ID = AsmLinkTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_ROOT_TYPE_ID"] = AsmRootTypeId
+ASSEMBLY_ROOT_TYPE_ID = AsmRootTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+BOOLEAN_OPERATION_TYPE_BY_KIND = BoolOperationTypeByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["BOOLEAN_OPERATION_TYPE_BY_KIND"] = BoolOperationTypeByKind
+CIRCULAR_GEOMETRY_KINDS = CircularGeomKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["CIRCULAR_GEOMETRY_KINDS"] = CircularGeomKinds
+CONSTRAINT_CODE_BY_KIND = RuleCodeByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_CODE_BY_KIND"] = RuleCodeByKind
+CONSTRAINT_POINT_INDEX_BY_NAME = RulePointIndexByName
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_POINT_INDEX_BY_NAME"] = RulePointIndexByName
+CREATE_OPERATION_NAMES = CreateOperationNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["CREATE_OPERATION_NAMES"] = CreateOperationNames
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+DIMENSIONAL_CONSTRAINT_CODES = DimensionalRuleCodes
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIMENSIONAL_CONSTRAINT_CODES"] = DimensionalRuleCodes
+DOCUMENT_ENTRY = KDocEntry
 
-# this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_ENTRY"] = KDocEntry
-
-# this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
-
-# this binding exists because shared behavior needs one stable value
-globals()["FIXED_CONSTRAINT_KINDS"] = FixedRuleKinds
-
-# this binding exists because shared behavior needs one stable value
-globals()["FORMAT_ID"] = FormatId
-
-# this binding exists because shared behavior needs one stable value
-globals()["FREECAD_BREP_FORMAT_IDS"] = FreecadBrepFormatIds
-
-# this binding exists because shared behavior needs one stable value
-globals()["FreeCADBrepWriteError"] = FreeCadBrepWriteError
-
-# this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_TYPE_IDS_BY_KIND"] = GeomTypeIdsByKind
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_GROUND_PROPERTY"] = JointGroundProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_REFERENCE_INDEX_BY_PROPERTY"] = JointRefIndexByProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_RESERVED_LINK_PROPERTIES"] = JointReservedLink
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPES"] = JointTypes
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPES_USING_DISTANCE"] = JointTypesUsingDistance
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPES_USING_SECOND_DISTANCE"] = JointTypesUsingSecond
-
-# this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPE_BY_MATE_KIND"] = JointTypeByMateKind
-
-# this binding exists because shared behavior needs one stable value
-globals()["MANIFEST_DATA_PROPERTY"] = KManifestDataProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["MANIFEST_ENCODING"] = KManifestEncoding
-
-# this binding exists because shared behavior needs one stable value
-globals()["MANIFEST_ENCODING_PROPERTY"] = KManifestEncodingProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["MANIFEST_ENTRY"] = KManifestEntry
-
-# this binding exists because shared behavior needs one stable value
-globals()["MANIFEST_SHA256_PROPERTY"] = KManifestShaTwoFiveSixPrA
-
-# this binding exists because shared behavior needs one stable value
-globals()["MIDPOINT_REFERENCE_POINT_NAMES"] = MidpointRefPointNames
-
-# this binding exists because shared behavior needs one stable value
-globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = KNativeDocShaTwoFiveSix
-
-# this binding exists because shared behavior needs one stable value
-globals()["NEUTRAL_GEOMETRY_TYPE_BY_KIND"] = NeutralGeomTypeByKind
-
-# this binding exists because shared behavior needs one stable value
-globals()["NEUTRAL_GEOMETRY_TYPE_ID_BY_KIND"] = NeutralGeomTypeIdByKind
-
-# this binding exists because shared behavior needs one stable value
-globals()["NativeBrepKey"] = KNativeBrepKey
-
-# this binding exists because shared behavior needs one stable value
-globals()["SKETCH_TYPE_ID"] = SketchTypeId
-
-# this binding exists because shared behavior needs one stable value
-globals()["SPLINE_CONTROL_TAGS"] = SplineControlTags
-
-# this binding exists because shared behavior needs one stable value
-globals()["SPLINE_GEOMETRY_KINDS"] = SplineGeomKinds
-
-# this binding exists because shared behavior needs one stable value
-globals()["STRING_HASHER_TAGS"] = StringHasherTags
-
-# this binding exists because shared behavior needs one stable value
-globals()["_Graph"] = ObjectGraph
-
-# this binding exists because shared behavior needs one stable value
-globals()["_IDENTITY_MATRIX"] = KIdentityMatrix
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_COMPRESSION_RATIO"] = KMaxCompressionRatio
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_DOCUMENT_SIZE"] = KMaxDocSize
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_ENTRIES"] = KMaxEntries
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_ENTRY_SIZE"] = KMaxEntrySize
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_EXTERNAL_FILES"] = KMaxOuterFiles
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_MANIFEST_JSON_DEPTH"] = KMaxManifestJsonDepth
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_TOTAL_SIZE"] = KMaxTotalSize
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_XML_DEPTH"] = KMaxXmlDepth
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_XML_NODES"] = KMaxXmlNodes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MIN_OBJECT_GRAPH_SCHEMA_VERSION"] = KMinObjectGraphSchema
-
-# this binding exists because shared behavior needs one stable value
-globals()["_Object"] = Object
-
-# this binding exists because shared behavior needs one stable value
-globals()["_Parameters"] = ParamCatalog
-
-# this binding exists because shared behavior needs one stable value
-globals()["_TARGET_FILE_VERSION"] = KTargetFileVersion
-
-# this binding exists because shared behavior needs one stable value
-globals()["_TARGET_PROGRAM_VERSION"] = KTargetProgramVersion
-
-# this binding exists because shared behavior needs one stable value
-globals()["_TARGET_SCHEMA_VERSION"] = KTargetSchemaVersion
-
-# this binding exists because shared behavior needs one stable value
-globals()["_add_assembly"] = AddAsmMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_add_assembly_origin"] = AddOriginMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_add_document_brep"] = AddBrepMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_add_document_meshes"] = AddMeshesMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_assembly_data"] = AsmData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_bool_property"] = BoolProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_canonical_manifest"] = CanonicalJson
-
-# this binding exists because shared behavior needs one stable value
-globals()["_constraint_carrier_reason"] = RuleCarrier
-
-# this binding exists because shared behavior needs one stable value
-globals()["_constraint_diagnostic"] = RuleDiag
-
-# this binding exists because shared behavior needs one stable value
-globals()["_constraints_property"] = ConstraintsProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_definition_mesh_sources"] = DefinitionMesh
-
-# this binding exists because shared behavior needs one stable value
-globals()["_definition_properties"] = DefinitionProps
-
-# this binding exists because shared behavior needs one stable value
-globals()["_definition_property"] = DefinitionProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_definition_tessellation"] = DefinitionA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_document_properties"] = DocProperties
-
-# this binding exists because shared behavior needs one stable value
-globals()["_document_xml"] = BuildDocXml
-
-# this binding exists because shared behavior needs one stable value
-globals()["_document_xml_manifest"] = DocXmlManifest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_edge_link_property"] = EdgeLinkProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_element_from_data"] = ElemFromData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_enum"] = EnumAction
-
-# this binding exists because shared behavior needs one stable value
-globals()["_enumeration_choices_property"] = EnumerationProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_enumeration_property"] = EnumerationProA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_expanded_instances"] = Expanded
-
-# this binding exists because shared behavior needs one stable value
-globals()["_expression_property"] = ExpressionProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_metadata"] = FeatureMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_parameter"] = FeatureParam
-
-# this binding exists because shared behavior needs one stable value
-globals()["_fillet_edges_data"] = FilletEdgesData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_fillet_edges_property"] = FilletEdgesProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_float_property"] = FloatProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_fmt"] = FmtAction
-
-# this binding exists because shared behavior needs one stable value
-globals()["_freecad_brep_payload"] = FreecadBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_geometry_property"] = GeomProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_grounded_joint"] = GroundJointMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_import_component_document"] = ImportCompMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_integer_property"] = IntegerProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_items"] = Items
-
-# this binding exists because shared behavior needs one stable value
-globals()["_json_property"] = JsonProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_line_profile_polygon"] = LineProfile
-
-# this binding exists because shared behavior needs one stable value
-globals()["_link_list_property"] = LinkListProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_link_property"] = LinkProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_link_sub_list_property"] = LinkSubListProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_mapping"] = ManifestMapping
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_joint_type"] = MateJointType
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_subelements"] = MateSubelements
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_value"] = MateScalar
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matrix_product"] = MatrixProduct
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matrix_scale"] = MatrixScale
+# this binding defines the supported archive entry size contract for native readers
+MAX_ENTRY_SIZE = KMaxEntrySize
 
-# this binding exists because shared behavior needs one stable value
-globals()["_matrix_transform"] = MatrixTransform
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matrix_values"] = MatrixValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_merge_named_property"] = MergeNamedMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mesh_kernel_data"] = MeshKernelData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mesh_property"] = MeshProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_midpoint_slots"] = MidpointSlots
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_brep_key"] = BuildBrepKey
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_closed_profile_count"] = NativeClosed
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_document_sha256"] = NativeDocShaTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_extensions"] = Native
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_geometry_element"] = NativeGeomElem
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_link_property_name"] = FindLinkProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_object"] = NativeObject
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_profiles_are_statically_sound"] = HasNativeProf
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_properties"] = NativeA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_sketch_analysis"] = NativeSketch
-
-# this binding exists because shared behavior needs one stable value
-globals()["_neutral_reference_point"] = NeutralRefPoint
-
-# this binding exists because shared behavior needs one stable value
-globals()["_normalize"] = Normalize
-
-# this binding exists because shared behavior needs one stable value
-globals()["_number"] = Number
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_bytes"] = PayloadBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_extension"] = PayloadSuffix
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_native_document_sha256"] = PayloadNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_role"] = PayloadRole
+# this binding defines the supported archive file count contract for native readers
+MAX_EXTERNAL_FILES = KMaxOuterFiles
 
-# this binding exists because shared behavior needs one stable value
-globals()["_placement_property"] = MakePlacement
-
-# this binding exists because shared behavior needs one stable value
-globals()["_point2"] = PointTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["_point_on_segment"] = IsPointOnSeg
-
-# this binding exists because shared behavior needs one stable value
-globals()["_point_segment_distance"] = PointSegment
-
-# this binding exists because shared behavior needs one stable value
-globals()["_points"] = Points
-
-# this binding exists because shared behavior needs one stable value
-globals()["_points_close"] = IsPointClose
+# this binding defines the supported archive aggregate size contract for native readers
+MAX_TOTAL_SIZE = KMaxTotalSize
 
-# this binding exists because shared behavior needs one stable value
-globals()["_profile_boundaries_intersect"] = IsProfile
+# this binding exposes deterministic payload keys to archive consumers
+native_brep_key = BuildBrepKey
 
 # this binding exists because shared behavior needs one stable value
-globals()["_property"] = PropAction
+ET = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["_python_proxy_property"] = PythonProxyProp
+FIXED_CONSTRAINT_KINDS = FixedRuleKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["_quaternion"] = Quaternion
+FORMAT_ID = FormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_raw_constraint_slots"] = RawRuleSlots
+FREECAD_BREP_FORMAT_IDS = FreecadBrepFormatIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["_reference_point"] = RefPoint
+FreeCADBrepWriteError = FreeCadBrepWriteError
 
 # this binding exists because shared behavior needs one stable value
-globals()["_rename_property_links"] = RenamePropLinks
+GEOMETRY_TYPE_IDS_BY_KIND = GeomTypeIdsByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["_replace_named_property"] = ReplaceNameMut
+JOINT_GROUND_PROPERTY = JointGroundProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_represented_native_object_names"] = Represented
+JOINT_REFERENCE_INDEX_BY_PROPERTY = JointRefIndexByProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_safe"] = SafeAction
+JOINT_RESERVED_LINK_PROPERTIES = JointReservedLink
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sanitize_payload_references"] = SanitizePayload
+JOINT_TYPES = JointTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segment_orientation"] = Segment
+JOINT_TYPES_USING_DISTANCE = JointTypesUsingDistance
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segments_intersect_or_touch"] = HasSegmentTouch
+JOINT_TYPES_USING_SECOND_DISTANCE = JointTypesUsingSecond
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sequence"] = Sequence
+JOINT_TYPE_BY_MATE_KIND = JointTypeByMateKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["_serialize_object_data"] = SerializeObject
+MANIFEST_DATA_PROPERTY = KManifestDataProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_shape_property"] = ShapeProp
+MANIFEST_ENCODING = KManifestEncoding
 
 # this binding exists because shared behavior needs one stable value
-globals()["_sketch_properties"] = BuildSketch
+MANIFEST_ENCODING_PROPERTY = KManifestEncodingProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_string_list_property"] = StringListProp
+MANIFEST_ENTRY = KManifestEntry
 
 # this binding exists because shared behavior needs one stable value
-globals()["_string_property"] = StringProp
+MANIFEST_SHA256_PROPERTY = KManifestShaTwoFiveSixPrA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_tessellation_data"] = Tessellation
+MIDPOINT_REFERENCE_POINT_NAMES = MidpointRefPointNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["_text"] = TextAction
+NATIVE_DOCUMENT_SHA256_ATTRIBUTE = KNativeDocShaTwoFiveSix
 
 # this binding exists because shared behavior needs one stable value
-globals()["_triangle_indices"] = TriangleIndices
+NEUTRAL_GEOMETRY_TYPE_BY_KIND = NeutralGeomTypeByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["_triangle_is_valid"] = IsTriangleValid
+NEUTRAL_GEOMETRY_TYPE_ID_BY_KIND = NeutralGeomTypeIdByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["_unique_payload_name"] = UniquePayload
+NativeBrepKey = KNativeBrepKey
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_archive_members"] = Validated
+SKETCH_TYPE_ID = SketchTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_document_xml"] = ValidatedDocXml
+SPLINE_CONTROL_TAGS = SplineControlTags
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_entry_name"] = ValidatedEntry
+SPLINE_GEOMETRY_KINDS = SplineGeomKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["_validated_object_name"] = ValidatedObject
+STRING_HASHER_TAGS = StringHasherTags
 
 # this binding exists because shared behavior needs one stable value
-globals()["_vector"] = Vector
+_Graph = ObjectGraph
 
 # this binding exists because shared behavior needs one stable value
-globals()["_vector_property"] = VectorProp
+_Parameters = ParamCatalog
 
-# this binding exists because shared behavior needs one stable value
-globals()["_without_tessellation"] = Without
+# this binding exposes validated archive construction to direct native consumers
+validated_archive_members = Validated
 
-# this binding exists because shared behavior needs one stable value
-globals()["_xlink_property"] = XlinkProp
+# this binding exposes validated document parsing to direct native consumers
+validated_document_xml = ValidatedDocXml
 
-# this binding exists because shared behavior needs one stable value
-globals()["_xlink_sub_property"] = XlinkSubProp
+# this binding exposes archive entry validation to direct native consumers
+validated_entry_name = ValidatedEntry
 
-# this binding exists because shared behavior needs one stable value
-globals()["_zip_entry"] = ZipEntry
+# this binding exposes object name validation to direct native consumers
+validated_object_name = ValidatedObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["base64"] = BaseSixFour
+base64 = BaseSixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()["brep_model_brep"] = BrepModelBrep
+brep_model_brep = BrepModelBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_fcstd_archive"] = BuildFcstdApi
+build_fcstd_archive = BuildFcstdApi
 
 # this binding exists because shared behavior needs one stable value
-globals()["copy"] = CopyValue
+copy = CopyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["extract_manifest_from_fcstd"] = ExtractManifest
+extract_manifest_from_fcstd = ExtractManifest
 
 # this binding exists because shared behavior needs one stable value
-globals()["field"] = Field
+field = Field
 
 # this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["io"] = IoStream
+io = IoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["json"] = JsonValue
+json = JsonValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["native_expression_parts"] = NativeParts
+native_expression_parts = NativeParts
 
 # this binding exists because shared behavior needs one stable value
-globals()["native_shape_feature_count"] = NativeShape
+native_shape_feature_count = NativeShape
 
 # this binding exists because shared behavior needs one stable value
-globals()["native_sketch_carrier_reasons"] = NativeSketchA
+native_sketch_carrier_reasons = NativeSketchA
 
 # this binding exists because shared behavior needs one stable value
-globals()["native_sketch_parts"] = NativeSketchB
+native_sketch_parts = NativeSketchB
 
 # this binding exists because shared behavior needs one stable value
-globals()["proven_ascii_brep"] = ProvenAsciiBrep
+proven_ascii_brep = ProvenAsciiBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["triangle_mesh_brep"] = TriangleMeshBrep
+triangle_mesh_brep = TriangleMeshBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["uuid"] = UuidValue
+uuid = UuidValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["zipfile"] = Zipfile
+zipfile = Zipfile
 
 # this binding exists because shared behavior needs one stable value
-globals()["zlib"] = ZlibValue
+zlib = ZlibValue

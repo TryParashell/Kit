@@ -153,7 +153,7 @@ KWrapperMetaKeys = frozenset(
 
 # this definition exists because focused behavior needs one stable owner
 class CatiaAdapterA(RuntimeError):
-    KSlots = ()
+    __slots__ = ()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -161,13 +161,13 @@ class CatiaMetadata:
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def info(self) -> AdapterInfo:
         return InfoValue
 
     # this definition exists because focused behavior needs one stable owner
-    def Probe(Instance, Source: Source) -> ProbeResult:
+    def probe(self, Source: Source) -> ProbeResult:
         try:
-            DataValue, Ignored = SourceBytesMut(Source)
+            DataValue, _ = SourceBytesMut(Source)
             Archive = CfvTwoArchive.from_bytes(DataValue)
             Manifest = ManifestBytes(Archive)
             if Manifest is not None:
@@ -187,17 +187,12 @@ class CatiaMetadata:
         ) as ErrorInfo:
             return ProbeResult(KFormatId, 0.0, str(ErrorInfo))
 
-    locals()["info"] = InfoAction
-    locals()["probe"] = Probe
-
 
 # this definition exists because focused behavior needs one stable owner
 class CatiaReader:
 
     # this definition exists because focused behavior needs one stable owner
-    def ReadAction(
-        Instance, Source: Source, Options: ReadOptions | None = None
-    ) -> CadDoc:
+    def read(self, Source: Source, Options: ReadOptions | None = None) -> CadDoc:
         Settings = Options or ReadOptions()
         DataValue, Label = SourceBytesMut(Source)
         Archive = CfvTwoArchive.from_bytes(DataValue)
@@ -208,7 +203,7 @@ class CatiaReader:
         Payloads = NativePayloads(Archive, DataValue, DocType, Settings)
         if DocType == ProductDocType:
             AsmValue, AsmDiagnostics = NativeProductAsm(
-                Archive, Label, Settings, Instance.read
+                Archive, Label, Settings, self.read
             )
         else:
             AsmValue, AsmDiagnostics = (None, ())
@@ -280,28 +275,24 @@ class CatiaReader:
             DocValue.assert_valid()
         return DocValue
 
-    locals()["read"] = ReadAction
-
 
 # this definition exists because focused behavior needs one stable owner
 class CatiaSupport:
 
     # this definition exists because focused behavior needs one stable owner
-    def CanSupport(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+    def supports(self, DocValue: CadDocument, Target: Destination) -> bool:
         if isinstance(Target, (str, FilePath)):
             Expected = KProductSuffix if DocValue.assembly is not None else KPartSuffix
             return FilePath(Target).suffix.casefold() == Expected
         return IsBinaryTarget(Target)
-
-    locals()["supports"] = CanSupport
 
 
 # this definition exists because focused behavior needs one stable owner
 class CatiaWriter:
 
     # this definition exists because focused behavior needs one stable owner
-    def Write(
-        Instance,
+    def write(
+        self,
         DocValue: CadDocument,
         Target: Destination,
         Options: WriteOptions | None = None,
@@ -329,14 +320,10 @@ class CatiaWriter:
             )
         return WriteCarrier(DocValue, Target, Settings, DocType, CarrierDoc)
 
-    locals()["write"] = Write
-
 
 # this definition exists because focused behavior needs one stable owner
 class CatiaAdapter(CatiaMetadata, CatiaReader, CatiaSupport, CatiaWriter):
-    KAdapterSlots = ()
-
-    locals()["__slots__"] = KAdapterSlots
+    __slots__ = ()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -519,10 +506,16 @@ def SourceBytesMut(Source: Source) -> tuple[bytes, str]:
     Reader = getattr(Source, "read", None)
     if not callable(Reader):
         raise TypeError("CATIA source must be a path, bytes, or binary stream")
-    Position = Source.tell() if hasattr(Source, "tell") else None
+    TellMethod = getattr(Source, "tell", None)
+    SeekMethod = getattr(Source, "seek", None)
+    Position: int | None = None
+    if callable(TellMethod) and callable(SeekMethod):
+        PositionValue: object = TellMethod()
+        if isinstance(PositionValue, int):
+            Position = PositionValue
     Value = Reader()
-    if Position is not None and hasattr(Source, "seek"):
-        Source.seek(Position)
+    if Position is not None and callable(SeekMethod):
+        SeekMethod(Position)
     if not isinstance(Value, (bytes, bytearray)):
         raise TypeError("CATIA source stream must be binary")
     return (bytes(Value), getattr(Source, "name", "<stream>"))
@@ -1688,7 +1681,7 @@ def IsCgmPayload(Payload: bytes) -> bool:
         return False
     Cursor = 5
     Labels: list[bytes] = []
-    for Ignored in range(2):
+    for _ in range(2):
         if Cursor + 4 > len(Payload):
             return False
         Length = Struct.unpack_from("<I", Payload, Cursor)[0]
@@ -2084,11 +2077,7 @@ def DigestDoc(
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            DigestDoc(ItemValue.document, IgnoredPayload)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=DigestDoc(ItemValue.document, IgnoredPayload),
                     )
                     for ItemValue in Nested.documents
                 )
@@ -2139,364 +2128,124 @@ def WriteCatia(
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Body"] = BodyRecord
+Body = BodyRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CatiaAdapterError"] = CatiaAdapterA
+CatiaAdapterError = CatiaAdapterA
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Archive"] = CfvTwoArchive
+Cfv2Archive = CfvTwoArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Declaration"] = CfvTwoDecl
+Cfv2Declaration = CfvTwoDecl
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Directory"] = CfvTwoFolder
+Cfv2Directory = CfvTwoFolder
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2FormatError"] = CfvTwoFormatError
+Cfv2FormatError = CfvTwoFormatError
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Stream"] = CfvTwoStream
+Cfv2Stream = CfvTwoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["Configuration"] = Config
+Configuration = Config
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_TYPE_BY_SUFFIX"] = DocTypeBySuffix
+DOCUMENT_TYPE_BY_SUFFIX = DocTypeBySuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["Destination"] = Target
+Destination = Target
 
 # this binding exists because shared behavior needs one stable value
-globals()["Diagnostic"] = DiagnosticInfo
+Diagnostic = DiagnosticInfo
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = InfoValue
+INFO = InfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_DOCUMENT_TYPE"] = PartDocType
+PART_DOCUMENT_TYPE = PartDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["PRODUCT_DOCUMENT_TYPE"] = ProductDocType
+PRODUCT_DOCUMENT_TYPE = ProductDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX_BY_DOCUMENT_TYPE"] = SuffixByDocType
+SUFFIX_BY_DOCUMENT_TYPE = SuffixByDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector3"] = VectorThree
+Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FORMAT_ID"] = KFormatId
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MANIFEST_MAGIC"] = KManifestMagic
+append_cfv2_stream = AppendCfvTwoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MANIFEST_NAME"] = KManifestName
+build_cfv2 = BuildCfvTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_MANIFEST_BYTES"] = KMaxManifestBytes
+build_declaration = BuildDecl
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_MANIFEST_JSON_DEPTH"] = KMaxManifestJsonDepth
+decode_opencascade_brep = DecodeOpencascadeBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NATIVE_DOCUMENT_BINDING_ID"] = KNativeDocBindingId
+decode_parasolid_brep = DecodeParasolidBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NATIVE_DOCUMENT_ID"] = KNativeDocId
+decode_product_table = DecodeProductTable
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NEUTRAL_BREP_FORMAT_IDS"] = KNeutralBrepFormatIds
+filter_document = FilterDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_OPENCASCADE_FORMAT_IDS"] = KOpencascadeFormatIds
+frozen_mapping = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PARASOLID_FORMAT_IDS"] = KParasolidFormatIds
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PART_STREAM"] = KPartStream
+infer_capabilities = InferCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PART_SUFFIX"] = KPartSuffix
+is_binary_destination = IsBinaryTarget
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRESERVED_BINDING_PREFIX"] = KSavedBindingPrefix
+native_product_assembly = NativeProductAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRESERVED_DOCUMENT_PREFIX"] = KSavedDocPrefix
+os = OsModule
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRODUCT_STREAM"] = KProductStream
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRODUCT_SUFFIX"] = KProductSuffix
+read_catia = ReadCatia
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REPLAY_SEMANTIC_ATTRIBUTE"] = KReplaySemanticAttr
+replace = Replace
 
 # this binding exists because shared behavior needs one stable value
-globals()["_WRAPPER_METADATA_KEYS"] = KWrapperMetaKeys
+semantic_metadata = SemanticMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["_application_version"] = AppVersion
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["_binding_matches_payload"] = IsBindingMatch
+suppress = Suppress
 
 # this binding exists because shared behavior needs one stable value
-globals()["_carrier_manifest_document"] = CarrierManifest
+with_wrapper_metadata = WithWrapperMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["_carrier_semantic_digest"] = CarrierSemantic
+write_catia = WriteCatia
 
 # this binding exists because shared behavior needs one stable value
-globals()["_catia_envelope_payload"] = IsCatiaEnvelope
-
-# this binding exists because shared behavior needs one stable value
-globals()["_container_metadata"] = ContainerMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["_declared_container_role"] = DeclaredRole
-
-# this binding exists because shared behavior needs one stable value
-globals()["_declared_osmx_role"] = DeclaredOsmx
-
-# this binding exists because shared behavior needs one stable value
-globals()["_decode_typed_brep"] = DecodeTypedBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_destination_type"] = TargetType
-
-# this binding exists because shared behavior needs one stable value
-globals()["_digest_document"] = DigestDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_document_digest"] = DocDigest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_document_type"] = DetectDocType
-
-# this binding exists because shared behavior needs one stable value
-globals()["_embedded_document"] = EmbeddedDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_archive"] = Generated
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_brep_mode_payload"] = IsBrepMode
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_catia_document_binding"] = IsCatiaDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_catia_document_payload"] = IsCatiaDocA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_cgm_payload"] = IsCgmPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_cgr_payload"] = IsCgrPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_delta_payload"] = IsDeltaPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_mfbrp_payload"] = IsMfbrpPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_native_document_binding"] = IsNativeDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_native_document_payload"] = IsNativeDocA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_preserved_document_binding"] = IsSavedDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_preserved_document_payload"] = IsSavedDocA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_logical_spans"] = LogicalSpans
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_bytes"] = ManifestBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_document"] = ManifestDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_json"] = ManifestJson
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matching_document_binding"] = MatchingDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_base_overlay_matches"] = IsNativeBase
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_base_payload"] = NativeBaseA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_candidate_is_unchanged"] = IsNativeChoice
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_container_data_included"] = CanIncludeData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_container_specification"] = NativeContaineA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_document_binding"] = NativeDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_document_binding_matches"] = IsNativeBinding
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_document_payload"] = NativeDocB
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_part_data"] = NativePartData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_payload_matches_document"] = IsNativePayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_payloads"] = NativePayloads
-
-# this binding exists because shared behavior needs one stable value
-globals()["_osmx_metadata"] = OsmxMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["_osmx_payload_role"] = OsmxPayloadRole
-
-# this binding exists because shared behavior needs one stable value
-globals()["_overlay_preserves_native_base"] = IsOverlayNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_pack_manifest"] = PackManifest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_part_planes"] = PartPlanes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_part_semantic_digest"] = PartSemantic
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_signature"] = PayloadDigest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_preserved_replay_digest"] = SavedReplay
-
-# this binding exists because shared behavior needs one stable value
-globals()["_replay_compatibility"] = Replay
-
-# this binding exists because shared behavior needs one stable value
-globals()["_restore_generated"] = Restore
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selected_configurations"] = Selected
-
-# this binding exists because shared behavior needs one stable value
-globals()["_semantic_digest"] = SemanticDigest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_source_bytes"] = SourceBytesMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_stream_provenance"] = StreamSource
-
-# this binding exists because shared behavior needs one stable value
-globals()["_summary_stream"] = SummaryStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["_symbol_provenance"] = SymbolSource
-
-# this binding exists because shared behavior needs one stable value
-globals()["_typed_brep"] = TypedBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unchanged_native_payload"] = UnchangedNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unpack_manifest"] = UnpackManifest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_bytes"] = WriteBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["append_cfv2_stream"] = AppendCfvTwoStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_cfv2"] = BuildCfvTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_declaration"] = BuildDecl
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_opencascade_brep"] = DecodeOpencascadeBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_parasolid_brep"] = DecodeParasolidBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_product_table"] = DecodeProductTable
-
-# this binding exists because shared behavior needs one stable value
-globals()["filter_document"] = FilterDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["frozen_mapping"] = FrozenMapping
-
-# this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
-
-# this binding exists because shared behavior needs one stable value
-globals()["infer_capabilities"] = InferCapabilities
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_binary_destination"] = IsBinaryTarget
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_product_assembly"] = NativeProductAsm
-
-# this binding exists because shared behavior needs one stable value
-globals()["os"] = OsModule
-
-# this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
-
-# this binding exists because shared behavior needs one stable value
-globals()["read_catia"] = ReadCatia
-
-# this binding exists because shared behavior needs one stable value
-globals()["replace"] = Replace
-
-# this binding exists because shared behavior needs one stable value
-globals()["semantic_metadata"] = SemanticMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["suppress"] = Suppress
-
-# this binding exists because shared behavior needs one stable value
-globals()["with_wrapper_metadata"] = WithWrapperMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["write_catia"] = WriteCatia
-
-# this binding exists because shared behavior needs one stable value
-globals()["zlib"] = ZlibValue
+zlib = ZlibValue

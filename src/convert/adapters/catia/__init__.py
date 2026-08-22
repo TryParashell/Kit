@@ -27,38 +27,55 @@ from convert.adapters.catia.Container import (
     build_declaration as BuildDecl,
 )
 
-# this binding exists because shared behavior needs one stable value
-KAllValue = [NameValue for NameValue in globals() if not NameValue.startswith("_")]
+# explicit exports keep the CATIA compatibility boundary visible to static analysis
+__all__ = (
+    "CatiaAdapter",
+    "CatiaAdapterError",
+    "Cfv2Archive",
+    "Cfv2Declaration",
+    "Cfv2Directory",
+    "Cfv2Extent",
+    "Cfv2FormatError",
+    "Cfv2Stream",
+    "OsmxArchive",
+    "OsmxFormatError",
+    "OsmxSymbol",
+    "append_cfv2_stream",
+    "build_cfv2",
+    "build_declaration",
+    "read_catia",
+    "write_catia",
+)
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Archive"] = CfvTwoArchive
+Cfv2Archive = CfvTwoArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Declaration"] = CfvTwoDecl
+Cfv2Declaration = CfvTwoDecl
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Directory"] = CfvTwoFolder
+Cfv2Directory = CfvTwoFolder
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Extent"] = CfvTwoExtent
+Cfv2Extent = CfvTwoExtent
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2FormatError"] = CfvTwoFormatError
+Cfv2FormatError = CfvTwoFormatError
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Stream"] = CfvTwoStream
+Cfv2Stream = CfvTwoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["append_cfv2_stream"] = AppendCfvTwoStream
+append_cfv2_stream = AppendCfvTwoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_cfv2"] = BuildCfvTwo
+build_cfv2 = BuildCfvTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_declaration"] = BuildDecl
+build_declaration = BuildDecl
 
 # this binding exists because shared behavior needs one stable value
-globals()["read_catia"] = ReadCatia
+read_catia = ReadCatia
 
 # this binding exists because shared behavior needs one stable value
-globals()["write_catia"] = WriteCatia
+write_catia = WriteCatia

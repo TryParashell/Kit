@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyEnums import ComponentKind
@@ -21,31 +21,46 @@ from interchange.records.RecordProvenance import Provenance
 # component definitions describe reusable nodes independently from their occurrences
 @ModelDataMut(
     DefaultMap={
-        "DocumentId": "",
-        "ConfigurationName": "",
-        "ConfigurationId": "",
-        "BoundingBox": None,
-        "BodyIds": (),
-        "MeshIds": (),
-        "SourcePath": "",
-        "SourceFormatId": "",
-        "SourceDigest": "",
-        "Provenance": None,
+        "document_id": "",
+        "configuration_name": "",
+        "configuration_id": "",
+        "bounding_box": None,
+        "body_ids": (),
+        "mesh_ids": (),
+        "source_path": "",
+        "source_format_id": "",
+        "source_sha256": "",
+        "provenance": None,
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class ComponentDef(ModelBase):
-    EntityId: str
-    EntityName: str
-    EntityKind: ComponentKind | str
-    DocumentId: str
-    ConfigurationName: str
-    ConfigurationId: str
-    BoundingBox: BoundingBox | None
-    BodyIds: tuple[str, ...]
-    MeshIds: tuple[str, ...]
-    SourcePath: str
-    SourceFormatId: str
-    SourceDigest: str
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    kind: ComponentKind | str
+    document_id: str
+    configuration_name: str
+    configuration_id: str
+    bounding_box: BoundingBox | None
+    body_ids: tuple[str, ...]
+    mesh_ids: tuple[str, ...]
+    source_path: str
+    source_format_id: str
+    source_sha256: str
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        EntityKind: ClassVar[ComponentKind | str]
+        DocumentId: ClassVar[str]
+        ConfigurationName: ClassVar[str]
+        ConfigurationId: ClassVar[str]
+        BoundingBox: ClassVar[BoundingBox | None]
+        BodyIds: ClassVar[tuple[str, ...]]
+        MeshIds: ClassVar[tuple[str, ...]]
+        SourcePath: ClassVar[str]
+        SourceFormatId: ClassVar[str]
+        SourceDigest: ClassVar[str]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

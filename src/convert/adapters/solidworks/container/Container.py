@@ -10,7 +10,7 @@ from __future__ import annotations as Annotations
 from dataclasses import dataclass as Dataclass
 from pathlib import Path as FilePath
 import struct as Struct
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, cast as CastValue
 import zlib as ZlibValue
 from convert.adapters.solidworks.container.Format import (
     CONTENT_TYPES_STREAM as ContentTypesStream,
@@ -77,73 +77,96 @@ def Signature(FileId: int) -> tuple[bytes, bytes, bytes] | None:
 # this definition exists because focused behavior needs one stable owner
 def Container(BlobValue: bytes | bytearray) -> tuple[bytes, bytes, bytes]:
     DataValue = bytes(BlobValue)
-    Signatures, Ignored = TemplateFields(DataValue, SldprtArchive.from_bytes(DataValue))
+    Signatures, _ = TemplateFields(DataValue, SldprtArchive.from_bytes(DataValue))
     return Signatures
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class StreamRecord:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["data"] = "bytes"
-    __annotations__["offset"] = "int"
-    __annotations__["payload_offset"] = "int"
-    __annotations__["compressed_size"] = "int"
-    __annotations__["uncompressed_size"] = "int"
-    __annotations__["crc32"] = "int"
-    __annotations__["signature"] = "bytes"
+    name: str
+    data: bytes
+    offset: int
+    payload_offset: int
+    compressed_size: int
+    uncompressed_size: int
+    crc32: int
+    signature: bytes
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SldprtArchive:
-    locals().setdefault("__annotations__", {})
-    __annotations__["path"] = "Path"
-    __annotations__["file_id"] = "int"
-    __annotations__["format_version"] = "int"
-    __annotations__["records"] = "tuple[StreamRecord, ...]"
+    path: FilePath
+    file_id: int
+    format_version: int
+    records: tuple[StreamRecord, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def OpenAction(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
-        return OpenArchive(ClassType, SourcePath)
+    def OpenAction(
+        cls: type[SldprtArchive], SourcePath: str | FilePath
+    ) -> SldprtArchive:
+        return OpenArchive(cls, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromBytes(
-        ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath = "<memory>"
+        cls: type[SldprtArchive],
+        BlobValue: bytes | bytearray,
+        SourcePath: str | FilePath = "<memory>",
     ) -> SldprtArchive:
-        return ParseArchive(ClassType, BlobValue, SourcePath)
+        return ParseArchive(cls, BlobValue, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def Streams(Instance) -> dict[str, bytes]:
-        return {Record.name: Record.data for Record in Instance.records}
+    def Streams(self) -> dict[str, bytes]:
+        return {Record.name: Record.data for Record in self.records}
 
     # this definition exists because focused behavior needs one stable owner
-    def GetAction(Instance, NameValue: str) -> bytes | None:
+    def GetAction(self, NameValue: str) -> bytes | None:
         return next(
-            (Record.data for Record in Instance.records if Record.name == NameValue),
+            (Record.data for Record in self.records if Record.name == NameValue),
             None,
         )
 
     # this definition exists because focused behavior needs one stable owner
-    def Require(Instance, NameValue: str) -> bytes:
-        DataValue = Instance.get(NameValue)
+    def Require(self, NameValue: str) -> bytes:
+        DataValue = self.GetAction(NameValue)
         if DataValue is None:
             raise SldprtFormat(f"required stream is missing: {NameValue}")
         return DataValue
 
-    locals()["from_bytes"] = FromBytes
-    locals()["get"] = GetAction
-    locals()["open"] = OpenAction
-    locals()["require"] = Require
-    locals()["streams"] = Streams
+    @classmethod
+    def from_bytes(
+        cls: type[SldprtArchive],
+        BlobValue: bytes | bytearray,
+        SourcePath: str | FilePath = "<memory>",
+    ) -> SldprtArchive:
+        return cls.FromBytes(BlobValue, SourcePath)
+
+    # compatibility callers require the conventional archive open spelling
+    @classmethod
+    def open(cls: type[SldprtArchive], SourcePath: str | FilePath) -> SldprtArchive:
+        return cls.OpenAction(SourcePath)
+
+    # compatibility callers require stream lookup through the conventional spelling
+    def get(self, NameValue: str) -> bytes | None:
+        return self.GetAction(NameValue)
+
+    # compatibility callers require stream lookup through the conventional spelling
+    def require(self, NameValue: str) -> bytes:
+        return self.Require(NameValue)
+
+    @property
+    def streams(self) -> dict[str, bytes]:
+        return self.Streams
 
 
 # this definition exists because archive loading needs one filesystem boundary
-def OpenArchive(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
+def OpenArchive(
+    ClassType: type[SldprtArchive], SourcePath: str | FilePath
+) -> SldprtArchive:
     Source = FilePath(SourcePath).expanduser().resolve()
     try:
         BlobValue = Source.read_bytes()
@@ -154,7 +177,9 @@ def OpenArchive(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
 
 # this definition exists because archive parsing needs one validated construction boundary
 def ParseArchive(
-    ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath = "<memory>"
+    ClassType: type[SldprtArchive],
+    BlobValue: bytes | bytearray,
+    SourcePath: str | FilePath = "<memory>",
 ) -> SldprtArchive:
     Source = FilePath(SourcePath)
     DataValue = bytes(BlobValue)
@@ -178,19 +203,48 @@ def BuildSldprt(
     **Options: object,
 ) -> bytes:
     OptionsMap = dict(Options)
-    FileId = OptionsMap.pop("file_id", FileId)
-    FormatVersion = OptionsMap.pop("format_version", FormatVersion)
-    Template = OptionsMap.pop("template", Template)
-    Signatures = OptionsMap.pop("signatures", Signatures)
+    FileIdValue = OptionsMap.pop("file_id", FileId)
+    VersionValue = OptionsMap.pop("format_version", FormatVersion)
+    TemplateValue = OptionsMap.pop("template", Template)
+    SignatureValue = OptionsMap.pop("signatures", Signatures)
     if OptionsMap:
         Unknown = next(iter(OptionsMap))
         raise TypeError(f"BuildSldprt() got an unexpected keyword argument '{Unknown}'")
+    if FileIdValue is not None and not isinstance(FileIdValue, int):
+        raise TypeError("file_id must be an integer or None")
+    if not isinstance(VersionValue, int):
+        raise TypeError("format_version must be an integer")
+    if TemplateValue is not None and not isinstance(TemplateValue, (bytes, bytearray)):
+        raise TypeError("template must be bytes or None")
+    if SignatureValue is not None:
+        if not isinstance(SignatureValue, tuple):
+            raise TypeError("signatures must contain three byte values")
+        SignatureObjects = CastValue(tuple[object, ...], SignatureValue)
+        if len(SignatureObjects) != 3 or not all(
+            isinstance(Value, (bytes, bytearray)) for Value in SignatureObjects
+        ):
+            raise TypeError("signatures must contain three byte values")
+        SignatureItems = CastValue(tuple[bytes | bytearray, ...], SignatureValue)
+        Signatures = (
+            bytes(SignatureItems[0]),
+            bytes(SignatureItems[1]),
+            bytes(SignatureItems[2]),
+        )
+    else:
+        Signatures = None
+    FileId = FileIdValue
+    FormatVersion = VersionValue
+    Template = TemplateValue
     FileId, SignatureSet, TypeIds = ResolveBuild(FileId, Template, Signatures)
     if not 0 <= FileId <= 4294967295:
         raise ValueError("SLDPRT file id must fit in 32 bits")
     if FormatVersion not in ContainerVersions:
         raise ValueError("SLDPRT container version must be 3 or 4")
-    Items = list(Streams.items() if isinstance(Streams, Mapping) else Streams)
+    if isinstance(Streams, Mapping):
+        StreamMap = CastValue(Mapping[str, bytes], Streams)
+        Items = list(StreamMap.items())
+    else:
+        Items = list(Streams)
     ValidateStreams(Items)
     return EmitSldprt(Items, FileId, FormatVersion, SignatureSet, TypeIds)
 
@@ -209,7 +263,11 @@ def ResolveBuild(
             raise ValueError("SLDPRT signatures must be three four byte values")
         if FileId is None:
             raise ValueError("SLDPRT signatures require the paired file id")
-        Signatures = tuple((bytes(Value) for Value in Signatures))
+        Signatures = (
+            bytes(Signatures[0]),
+            bytes(Signatures[1]),
+            bytes(Signatures[2]),
+        )
     elif Template is None:
         if FileId is None:
             FileId = KDefaultFileId
@@ -233,7 +291,7 @@ def ResolveBuild(
 
 # this definition exists because stream validation must precede any emitted bytes
 def ValidateStreams(Items: list[tuple[str, bytes]]) -> None:
-    Names = [NameValue for NameValue, Ignored in Items]
+    Names = [NameValue for NameValue, _ in Items]
     if len(Names) != len(set(Names)):
         raise ValueError("SLDPRT stream names must be unique")
     if len(Items) > KMaxFolderStreamCount:
@@ -575,100 +633,46 @@ def EndSignature(BlobValue: bytes, CentralStart: int, Count: int) -> bytes:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTAINER_VERSIONS"] = ContainerVersions
+CONTAINER_VERSIONS = ContainerVersions
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTENT_TYPES_STREAM"] = ContentTypesStream
+CONTENT_TYPES_STREAM = ContentTypesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_FILE_ID"] = KDefaultFileId
+DEFAULT_FILE_ID = KDefaultFileId
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_SIGNATURES"] = KDefaultSignatures
+DEFAULT_SIGNATURES = KDefaultSignatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["RELATIONSHIPS_STREAM"] = RelationshipsStream
+RELATIONSHIPS_STREAM = RelationshipsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["SldprtFormatError"] = SldprtFormat
+SldprtFormatError = SldprtFormat
+
+# reverse engineering tools still consume this private compatibility boundary
+_template_fields = TemplateFields  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ARCHIVE_OFFSET"] = KArchiveOffset
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_FILE_ID"] = KDefaultFileIdA
+build_sldprt = BuildSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_TYPE_ID"] = KDefaultTypeId
+container_signatures = Container
 
 # this binding exists because shared behavior needs one stable value
-globals()["_LOCAL_SIGNATURE_PREFIX"] = KLocalSignaturePrefix
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_LOCAL_SIGNATURE_SIZE"] = KLocalSignatureSize
+signature_triplet = Signature
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_ARCHIVE_OFFSET"] = KMaxArchiveOffset
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_DIRECTORY_STREAM_COUNT"] = KMaxFolderStreamCount
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_NAME_BYTES"] = KMaxNameBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_STREAM_COUNT"] = KMaxStreamCount
-
-# this binding exists because shared behavior needs one stable value
-globals()["_MAX_UNCOMPRESSED_STREAM"] = KMaxUncompressedStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["_TYPE_IDS_BY_NAME"] = KTypeIdsByName
-
-# this binding exists because shared behavior needs one stable value
-globals()["_decode_scanned_candidate"] = DecodeScanned
-
-# this binding exists because shared behavior needs one stable value
-globals()["_encode_directory_entry"] = EncodeFolder
-
-# this binding exists because shared behavior needs one stable value
-globals()["_encode_record"] = EncodeRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_encoded_name"] = EncodedName
-
-# this binding exists because shared behavior needs one stable value
-globals()["_end_signature"] = EndSignature
-
-# this binding exists because shared behavior needs one stable value
-globals()["_nibble_swap"] = NibbleSwap
-
-# this binding exists because shared behavior needs one stable value
-globals()["_scan_records"] = ScanRecords
-
-# this binding exists because shared behavior needs one stable value
-globals()["_template_fields"] = TemplateFields
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_sldprt"] = BuildSldprt
-
-# this binding exists because shared behavior needs one stable value
-globals()["container_signatures"] = Container
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
-
-# this binding exists because shared behavior needs one stable value
-globals()["signature_triplet"] = Signature
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["zlib"] = ZlibValue
+zlib = ZlibValue

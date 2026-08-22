@@ -13,7 +13,6 @@ from pathlib import Path as PathInfo
 
 from convert.Security.PathBoundary import ResolveArgPath, ResolveWithin, UnsafePath
 
-
 # exact executable names prevent the oracle setting from selecting another program
 KFreecadNames = frozenset(("FreeCADCmd", "FreeCADCmd.exe", "freecadcmd"))
 

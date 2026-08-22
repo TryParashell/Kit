@@ -37,9 +37,12 @@ def ExtractBrep(
     UsedNames: set[str] = set()
     for IndexValue, PayloadData in enumerate(GetBrepPayloads(DocumentData), start=1):
         OutputName = MakeBrepNameMut(PayloadData, IndexValue, UsedNames)
-        OutputPath = TargetPath / f"{OutputName}{PayloadData.file_extension}"
+        OutputPath = TargetPath / f"{OutputName}{PayloadData.FileExtension}"
         if OutputPath.exists() and not Overwrite:
             raise FileExistsError(OutputPath)
-        OutputPath.write_bytes(PayloadData.data)
+        PayloadBytes = PayloadData.PayloadData
+        if PayloadBytes is None:
+            continue
+        OutputPath.write_bytes(PayloadBytes)
         OutputPaths.append(OutputPath)
     return tuple(OutputPaths)

@@ -12,7 +12,15 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    BuildOverrides,
+    FieldOp,
+    FieldOverrides,
+)
+from convert.adapters.solidworks.programs.Common.FieldEncoder import (
+    BuildShiftMap,
+    RequireInt,
+)
 
 from convert.adapters.solidworks.programs.assembly.mixed.sextuples.Program import (
     EncodeField,
@@ -117,14 +125,15 @@ KHeaderTailStart = 2734
 
 # operation emission preserves typed ownership while replacing semantic fields
 def EncodeOps(
-    Operations: Sequence[tuple[int, int, int, str, AnyValue]],
-    Overrides: Mapping[int, AnyValue],
+    Operations: Sequence[FieldOp],
+    Overrides: FieldOverrides,
     BasePos: int = 0,
     XformPos: int | None = None,
-    XformItem: AnyValue | None = None,
+    XformItem: RepeatItem | None = None,
 ) -> bytes:
     OutputData = bytearray()
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+    for Operation in Operations:
+        StartPos, KindName, DefaultValue = Operation[0], Operation[3], Operation[4]
         RelativePos = StartPos - BasePos
         if XformPos is not None and XformItem is not None:
             if RelativePos == XformPos:
@@ -138,7 +147,7 @@ def EncodeOps(
 
 
 # native transform records need an explicit basis only for rotated occurrences
-def EncodeXform(ItemValue: AnyValue) -> bytes:
+def EncodeXform(ItemValue: RepeatItem) -> bytes:
     BasisVals = tuple(ItemValue.BasisVals)
     if len(BasisVals) != 9:
         raise SldprtFormatError("native assembly basis requires nine values")
@@ -164,7 +173,7 @@ def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[tuple[int, int, int, str, AnyValue], ...]:
+) -> tuple[FieldOp, ...]:
     return tuple(
         Operation
         for Operation in StreamPrograms[StreamName]
@@ -321,13 +330,15 @@ def EncodeConfig(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     SuffixOps = SliceOps("Contents/Config-0", SuffixStart)
-    SuffixOverrides: dict[int, AnyValue] = {}
-    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
-        RelativePos = StartPos - SuffixStart
-        if RelativePos in KConfigShiftMap:
-            SuffixOverrides[RelativePos] = DefaultValue + MapShift
-        elif RelativePos in KConfigShiftUniq:
-            SuffixOverrides[RelativePos] = DefaultValue + UniqueShift
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        (
+            (KConfigShiftMap, MapShift),
+            (KConfigShiftUniq, UniqueShift),
+        ),
+        "configuration suffix reference",
+    )
     SuffixOverrides[23282] = ItemCount
     SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
@@ -368,9 +379,11 @@ def EncodeResolved(
             UnitStart + UnitWidth,
         )
         RefValues = {
-            StartPos - UnitStart: DefaultValue + BaseShift
-            for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in UnitOps
-            if KindName == "classref"
+            Operation[0]
+            - UnitStart: RequireInt(Operation[4], "resolved unit reference")
+            + BaseShift
+            for Operation in UnitOps
+            if Operation[3] == "classref"
         }
         UnitData.extend(
             EncodeOps(
@@ -385,15 +398,16 @@ def EncodeResolved(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     SuffixOps = SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
-    SuffixOverrides: dict[int, AnyValue] = {}
-    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
-        RelativePos = StartPos - SuffixStart
-        if RelativePos in KResolvedShiftMap:
-            SuffixOverrides[RelativePos] = DefaultValue + LinkShift
-        elif RelativePos in KResolvedShiftBase:
-            SuffixOverrides[RelativePos] = DefaultValue + BaseShift
-        elif RelativePos in KResolvedShiftUniq:
-            SuffixOverrides[RelativePos] = DefaultValue + UniqueShift
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        (
+            (KResolvedShiftMap, LinkShift),
+            (KResolvedShiftBase, BaseShift),
+            (KResolvedShiftUniq, UniqueShift),
+        ),
+        "resolved suffix reference",
+    )
     SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
@@ -434,14 +448,16 @@ def EncodeHeader(
         )
     FirstItem = UniqueItems[0]
     FirstStem = PureWindowsPath(FirstItem.CompPath).stem
-    ExtOverrides = {
-        4: 24 + ItemCount,
-        31: UniqueCount,
-        75: FirstItem.CompPath,
-        211: 64 + (2 * ItemCount),
-        213: FirstStem,
-        254: PathCounts[PathKey(FirstItem.CompPath)],
-    }
+    ExtOverrides = BuildOverrides(
+        {
+            4: 24 + ItemCount,
+            31: UniqueCount,
+            75: FirstItem.CompPath,
+            211: 64 + (2 * ItemCount),
+            213: FirstStem,
+            254: PathCounts[PathKey(FirstItem.CompPath)],
+        }
+    )
     if FirstItem.FileStamp > 0:
         ExtOverrides[232] = FirstItem.FileStamp
     ExtPrefix = EncodeOps(
@@ -458,15 +474,17 @@ def EncodeHeader(
         TemplateIndex = min(FileIndex, KTracedUnique)
         FileStart = KHeaderFileStart + ((TemplateIndex - 2) * KHeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
-        FileOverrides = {
-            0: 62 + (2 * ItemCount),
-            2: 64 + (2 * ItemCount),
-            4: ItemValue.CompPath,
-            140: 64 + (2 * ItemCount),
-            142: FileStem,
-            183: PathCounts[PathKey(ItemValue.CompPath)],
-            191: FileIndex - 1,
-        }
+        FileOverrides = BuildOverrides(
+            {
+                0: 62 + (2 * ItemCount),
+                2: 64 + (2 * ItemCount),
+                4: ItemValue.CompPath,
+                140: 64 + (2 * ItemCount),
+                142: FileStem,
+                183: PathCounts[PathKey(ItemValue.CompPath)],
+                191: FileIndex - 1,
+            }
+        )
         if ItemValue.FileStamp > 0:
             FileOverrides[161] = ItemValue.FileStamp
         FileData.extend(
@@ -497,31 +515,28 @@ def EncodeHeader(
 
 
 # legacy aliases preserve recovered mixed helpers and existing external callers
-KLegacyAliases = {
-    "InsertSpecs": KInsertSpecs,
-    "TracedCount": KTracedCount,
-    "TracedUnique": KTracedUnique,
-    "ConfigShiftMap": KConfigShiftMap,
-    "ConfigShiftUniq": KConfigShiftUniq,
-    "ResolvedShiftMap": KResolvedShiftMap,
-    "ResolvedShiftBase": KResolvedShiftBase,
-    "ResolvedShiftUniq": KResolvedShiftUniq,
-    "HeaderExtStart": KHeaderExtStart,
-    "HeaderExtWidth": KHeaderExtWidth,
-    "HeaderFileStart": KHeaderFileStart,
-    "HeaderFileWidth": KHeaderFileWidth,
-    "HeaderTailStart": KHeaderTailStart,
-    "_EmitOps": EncodeOps,
-    "_SliceOps": SliceOps,
-    "_PathKey": PathKey,
-    "_UniqueItems": UniqueItems,
-    "_PathIndex": PathIndex,
-    "_EncodeCMgr": EncodeCmgr,
-    "_EncodeConfig": EncodeConfig,
-    "_EncodeResolved": EncodeResolved,
-    "_EncodeHeader": EncodeHeader,
-}
-globals().update(KLegacyAliases)
+InsertSpecs = KInsertSpecs
+TracedCount = KTracedCount
+TracedUnique = KTracedUnique
+ConfigShiftMap = KConfigShiftMap
+ConfigShiftUniq = KConfigShiftUniq
+ResolvedShiftMap = KResolvedShiftMap
+ResolvedShiftBase = KResolvedShiftBase
+ResolvedShiftUniq = KResolvedShiftUniq
+HeaderExtStart = KHeaderExtStart
+HeaderExtWidth = KHeaderExtWidth
+HeaderFileStart = KHeaderFileStart
+HeaderFileWidth = KHeaderFileWidth
+HeaderTailStart = KHeaderTailStart
+_EmitOps = EncodeOps  # lgtm[py/unused-global-variable]
+_SliceOps = SliceOps  # lgtm[py/unused-global-variable]
+_PathKey = PathKey  # lgtm[py/unused-global-variable]
+_UniqueItems = UniqueItems  # lgtm[py/unused-global-variable]
+_PathIndex = PathIndex  # lgtm[py/unused-global-variable]
+_EncodeCMgr = EncodeCmgr  # lgtm[py/unused-global-variable]
+_EncodeConfig = EncodeConfig  # lgtm[py/unused-global-variable]
+_EncodeResolved = EncodeResolved  # lgtm[py/unused-global-variable]
+_EncodeHeader = EncodeHeader  # lgtm[py/unused-global-variable]
 
 
 # canonical mixed programs scale repeated paths without opaque vendor payloads

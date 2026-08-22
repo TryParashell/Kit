@@ -11,12 +11,12 @@ from dataclasses import replace as ReplaceValue
 import pytest as PytestLib
 from interchange import (
     CadDocument,
-    DocumentError,
-    ComponentInst,
-    TransformMatrix,
-    SurfaceMesh,
     SpaceVector,
 )
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.TransformMatrix import TransformMatrix
+from interchange.document.models.DocumentError import DocumentError
+from interchange.mesh.SurfaceMesh import SurfaceMesh
 from tests.interchange.document.DocumentTests import BuildDocument
 from tests.interchange.fixtures.AssemblyFixture import (
     BuildAssembly as BuildFixtureAssembly,
@@ -29,76 +29,75 @@ def BuildAssembly() -> CadDocument:
 
 
 # historical imports keep conversion suites independent from helper renaming
-def __getattr__(NameText: str) -> object:
-    if NameText == "assembly_document":
-        return BuildAssembly
-    raise AttributeError(f"module {__name__!r} has no attribute {NameText!r}")
+assembly_document = BuildAssembly
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckRoundtrip() -> None:
     SourceValue = BuildAssembly()
-    SourceValue.AssertValid()
-    RestoredValue = CadDocument.FromJson(SourceValue.ToJson())
+    SourceValue.assert_valid()
+    RestoredValue = CadDocument.from_json(SourceValue.to_json())
     assert RestoredValue == SourceValue
-    assert RestoredValue.Assembly is not None
-    EmbeddedValue = RestoredValue.Assembly.Document("document:part")
+    assert RestoredValue.assembly is not None
+    EmbeddedValue = RestoredValue.assembly.GetDocument("document:part")
     assert isinstance(EmbeddedValue, CadDocument)
     assert EmbeddedValue == BuildDocument()
-    assert RestoredValue.Assembly.GetChildren("definition:root") == (
-        RestoredValue.Assembly.Instances[0],
+    assert RestoredValue.assembly.GetChildren("definition:root") == (
+        RestoredValue.assembly.instances[0],
     )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckTransform() -> None:
-    TransformValue = BuildAssembly().Assembly.Instances[0].Transform
+    AssemblyValue = BuildAssembly().assembly
+    assert AssemblyValue is not None
+    TransformValue = AssemblyValue.instances[0].transform
     assert TransformValue.TransformPoint((1.0, 2.0, 3.0)) == (101.0, 22.0, 33.0)
     assert TransformValue.GetRows()[0] == (1.0, 0.0, 0.0, 100.0)
-    assert TransformValue.rows() == TransformValue.GetRows()
+    assert TransformValue.GetRows() == TransformValue.GetRows()
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckCycle() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     CycleValue = ComponentInst(
         "instance:cycle",
         "Engine-1",
-        AssemblyValue.RootDefinitionId,
+        AssemblyValue.root_definition_id,
         "definition:subassembly",
     )
     InvalidValue = ReplaceValue(
         SourceValue,
-        Assembly=ReplaceValue(
-            AssemblyValue, Instances=(*AssemblyValue.Instances, CycleValue)
+        assembly=ReplaceValue(
+            AssemblyValue, instances=(*AssemblyValue.instances, CycleValue)
         ),
     )
     with PytestLib.raises(DocumentError, match="contains a cycle"):
-        InvalidValue.AssertValid()
+        InvalidValue.assert_valid()
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckBadLinks() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     InvalidInst = ReplaceValue(
-        AssemblyValue.Instances[0], Transform=TransformMatrix((1.0,) * 15)
+        AssemblyValue.instances[0], transform=TransformMatrix((1.0,) * 15)
     )
     InvalidEntity = ReplaceValue(
-        AssemblyValue.MateEntities[1], InstancePath=("instance:part",)
+        AssemblyValue.mate_entities[1], instance_path=("instance:part",)
     )
     InvalidValue = ReplaceValue(
         SourceValue,
-        Assembly=ReplaceValue(
+        assembly=ReplaceValue(
             AssemblyValue,
-            Instances=(InvalidInst, *AssemblyValue.Instances[1:]),
-            MateEntities=(AssemblyValue.MateEntities[0], InvalidEntity),
+            instances=(InvalidInst, *AssemblyValue.instances[1:]),
+            mate_entities=(AssemblyValue.mate_entities[0], InvalidEntity),
         ),
     )
-    ErrorValues = InvalidValue.GetErrors()
+    ErrorValues = InvalidValue.validate()
     assert (
         "component instance instance:subassembly has an invalid transform"
         in ErrorValues
@@ -111,7 +110,7 @@ def CheckBadLinks() -> None:
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckMeshRound() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     MeshValue = SurfaceMesh(
         "mesh:1",
@@ -127,27 +126,27 @@ def CheckMeshRound() -> None:
     Definitions = tuple(
         (
             (
-                ReplaceValue(DefinitionValue, MeshIds=(MeshValue.EntityId,))
-                if DefinitionValue.EntityId == "definition:part"
+                ReplaceValue(DefinitionValue, mesh_ids=(MeshValue.id,))
+                if DefinitionValue.id == "definition:part"
                 else DefinitionValue
             )
-            for DefinitionValue in AssemblyValue.Definitions
+            for DefinitionValue in AssemblyValue.definitions
         )
     )
     ExtendedValue = ReplaceValue(
         SourceValue,
-        Meshes=(MeshValue,),
-        Assembly=ReplaceValue(AssemblyValue, Definitions=Definitions),
+        meshes=(MeshValue,),
+        assembly=ReplaceValue(AssemblyValue, definitions=Definitions),
     )
-    ExtendedValue.AssertValid()
-    RestoredValue = CadDocument.FromJson(ExtendedValue.ToJson())
+    ExtendedValue.assert_valid()
+    RestoredValue = CadDocument.from_json(ExtendedValue.to_json())
     assert RestoredValue == ExtendedValue
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckMeshErrors() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
     MeshValue = SurfaceMesh(
         "mesh:invalid",
@@ -156,8 +155,8 @@ def CheckMeshErrors() -> None:
         ((0, 1, 2),),
         Normals=(SpaceVector(0.0, 0.0, 1.0), SpaceVector(0.0, 0.0, 1.0)),
     )
-    InvalidValue = ReplaceValue(SourceValue, Meshes=(MeshValue,))
-    ErrorValues = InvalidValue.GetErrors()
+    InvalidValue = ReplaceValue(SourceValue, meshes=(MeshValue,))
+    ErrorValues = InvalidValue.validate()
     assert "mesh mesh:invalid contains a non-finite vertex" in ErrorValues
     assert "mesh mesh:invalid has a mismatched normal count" in ErrorValues
     assert "mesh mesh:invalid contains an invalid triangle" in ErrorValues
@@ -166,18 +165,18 @@ def CheckMeshErrors() -> None:
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckChildError() -> None:
     SourceValue = BuildAssembly()
-    AssemblyValue = SourceValue.Assembly
+    AssemblyValue = SourceValue.assembly
     assert AssemblyValue is not None
-    LinkedValue = AssemblyValue.Documents[0]
-    InvalidLinked = ReplaceValue(LinkedValue.Document, Configurations=())
+    LinkedValue = AssemblyValue.documents[0]
+    InvalidLinked = ReplaceValue(LinkedValue.document, configurations=())
     InvalidValue = ReplaceValue(
         SourceValue,
-        Assembly=ReplaceValue(
+        assembly=ReplaceValue(
             AssemblyValue,
-            Documents=(ReplaceValue(LinkedValue, Document=InvalidLinked),),
+            documents=(ReplaceValue(LinkedValue, document=InvalidLinked),),
         ),
     )
     assert (
         "component document document:part: document has no configuration"
-        in InvalidValue.GetErrors()
+        in InvalidValue.validate()
     )

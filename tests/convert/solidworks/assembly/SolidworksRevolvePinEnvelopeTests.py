@@ -13,10 +13,10 @@ from pathlib import Path as FilePath
 import pytest as PytestLib
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.core.Native import (
-    _HEADER_OBJECTS as Objects,
-    _NativeIdentity as NativeIdentity,
-    _SOLIDWORKS_CONFIGURATION_FLAGS as Flags,
-    _header_payload as HeaderPayload,
+    HeaderPayload,
+    KHeaderObjects as Objects,
+    KSolidworksConfigFlags as Flags,
+    NativeIdentity,
 )
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
     BuildEnvelope,

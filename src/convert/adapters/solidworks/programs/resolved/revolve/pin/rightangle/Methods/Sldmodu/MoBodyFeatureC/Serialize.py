@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
+from convert.adapters.solidworks.programs.Common.ProgramContract import MethodProgram
 from convert.adapters.solidworks.programs.Owners.Sldmodu.MoBodyFeatureC.Serialize import (
     KOwnerSites,
 )
 
 
 # isolated method data lets new reverse engineered serializers compose independently
-KMethodProgram = (
+KMethodProgram: MethodProgram = (
     KOwnerSites,
     {
         "ResolvedFeatures": ((10339, 4, 752, "primitive:long", 0),),

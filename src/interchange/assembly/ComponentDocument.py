@@ -6,13 +6,23 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
+from __future__ import annotations
+
+from typing import ClassVar, TYPE_CHECKING as IsTypeCheck
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
+
+if IsTypeCheck:
+    from interchange.document.models.DocumentModel import (
+        CadDocument,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # component documents embed linked portable documents without weakening graph typing
 @ModelDataMut
 class ComponentDoc(ModelBase):
-    EntityId: str
-    Document: AnyValue
+    id: str
+    document: CadDocument
+    if IsTypeCheck:
+        EntityId: ClassVar[str]
+        Document: ClassVar[CadDocument]

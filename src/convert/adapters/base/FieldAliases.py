@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # legacy contract fields remain readable while stored dataclass identifiers follow steering
 KFieldAliases: TypeMap[str, str] = {
     "adapter": "AdapterName",

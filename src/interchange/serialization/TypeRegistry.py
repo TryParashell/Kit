@@ -8,13 +8,12 @@
 
 from interchange.serialization.Wire import GetWireType
 
-
 # registered types allow wire data to reconstruct concrete immutable records safely
-KTypeRegistry: dict[str, type] = {}
+KTypeRegistry: dict[str, type[object]] = {}
 
 
 # explicit registration prevents deserialization from importing arbitrary classes by name
-def RegisterTypes(*ClassTypes: type) -> None:
+def RegisterTypes(*ClassTypes: type[object]) -> None:
     for ClassType in ClassTypes:
         WireType = GetWireType(ClassType)
         ExistingType = KTypeRegistry.get(WireType)

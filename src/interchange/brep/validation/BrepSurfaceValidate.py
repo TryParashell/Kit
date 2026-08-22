@@ -79,8 +79,8 @@ def IsSplineSurf(SurfaceValue: NurbsSurface) -> bool:
     ControlRows = SurfaceValue.ControlPoints
     RowSize = len(ControlRows[0]) if ControlRows else 0
     WeightRows = SurfaceValue.Weights
-    UWeights = tuple(1.0 for UnusedValue in ControlRows) if WeightRows else ()
-    VWeights = tuple(1.0 for UnusedValue in range(RowSize)) if WeightRows else ()
+    UWeights = (1.0,) * len(ControlRows) if WeightRows else ()
+    VWeights = (1.0,) * RowSize if WeightRows else ()
     return (
         bool(ControlRows)
         and RowSize > 0

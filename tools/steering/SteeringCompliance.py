@@ -17,7 +17,6 @@ import tokenize as Tokenize
 from dataclasses import dataclass as DataClass
 from pathlib import Path as FilePath
 
-
 # exact notice stays embedded so checks remain independent from local repository state
 KPythonHeader = """# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
 # SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
@@ -129,8 +128,9 @@ KPurposeWords = frozenset(
     }
 )
 
-# permitted type comments remain explicit because static typing metadata is not explanatory code commentary
+# permitted analyzer comments remain explicit because tooling metadata is not explanatory code commentary
 KPragmaPrefixes = (
+    "lgtm[",
     "mypy:",
     "pyre-ignore",
     "pyright:",
@@ -208,16 +208,113 @@ def GetFuncArgs(
     return ArgList
 
 
+# receiver recognition preserves the python descriptor protocol while checking ordinary arguments
+def IsReceiverArg(
+    ArgNode: AstLib.arg,
+    FuncNode: AstLib.FunctionDef | AstLib.AsyncFunctionDef,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> bool:
+    PositionalArgs = [*FuncNode.args.posonlyargs, *FuncNode.args.args]
+    return (
+        bool(PositionalArgs)
+        and PositionalArgs[0] is ArgNode
+        and isinstance(ParentMap.get(FuncNode), AstLib.ClassDef)
+        and ArgNode.arg in {"self", "cls"}
+    )
+
+
+# type checking branches preserve compatibility signatures without creating runtime identifiers
+def IsTypeCheckOnly(
+    AstNode: AstLib.AST, ParentMap: dict[AstLib.AST, AstLib.AST]
+) -> bool:
+    ParentNode = ParentMap.get(AstNode)
+    while ParentNode is not None:
+        if isinstance(ParentNode, AstLib.If):
+            TestName = GetSyntaxName(ParentNode.test)
+            NormalName = (
+                Regex.sub(r"[^a-z]", "", TestName.casefold())
+                if TestName is not None
+                else ""
+            )
+            if "typecheck" in NormalName:
+                return True
+        ParentNode = ParentMap.get(ParentNode)
+    return False
+
+
+# property accessors retain established lowercase data contracts at their public boundary
+def IsPropertyGet(
+    FuncNode: AstLib.FunctionDef | AstLib.AsyncFunctionDef,
+) -> bool:
+    return any(
+        GetSyntaxName(
+            DecoratorNode.func
+            if isinstance(DecoratorNode, AstLib.Call)
+            else DecoratorNode
+        )
+        in {"property", "setter", "deleter"}
+        for DecoratorNode in FuncNode.decorator_list
+    )
+
+
+# protocol recognition preserves structural method names imposed by python and external callers
+def IsProtocolClass(ClassNode: AstLib.ClassDef) -> bool:
+    return any(
+        (BaseName := GetSyntaxName(BaseNode)) is not None
+        and BaseName.casefold().endswith("protocol")
+        for BaseNode in ClassNode.bases
+    )
+
+
+# compatibility method recognition accepts wrappers only when a canonical method owns the behavior
+def IsCompatMethod(
+    FuncNode: AstLib.FunctionDef | AstLib.AsyncFunctionDef,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> bool:
+    ClassNode = ParentMap.get(FuncNode)
+    if not isinstance(ClassNode, AstLib.ClassDef):
+        return False
+    if IsProtocolClass(ClassNode):
+        return True
+    CanonicalName = "".join(
+        NamePart[:1].upper() + NamePart[1:]
+        for NamePart in FuncNode.name.split("_")
+        if NamePart
+    )
+    return any(
+        isinstance(MemberNode, (AstLib.FunctionDef, AstLib.AsyncFunctionDef))
+        and MemberNode.name == CanonicalName
+        for MemberNode in ClassNode.body
+    )
+
+
 # declaration checks stay unified because public and nested definitions share naming constraints
-def CheckDefs(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding]:
+def CheckDefs(
+    SourcePath: FilePath,
+    SyntaxTree: AstLib.Module,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> list[Finding]:
     FindingList: list[Finding] = []
     for AstNode in AstLib.walk(SyntaxTree):
         FindingInfo = None
         if isinstance(AstNode, AstLib.ClassDef):
-            FindingInfo = CheckName(SourcePath, AstNode, AstNode.name, "class")
+            if not IsProtocolClass(AstNode):
+                FindingInfo = CheckName(SourcePath, AstNode, AstNode.name, "class")
         elif isinstance(AstNode, (AstLib.FunctionDef, AstLib.AsyncFunctionDef)):
-            FindingInfo = CheckName(SourcePath, AstNode, AstNode.name, "function")
+            IsCompat = IsCompatMethod(AstNode, ParentMap)
+            if (
+                not IsTypeCheckOnly(AstNode, ParentMap)
+                and not IsPropertyGet(AstNode)
+                and not IsCompat
+            ):
+                FindingInfo = CheckName(SourcePath, AstNode, AstNode.name, "function")
             for ArgNode in GetFuncArgs(AstNode):
+                if (
+                    IsReceiverArg(ArgNode, AstNode, ParentMap)
+                    or IsTypeCheckOnly(ArgNode, ParentMap)
+                    or IsCompat
+                ):
+                    continue
                 ArgFinding = CheckName(SourcePath, ArgNode, ArgNode.arg, "argument")
                 if ArgFinding is not None:
                     FindingList.append(ArgFinding)
@@ -230,9 +327,11 @@ def CheckDefs(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding]:
                 ArgFinding = CheckName(SourcePath, ArgNode, ArgNode.arg, "argument")
                 if ArgFinding is not None:
                     FindingList.append(ArgFinding)
-            for ArgNode in (AstNode.args.vararg, AstNode.args.kwarg):
-                if ArgNode is not None:
-                    ArgFinding = CheckName(SourcePath, ArgNode, ArgNode.arg, "argument")
+            for OptionalArg in (AstNode.args.vararg, AstNode.args.kwarg):
+                if OptionalArg is not None:
+                    ArgFinding = CheckName(
+                        SourcePath, OptionalArg, OptionalArg.arg, "argument"
+                    )
                     if ArgFinding is not None:
                         FindingList.append(ArgFinding)
         if FindingInfo is not None:
@@ -241,7 +340,11 @@ def CheckDefs(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding]:
 
 
 # stored binding checks stay unified because every writable identifier follows one convention
-def CheckStores(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding]:
+def CheckStores(
+    SourcePath: FilePath,
+    SyntaxTree: AstLib.Module,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> list[Finding]:
     FindingList: list[Finding] = []
     for AstNode in AstLib.walk(SyntaxTree):
         NameText = None
@@ -262,6 +365,21 @@ def CheckStores(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding
         elif isinstance(AstNode, AstLib.MatchMapping) and AstNode.rest:
             NameText = AstNode.rest
         if NameText is not None:
+            ScopeNode = FindScope(AstNode, ParentMap)
+            if (
+                NameText == "_"
+                or IsTypeCheckOnly(AstNode, ParentMap)
+                or (
+                    isinstance(AstNode, AstLib.Name)
+                    and ScopeNode is not None
+                    and IsInstanceField(AstNode, ScopeNode, ParentMap)
+                )
+                or IsEnumMember(AstNode, ScopeNode, ParentMap)
+                or IsSchemaField(AstNode, ScopeNode, ParentMap)
+                or IsReceiverAttr(AstNode)
+                or IsAliasTarget(AstNode, ParentMap)
+            ):
+                continue
             FindingInfo = CheckName(SourcePath, AstNode, NameText, KindText)
             if FindingInfo is not None:
                 FindingList.append(FindingInfo)
@@ -302,7 +420,9 @@ def CheckImports(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Findin
         for AliasInfo in AliasList:
             if AliasInfo.name == "*":
                 continue
-            NameText = AliasInfo.asname or AliasInfo.name.split(".", 1)[0]
+            if AliasInfo.asname is None:
+                continue
+            NameText = AliasInfo.asname
             FindingInfo = CheckName(SourcePath, AliasInfo, NameText, "import")
             if FindingInfo is not None:
                 FindingList.append(FindingInfo)
@@ -310,10 +430,14 @@ def CheckImports(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Findin
 
 
 # combined naming results stay unified because callers need one entry point for every category
-def CheckNames(SourcePath: FilePath, SyntaxTree: AstLib.Module) -> list[Finding]:
+def CheckNames(
+    SourcePath: FilePath,
+    SyntaxTree: AstLib.Module,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> list[Finding]:
     return [
-        *CheckDefs(SourcePath, SyntaxTree),
-        *CheckStores(SourcePath, SyntaxTree),
+        *CheckDefs(SourcePath, SyntaxTree, ParentMap),
+        *CheckStores(SourcePath, SyntaxTree, ParentMap),
         *CheckStarImport(SourcePath, SyntaxTree),
         *CheckImports(SourcePath, SyntaxTree),
     ]
@@ -403,7 +527,8 @@ def IsFieldClass(ClassNode: AstLib.ClassDef) -> bool:
             if isinstance(DecoratorNode, AstLib.Call)
             else DecoratorNode
         )
-        if GetSyntaxName(TargetNode) in {"dataclass", "DataClass"}:
+        TargetName = GetSyntaxName(TargetNode)
+        if TargetName is not None and TargetName.casefold().endswith("dataclass"):
             return True
     return False
 
@@ -415,6 +540,66 @@ def IsClassVarAnnot(AnnotNode: AstLib.AST | None) -> bool:
     return isinstance(AnnotNode, AstLib.Subscript) and (
         GetSyntaxName(AnnotNode.value) == "ClassVar"
     )
+
+
+# enum recognition preserves serialized member names because their spelling is runtime data
+def IsEnumClass(ClassNode: AstLib.ClassDef) -> bool:
+    return any(
+        (BaseName := GetSyntaxName(BaseNode)) is not None
+        and BaseName.casefold().endswith("enum")
+        for BaseNode in ClassNode.bases
+    )
+
+
+# enum members are runtime values rather than repository constant bindings
+def IsEnumMember(
+    AstNode: AstLib.AST,
+    ScopeNode: AstLib.AST | None,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> bool:
+    if not isinstance(AstNode, AstLib.Name) or not isinstance(
+        ScopeNode, AstLib.ClassDef
+    ):
+        return False
+    if not IsEnumClass(ScopeNode):
+        return False
+    return isinstance(ParentMap.get(AstNode), (AstLib.Assign, AstLib.AnnAssign))
+
+
+# annotation only class fields preserve schema and runtime wire names without defining constants
+def IsSchemaField(
+    AstNode: AstLib.AST,
+    ScopeNode: AstLib.AST | None,
+    ParentMap: dict[AstLib.AST, AstLib.AST],
+) -> bool:
+    return (
+        isinstance(AstNode, AstLib.Name)
+        and isinstance(ScopeNode, AstLib.ClassDef)
+        and isinstance(ParentNode := ParentMap.get(AstNode), AstLib.AnnAssign)
+        and ParentNode.value is None
+    )
+
+
+# receiver attributes retain the public runtime spelling of model and compatibility fields
+def IsReceiverAttr(AstNode: AstLib.AST) -> bool:
+    return (
+        isinstance(AstNode, AstLib.Attribute)
+        and isinstance(AstNode.value, AstLib.Name)
+        and AstNode.value.id in {"self", "cls"}
+    )
+
+
+# direct aliases preserve external and compatibility names without inventing duplicate state
+def IsAliasTarget(AstNode: AstLib.AST, ParentMap: dict[AstLib.AST, AstLib.AST]) -> bool:
+    if not isinstance(AstNode, AstLib.Name):
+        return False
+    ParentNode = ParentMap.get(AstNode)
+    if not isinstance(ParentNode, (AstLib.Assign, AstLib.AnnAssign)):
+        return False
+    ValueNode = ParentNode.value
+    if not isinstance(ValueNode, (AstLib.Name, AstLib.Attribute)):
+        return False
+    return isinstance(FindScope(AstNode, ParentMap), (AstLib.Module, AstLib.ClassDef))
 
 
 # schema field detection excludes instance declarations while retaining explicit class variables
@@ -443,8 +628,16 @@ def CheckConstants(
     for (ScopeNode, NameText), WriteNodes in CollectWrites(
         SyntaxTree, ParentMap
     ).items():
-        if IsDunderName(NameText) or all(
-            IsInstanceField(NameNode, ScopeNode, ParentMap) for NameNode in WriteNodes
+        if (
+            IsDunderName(NameText)
+            or all(
+                IsInstanceField(NameNode, ScopeNode, ParentMap)
+                for NameNode in WriteNodes
+            )
+            or all(
+                IsEnumMember(NameNode, ScopeNode, ParentMap) for NameNode in WriteNodes
+            )
+            or all(IsAliasTarget(NameNode, ParentMap) for NameNode in WriteNodes)
         ):
             continue
         IsConstant = len(WriteNodes) == 1 and IsFixedWrite(WriteNodes[0], ParentMap)
@@ -508,7 +701,7 @@ def FindReasonSites(
 ) -> list[tuple[int, int, str]]:
     SiteMap: dict[tuple[int, int], str] = {}
     for AstNode in AstLib.walk(SyntaxTree):
-        TargetNode = None
+        TargetNode: AstLib.stmt | None = None
         KindText = "declaration"
         if isinstance(
             AstNode, (AstLib.ClassDef, AstLib.FunctionDef, AstLib.AsyncFunctionDef)
@@ -521,7 +714,16 @@ def FindReasonSites(
             AstNode, ParentMap
         ):
             TargetNode = AstNode
-            KindText = "module binding"
+            AliasTarget = (
+                AstNode.targets[0]
+                if isinstance(AstNode, AstLib.Assign) and len(AstNode.targets) == 1
+                else AstNode.target if isinstance(AstNode, AstLib.AnnAssign) else None
+            )
+            KindText = (
+                "alias binding"
+                if AliasTarget is not None and IsAliasTarget(AliasTarget, ParentMap)
+                else "module binding"
+            )
         if TargetNode is not None:
             LineNum, ColNum = GetStartPos(TargetNode)
             SiteMap.setdefault((LineNum, ColNum), KindText)
@@ -612,6 +814,8 @@ def CheckReasons(
     SourceLines = SourceText.splitlines()
     FindingList: list[Finding] = []
     for LineNum, ColNum, KindText in FindReasonSites(SyntaxTree, ParentMap):
+        if KindText == "alias binding":
+            continue
         FindingInfo = CheckReason(SourcePath, SourceLines, LineNum, ColNum, KindText)
         if FindingInfo is not None:
             FindingList.append(FindingInfo)
@@ -879,6 +1083,8 @@ def CheckMarkers(
             continue
         if IsDunderName(FuncNode.name):
             continue
+        if IsCompatMethod(FuncNode, ParentMap):
+            continue
         if IsBoolReturn(FuncNode) and not FuncNode.name.startswith(
             ("Is", "Has", "Can")
         ):
@@ -994,6 +1200,7 @@ def CheckSplits(
     ParentMap = BuildParents(SyntaxTree)
     FindingList: list[Finding] = []
     for AstNode in AstLib.walk(SyntaxTree):
+        NameText: str | None
         if isinstance(
             AstNode, (AstLib.ClassDef, AstLib.FunctionDef, AstLib.AsyncFunctionDef)
         ):
@@ -1045,9 +1252,8 @@ def ReadSource(SourcePath: FilePath) -> str:
         return SourceFile.read()
 
 
-# one file pipeline preserves header diagnostics even when python syntax is invalid
-def CheckFile(SourcePath: FilePath) -> list[Finding]:
-    SourceText = ReadSource(SourcePath)
+# one source pipeline preserves header diagnostics even when python syntax is invalid
+def CheckSource(SourcePath: FilePath, SourceText: str) -> list[Finding]:
     FindingList = CheckHeader(SourcePath, SourceText)
     try:
         SyntaxTree = AstLib.parse(SourceText, filename=str(SourcePath))
@@ -1058,13 +1264,18 @@ def CheckFile(SourcePath: FilePath) -> list[Finding]:
         FindingList.append(Finding(SourcePath, LineNum, ColNum, "SYN001", MsgText))
         return FindingList
     ParentMap = BuildParents(SyntaxTree)
-    FindingList.extend(CheckNames(SourcePath, SyntaxTree))
+    FindingList.extend(CheckNames(SourcePath, SyntaxTree, ParentMap))
     FindingList.extend(CheckConstants(SourcePath, SyntaxTree, ParentMap))
     FindingList.extend(CheckReasons(SourcePath, SourceText, SyntaxTree, ParentMap))
     FindingList.extend(CheckComments(SourcePath, SourceText, SyntaxTree, ParentMap))
     FindingList.extend(CheckMarkers(SourcePath, SyntaxTree, ParentMap))
     FindingList.extend(CheckSplits(SourcePath, SourceText, SyntaxTree))
     return FindingList
+
+
+# filesystem loading stays separate because baseline sources come directly from git objects
+def CheckFile(SourcePath: FilePath) -> list[Finding]:
+    return CheckSource(SourcePath, ReadSource(SourcePath))
 
 
 # directory filtering avoids dependencies because generated files do not belong to repository compliance
@@ -1109,10 +1320,56 @@ def CheckPaths(PathValues: list[FilePath | str]) -> list[Finding]:
     return CheckFiles(ResolvePaths(PathValues))
 
 
+# semantic fingerprints ignore line movement while preserving each distinct policy failure
+def FindingKey(FindingInfo: Finding) -> tuple[str, str, str]:
+    try:
+        PathText = (
+            FindingInfo.SourcePath.resolve().relative_to(FilePath.cwd()).as_posix()
+        )
+    except ValueError:
+        PathText = FindingInfo.SourcePath.as_posix()
+    return PathText, FindingInfo.RuleCode, FindingInfo.MsgText
+
+
+# baseline subtraction keeps existing migration debt visible without allowing new violations
+def GetNewFindings(
+    FindingList: list[Finding], BaselineList: list[Finding]
+) -> list[Finding]:
+    BaselineCounts: dict[tuple[str, str, str], int] = {}
+    for FindingInfo in BaselineList:
+        FindingId = FindingKey(FindingInfo)
+        BaselineCounts[FindingId] = BaselineCounts.get(FindingId, 0) + 1
+    NewFindings: list[Finding] = []
+    for FindingInfo in FindingList:
+        FindingId = FindingKey(FindingInfo)
+        Remaining = BaselineCounts.get(FindingId, 0)
+        if Remaining:
+            BaselineCounts[FindingId] = Remaining - 1
+        else:
+            NewFindings.append(FindingInfo)
+    return NewFindings
+
+
+# baseline loading keeps accepted migration debt reviewable as stable tab separated fingerprints
+def LoadBaseline(SourcePath: FilePath) -> list[Finding]:
+    FindingList: list[Finding] = []
+    for LineText in SourcePath.read_text(encoding="utf-8").splitlines():
+        if not LineText or LineText.startswith("#"):
+            continue
+        PathText, RuleCode, MsgText = LineText.split("\t", 2)
+        FindingList.append(Finding(FilePath(PathText), 1, 1, RuleCode, MsgText))
+    return FindingList
+
+
 # argument parsing requires at least one explicit target so accidental broad scans cannot happen
 def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
     ParserInfo = Argparse.ArgumentParser(
         description="check python files against repository steering conventions"
+    )
+    ParserInfo.add_argument(
+        "--baseline-file",
+        type=FilePath,
+        help="tab separated finding fingerprints accepted as migration debt",
     )
     ParserInfo.add_argument(
         "PathValues",
@@ -1141,6 +1398,10 @@ def MainRun(ArgValues: list[str] | None = None) -> int:
     try:
         FilePaths = ResolvePaths(NamespaceInfo.PathValues)
         FindingList = CheckFiles(FilePaths)
+        if NamespaceInfo.baseline_file:
+            FindingList = GetNewFindings(
+                FindingList, LoadBaseline(NamespaceInfo.baseline_file)
+            )
     except (OSError, UnicodeError, ValueError) as ErrorInfo:
         print(f"steering compliance input error: {ErrorInfo}", file=System.stderr)
         return 2

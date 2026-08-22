@@ -97,17 +97,22 @@ def CheckNewFolders(TmpPath: FilePath) -> None:
 
 
 # injected creation failure proves partial directory setup remains transactionally clean
-def CheckPartMake(TmpPath: FilePath, MonkeyPatch) -> None:
+def CheckPartMake(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     RegistryData, InfoData = BuildRegistry("format.partial-directory")
     TargetPath = TmpPath / "partial" / "one" / "two" / "blocked.partial"
     FailurePath = TmpPath / "partial" / "one"
     OriginalMake = FilePath.mkdir
 
     # forced failure isolates cleanup after only some ancestors were created
-    def FailMakeMut(PathValue: FilePath, *ArgValues, **NamedValues) -> None:
-        if PathValue == FailurePath:
+    def FailMakeMut(
+        self: FilePath,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if self == FailurePath:
             raise OSError("forced staging directory failure")
-        OriginalMake(PathValue, *ArgValues, **NamedValues)
+        OriginalMake(self, mode=mode, parents=parents, exist_ok=exist_ok)
 
     MonkeyPatch.setattr(FilePath, "mkdir", FailMakeMut)
     with Pytest.raises(OSError, match="forced staging directory failure"):
@@ -120,7 +125,7 @@ def CheckPartMake(TmpPath: FilePath, MonkeyPatch) -> None:
 
 
 # racing directory creation must preserve the peer owned ancestor during rollback
-def CheckConcurrent(TmpPath: FilePath, MonkeyPatch) -> None:
+def CheckConcurrent(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     RegistryData, InfoData = BuildRegistry("format.concurrent-directory")
     SharedPath = TmpPath / "concurrent"
     TargetPath = SharedPath / "one" / "two" / "blocked.concurrent"
@@ -128,13 +133,18 @@ def CheckConcurrent(TmpPath: FilePath, MonkeyPatch) -> None:
     InjectedFlag = False
 
     # simulated peer ownership prevents cleanup from deleting a concurrently created folder
-    def RaceMakeMut(PathValue: FilePath, *ArgValues, **NamedValues) -> None:
+    def RaceMakeMut(
+        self: FilePath,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
         nonlocal InjectedFlag
-        if PathValue == SharedPath and not InjectedFlag:
+        if self == SharedPath and not InjectedFlag:
             InjectedFlag = True
-            OriginalMake(PathValue, *ArgValues, **NamedValues)
-            raise FileExistsError(PathValue)
-        OriginalMake(PathValue, *ArgValues, **NamedValues)
+            OriginalMake(self, mode=mode, parents=parents, exist_ok=exist_ok)
+            raise FileExistsError(self)
+        OriginalMake(self, mode=mode, parents=parents, exist_ok=exist_ok)
 
     MonkeyPatch.setattr(FilePath, "mkdir", RaceMakeMut)
     with Pytest.raises(ApplicationUsabilityError):

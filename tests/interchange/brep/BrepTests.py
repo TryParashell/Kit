@@ -32,9 +32,9 @@ from interchange import (
     PlaneSurface,
     Transform,
     SpaceVector,
-    FilterDocument,
-    InferCaps,
 )
+from interchange.document.models.DocumentCaps import InferCaps
+from interchange.document.models.DocumentFilter import FilterDocument
 from tests.interchange.document.DocumentTests import BuildDocument
 
 # dynamic package loading lets reflection inspect the facade without mixed import forms
@@ -100,20 +100,17 @@ def BuildTriangle() -> BrepModel:
 
 
 # historical imports keep conversion suites independent from helper renaming
-def __getattr__(NameText: str) -> object:
-    if NameText == "triangle_brep":
-        return BuildTriangle
-    raise AttributeError(f"module {__name__!r} has no attribute {NameText!r}")
+triangle_brep = BuildTriangle
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckRoundtrip() -> None:
     SourceValue = ReplaceValue(
-        BuildDocument(), BrepModel=BuildTriangle(), Capabilities=frozenset()
+        BuildDocument(), brep=BuildTriangle(), capabilities=frozenset()
     )
-    SourceValue.AssertValid()
+    SourceValue.assert_valid()
     assert Capability.KBrep in InferCaps(SourceValue)
-    RestoredValue = CadDocument.FromJson(SourceValue.ToJson())
+    RestoredValue = CadDocument.from_json(SourceValue.to_json())
     assert RestoredValue == SourceValue
 
 
@@ -121,22 +118,22 @@ def CheckRoundtrip() -> None:
 def CheckBaseTypes() -> None:
     SourceValue = ReplaceValue(
         BuildDocument(),
-        BrepModel=BuildTriangle(),
-        Capabilities=frozenset({Capability.KBrep, Capability.KParamHistory}),
+        brep=BuildTriangle(),
+        capabilities=frozenset({Capability.KBrep, Capability.KParamHistory}),
     )
     FilteredValue = FilterDocument(
         SourceValue, IncludeBrep=False, IncludeMesh=True, KeepPayloads=True
     )
-    assert FilteredValue.BrepModel is None
-    assert Capability.KBrep not in FilteredValue.Capabilities
-    assert Capability.KParamHistory in FilteredValue.Capabilities
+    assert FilteredValue.brep is None
+    assert Capability.KBrep not in FilteredValue.capabilities
+    assert Capability.KParamHistory in FilteredValue.capabilities
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckBadRefs() -> None:
     ModelValue = BuildTriangle()
     BrokenValue = ReplaceValue(
-        ModelValue, Edges=(ReplaceValue(ModelValue.Edges[0], CurveId="missing"),)
+        ModelValue, edges=(ReplaceValue(ModelValue.edges[0], curve_id="missing"),)
     )
     ErrorValues = BrokenValue.GetErrors(frozenset({"body:1"}))
     assert any(("missing curve" in ErrorText for ErrorText in ErrorValues))
@@ -157,7 +154,9 @@ def CheckBadSpline() -> None:
         (2, 2),
     )
     InvalidValue = ReplaceValue(
-        ModelValue, Curves=(InvalidCurve, *ModelValue.Curves[1:]), SchemaVersion=""
+        ModelValue,
+        curves=(InvalidCurve, *ModelValue.curves[1:]),
+        schema_version="",
     )
     ErrorValues = InvalidValue.GetErrors(frozenset({"body:1"}))
     assert "B-rep schema version must be a non-empty string" in ErrorValues

@@ -13,7 +13,7 @@ import hashlib as Hashlib
 import os as OsModule
 from pathlib import Path as FilePath
 import stat as StatValue
-from typing import Callable
+from typing import Callable, TypeGuard
 from convert.adapters.base import ReadOptions
 from interchange import (
     AssemblyData as AsmData,
@@ -66,64 +66,63 @@ KDefaultMaxDepth = 8
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductD:
-    locals().setdefault("__annotations__", {})
-    __annotations__["value"] = "str"
-    __annotations__["offset"] = "int"
-    __annotations__["length"] = "int"
-    __annotations__["encoding"] = "str"
+    value: str
+    offset: int
+    length: int
+    encoding: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProduct:
-    locals().setdefault("__annotations__", {})
-    __annotations__["definition_name"] = "str"
-    __annotations__["instance_name"] = "str"
-    __annotations__["definition_offset"] = "int"
-    __annotations__["instance_offset"] = "int"
-    __annotations__["definition_length"] = "int"
-    __annotations__["instance_length"] = "int"
-    __annotations__["reference_number"] = "str"
+    definition_name: str
+    instance_name: str
+    definition_offset: int
+    instance_offset: int
+    definition_length: int
+    instance_length: int
+    reference_number: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductB:
-    locals().setdefault("__annotations__", {})
-    __annotations__["root_name"] = "str"
-    __annotations__["stream_name"] = "str"
-    __annotations__["stream_descriptor_offset"] = "int"
-    __annotations__["table_offset"] = "int"
-    __annotations__["tokens"] = "tuple[NativeProductD, ...]"
-    __annotations__["occurrences"] = "tuple[NativeProduct, ...]"
-    __annotations__["ambiguous_tokens"] = "tuple[NativeProductD, ...]"
-    __annotations__["alternatives"] = "tuple[NativeProductC, ...]"
-    locals()["alternatives"] = ()
+    root_name: str
+    stream_name: str
+    stream_descriptor_offset: int
+    table_offset: int
+    tokens: tuple[NativeProductD, ...]
+    occurrences: tuple[NativeProduct, ...]
+    ambiguous_tokens: tuple[NativeProductD, ...]
+    alternatives: tuple[NativeProductC, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductC:
-    locals().setdefault("__annotations__", {})
-    __annotations__["root_name"] = "str"
-    __annotations__["stream_name"] = "str"
-    __annotations__["stream_descriptor_offset"] = "int"
-    __annotations__["table_offset"] = "int"
-    __annotations__["tokens"] = "tuple[NativeProductD, ...]"
+    root_name: str
+    stream_name: str
+    stream_descriptor_offset: int
+    table_offset: int
+    tokens: tuple[NativeProductD, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["path"] = "FilePath"
-    __annotations__["document_type"] = "str"
-    __annotations__["sha256"] = "str"
+    name: str
+    path: FilePath
+    document_type: str
+    sha256: str
 
 
 # this binding exists because shared behavior needs one stable value
 KComponentReader = Callable[[FilePath, ReadOptions], CadDoc]
+
+
+# option tuple narrowing prevents dynamic extension values from leaking unknown element types
+def IsObjectTuple(Value: object) -> TypeGuard[tuple[object, ...]]:
+    return isinstance(Value, tuple)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -595,12 +594,11 @@ def DecodedText(RawValue: bytes, Encoding: str) -> str | None:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class ProductState:
-    locals().setdefault("__annotations__", {})
-    __annotations__["Result"] = "list[NativeProduct]"
-    __annotations__["UsedValue"] = "set[int]"
-    __annotations__["CurrentDefinition"] = "int | None"
-    __annotations__["DefinitionsByInstanceKey"] = "dict[str, int]"
-    __annotations__["Pending"] = "int | None"
+    Result: list[NativeProduct]
+    UsedValue: set[int]
+    CurrentDefinition: int | None
+    DefinitionsByInstanceKey: dict[str, int]
+    Pending: int | None
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -782,12 +780,11 @@ def Numbered(Value: str) -> tuple[str, str] | None:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class SearchState:
-    locals().setdefault("__annotations__", {})
-    __annotations__["References"] = "Defaultdict[str, list[NativeProductA]]"
-    __annotations__["Diagnostics"] = "list[DiagValue]"
-    __annotations__["FileCount"] = "int"
-    __annotations__["TotalBytes"] = "int"
-    __annotations__["LimitName"] = "str | None"
+    References: Defaultdict[str, list[NativeProductA]]
+    Diagnostics: list[DiagValue]
+    FileCount: int
+    TotalBytes: int
+    LimitName: str | None
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1015,7 +1012,7 @@ def SearchRoots(Label: str, Settings: ReadOptions) -> tuple[FilePath, ...]:
     Source = SourcePath(Label)
     if Source is None:
         return ()
-    Candidates = (Source.parent,)
+    Candidates: tuple[FilePath, ...] = (Source.parent,)
     if Source.parent.name.casefold() in {
         KProductSuffix,
         KProductSuffix.removeprefix("."),
@@ -1029,12 +1026,9 @@ def SearchLimit(
     Settings: ReadOptions, NameValue: str, Default: int, *, AllowZero: bool = False
 ) -> int:
     Value = Settings.values.get(NameValue, Default)
-    if isinstance(Value, bool):
+    if isinstance(Value, bool) or not isinstance(Value, int):
         raise ValueError(f"{NameValue} must be an integer")
-    try:
-        Parsed = int(Value)
-    except (TypeError, ValueError) as ErrorInfo:
-        raise ValueError(f"{NameValue} must be an integer") from ErrorInfo
+    Parsed = Value
     Minimum = 0 if AllowZero else 1
     if Parsed < Minimum:
         raise ValueError(f"{NameValue} must be at least {Minimum}")
@@ -1127,7 +1121,7 @@ def Component(
     Settings: ReadOptions,
     Reader: ComponentReader,
 ) -> tuple[tuple[ComponentDoc, ...], dict[str, str], tuple[DiagValue, ...]]:
-    Source, Stack, Active, Options = ReadContext(Label, Settings)
+    _, _, Active, Options = ReadContext(Label, Settings)
     Documents: list[ComponentDoc] = []
     DocIdsByPath: dict[FilePath, str] = {}
     DocIdsByName: dict[str, str] = {}
@@ -1169,7 +1163,15 @@ def ReadContext(
     Label: str, Settings: ReadOptions
 ) -> tuple[FilePath | None, tuple[str, ...], set[str], ReadOptions]:
     Source = SourcePath(Label)
-    Stack = tuple(str(Value) for Value in Settings.values.get("catia_path_stack", ()))
+    StackValue = Settings.values.get("catia_path_stack", ())
+    if not IsObjectTuple(StackValue):
+        raise ValueError("catia path stack must be a tuple")
+    StackItems: list[str] = []
+    for PathValue in StackValue:
+        if not isinstance(PathValue, str):
+            raise ValueError("catia path stack entries must be strings")
+        StackItems.append(PathValue)
+    Stack = tuple(StackItems)
     Active = {Value.casefold() for Value in Stack}
     if Source is not None:
         Active.add(str(Source).casefold())
@@ -1241,157 +1243,85 @@ def SourcePath(Label: str) -> FilePath | None:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["AssemblyData"] = AsmData
+AssemblyData = AsmData
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Archive"] = CfvTwoArchive
+Cfv2Archive = CfvTwoArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2FormatError"] = CfvTwoFormatError
+Cfv2FormatError = CfvTwoFormatError
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Stream"] = CfvTwoStream
+Cfv2Stream = CfvTwoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["ComponentDocument"] = ComponentDoc
+ComponentDocument = ComponentDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["ComponentReader"] = KComponentReader
+ComponentReader = KComponentReader
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_TYPE_BY_SUFFIX"] = DocTypeBySuffix
+DOCUMENT_TYPE_BY_SUFFIX = DocTypeBySuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["Diagnostic"] = DiagValue
+Diagnostic = DiagValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = InfoValue
+INFO = InfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeProductOccurrence"] = NativeProduct
+NativeProductOccurrence = NativeProduct
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeProductReference"] = NativeProductA
+NativeProductReference = NativeProductA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeProductTable"] = NativeProductB
+NativeProductTable = NativeProductB
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeProductTableCandidate"] = NativeProductC
+NativeProductTableCandidate = NativeProductC
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeProductToken"] = NativeProductD
+NativeProductToken = NativeProductD
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_DOCUMENT_TYPE"] = PartDocType
+PART_DOCUMENT_TYPE = PartDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["PRODUCT_DOCUMENT_TYPE"] = ProductDocType
+PRODUCT_DOCUMENT_TYPE = ProductDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX_BY_DOCUMENT_TYPE"] = SuffixByDocType
+SUFFIX_BY_DOCUMENT_TYPE = SuffixByDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_MAX_DEPTH"] = KDefaultMaxDepth
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_MAX_FILES"] = KDefaultMaxFiles
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DEFAULT_MAX_TOTAL_BYTES"] = KDefaultMaxTotalBytes
+decode_product_table = DecodeProductA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FORMAT_ID"] = KFormatId
+defaultdict = Defaultdict
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PART_SUFFIX"] = KPartSuffix
+frozen_mapping = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRODUCT_MARKER"] = KProductMarker
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRODUCT_SUFFIX"] = KProductSuffix
+native_product_assembly = NativeProductE
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_documents"] = Component
+os = OsModule
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_reference_index"] = ComponentRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_component_search_roots"] = ComponentSearch
-
-# this binding exists because shared behavior needs one stable value
-globals()["_decode_product_token"] = DecodeProduct
-
-# this binding exists because shared behavior needs one stable value
-globals()["_decoded_text"] = DecodedText
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_reparse_point"] = IsReparsePoint
-
-# this binding exists because shared behavior needs one stable value
-globals()["_numbered_instance_identity"] = Numbered
-
-# this binding exists because shared behavior needs one stable value
-globals()["_physical_spans"] = PhysicalSpans
-
-# this binding exists because shared behavior needs one stable value
-globals()["_product_occurrences"] = Product
-
-# this binding exists because shared behavior needs one stable value
-globals()["_product_tokens"] = ProductTokens
-
-# this binding exists because shared behavior needs one stable value
-globals()["_search_diagnostic"] = SearchDiag
-
-# this binding exists because shared behavior needs one stable value
-globals()["_search_limit"] = SearchLimit
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selected_references"] = SelectRefs
-
-# this binding exists because shared behavior needs one stable value
-globals()["_source_path"] = SourcePath
-
-# this binding exists because shared behavior needs one stable value
-globals()["_table_candidate_record"] = TableChoice
-
-# this binding exists because shared behavior needs one stable value
-globals()["_token_record"] = TokenRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_under_root"] = IsUnderRoot
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_product_table"] = DecodeProductA
-
-# this binding exists because shared behavior needs one stable value
-globals()["defaultdict"] = Defaultdict
-
-# this binding exists because shared behavior needs one stable value
-globals()["frozen_mapping"] = FrozenMapping
-
-# this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_product_assembly"] = NativeProductE
-
-# this binding exists because shared behavior needs one stable value
-globals()["os"] = OsModule
-
-# this binding exists because shared behavior needs one stable value
-globals()["stat"] = StatValue
+stat = StatValue

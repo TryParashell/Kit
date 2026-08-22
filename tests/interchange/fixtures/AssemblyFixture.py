@@ -6,20 +6,18 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from interchange import AssemblyData
-from interchange import CadDocument
-from interchange import CadSource
-from interchange import Capability
-from interchange import ComponentDef
-from interchange import ComponentDoc
-from interchange import ComponentInst
-from interchange import ComponentKind
-from interchange import Configuration
-from interchange import MateConstraint
-from interchange import MateEntity
-from interchange import MateEntityKind
-from interchange import MateKind
-from interchange import TransformMatrix
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyEnums import ComponentKind, MateEntityKind, MateKind
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentDocument import ComponentDoc
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.TransformMatrix import TransformMatrix
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.enums.EnumDocument import Capability
+from interchange.records.RecordConfig import Configuration
+from interchange.records.RecordSource import CadSource
 from tests.interchange.fixtures.DocumentFixture import BuildDocument
 
 
@@ -34,14 +32,14 @@ def BuildAssembly() -> CadDocument:
         "definition:part",
         "Piston",
         ComponentKind.KPart,
-        DocumentId="document:part",
-        BodyIds=("body:1",),
+        document_id="document:part",
+        body_ids=("body:1",),
     )
     SubassemblyInst = ComponentInst(
         "instance:subassembly",
         "Piston-1",
-        Subassembly.EntityId,
-        RootValue.EntityId,
+        Subassembly.id,
+        RootValue.id,
         TransformMatrix(
             (
                 1.0,
@@ -64,46 +62,46 @@ def BuildAssembly() -> CadDocument:
         ),
     )
     PartInstance = ComponentInst(
-        "instance:part", "Piston-1", PartDef.EntityId, Subassembly.EntityId
+        "instance:part", "Piston-1", PartDef.id, Subassembly.id
     )
     FirstEntity = MateEntity(
         "mate-entity:assembly",
-        RootValue.EntityId,
+        RootValue.id,
         (),
         MateEntityKind.KPlane,
-        SourceEntityId="plane:front",
+        source_entity_id="plane:front",
     )
     SecondEntity = MateEntity(
         "mate-entity:part",
-        RootValue.EntityId,
-        (SubassemblyInst.EntityId, PartInstance.EntityId),
+        RootValue.id,
+        (SubassemblyInst.id, PartInstance.id),
         MateEntityKind.KPlane,
-        SourceEntityId="plane:xy",
+        source_entity_id="plane:xy",
     )
     MateValue = MateConstraint(
         "mate:1",
         "Coincident1",
         MateKind.KCoincident,
-        RootValue.EntityId,
-        (FirstEntity.EntityId, SecondEntity.EntityId),
+        RootValue.id,
+        (FirstEntity.id, SecondEntity.id),
     )
     AssemblyValue = AssemblyData(
-        RootValue.EntityId,
+        RootValue.id,
         (RootValue, Subassembly, PartDef),
         (SubassemblyInst, PartInstance),
-        Documents=(ComponentDoc("document:part", PartValue),),
-        MateEntities=(FirstEntity, SecondEntity),
-        Mates=(MateValue,),
+        documents=(ComponentDoc("document:part", PartValue),),
+        mate_entities=(FirstEntity, SecondEntity),
+        mates=(MateValue,),
     )
     return CadDocument(
-        Source=CadSource("test.assembly", "memory", "1" * 64),
-        Configurations=(Configuration("config:default", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(),
-        Sketches=(),
-        Selections=(),
-        FeatureTimeline=(),
-        Bodies=(),
-        Capabilities=frozenset({Capability.KAssemblies}),
-        Assembly=AssemblyValue,
+        source=CadSource("test.assembly", "memory", "1" * 64),
+        configurations=(Configuration("config:default", "Default", True),),
+        parameters=(),
+        support_planes=(),
+        sketches=(),
+        selections=(),
+        feature_timeline=(),
+        bodies=(),
+        capabilities=frozenset({Capability.KAssemblies}),
+        assembly=AssemblyValue,
     )

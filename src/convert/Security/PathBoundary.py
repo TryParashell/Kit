@@ -8,10 +8,11 @@
 
 from __future__ import annotations as Annotations
 
-import os as OsLayer
+from os import PathLike as PathLikeValue
 from pathlib import Path as PathInfo
 import tempfile as Tempfile
 
+from convert.Security.LexicalBoundary import ResolveLexical
 
 # command argument paths permit only inert characters after fixed root resolution
 KCommandPathCharacters = frozenset(" ._-/\\:")
@@ -22,41 +23,39 @@ class UnsafePath(ValueError):
     __slots__ = ()
 
 
-# normalized containment prevents traversal and symlink escapes before filesystem access
+# canonical containment prevents traversal and symlink escapes before protected filesystem operations
 def ResolveWithin(
-    PathValue: str | OsLayer.PathLike[str],
-    RootValue: str | OsLayer.PathLike[str],
+    PathValue: str | PathLikeValue[str],
+    RootValue: str | PathLikeValue[str],
     RequireFile: bool = False,
 ) -> PathInfo:
-    RootKey = OsLayer.path.normcase(OsLayer.path.realpath(OsLayer.fspath(RootValue)))
-    CandidateKey = OsLayer.path.normcase(
-        OsLayer.path.realpath(OsLayer.fspath(PathValue))
-    )
-    RootBase = RootKey.rstrip("\\/") or OsLayer.sep
-    if not CandidateKey.startswith(RootBase):
-        raise UnsafePath(f"path escapes trusted root {RootKey!r}")
-    Remainder = CandidateKey[len(RootBase) :]
-    IsBoundary = not Remainder or RootBase.endswith(("\\", "/"))
-    if not IsBoundary and Remainder[0] not in "\\/":
-        raise UnsafePath(f"path escapes trusted root {RootKey!r}")
-    ResultPath = PathInfo(CandidateKey)
+    RootPath = PathInfo(RootValue).resolve(strict=True)
+    try:
+        CandidatePath = ResolveLexical(PathValue, RootPath)
+    except ValueError as ErrorInfo:
+        raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
+    ResultPath = CandidatePath.resolve(strict=RequireFile)
+    try:
+        ResultPath.relative_to(RootPath)
+    except ValueError as ErrorInfo:
+        raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
     if RequireFile and not ResultPath.is_file():
         raise FileNotFoundError(ResultPath)
     return ResultPath
 
 
 # local paths need one containment primitive before applying file type rules
-def ResolveLocal(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+def ResolveLocal(PathValue: str | PathLikeValue[str]) -> PathInfo:
     return ResolveWithin(PathValue, PathInfo.cwd())
 
 
 # tool inputs stay inside the operator selected working directory
-def ResolveInput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+def ResolveInput(PathValue: str | PathLikeValue[str]) -> PathInfo:
     return ResolveWithin(PathValue, PathInfo.cwd(), True)
 
 
 # subprocess file arguments need containment plus a command inert absolute spelling
-def ResolveArgPath(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+def ResolveArgPath(PathValue: str | PathLikeValue[str]) -> PathInfo:
     ResultPath = ResolveInput(PathValue)
     if any(
         not CharText.isalnum() and CharText not in KCommandPathCharacters
@@ -67,12 +66,12 @@ def ResolveArgPath(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
 
 
 # tool output paths stay inside the operator selected working directory
-def ResolveOutput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+def ResolveOutput(PathValue: str | PathLikeValue[str]) -> PathInfo:
     return ResolveLocal(PathValue)
 
 
 # tool directory inputs stay inside the operator selected working directory
-def ResolveFolder(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+def ResolveFolder(PathValue: str | PathLikeValue[str]) -> PathInfo:
     ResultPath = ResolveWithin(PathValue, PathInfo.cwd())
     if not ResultPath.is_dir():
         raise NotADirectoryError(ResultPath)
@@ -80,7 +79,7 @@ def ResolveFolder(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
 
 
 # test artifacts stay inside the operating system managed temporary root
-def ResolveTemp(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+def ResolveTemp(PathValue: str | PathLikeValue[str]) -> PathInfo:
     return ResolveWithin(PathValue, Tempfile.gettempdir())
 
 

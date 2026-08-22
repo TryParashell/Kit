@@ -26,9 +26,6 @@ maintainers = [
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 keywords = ["cad"]
-classifiers = [
-    "Private :: Do Not Upload",
-]
 dependencies = []
 
 [project.urls]
@@ -66,8 +63,52 @@ collect_imported_tests = false
 [tool.black]
 line-length = 88
 target-version = ["py311"]
+force-exclude = "(examples|Parashell|modules|re|src/convert/adapters/solidworks/programs)/"
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.4",
     "black==26.3.1",
+    "checkov>=3.3.11",
+    "detect-secrets>=1.5.0",
+    "mypy>=2.3.1",
+    "numpy<2.5",
+    "pip-audit>=2.9.0",
+    "pyright>=1.1.411",
+    "ruff>=0.16.3",
+    "safety>=3.8.1",
+    "semgrep>=1.136.0",
+    "setuptools==80.9.0",
+    "types-pywin32>=312.0.0.20260724",
+    "zizmor>=1.29.0",
 ]
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["src", "tests", "tools"]
+exclude = [".venv", "examples", "Parashell", "modules", "re", ".github/scripts"]
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+ignore = ["F401", "F402", "F811", "F821", "F823"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "examples", "Parashell", "modules", "re", "tests"]
+skips = ["B101", "B105", "B314", "B404", "B405", "B603", "B607"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+explicit_package_bases = true
+files = ["src", "tests", "tools"]
+exclude = '^(\.venv|examples|Parashell|modules)/'
+mypy_path = ["src", ".", "re/tooling/ghidra/Generation"]
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+
+[tool.pyright]
+include = ["src", "tests", "tools"]
+exclude = [".venv", "examples", "Parashell", "modules", "tests/oracle"]
+typeCheckingMode = "strict"
+pythonVersion = "3.11"

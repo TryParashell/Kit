@@ -8,6 +8,8 @@
 
 from dataclasses import dataclass as DataClass
 from inspect import Signature as FuncSig
+from typing import ClassVar
+from typing import TYPE_CHECKING
 
 from interchange.enums.EnumDocument import Capability
 from interchange.features.FeatureBody import DesignBody
@@ -44,14 +46,18 @@ class AdapterCaps(ModelBase):
 
     # historical constructor keywords must remain accepted without changing canonical storage
     def __init__(
-        SelfValue,
+        self,
         Values: frozenset[Capability] = frozenset(),
     ) -> None:
-        object.__setattr__(SelfValue, "Values", Values)
+        object.__setattr__(self, "Values", Values)
 
     # callers need one consistent containment check for adapter support declarations
-    def HasCapability(SelfValue, CapabilityValue: Capability) -> bool:
-        return CapabilityValue in SelfValue.Values
+    def HasCapability(self, CapabilityValue: Capability) -> bool:
+        return CapabilityValue in self.Values
+
+    if TYPE_CHECKING:
+        values: ClassVar[frozenset[Capability]]
+        supports = HasCapability
 
 
 BindCompatMut(
@@ -81,31 +87,36 @@ BindCompatMut(
 )
 BindHistoryMut(AdapterCaps)
 
-for AttrName, AttrValue in {
+for FeatureAttrName, FeatureAttrValue in {
     "__name__": "ExtrusionEndCondition",
     "__qualname__": "ExtrusionEndCondition",
     "__module__": __name__,
 }.items():
-    setattr(ExtrudeEnd, AttrName, AttrValue)
-for AttrName, AttrValue in {"__module__": __name__}.items():
-    setattr(PayloadRole, AttrName, AttrValue)
-for AttrName, AttrValue in {
+    setattr(ExtrudeEnd, FeatureAttrName, FeatureAttrValue)
+for PayloadAttrName, PayloadAttrValue in {"__module__": __name__}.items():
+    setattr(PayloadRole, PayloadAttrName, PayloadAttrValue)
+for DefinitionAttrName, DefinitionAttrValue in {
     "__name__": "FeatureDefinition",
     "__qualname__": "FeatureDefinition",
     "__module__": __name__,
     "__signature__": FuncSig(),
 }.items():
-    setattr(FeatureDef, AttrName, AttrValue)
-for AttrName, AttrValue in {"__module__": __name__}.items():
-    setattr(TopologyCounts, AttrName, AttrValue)
+    setattr(FeatureDef, DefinitionAttrName, DefinitionAttrValue)
+for TopologyAttrName, TopologyAttrValue in {"__module__": __name__}.items():
+    setattr(TopologyCounts, TopologyAttrName, TopologyAttrValue)
 
-globals().update(
-    {
-        "ExtrusionEndCondition": ExtrudeEnd,
-        "FeatureDefinition": FeatureDef,
-        "TopologySummary": TopologyCounts,
-    }
-)
+ExtrusionEndCondition = ExtrudeEnd
+FeatureDefinition = FeatureDef
+TopologySummary = TopologyCounts
+AdapterCapabilities = AdapterCaps
+Body = DesignBody
+CircularPatternFeature = CirclePattern
+ExtrusionFeature = ExtrudeFeature
+FeatureConfigurationState = FeatureCfgState
+LinearPatternFeature = LinearPattern
+NativeFeatureDefinition = NativeFeature
+ReferencePlaneFeature = RefPlaneFeature
+RevolutionFeature = RevolveFeature
 
 
 # legacy module exports stay explicit so integrations cannot depend on implementation details

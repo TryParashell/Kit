@@ -12,9 +12,9 @@ from convert.adapters.solidworks.core.Native import (
     HORIZONTAL_AXIS_SUBELEMENT as Subelement,
     NORMAL_AXIS_SUBELEMENT as SubelementA,
     VERTICAL_AXIS_SUBELEMENT as SubelementB,
-    _matrix_frame as MatrixFrame,
-    _plane_frame_block as PlaneFrameBlock,
-    _plane_payload as PlanePayload,
+    MatrixFrame,
+    PlaneFrameBlock,
+    PlanePayload,
     NativeMarker,
     NativeModel,
     NativeOperation,
@@ -32,10 +32,10 @@ from interchange import (
     ParameterValue,
     SupportPlane,
     Transform,
-    UnitSystem,
     ValueKind,
     Vector3 as VectorThree,
 )
+from interchange.enums.EnumUnits import UnitSystem
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -159,7 +159,7 @@ def TestPFBIRBTD() -> None:
     assert len(Block) == 121
     Frame = MatrixFrame(Block, 0, len(Block))
     assert Frame is not None
-    IgnoredValue, IgnoredValue, Origin, Normal, UAxis, VAxis = Frame
+    _, _, Origin, Normal, UAxis, VAxis = Frame
     assert Origin == (0.0, 0.0, 0.0)
     assert Normal == (0.0, -1.0, 0.0)
     assert UAxis == (1.0, 0.0, 0.0)
@@ -190,7 +190,9 @@ def TestAPPCADRF() -> None:
         ),
     )
     Payload = PlanePayload(PlaneA)
-    assert Payload.endswith(PlaneFrameBlock(PlaneA))
+    Block = PlaneFrameBlock(PlaneA)
+    assert Block is not None
+    assert Payload.endswith(Block)
     Offset = len(Payload) - 121
     Frame = MatrixFrame(Payload, Offset, len(Payload))
     assert Frame is not None

@@ -8,12 +8,12 @@
 
 from __future__ import annotations
 
+import argparse as Argparse
 import json as JsonData
-from typing import Any as AnyValue
 
 
 # worker mode isolates risky documents while retaining one public command entry point
-def RunWorker(ArgumentsData: AnyValue) -> int:
+def RunWorker(ArgumentsData: Argparse.Namespace) -> int:
     from tools.audit.FcstdAudit import AuditSource
 
     WorkerSource = ArgumentsData.worker_source

@@ -67,14 +67,15 @@ def ReadMethod(
     TreeData = AstLib.parse(SourceText, filename=str(MethodPath))
     ProgramNode: AstLib.AST | None = None
     for NodeData in TreeData.body:
-        if not isinstance(NodeData, AstLib.Assign):
-            continue
-        if any(
-            (
-                isinstance(TargetNode, AstLib.Name)
-                and TargetNode.id == "KMethodProgram"
-                for TargetNode in NodeData.targets
-            )
+        if isinstance(NodeData, AstLib.AnnAssign) and (
+            isinstance(NodeData.target, AstLib.Name)
+            and NodeData.target.id == "KMethodProgram"
+        ):
+            ProgramNode = NodeData.value
+            break
+        if isinstance(NodeData, AstLib.Assign) and any(
+            isinstance(TargetNode, AstLib.Name) and TargetNode.id == "KMethodProgram"
+            for TargetNode in NodeData.targets
         ):
             ProgramNode = NodeData.value
             break

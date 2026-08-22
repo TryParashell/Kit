@@ -19,7 +19,8 @@ from pathlib import Path as FilePath, PureWindowsPath
 import re as RegexLib
 import struct as Struct
 import tempfile as Tempfile
-from typing import Any as AnyValue, Mapping, Sequence
+from types import MappingProxyType
+from typing import Mapping, Sequence, TypeGuard, cast as CastValue
 import xml.etree.ElementTree as XmlTree
 from convert.adapters.base import (
     AdapterInfo,
@@ -157,14 +158,17 @@ from convert.adapters.solidworks.container.Format import (
     SUFFIX_BY_FORMAT_ID as SuffixByFormatId,
 )
 from convert.adapters.solidworks.core.FeatureKindByNative import KFeatureKindByNative
+from convert.adapters.solidworks.core.Display import NativeDisplay
 from convert.adapters.solidworks.core.Native import (
     NativeDimension,
     NativeFeature,
+    XmlFeature,
     NativeMarker,
     NativeModel,
     NativeOperation,
     NativePlane,
     NativeProfile,
+    NativeRule,
     NativeSketch,
     NativeAssemblyEnvelope as NativeAsmEnvelope,
     DIRECTION_AXIS_ROLE as DirectionAxisRole,
@@ -173,6 +177,8 @@ from convert.adapters.solidworks.core.Native import (
     encode_native_part as EncodeNativePart,
     operation_axis_subelement as OperationAxisSubElem,
 )
+from interchange.features.FeatureContract import FeatureDef
+from interchange.geometry.models.GeometryTypes import KGeometryTypes
 from convert.adapters.solidworks.container.Parasolid import (
     ParasolidPayload,
     ParasolidWriteError,
@@ -260,39 +266,32 @@ KTargetUnsupported = frozenset(
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class Generated:
-    locals().setdefault("__annotations__", {})
-    __annotations__["streams"] = "dict[str, bytes]"
-    __annotations__["native_brep"] = "str"
-    __annotations__["native_capabilities"] = "frozenset[Capability]"
-    __annotations__["compatibility"] = "str"
-    __annotations__["application_usable"] = "bool"
-    __annotations__["vendor_loadable"] = "bool"
-    __annotations__["mixed_capabilities"] = "frozenset[Capability]"
-    locals()["mixed_capabilities"] = frozenset()
-    __annotations__["unexpressed"] = "tuple[str, ...]"
-    locals()["unexpressed"] = ()
-    __annotations__["donor_notes"] = "tuple[str, ...]"
-    locals()["donor_notes"] = ()
-    __annotations__["reader_gaps"] = "tuple[str, ...]"
-    locals()["reader_gaps"] = ()
+    streams: dict[str, bytes]
+    native_brep: str
+    native_capabilities: frozenset[Capability]
+    compatibility: str
+    application_usable: bool
+    vendor_loadable: bool
+    mixed_capabilities: frozenset[Capability] = frozenset()
+    unexpressed: tuple[str, ...] = ()
+    donor_notes: tuple[str, ...] = ()
+    reader_gaps: tuple[str, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class AsmTemplate:
-    locals().setdefault("__annotations__", {})
-    __annotations__["capabilities"] = "frozenset[Capability]"
-    __annotations__["divergences"] = "tuple[str, ...]"
+    capabilities: frozenset[Capability]
+    divergences: tuple[str, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class AsmBundle:
-    locals().setdefault("__annotations__", {})
-    __annotations__["names"] = "Mapping[str, str]"
-    __annotations__["payloads"] = "Mapping[Path, bytes]"
+    names: Mapping[str, str]
+    payloads: Mapping[Path, bytes]
     StampValues: Mapping[str, int]
-    __annotations__["complete"] = "bool"
+    complete: bool
     NativeCaps: frozenset[Capability] = frozenset()
 
 
@@ -314,14 +313,35 @@ KWrapperMetaKeys = KSourceKeys | frozenset(
 class SldprtAdapter:
     __slots__ = ()
 
+    @property
+    def info(self) -> AdapterInfo:
+        return InfoAction(self)
+
+    def probe(self, SourceValue: Source) -> ProbeResult:
+        return Probe(self, SourceValue)
+
+    def read(self, SourceValue: Source, Options: ReadOptions | None = None) -> CadDoc:
+        return ReadAction(self, SourceValue, Options)
+
+    def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
+        return IsSupports(self, DocValue, TargetValue)
+
+    def write(
+        self,
+        DocValue: CadDocument,
+        TargetValue: Target,
+        Options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return Write(self, DocValue, TargetValue, Options)
+
 
 # adapter metadata stays isolated so discovery can inspect capabilities without reading documents
-def InfoAction(Instance) -> AdapterInfo:
+def InfoAction(Instance: SldprtAdapter) -> AdapterInfo:
     return InfoValue
 
 
 # probing stays independent so format detection never performs a full conversion
-def Probe(Instance, Source: Source) -> ProbeResult:
+def Probe(Instance: SldprtAdapter, Source: Source) -> ProbeResult:
     try:
         DataValue, Label = SourceBytes(Source)
         if len(DataValue) < 8:
@@ -349,7 +369,9 @@ def Probe(Instance, Source: Source) -> ProbeResult:
 
 
 # adapter reading dispatches embedded assembly and native part paths through one contract
-def ReadAction(Instance, Source: Source, Options: ReadOptions | None = None) -> CadDoc:
+def ReadAction(
+    Instance: SldprtAdapter, Source: Source, Options: ReadOptions | None = None
+) -> CadDoc:
     Settings = Options or ReadOptions()
     DataValue, Label = SourceBytes(Source)
     Archive = SldprtArchive.from_bytes(DataValue, Label)
@@ -368,7 +390,9 @@ def ReadAction(Instance, Source: Source, Options: ReadOptions | None = None) -> 
 
 
 # destination checks belong on the adapter so callers can reject incompatible targets early
-def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+def IsSupports(
+    Instance: SldprtAdapter, DocValue: CadDocument, Target: Destination
+) -> bool:
     PathValue = TargetPath(Target)
     if PathValue is None:
         return IsBinaryTarget(Target)
@@ -378,20 +402,12 @@ def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
 
 # adapter writing delegates policy and persistence to the focused write composition
 def Write(
-    Instance,
+    Instance: SldprtAdapter,
     DocValue: CadDocument,
     Target: Destination,
     Options: WriteOptions | None = None,
 ) -> WriteResult:
     return WriteDocument(Instance, DocValue, Target, Options)
-
-
-setattr(SldprtAdapter, "info", property(InfoAction))
-setattr(SldprtAdapter, "probe", Probe)
-setattr(SldprtAdapter, "read", ReadAction)
-setattr(SldprtAdapter, "supports", IsSupports)
-setattr(SldprtAdapter, "write", Write)
-setattr(SldprtAdapter, "Supports", IsSupports)
 
 
 # generated writing needs one immutable input bundle so selection policy cannot drift across phases
@@ -421,6 +437,64 @@ class WritePlan:
     PortableCarrier: bool
 
 
+# string mapping validation prevents untyped option payloads reaching assembly writers
+def StringMap(Value: object) -> Mapping[str, str]:
+    if not IsObjectMap(Value):
+        return {}
+    Result: dict[str, str] = {}
+    for KeyValue, ItemValue in Value.items():
+        if not isinstance(KeyValue, str) or not isinstance(ItemValue, str):
+            raise TypeError("bundle names must map strings to strings")
+        Result[KeyValue] = ItemValue
+    return Result
+
+
+# integer mapping validation prevents untyped option payloads reaching assembly writers
+def IntegerMap(Value: object) -> Mapping[str, int]:
+    if not IsObjectMap(Value):
+        return {}
+    Result: dict[str, int] = {}
+    for KeyValue, ItemValue in Value.items():
+        if not isinstance(KeyValue, str) or not isinstance(ItemValue, int):
+            raise TypeError("bundle stamps must map strings to integers")
+        Result[KeyValue] = ItemValue
+    return Result
+
+
+# object mapping narrowing gives decoded option and json records concrete member types
+def IsObjectMap(Value: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(Value, Mapping)
+
+
+# dictionary narrowing keeps decoded json iteration free from unknown key types
+def IsObjectDict(Value: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(Value, dict)
+
+
+# list narrowing keeps decoded json iteration free from unknown element types
+def IsObjectList(Value: object) -> TypeGuard[list[object]]:
+    return isinstance(Value, list)
+
+
+# json object validation rejects nontext keys before records enter typed contracts
+def ObjectDict(Value: object) -> dict[str, object] | None:
+    if not IsObjectDict(Value):
+        return None
+    Result: dict[str, object] = {}
+    for KeyValue, ItemValue in Value.items():
+        if not isinstance(KeyValue, str):
+            return None
+        Result[KeyValue] = ItemValue
+    return Result
+
+
+# json array validation prevents unknown element types escaping decoder boundaries
+def ObjectList(Value: object) -> list[object] | None:
+    if not IsObjectList(Value):
+        return None
+    return Value
+
+
 # generation input selection owns carrier policy bundle discovery and caller supplied identities
 def GetGenInputs(
     DocValue: CadDocument, PathValue: FilePath | None, Settings: WriteOptions
@@ -444,18 +518,12 @@ def GetGenInputs(
         and Settings.values.get("allow_carrier") is True
         and (not Bundle.complete)
     )
-    ConfiguredNames = Settings.values.get("bundle_names")
-    BundleNames = (
-        Bundle.names
-        if Bundle.names
-        else ConfiguredNames if isinstance(ConfiguredNames, Mapping) else {}
-    )
-    ConfiguredStamps = Settings.values.get("bundle_stamps")
-    BundleStamps = (
-        Bundle.StampValues
-        if Bundle.StampValues
-        else ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {}
-    )
+    BundleNames: Mapping[str, str] = Bundle.names
+    if not BundleNames:
+        BundleNames = StringMap(Settings.values.get("bundle_names"))
+    BundleStamps: Mapping[str, int] = Bundle.StampValues
+    if not BundleStamps:
+        BundleStamps = IntegerMap(Settings.values.get("bundle_stamps"))
     ConfiguredName = Settings.values.get("model_name")
     ModelName = ConfiguredName if isinstance(ConfiguredName, str) else ""
     return GenWriteInput(
@@ -631,8 +699,10 @@ def BuildSavedPlan(
         VendorLoadable = True
     elif Attestation is not None:
         Transfers = Attested(Attestation, RequiredCaps)
-        AppUsable = Attestation["application_usable"]
-        VendorLoadable = Attestation["vendor_loadable"]
+        AppUsable = BooleanValue(
+            Attestation["application_usable"], "application_usable"
+        )
+        VendorLoadable = BooleanValue(Attestation["vendor_loadable"], "vendor_loadable")
         NativeBrep = str(Attestation.get("native_brep", "template"))
         NativeContent = "source-preserved"
     else:
@@ -873,6 +943,20 @@ def ReadNativePart(
     return RetainSource(DocValue, DataValue)
 
 
+# boolean option validation keeps compatibility keywords aligned with canonical options
+def BooleanValue(Value: object, FieldName: str) -> bool:
+    if not isinstance(Value, bool):
+        raise TypeError(f"{FieldName} must be a boolean")
+    return Value
+
+
+# optional text validation keeps compatibility keywords aligned with canonical options
+def OptionalString(Value: object, FieldName: str) -> str | None:
+    if Value is not None and not isinstance(Value, str):
+        raise TypeError(f"{FieldName} must be a string or None")
+    return Value
+
+
 # this definition exists because focused behavior needs one stable owner
 def ReadSldprt(
     Source: Source,
@@ -883,10 +967,15 @@ def ReadSldprt(
     Strict: bool = True,
     **LegacyValues: object,
 ) -> CadDoc:
-    Config = LegacyValues.get("configuration", Config)
-    IncludeBrep = LegacyValues.get("include_brep", IncludeBrep)
-    IncludeTessellation = LegacyValues.get("include_tessellation", IncludeTessellation)
-    Strict = LegacyValues.get("strict", Strict)
+    Config = OptionalString(LegacyValues.get("configuration", Config), "configuration")
+    IncludeBrep = BooleanValue(
+        LegacyValues.get("include_brep", IncludeBrep), "include_brep"
+    )
+    IncludeTessellation = BooleanValue(
+        LegacyValues.get("include_tessellation", IncludeTessellation),
+        "include_tessellation",
+    )
+    Strict = BooleanValue(LegacyValues.get("strict", Strict), "strict")
     UnknownValues = set(LegacyValues) - {
         "configuration",
         "include_brep",
@@ -919,7 +1008,9 @@ def WriteSldprt(
     AllowNonNative: bool = True,
     **LegacyValues: object,
 ) -> WriteResult:
-    AllowNonNative = LegacyValues.get("allow_non_native", AllowNonNative)
+    AllowNonNative = BooleanValue(
+        LegacyValues.get("allow_non_native", AllowNonNative), "allow_non_native"
+    )
     UnknownValues = set(LegacyValues) - {"allow_non_native"}
     if UnknownValues:
         Unexpected = next(iter(UnknownValues))
@@ -1058,11 +1149,7 @@ def SemanticDoc(DocValue: CadDocument) -> CadDoc:
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            SemanticDoc(ItemValue.document)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=SemanticDoc(ItemValue.document),
                     )
                     for ItemValue in AsmValue.documents
                 )
@@ -1144,6 +1231,8 @@ def SourceTemplate(DocValue: CadDocument, Target: Path | None) -> bytes | None:
         return None
     SourceFormat = DocValue.metadata.get(KSourceFormatKey)
     if Target is not None:
+        if not isinstance(SourceFormat, str):
+            return None
         ExpectedSuffix = SuffixByFormatId.get(SourceFormat)
         if ExpectedSuffix is None or Target.suffix.casefold() != ExpectedSuffix:
             return None
@@ -1199,7 +1288,7 @@ class BundleState:
 def BundleComponent(
     DocValue: CadDocument,
     Definition: ComponentDefinition,
-    Documents: Mapping[str, AnyValue],
+    Documents: Mapping[str, CadDocument],
 ) -> CadDoc | None:
     Component = Documents.get(Definition.document_id)
     if (
@@ -1243,7 +1332,7 @@ def BundleNameMut(
 def PlanBundleMut(
     DocValue: CadDocument,
     Definitions: Sequence[ComponentDefinition],
-    Documents: Mapping[str, AnyValue],
+    Documents: Mapping[str, CadDocument],
     Target: PathValue,
     FinalPath: PathValue,
     StateMut: BundleState,
@@ -1297,7 +1386,7 @@ def BundleMember(
     Settings: WriteOptions,
     Names: Mapping[str, str],
     Stamps: Mapping[str, int],
-) -> tuple[AnyValue, bytes]:
+) -> tuple[WriteResult, bytes]:
     Buffer = BytesIo()
     Values = dict(Settings.values)
     Values["portable"] = False
@@ -1364,9 +1453,7 @@ def BuildBundleMut(
         if ReadyIndex is None:
             StateMut.Complete = False
             ReadyIndex = 0
-        Ignored, Component, Choice, TargetValue, FinalTarget = PendingTargets.pop(
-            ReadyIndex
-        )
+        _, Component, Choice, TargetValue, FinalTarget = PendingTargets.pop(ReadyIndex)
         Result, Payload = BundleMember(
             Component, Choice, Settings, StateMut.Names, StateMut.Stamps
         )
@@ -1422,7 +1509,7 @@ def AsmBundleA(
         StateMut.Complete = False
     return AsmBundle(
         FrozenMapping(StateMut.Names),
-        FrozenMapping(StateMut.Payloads),
+        MappingProxyType(dict(StateMut.Payloads)),
         FrozenMapping(StateMut.Stamps),
         StateMut.Complete,
         frozenset(StateMut.Capabilities),
@@ -1530,7 +1617,10 @@ def NestedPayloads(
             ):
                 continue
             try:
-                OwnerId = int(Payload.attributes.get("owner_definition_id", -1))
+                OwnerValue = Payload.attributes.get("owner_definition_id", -1)
+                if not isinstance(OwnerValue, (int, str, bytes, bytearray)):
+                    continue
+                OwnerId = int(OwnerValue)
             except (TypeError, ValueError):
                 continue
             if OwnerId != NativeRootId:
@@ -1702,16 +1792,17 @@ def NativeBytes(
 # this definition exists because attestation envelopes need authenticated decoding
 def NativeEnvelope(
     DataValue: bytes,
-) -> tuple[SldprtArchive, dict[str, AnyValue], CadDocument] | None:
+) -> tuple[SldprtArchive, dict[str, object], CadDocument] | None:
     try:
         Archive = SldprtArchive.from_bytes(DataValue)
         RawValue = Archive.require(KitNativeStream)
         Embedded = Archive.require(KitDocStream)
-        Value = JsonValue.loads(RawValue.decode("utf-8"))
+        DecodedValue: object = JsonValue.loads(RawValue.decode("utf-8"))
+        Value = ObjectDict(DecodedValue)
         DocValue = CadDoc.from_json(Embedded.decode("utf-8"))
     except (KeyError, SldprtFormatError, TypeError, ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(Value, dict) or Value.get("version") != 2:
+    if Value is None or Value.get("version") != 2:
         return None
     if Value.get("embedded_sha256") != Hashlib.sha256(Embedded).hexdigest():
         return None
@@ -1736,29 +1827,34 @@ def NativeEnvelope(
 
 # this definition exists because capability records need exact typed decoding
 def ParseTransfers(
-    Value: Mapping[str, AnyValue],
+    Value: Mapping[str, object],
 ) -> tuple[CapabilityTransfer, ...] | None:
-    Records = Value.get("transfers")
-    if not isinstance(Records, list):
+    Records = ObjectList(Value.get("transfers"))
+    if Records is None:
         return None
+    ParsedValues: list[CapabilityTransfer] = []
     try:
-        Parsed = tuple(
-            (
+        for RecordValue in Records:
+            Record = ObjectDict(RecordValue)
+            if Record is None:
+                return None
+            CapabilityValue = Record.get("capability")
+            ModeValue = Record.get("mode")
+            ReasonValue = Record.get("carrier_reason")
+            if not isinstance(CapabilityValue, str) or not isinstance(ModeValue, str):
+                return None
+            if ReasonValue is not None and not isinstance(ReasonValue, str):
+                return None
+            ParsedValues.append(
                 CapabilityTransfer(
-                    Capability(Record["capability"]),
-                    TransferMode(Record["mode"]),
-                    (
-                        CarrierReason(Record["carrier_reason"])
-                        if Record.get("carrier_reason") is not None
-                        else None
-                    ),
+                    Capability(CapabilityValue),
+                    TransferMode(ModeValue),
+                    CarrierReason(ReasonValue) if ReasonValue is not None else None,
                 )
-                for Record in Records
-                if isinstance(Record, dict)
             )
-        )
     except (KeyError, TypeError, ValueError):
         return None
+    Parsed = tuple(ParsedValues)
     if len(Parsed) != len(Records) or len(
         {ItemValue.capability for ItemValue in Parsed}
     ) != len(Parsed):
@@ -1768,7 +1864,7 @@ def ParseTransfers(
 
 # this predicate exists because regenerated proof must match every attested claim
 def IsProofMatch(
-    Value: Mapping[str, AnyValue],
+    Value: Mapping[str, object],
     Compatibility: str,
     Proof: Generated,
 ) -> bool:
@@ -1781,7 +1877,7 @@ def IsProofMatch(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
+def Native(DataValue: bytes) -> dict[str, object] | None:
     Envelope = NativeEnvelope(DataValue)
     if Envelope is None:
         return None
@@ -1874,11 +1970,21 @@ def AttestedBundle(DocValue: CadDocument, Archive: SldprtArchive) -> Mapping[str
 
 
 # this definition exists because focused behavior needs one stable owner
+def IsTransferTuple(
+    Value: object,
+) -> TypeGuard[tuple[CapabilityTransfer, ...]]:
+    if not isinstance(Value, tuple):
+        return False
+    ItemValues = CastValue(tuple[object, ...], Value)
+    return all(isinstance(ItemValue, CapabilityTransfer) for ItemValue in ItemValues)
+
+
+# this definition exists because focused behavior needs one stable owner
 def Attested(
-    Attestation: Mapping[str, Any], Required: frozenset[Capability]
+    Attestation: Mapping[str, object], Required: frozenset[Capability]
 ) -> tuple[CapabilityTransfer, ...]:
     Parsed = Attestation.get("parsed_transfers")
-    if not isinstance(Parsed, tuple):
+    if not IsTransferTuple(Parsed):
         return SolidworksA(Required, frozenset())
     ByCapability = {ItemValue.capability: ItemValue for ItemValue in Parsed}
     if set(ByCapability) != set(Required):
@@ -1906,6 +2012,11 @@ def Replay(DataValue: bytes) -> str:
     )
 
 
+# empty object identifiers keep generated state defaults concrete for both analyzers
+def EmptyObjectIds() -> Mapping[str, int]:
+    return {}
+
+
 # this state exists because native generation has format specific branches
 @DataClass(slots=True)
 class GeneratedState:
@@ -1914,7 +2025,7 @@ class GeneratedState:
     PartCapabilities: frozenset[Capability] = frozenset()
     MixedCapabilities: frozenset[Capability] = frozenset()
     PartPartition: bytes | None = None
-    PartObjectIds: Mapping[str, int] = Field(default_factory=FrozenMapping)
+    PartObjectIds: Mapping[str, int] = Field(default_factory=EmptyObjectIds)
     PartAppUsable: bool = False
     PartVendorLoadable: bool = False
     PartDonorNotes: tuple[str, ...] = ()
@@ -2016,6 +2127,7 @@ def BuildAsmMut(
 def BuildGeomMut(
     Portable: CadDocument, StateMut: GeneratedState
 ) -> tuple[bytes | None, str]:
+    Payload: bytes | None
     if StateMut.PartPartition is not None:
         Payload = StateMut.PartPartition
         NativeBrep = "generated"
@@ -2043,6 +2155,7 @@ def GeneratedCaps(
     BundleComplete: bool | None,
     BundleCapabilities: frozenset[Capability],
 ) -> frozenset[Capability]:
+    ResolvedNames = BundleNames or {}
     NativeCaps = set(
         GeneratedAsm(
             Portable.assembly, State.Encoding, State.Streams, Portable.configurations
@@ -2056,8 +2169,8 @@ def GeneratedCaps(
         and all(
             (
                 DefinitionItem.id == Portable.assembly.root_definition_id
-                or DefinitionItem.document_id in BundleNames
-                or DefinitionItem.id in BundleNames
+                or DefinitionItem.document_id in ResolvedNames
+                or DefinitionItem.id in ResolvedNames
                 for DefinitionItem in Portable.assembly.definitions
             )
         )
@@ -2367,7 +2480,10 @@ def SavedMateLists(
         ):
             continue
         try:
-            OwnerId = int(Payload.attributes.get("owner_definition_id", -1))
+            OwnerValue = Payload.attributes.get("owner_definition_id", -1)
+            if not isinstance(OwnerValue, (int, str, bytes, bytearray)):
+                continue
+            OwnerId = int(OwnerValue)
             Decoded = DecodeMateList(Payload.data, Payload.source_stream, OwnerId)
         except (SldprtFormatError, TypeError, ValueError, Struct.error):
             continue
@@ -2382,7 +2498,7 @@ def IsSavedPayloads(
     AsmValue: AsmData,
     Candidates: Mapping[str, tuple[BrepPayload, NativeMateList]],
 ) -> bool:
-    PayloadIds = {Payload.id for Payload, Ignored in Candidates.values()}
+    PayloadIds = {Payload.id for Payload, _ in Candidates.values()}
     DesiredPayloadIds = {
         str(Value)
         for Value in (
@@ -2455,13 +2571,12 @@ def SavedGenerated(
         or not IsSavedMatches(AsmValue, Candidates)
     ):
         return ({}, False)
-    return (
-        {
-            Payload.source_stream: bytes(Payload.data)
-            for Payload, Ignored in Candidates.values()
-        },
-        True,
-    )
+    SavedStreams: dict[str, bytes] = {}
+    for Payload, _ in Candidates.values():
+        if Payload.data is None:
+            return ({}, False)
+        SavedStreams[Payload.source_stream] = Payload.data
+    return (SavedStreams, True)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2661,8 +2776,9 @@ def IsAsmOrder(
         # this callback exists because native sibling ordering needs a stable key
         Expected = [
             Encoding.occurrence_ids[ItemValue.id]
-            for Ignored, Ignored, ItemValue in sorted(
-                Values, key=lambda Value: (Value[0], Value[1])
+            for ItemValue in (
+                Entry[2]
+                for Entry in sorted(Values, key=lambda Value: (Value[0], Value[1]))
             )
         ]
         Actual = [
@@ -2709,6 +2825,8 @@ def GeneratedRef(Instance: ComponentInstance, Fallback: int) -> int:
     ):
         if isinstance(Value, bool):
             continue
+        if not isinstance(Value, (int, str, bytes, bytearray)):
+            continue
         try:
             Number = int(Value)
         except (TypeError, ValueError):
@@ -2720,8 +2838,10 @@ def GeneratedRef(Instance: ComponentInstance, Fallback: int) -> int:
 
 
 # this definition exists because focused behavior needs one stable owner
-def GeneratedA(Value: Any) -> int:
+def GeneratedA(Value: object) -> int:
     if isinstance(Value, bool):
+        return 0
+    if not isinstance(Value, (int, str, bytes, bytearray)):
         return 0
     try:
         return int(Value)
@@ -2929,16 +3049,15 @@ def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def KeywordsBytes(Prefix: bytes, RootValue: ET.Element, Trailing: bytes) -> bytes:
-    return (
-        Prefix
-        + XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
-        + Trailing
-    )
+def KeywordsBytes(Prefix: bytes, RootValue: XmlTree.Element, Trailing: bytes) -> bytes:
+    Serialized = XmlTree.tostring(RootValue, encoding="utf-8", xml_declaration=True)
+    if not isinstance(Serialized, bytes):
+        raise TypeError("keyword xml serialization must produce bytes")
+    return Prefix + Serialized + Trailing
 
 
 # this definition exists because focused behavior needs one stable owner
-def XmlElementsById(RootValue: ET.Element) -> dict[int, XmlTree.Element]:
+def XmlElementsById(RootValue: XmlTree.Element) -> dict[int, XmlTree.Element]:
     Result: dict[int, XmlTree.Element] = {}
     for ElemValue in RootValue.iter():
         RawValue = ElemValue.attrib.get("id")
@@ -3079,7 +3198,10 @@ def IsPatchParamMut(
     if Record is None or Record[1].native_offset is None:
         return False
     ObjectId, Dimension = Record
-    Struct.pack_into("<d", Resolved, Dimension.native_offset, TargetMm / 1000.0)
+    NativeOffset = Dimension.native_offset
+    if NativeOffset is None:
+        return False
+    Struct.pack_into("<d", Resolved, NativeOffset, TargetMm / 1000.0)
     ElemValue = Elements.get(ObjectId)
     if ElemValue is None:
         return False
@@ -3375,14 +3497,12 @@ def PatchRectangle(
         if Entity is None or not isinstance(Entity.geometry, LineGeom):
             return
         Lines.append(Entity.geometry)
-    Points = tuple(
-        (
-            PointValues(Lines[0].start),
-            PointValues(Lines[0].end),
-            PointValues(Lines[1].end),
-            PointValues(Lines[2].end),
-        )
-    )[0]
+    Points = (
+        PointValues(Lines[0].start),
+        PointValues(Lines[0].end),
+        PointValues(Lines[1].end),
+        PointValues(Lines[2].end),
+    )
     if (
         PointValues(Lines[1].start) != Points[1]
         or PointValues(Lines[2].start) != Points[2]
@@ -3401,6 +3521,12 @@ def PatchRectangle(
         (XOneValue, YOneValue),
         (XZero, YOneValue),
     )
+    if all(
+        MathValue.isclose(SourceValue, TargetValue, abs_tol=1e-09)
+        for SourcePoint, TargetPoint in zip(SourceCorners, Points, strict=True)
+        for SourceValue, TargetValue in zip(SourcePoint, TargetPoint, strict=True)
+    ):
+        return
     for Marker in Sketch.markers:
         if Marker.coordinates_mm is None:
             continue
@@ -3423,7 +3549,7 @@ def RoundNumber(Value: float) -> float:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParamValues(Parameters: Sequence[Parameter]) -> tuple[AnyValue, ...]:
+def ParamValues(Parameters: Sequence[Parameter]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3460,7 +3586,7 @@ def TransformValues(Transform: Transform) -> tuple[float, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[AnyValue, ...]:
+def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3476,7 +3602,7 @@ def PlaneValues(Planes: Sequence[SupportPlane]) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def GeomValues(GeomValue: Any) -> AnyValue:
+def GeomValues(GeomValue: KGeometryTypes) -> object:
     if isinstance(GeomValue, PointGeom):
         return (
             "point",
@@ -3498,7 +3624,7 @@ def GeomValues(GeomValue: Any) -> AnyValue:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SketchValues(Sketches: Sequence[SketchData]) -> tuple[AnyValue, ...]:
+def SketchValues(Sketches: Sequence[SketchData]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3541,8 +3667,8 @@ def SketchValues(Sketches: Sequence[SketchData]) -> tuple[AnyValue, ...]:
 
 # this definition exists because focused behavior needs one stable owner
 def DefinitionValue(
-    Definition: Any, ParamValue: ParameterValue | None = None
-) -> AnyValue:
+    Definition: FeatureDef | None, ParamValue: ParameterValue | None = None
+) -> object:
     if isinstance(Definition, ExtrusionFeature):
         Length = ParamValue or Definition.length
         return (
@@ -3564,7 +3690,7 @@ def DefinitionValue(
 # this definition exists because focused behavior needs one stable owner
 def FeatureValues(
     Features: Sequence[FeatureStep], Parameters: Sequence[Parameter] = ()
-) -> tuple[AnyValue, ...]:
+) -> tuple[object, ...]:
     ParamById = {Param.id: Param for Param in Parameters}
     return tuple(
         (
@@ -3615,7 +3741,7 @@ def IsNativeFeature(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SelectionValues(Selections: Sequence[Selection]) -> tuple[AnyValue, ...]:
+def SelectionValues(Selections: Sequence[Selection]) -> tuple[object, ...]:
     return tuple(
         (
             (Selection.id, Selection.name, Selection.path, dict(Selection.query))
@@ -3625,7 +3751,7 @@ def SelectionValues(Selections: Sequence[Selection]) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[AnyValue, ...]:
+def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3642,7 +3768,7 @@ def ConfigValues(Configurations: Sequence[Configuration]) -> tuple[AnyValue, ...
 
 
 # this definition exists because focused behavior needs one stable owner
-def BodyValues(Bodies: Sequence[Body]) -> tuple[AnyValue, ...]:
+def BodyValues(Bodies: Sequence[Body]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3660,7 +3786,7 @@ def BodyValues(Bodies: Sequence[Body]) -> tuple[AnyValue, ...]:
 # this definition exists because focused behavior needs one stable owner
 def NativeBody(
     Model: NativeModel, Timeline: tuple[FeatureStep, ...]
-) -> tuple[AnyValue, ...]:
+) -> tuple[object, ...]:
     BodyFeature = SolidBody(Model.features)
     BodyItem = BodyValue(
         id="sldprt:body:1",
@@ -3679,7 +3805,7 @@ def NativeBody(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[AnyValue, ...]:
+def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -3705,7 +3831,7 @@ def PatchTemplatMut(
     OriginalStreams: Mapping[str, bytes],
 ) -> tuple[str, bool, bool]:
     Archive = SldprtArchive.from_bytes(BuildSldprt(OriginalStreams))
-    OriginalPayloads, Ignored = BrepPayloads(Archive, ReadOptions(strict=False))
+    OriginalPayloads = BrepPayloads(Archive, ReadOptions(strict=False))[0]
     DesiredIndexes = SourcePayloadIndexes(DocValue)
     DesiredPayloads = tuple(
         (
@@ -3739,15 +3865,16 @@ def PatchPathsMut(
     if not BundleNames:
         return
     Prefix, RootValue, Trailing = KeywordsRoot(StreamsMut[ComponentTreeStream])
-    PathByFileId = {
-        int(Definition.attributes["native_file_id"]): BundleNames.get(
-            Definition.document_id
+    PathByFileId: dict[int, str] = {}
+    for Definition in AsmValue.definitions:
+        NativeFileId = Definition.attributes.get("native_file_id")
+        if not isinstance(NativeFileId, int):
+            continue
+        BundlePath = BundleNames.get(Definition.document_id) or BundleNames.get(
+            Definition.id
         )
-        or BundleNames[Definition.id]
-        for Definition in AsmValue.definitions
-        if (Definition.document_id in BundleNames or Definition.id in BundleNames)
-        and isinstance(Definition.attributes.get("native_file_id"), int)
-    }
+        if BundlePath is not None:
+            PathByFileId[NativeFileId] = BundlePath
     Changed = False
     for ElemValue in RootValue.iter():
         if ElemValue.tag.rsplit("}", 1)[-1] != "swFile":
@@ -3814,8 +3941,7 @@ def AsmBaseCaps(
     DocIds = {Component.id for Component in AsmValue.documents}
     SavedDocuments = all(
         (
-            isinstance(Component.document, CadDoc)
-            and SavedSource(Component.document, None) is not None
+            SavedSource(Component.document, None) is not None
             for Component in AsmValue.documents
         )
     )
@@ -3827,7 +3953,6 @@ def AsmBaseCaps(
                 not Component.document.bodies
                 or Capability.BODY_STRUCTURE in Component.document.capabilities
                 for Component in AsmValue.documents
-                if isinstance(Component.document, CadDoc)
             )
         ):
             Result.add(Capability.BODY_STRUCTURE)
@@ -3852,7 +3977,7 @@ def IsRootMates(
     IdentityOccurrences = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
-    Ignored, Entities, Mates, Groups = AsmMates(
+    _, Entities, Mates, Groups = AsmMates(
         Native,
         (
             (
@@ -3913,7 +4038,7 @@ def AsmFinalCapsMut(
         Capability.COMPONENT_DOCUMENTS in ResultMut,
     ):
         ResultMut.add(Capability.ASSEMBLY_MATES)
-    NativeMeshes, Ignored = AsmMeshes(Native)
+    NativeMeshes = AsmMeshes(Native)[0]
     if MeshValues(DocValue.meshes) == MeshValues(NativeMeshes):
         ResultMut.add(Capability.TESSELLATION)
 
@@ -4060,7 +4185,7 @@ def ReadAsmMates(
     ItemMap = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
-    Ignored, Ignored, OriginalMates, Ignored = AsmMates(
+    OriginalMates = AsmMates(
         Native,
         (
             (
@@ -4071,7 +4196,7 @@ def ReadAsmMates(
                 SourcePath,
             ),
         ),
-    )
+    )[2]
     return {MateValue.id: MateValue for MateValue in OriginalMates}
 
 
@@ -4127,7 +4252,9 @@ def IsPatchValueMut(
 
 # this predicate exists because native mate alignment has a coded binary field
 def IsPatchAlignMut(
-    BufferMut: bytearray, MateValue: NativeMate, TargetValue: AnyValue
+    BufferMut: bytearray,
+    MateValue: NativeMate,
+    TargetValue: MateAlignment | str,
 ) -> bool:
     AlignmentCode = next(
         (
@@ -4227,7 +4354,7 @@ def NativeMateA(DataValue: bytes | bytearray, MateValue: NativeMate) -> int | No
 
 
 # this definition exists because focused behavior needs one stable owner
-def Definition(Definition: ComponentDefinition) -> tuple[AnyValue, ...]:
+def Definition(Definition: ComponentDefinition) -> tuple[object, ...]:
     return (
         Definition.id,
         Definition.name,
@@ -4237,7 +4364,7 @@ def Definition(Definition: ComponentDefinition) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def InstanceValues(Instance: ComponentInstance) -> tuple[AnyValue, ...]:
+def InstanceValues(Instance: ComponentInstance) -> tuple[object, ...]:
     return (
         Instance.id,
         Instance.name,
@@ -4257,7 +4384,7 @@ def InstanceValues(Instance: ComponentInstance) -> tuple[AnyValue, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def AsmStructure(AsmValue: AssemblyData) -> tuple[AnyValue, ...]:
+def AsmStructure(AsmValue: AssemblyData) -> tuple[object, ...]:
     return (
         AsmValue.root_definition_id,
         tuple(
@@ -4277,13 +4404,13 @@ def NativeAsmData(Native: NativeAssembly) -> AsmData:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeAsmValues(Native: NativeAssembly) -> tuple[AnyValue, ...]:
+def NativeAsmValues(Native: NativeAssembly) -> tuple[object, ...]:
     return AsmStructure(NativeAsmData(Native))
 
 
 # this definition exists because focused behavior needs one stable owner
 def DivergedKeys(
-    Donor: Mapping[str, Any], Desired: Mapping[str, Any]
+    Donor: Mapping[str, object], Desired: Mapping[str, object]
 ) -> tuple[str, ...]:
     return tuple(sorted(set(Donor) ^ set(Desired))) + tuple(
         (
@@ -4346,7 +4473,7 @@ def MateValues(
     Entities: Sequence[MateEntity],
     Mates: Sequence[MateConstraint],
     Groups: Sequence[MateGroup],
-) -> tuple[AnyValue, ...]:
+) -> tuple[object, ...]:
     return (
         tuple(
             (
@@ -4398,7 +4525,7 @@ def MateValues(
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateParamValue(Value: ParameterValue | None) -> AnyValue:
+def MateParamValue(Value: ParameterValue | None) -> object:
     if (
         Value is None
         or isinstance(Value.value, bool)
@@ -4424,7 +4551,7 @@ def MateParamValue(Value: ParameterValue | None) -> AnyValue:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshValues(Meshes: Sequence[Mesh]) -> tuple[AnyValue, ...]:
+def MeshValues(Meshes: Sequence[Mesh]) -> tuple[object, ...]:
     return tuple(
         (
             (
@@ -4573,6 +4700,8 @@ def WriteTargetMut(
 ) -> PathValue | None:
     PathValue = TargetPath(Target)
     if PathValue is None:
+        if not IsBinaryTarget(Target):
+            raise TypeError("SLDPRT destination stream must accept bytes")
         try:
             Written = Target.write(DataValue)
         except TypeError as ErrorInfo:
@@ -4602,9 +4731,15 @@ def WriteTargetMut(
 
 
 # this definition exists because assembly part metadata shares one decode pass
-def AsmPartFields(
-    Archive: SldprtArchive, Settings: ReadOptions
-) -> tuple[AnyValue, ...]:
+def AsmPartFields(Archive: SldprtArchive, Settings: ReadOptions) -> tuple[
+    NativeModel,
+    tuple[Config, ...],
+    tuple[Param, ...],
+    tuple[SupportPlane, ...],
+    tuple[SketchData, ...],
+    tuple[Selection, ...],
+    tuple[FeatureStep, ...],
+]:
     SelectedStream = ResolvedStream(Archive.streams, ResolvedFeaturesStream)
     Model = DecodeNativeModel(
         Archive.require(KeywordsStream),
@@ -4979,11 +5114,18 @@ def AsmDocuments(
 
 
 # this definition exists because component faces share one indexed mesh accumulator
-def MeshGeometry(Component: AnyValue) -> tuple[AnyValue, ...]:
+def MeshGeometry(
+    Component: NativeDisplay,
+) -> tuple[
+    list[VectorThree],
+    list[VectorThree],
+    list[tuple[int, int, int]],
+    list[dict[str, object]],
+]:
     Vertices: list[VectorThree] = []
     Normals: list[VectorThree] = []
     Triangles: list[tuple[int, int, int]] = []
-    Faces: list[dict[str, AnyValue]] = []
+    Faces: list[dict[str, object]] = []
     for FaceValue in Component.faces:
         VertexStart = len(Vertices)
         TriangleStart = len(Triangles)
@@ -4991,7 +5133,11 @@ def MeshGeometry(Component: AnyValue) -> tuple[AnyValue, ...]:
         Normals.extend((VectorThree(*Normal) for Normal in FaceValue.normals))
         Triangles.extend(
             (
-                tuple((Index + VertexStart for Index in Triangle))
+                (
+                    Triangle[0] + VertexStart,
+                    Triangle[1] + VertexStart,
+                    Triangle[2] + VertexStart,
+                )
                 for Triangle in FaceValue.triangle_indices
             )
         )
@@ -5566,7 +5712,10 @@ def NeutralMateKinA(Value: str) -> MateKind:
 
 # this definition exists because focused behavior needs one stable owner
 def NeutralMate(MateValue: NativeMate) -> MateAlignment:
-    Alignment = NativeMateAlignmentByCode.get(MateValue.alignment_code)
+    AlignmentCode = MateValue.alignment_code
+    if AlignmentCode is None:
+        return MateAlignment.UNKNOWN
+    Alignment = NativeMateAlignmentByCode.get(AlignmentCode)
     if Alignment is None:
         return MateAlignment.UNKNOWN
     return MateAlignment(Alignment.kind)
@@ -5686,7 +5835,7 @@ def MateGroups(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Flattened(Native: NativeAssembly) -> tuple[dict[str, AnyValue], ...]:
+def Flattened(Native: NativeAssembly) -> tuple[dict[str, object], ...]:
     Identity = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
@@ -5712,30 +5861,30 @@ def Flattened(Native: NativeAssembly) -> tuple[dict[str, AnyValue], ...]:
 # this definition exists because focused behavior needs one stable owner
 def FlattenedMates(
     Native: NativeAssembly, Mates: tuple[MateConstraint, ...]
-) -> tuple[dict[str, AnyValue], ...]:
+) -> tuple[dict[str, object], ...]:
     Identity = {
         ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences
     }
     OwnerPaths: Defaultdict[int, list[tuple[str, tuple[str, ...]]]] = Defaultdict(list)
     OwnerPaths[Native.root_definition_id].append(("", ()))
     for ItemValue in Native.occurrence_paths:
-        PathValue = tuple(
+        InstanceIds = tuple(
             (
                 AsmInstanceId(Value)
                 for Value in MateInstance(Native, Identity, ItemValue.path)
             )
         )
-        OwnerPaths[ItemValue.definition_id].append((ItemValue.path, PathValue))
-    Result: list[dict[str, AnyValue]] = []
+        OwnerPaths[ItemValue.definition_id].append((ItemValue.path, InstanceIds))
+    Result: list[dict[str, object]] = []
     for MateValue in Mates:
         OwnerId = int(MateValue.owner_definition_id.rsplit(":", 1)[-1])
-        for Index, (PathValue, InstancePath) in enumerate(OwnerPaths.get(OwnerId, [])):
+        for Index, (SourcePath, InstancePath) in enumerate(OwnerPaths.get(OwnerId, [])):
             Result.append(
                 {
                     "id": f"{MateValue.id}:occurrence:{Index}",
                     "mate_id": MateValue.id,
                     "owner_definition_id": MateValue.owner_definition_id,
-                    "owner_occurrence_path": PathValue,
+                    "owner_occurrence_path": SourcePath,
                     "owner_instance_path": InstancePath,
                 }
             )
@@ -5770,7 +5919,7 @@ def Companion(Label: str) -> tuple[BrepPayload, ...]:
         if Choice is None:
             continue
         DataValue = Choice.read_bytes()
-        Attributes: dict[str, AnyValue] = {
+        Attributes: dict[str, object] = {
             "companion_path": str(Choice.resolve()),
             "source_assembly": str(Source),
         }
@@ -5887,7 +6036,8 @@ def SourceBytes(Source: Source) -> tuple[bytes, str]:
     TellValue = getattr(Source, "tell", None)
     if callable(TellValue):
         try:
-            Position = TellValue()
+            PositionValue = TellValue()
+            Position = PositionValue if isinstance(PositionValue, int) else None
         except (OSError, ValueError):
             Position = None
     Value = Source.read()
@@ -6247,7 +6397,9 @@ def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[SketchData, ...]:
 
 
 # this definition exists because profile primitives share one entity mapping pass
-def ProfileSketch(Sketch: NativeSketch) -> tuple[AnyValue, ...]:
+def ProfileSketch(
+    Sketch: NativeSketch,
+) -> tuple[list[SketchEntity], dict[str, str], dict[int, str], set[int]]:
     Entities: list[SketchEntity] = []
     RefMap: dict[str, str] = {}
     ProfileEntities: dict[int, str] = {}
@@ -6442,7 +6594,7 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
     SketchParamIds = tuple(
         (
             ParamId
-            for Dimension, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions)
+            for _, ParamId in ParamEntries(Sketch.object_id, Sketch.dimensions)
             if ParamId in ParamIds
         )
     )
@@ -6474,7 +6626,7 @@ def MarkerLinear(
     CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]],
     CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
     ResolvedSemantic: str,
-) -> tuple[AnyValue, AnyValue] | None:
+) -> tuple[GeomKind, KGeometryTypes] | None:
     if ResolvedSemantic == "point" and Marker.coordinates_mm is not None:
         return (GeomKind.POINT, PointGeom(VectorTwo(*Marker.coordinates_mm)))
     if ResolvedSemantic != "line" or Marker.endpoint_indices is None:
@@ -6497,9 +6649,9 @@ def MarkerCurved(
     Marker: NativeMarker,
     CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
     ResolvedSemantic: str,
-) -> tuple[AnyValue, AnyValue]:
-    KindValue: AnyValue = GeomKind.NATIVE
-    GeomValue: AnyValue = None
+) -> tuple[GeomKind, KGeometryTypes]:
+    KindValue = GeomKind.NATIVE
+    GeomValue: KGeometryTypes | None = None
     if ResolvedSemantic in {"circle", "arc"}:
         Circular = MarkerCircular(Marker, CoordinatesByIndex, ResolvedSemantic)
         if Circular is not None:
@@ -6527,7 +6679,7 @@ def MarkerGeometry(
     CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]],
     CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
     ResolvedSemantic: str,
-) -> tuple[AnyValue, AnyValue]:
+) -> tuple[GeomKind, KGeometryTypes]:
     Linear = MarkerLinear(
         Marker, CoordinatesByPrefix, CoordinatesByIndex, ResolvedSemantic
     )
@@ -6853,8 +7005,16 @@ def RuleContextA(Sketch: NativeSketch, ParamIds: set[str]) -> RuleContext:
 
 # this definition exists because each native rule needs deterministic occurrence binding
 def RulePartsMut(
-    RuleValue: AnyValue, RefMap: Mapping[str, str], ContextMut: RuleContext
-) -> tuple[AnyValue, ...]:
+    RuleValue: NativeRule, RefMap: Mapping[str, str], ContextMut: RuleContext
+) -> tuple[
+    list[RuleRef],
+    str,
+    str,
+    int,
+    NativeDimension | None,
+    str | None,
+    str,
+]:
     ResolvedRefs = [RefMap.get(RefValue) for RefValue in RuleValue.references]
     References = (
         [RuleRef(RefValue) for RefValue in ResolvedRefs]
@@ -6895,7 +7055,7 @@ def RulePartsMut(
 # this definition exists because resolved rule parts need one neutral constructor
 def BuildSketchRule(
     Sketch: NativeSketch,
-    RuleValue: AnyValue,
+    RuleValue: NativeRule,
     RefMap: Mapping[str, str],
     ContextMut: RuleContext,
 ) -> SketchRule:
@@ -7092,13 +7252,7 @@ def OperationA(
 # this definition exists because focused behavior needs one stable owner
 def OperationId(Operation: NativeOperation, Producer: int, LocalId: int) -> str:
     Duplicate = (
-        sum(
-            (
-                RefLocal == LocalId
-                for Ignored, RefLocal in Operation.selection_references
-            )
-        )
-        > 1
+        sum((RefLocal == LocalId for _, RefLocal in Operation.selection_references)) > 1
     )
     return SelectionId(
         Operation.object_id,
@@ -7158,7 +7312,7 @@ def TimelineOp(
     Selected = tuple(
         (
             SelectionId
-            for Producer, LocalId, Ignored in OperationA(Operation)
+            for Producer, LocalId, _ in OperationA(Operation)
             for SelectionId in (OperationId(Operation, Producer, LocalId),)
             if SelectionId in SelectionIds
         )
@@ -7197,12 +7351,10 @@ def Timeline(
         ParamIds = tuple(
             (
                 ParamId
-                for Dimension, ParamId in ParamEntries(
-                    Feature.object_id, Feature.dimensions
-                )
+                for _, ParamId in ParamEntries(Feature.object_id, Feature.dimensions)
             )
         )
-        Attributes: dict[str, AnyValue] = {
+        Attributes: dict[str, object] = {
             "native_object_id": Feature.object_id,
             "native_type": Feature.kind,
             "xml_tag": Feature.xml_tag,
@@ -7272,8 +7424,8 @@ def FinalBodyId(
 
 
 # this definition exists because focused behavior needs one stable owner
-def OperationAttrs(Operation: NativeOperation) -> dict[str, AnyValue]:
-    Result: dict[str, AnyValue] = {
+def OperationAttrs(Operation: NativeOperation) -> dict[str, object]:
+    Result: dict[str, object] = {
         "profile_native_id": Operation.profile_id,
         "native_dependencies": Operation.dependencies,
         "family_code": Operation.family_code,
@@ -7381,6 +7533,7 @@ def BuildRevolve(
         Operation is not None
         and Operation.kind in {"revolve_join", "revolve_cut"}
         and (Operation.angle_degrees is not None)
+        and (Operation.profile_id is not None)
         and (Operation.profile_id in Sketches)
         and (Operation.axis_marker_offset is not None)
     ):
@@ -7534,7 +7687,7 @@ def OperationValue(
 
 
 # this definition exists because focused behavior needs one stable owner
-def FeatureKindA(Feature: NativeFeature) -> FeatureKind:
+def FeatureKindA(Feature: NativeFeature | XmlFeature) -> FeatureKind:
     if getattr(Feature, "class_name", "") in {"moSketchHole", "moHoleWzd_c"}:
         return FeatureKind.HOLE
     return KFeatureKindByNative.get(Feature.kind.casefold().strip(), FeatureKind.NATIVE)
@@ -7647,20 +7800,31 @@ def BoundingBoxA(Model: NativeModel) -> BoundingBox | None:
         Plane = PlaneById.get(Sketch.support_plane_id)
         if Plane is None or Operation.length_mm is None:
             continue
-        Direction = tuple((Value * Operation.length_mm for Value in Plane.normal))
+        Direction = (
+            Plane.normal[0] * Operation.length_mm,
+            Plane.normal[1] * Operation.length_mm,
+            Plane.normal[2] * Operation.length_mm,
+        )
         for Profile in Sketch.profiles:
             for Local in ProfileExtrema(Profile):
-                BaseValue = tuple(
-                    (
-                        Plane.origin_mm[Index]
-                        + Plane.u_axis[Index] * Local[0]
-                        + Plane.v_axis[Index] * Local[1]
-                        for Index in range(3)
-                    )
+                BaseValue = (
+                    Plane.origin_mm[0]
+                    + Plane.u_axis[0] * Local[0]
+                    + Plane.v_axis[0] * Local[1],
+                    Plane.origin_mm[1]
+                    + Plane.u_axis[1] * Local[0]
+                    + Plane.v_axis[1] * Local[1],
+                    Plane.origin_mm[2]
+                    + Plane.u_axis[2] * Local[0]
+                    + Plane.v_axis[2] * Local[1],
                 )
                 Points.append(BaseValue)
                 Points.append(
-                    tuple((BaseValue[Index] + Direction[Index] for Index in range(3)))
+                    (
+                        BaseValue[0] + Direction[0],
+                        BaseValue[1] + Direction[1],
+                        BaseValue[2] + Direction[2],
+                    )
                 )
     if not Points:
         return None
@@ -7812,928 +7976,355 @@ def MarkerId(NativeId: int, Offset: int) -> str:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+ArcEllipseGeometry = ArcEllipseGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcEllipseGeometry"] = ArcEllipseGeom
+ArcGeometry = ArcGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcGeometry"] = ArcGeom
+ArcParabolaGeometry = ArcParabolaGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["ArcParabolaGeometry"] = ArcParabolaGeom
+AssemblyData = AsmData
 
 # this binding exists because shared behavior needs one stable value
-globals()["AssemblyData"] = AsmData
+Body = BodyValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Body"] = BodyValue
+BooleanOperation = BoolOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()["BooleanOperation"] = BoolOperation
+BytesIO = BytesIo
 
 # this binding exists because shared behavior needs one stable value
-globals()["BytesIO"] = BytesIo
+COMPONENT_TREE_STREAM = ComponentTreeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["COMPONENT_TREE_STREAM"] = ComponentTreeStream
+CONTAINER_VERSIONS = ContainerVersions
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTAINER_VERSIONS"] = ContainerVersions
+CONTENT_TYPES_STREAM = ContentTypesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONTENT_TYPES_STREAM"] = ContentTypesStream
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+CircleGeometry = CircleGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["CircleGeometry"] = CircleGeom
+ComponentDocument = ComponentDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["ComponentDocument"] = ComponentDoc
+Configuration = Config
 
 # this binding exists because shared behavior needs one stable value
-globals()["Configuration"] = Config
+ConstraintReference = RuleRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintReference"] = RuleRef
+DIRECTION_AXIS_ROLE = DirectionAxisRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIRECTION_AXIS_ROLE"] = DirectionAxisRole
+DISPLAY_LISTS_STREAM = DisplayListsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_LISTS_STREAM"] = DisplayListsStream
+Destination = Target
 
 # this binding exists because shared behavior needs one stable value
-globals()["Destination"] = Target
+Diagnostic = DiagValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Diagnostic"] = DiagValue
+ET = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
+EllipseGeometry = EllipseGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["EllipseGeometry"] = EllipseGeom
+FEATURES_STREAM = FeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURES_STREAM"] = FeaturesStream
+FORMAT_ID_BY_SUFFIX = FormatIdBySuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["FORMAT_ID_BY_SUFFIX"] = FormatIdBySuffix
+GeometryKind = GeomKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["GeometryKind"] = GeomKind
+INFO = InfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = InfoValue
+KEYWORDS_STREAM = KeywordsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KEYWORDS_STREAM"] = KeywordsStream
+KIT_DOCUMENT_STREAM = KitDocStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_DOCUMENT_STREAM"] = KitDocStream
+KIT_NATIVE_STREAM = KitNativeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_NATIVE_STREAM"] = KitNativeStream
+KIT_RESOLVED_STREAM = KitResolvedStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_RESOLVED_STREAM"] = KitResolvedStream
+LineGeometry = LineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["LineGeometry"] = LineGeom
+MATES_STREAM_NAME = MatesStreamName
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_NAME"] = MatesStreamName
+MATES_STREAM_SUFFIX = MatesStreamSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATES_STREAM_SUFFIX"] = MatesStreamSuffix
+MATE_VALUE_SEMANTICS = MateValueSemantics
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_VALUE_SEMANTICS"] = MateValueSemantics
+MateConstraint = MateRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["MateConstraint"] = MateRule
+Matrix4 = MatrixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()["Matrix4"] = MatrixFour
+Mesh = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Mesh"] = MeshValue
+NATIVE_MATE_ALIGNMENT_BY_CODE = NativeMateAlignmentByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ALIGNMENT_BY_CODE"] = NativeMateAlignmentByCode
+NATIVE_MATE_ENTITY_MARKERS = NativeMateEntityMarkers
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_ENTITY_MARKERS"] = NativeMateEntityMarkers
+NATIVE_MATE_NEUTRAL_KIND_ALIASES = NativeMateNeutralKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_MATE_NEUTRAL_KIND_ALIASES"] = NativeMateNeutralKind
+NativeAssembly = NativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssembly"] = NativeAsm
+NativeAssemblyDefinition = NativeAsmDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyDefinition"] = NativeAsmDefinition
+NativeAssemblyEncoding = NativeAsmEncoding
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyEncoding"] = NativeAsmEncoding
+NativeAssemblyEnvelope = NativeAsmEnvelope
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyEnvelope"] = NativeAsmEnvelope
+NativeAssemblyOccurrence = NativeAsmItem
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyOccurrence"] = NativeAsmItem
+NativeGeometry = NativeGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeGeometry"] = NativeGeom
+PARTITION_STREAM = PartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["PARTITION_STREAM"] = PartitionStream
+PLANE_FEATURE_TYPES = PlaneFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["PLANE_FEATURE_TYPES"] = PlaneFeatureTypes
+Parameter = Param
 
 # this binding exists because shared behavior needs one stable value
-globals()["Parameter"] = Param
+ParameterRole = ParamRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterRole"] = ParamRole
+ParameterValue = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterValue"] = ParamValue
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+PathValue = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["PathValue"] = FilePath
+PointGeometry = PointGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["PointGeometry"] = PointGeom
+RELATIONSHIPS_STREAM = RelationshipsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["RELATIONSHIPS_STREAM"] = RelationshipsStream
+RESOLVED_FEATURES_STREAM = ResolvedFeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["RESOLVED_FEATURES_STREAM"] = ResolvedFeaturesStream
+ReferencePlaneFeature = RefPlaneFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["ReferencePlaneFeature"] = RefPlaneFeature
+SOLIDWORKS_STREAM = SolidworksStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["SOLIDWORKS_STREAM"] = SolidworksStream
+SOLID_BODY_FEATURE_TYPES = SolidBodyFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["SOLID_BODY_FEATURE_TYPES"] = SolidBodyFeatureTypes
+SUFFIX_BY_FORMAT_ID = SuffixByFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX_BY_FORMAT_ID"] = SuffixByFormatId
+SelectionPathElement = SelectionPathElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["SelectionPathElement"] = SelectionPathElem
+SketchConstraint = SketchRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["SketchConstraint"] = SketchRule
+SplineGeometry = SplineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["SplineGeometry"] = SplineGeom
+Vector2 = VectorTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector2"] = VectorTwo
+Vector3 = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector3"] = VectorThree
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_DONOR_CARRIED_STREAMS"] = KAsmDonorCarriedStreams
+build_sldprt = BuildSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_FORMAT_ID"] = KAsmFormatId
+contains_parasolid_payload = ContainsParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_READER_REQUIRED_STREAMS"] = KAsmReaderRequiredStreams
+dataclass = DataClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_REWRITABLE_DONOR_STREAMS"] = KAsmRewritableDonorStreaA
+decode_brep_model = DecodeBrepModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ATTESTED_COMPATIBILITIES"] = KAttestedCompatibilities
+decode_mate_list = DecodeMateList
 
 # this binding exists because shared behavior needs one stable value
-globals()["_AssemblyBundle"] = AsmBundle
+decode_native_assembly = DecodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_AssemblyTemplatePatch"] = AsmTemplate
+decode_native_model = DecodeNativeModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FEATURE_KIND_BY_NATIVE"] = KFeatureKindByNative
+decode_partition_stream = DecodePartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FORMAT_ID"] = KFormatId
+defaultdict = Defaultdict
 
 # this binding exists because shared behavior needs one stable value
-globals()["_GeneratedStreams"] = Generated
+encode_blank_partition_stream = EncodeBlankPartition
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NUMBER_TEXT"] = KNumberText
+encode_brep_model = EncodeBrepModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RESOLVED_CONFIGURATION_STREAM"] = KResolvedConfigStream
+encode_native_assembly = EncodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_BYTES_KEY"] = KSourceBytesKey
+encode_native_assembly_envelope = EncodeNativeAsmEnvelope
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_FORMAT_KEY"] = KSourceFormatKey
+encode_native_part = EncodeNativePart
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_KEYS"] = KSourceKeys
+encode_partition_stream = EncodePartitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_SEMANTIC_SHA256_KEY"] = KSourceSemanticShaTwoFive
+filter_document = FilterDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOURCE_SHA256_KEY"] = KSourceShaTwoFiveSixKey
+frozen_mapping = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()["_TARGET_UNSUPPORTED_CAPABILITIES"] = KTargetUnsupported
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_WRAPPER_METADATA_KEYS"] = KWrapperMetaKeys
+infer_capabilities = InferCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["_apply_native_equations"] = ApplyNativeMut
+is_binary_destination = IsBinaryTarget
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_bounding_box"] = AsmBoundingBox
+is_native_parasolid_payload = IsNativeParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_bundle"] = AsmBundleA
+json = JsonValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_definition_id"] = AsmDefinitionId
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_definitions"] = AsmDefinitions
+operation_axis_subelement = OperationAxisSubElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_document"] = AsmDoc
+os = OsModule
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_documents"] = AsmDocuments
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_instance_id"] = AsmInstanceId
+read_sldprt = ReadSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_instances"] = AsmInstances
+replace = Replace
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_mate_entity"] = AsmMateEntity
+retained_capabilities = RetainedCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_mates"] = AsmMates
+semantic_metadata = SemanticMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_matrix"] = AsmMatrix
+source_payload_indexes = SourcePayloadIndexes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_meshes"] = AsmMeshes
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_reader_gaps"] = AsmReaderGaps
+suppress = Suppress
 
 # this binding exists because shared behavior needs one stable value
-globals()["_assembly_structure_values"] = AsmStructure
+tempfile = Tempfile
 
 # this binding exists because shared behavior needs one stable value
-globals()["_attested_generated_bundle_names"] = AttestedBundle
+with_wrapper_metadata = WithWrapperMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["_attested_native_proof"] = AttestedNative
+write_sldprt = WriteSldprt
 
 # this binding exists because shared behavior needs one stable value
-globals()["_attested_transfers"] = Attested
+ApplyNative = ApplyNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_axis_source_id"] = AxisSourceId
+BundleSatisfied = IsBundleSatisfi
 
 # this binding exists because shared behavior needs one stable value
-globals()["_body_values"] = BodyValues
+GeneratedAsmB = IsGeneratedAsmB
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bounding_box"] = BoundingBoxA
+NativeFeatureA = IsNativeFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["_brep_payload"] = BrepPayloadA
+NativeSourceDoc = IsNativeSourceD
 
 # this binding exists because shared behavior needs one stable value
-globals()["_brep_payloads"] = BrepPayloads
+Orthonormal = IsOrthonormal
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bundle_requirements_satisfied"] = IsBundleSatisfi
+PatchAsm = PatchAsmMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_companion_payloads"] = Companion
+PatchAsmMates = PatchAsmMateMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_file_index"] = ComponentFile
+PatchCoordinate = IsPatchCoordina
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_id"] = ConfigId
+PatchFeature = IsPatchFeatuMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_values"] = ConfigValues
+PatchNative = PatchNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configurations"] = Configurations
+PatchNativeAsm = PatchNativeAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_coordinate_offset"] = Coordinate
+PatchParameters = IsPatchParamete
 
 # this binding exists because shared behavior needs one stable value
-globals()["_coordinate_reference"] = CoordinateRef
+PatchTemplate = PatchTemplatMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_structure_values"] = Definition
+SavedNativeMate = IsSavedNativeMa
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_value"] = DefinitionValue
+UnitVector = IsUnitVector
 
 # this binding exists because shared behavior needs one stable value
-globals()["_destination_format_id"] = TargetFormatId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_destination_path"] = TargetPath
-
-# this binding exists because shared behavior needs one stable value
-globals()["_dimension_parameter_value"] = DimensionParam
-
-# this binding exists because shared behavior needs one stable value
-globals()["_dimension_text"] = DimensionText
-
-# this binding exists because shared behavior needs one stable value
-globals()["_direction_axis_selections"] = DirectionAxis
-
-# this binding exists because shared behavior needs one stable value
-globals()["_diverged_donor_records"] = DivergedDonor
-
-# this binding exists because shared behavior needs one stable value
-globals()["_diverged_keys"] = DivergedKeys
-
-# this binding exists because shared behavior needs one stable value
-globals()["_document_without_source"] = DocWithout
-
-# this binding exists because shared behavior needs one stable value
-globals()["_embedded_document"] = EmbeddedDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_definition"] = BuildFeature
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_id"] = FeatureId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_kind"] = FeatureKindA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_provenance"] = FeatureA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_span_provenance"] = FeatureSpan
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_values"] = FeatureValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_final_body_feature_id"] = FinalBodyId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_flattened_mates"] = FlattenedMates
-
-# this binding exists because shared behavior needs one stable value
-globals()["_flattened_occurrences"] = Flattened
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_assembly_capabilities"] = GeneratedAsm
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_assembly_notes"] = GeneratedAsmA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_assembly_structure_matches"] = IsGeneratedAsmB
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_integer"] = GeneratedA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_occurrence_labels"] = GeneratedItem
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_reference_number"] = GeneratedRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_generated_streams"] = GeneratedB
-
-# this binding exists because shared behavior needs one stable value
-globals()["_geometry_values"] = GeomValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_instance_structure_values"] = InstanceValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_geometry_brep_payload"] = IsGeomBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_keywords_bytes"] = KeywordsBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_keywords_root"] = KeywordsRoot
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_arc_ellipse_geometry"] = MarkerArcGeom
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_circular_geometry"] = MarkerCircular
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_curve_reference_indices"] = MarkerCurveRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_curve_semantic"] = MarkerCurve
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_ellipse_geometry"] = MarkerEllipse
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_entity"] = MarkerEntity
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_id"] = MarkerId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_object_reference_indices"] = MarkerObjectRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_parabola_geometry"] = MarkerParabola
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_spline_geometry"] = MarkerSpline
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_spline_reference_indices"] = MarkerSplineRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_groups"] = MateGroups
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_instance_path"] = MateInstance
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_parameter_value"] = MateParamValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_payload"] = MatePayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_provenance"] = MateProvenance
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_sources"] = MateSources
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_values"] = MateValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mesh_values"] = MeshValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_data"] = NativeAsmData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_matrix"] = NativeAsmMatrix
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_structure_values"] = NativeAsmValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_attestation"] = Native
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_attestation_bytes"] = NativeBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_body_values"] = NativeBody
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_definition_key"] = NativeKey
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_equation_value"] = NativeEquation
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_feature_definitions_unchanged"] = IsNativeFeature
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_id"] = NativeId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_marker_geometry"] = NativeMarkerA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_mate_alignment_offset"] = NativeMateA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_mate_values"] = NativeMateB
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_part_model"] = NativePartModel
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_source_matches_document"] = IsNativeSourceD
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_stream_sha256"] = NativeStreamSha
-
-# this binding exists because shared behavior needs one stable value
-globals()["_nested_assembly_document"] = NestedAsmDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_nested_definition_map"] = NestedMap
-
-# this binding exists because shared behavior needs one stable value
-globals()["_nested_occurrence_map"] = NestedItemMap
-
-# this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_alignment"] = NeutralMate
-
-# this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_entity_kind"] = NeutralMateKind
-
-# this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_kind"] = NeutralMateKinA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_neutral_mate_value"] = NeutralMateA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_attributes"] = OperationAttrs
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_dimension_value"] = OperationValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_selection_entries"] = OperationA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_selection_id"] = OperationId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_orthonormal_transform"] = IsOrthonormal
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameter_entries"] = ParamEntries
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameter_id"] = ParamId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameter_millimeters"] = ParamA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameter_values"] = ParamValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameters"] = Parameters
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parasolid_payload"] = Parasolid
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_assembly_instances"] = PatchAsmMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_assembly_mates"] = PatchAsmMateMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_coordinate"] = IsPatchCoordina
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_feature_names"] = IsPatchFeatuMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_native_assembly"] = PatchNativeAMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_native_template"] = PatchNativeMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_parameters"] = IsPatchParamete
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_rectangle_profile"] = PatchRectangle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_sketch_geometry"] = PatchSketchGeom
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_support_planes"] = PatchSupport
-
-# this binding exists because shared behavior needs one stable value
-globals()["_patch_template_brep"] = PatchTemplatMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_values"] = PayloadValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_plane_id"] = PlaneId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_plane_values"] = PlaneValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_planes"] = Planes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_point_values"] = PointValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_preserved_generated_mate_streams"] = SavedGenerated
-
-# this binding exists because shared behavior needs one stable value
-globals()["_preserved_native_mate_matches"] = IsSavedNativeMa
-
-# this binding exists because shared behavior needs one stable value
-globals()["_preserved_source"] = SavedSource
-
-# this binding exists because shared behavior needs one stable value
-globals()["_profile_edge_id"] = ProfileEdgeId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_profile_extrema"] = ProfileExtrema
-
-# this binding exists because shared behavior needs one stable value
-globals()["_profile_id"] = ProfileId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_provenance"] = ProvenanceA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_replay_compatibility"] = Replay
-
-# this binding exists because shared behavior needs one stable value
-globals()["_required_capabilities"] = Required
-
-# this binding exists because shared behavior needs one stable value
-globals()["_resolved_component_path"] = ResolvedPath
-
-# this binding exists because shared behavior needs one stable value
-globals()["_resolved_features_stream"] = ResolvedStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["_retain_source"] = RetainSource
-
-# this binding exists because shared behavior needs one stable value
-globals()["_round_number"] = RoundNumber
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selection_id"] = SelectionId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selection_values"] = SelectionValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selections"] = Selections
-
-# this binding exists because shared behavior needs one stable value
-globals()["_semantic_document"] = SemanticDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_semantic_sha256"] = SemanticShaTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch"] = SketchA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch_constraints"] = SketchB
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch_id"] = SketchId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch_values"] = SketchValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketches"] = Sketches
-
-# this binding exists because shared behavior needs one stable value
-globals()["_solid_body_feature"] = SolidBody
-
-# this binding exists because shared behavior needs one stable value
-globals()["_solidworks_package_streams"] = Solidworks
-
-# this binding exists because shared behavior needs one stable value
-globals()["_solidworks_transfers"] = SolidworksA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_solidworks_xml"] = SolidworksXml
-
-# this binding exists because shared behavior needs one stable value
-globals()["_source_bytes"] = SourceBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_source_template"] = SourceTemplate
-
-# this binding exists because shared behavior needs one stable value
-globals()["_timeline"] = Timeline
-
-# this binding exists because shared behavior needs one stable value
-globals()["_transform_values"] = TransformValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_typed_brep"] = TypedBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unit_vector"] = IsUnitVector
-
-# this binding exists because shared behavior needs one stable value
-globals()["_validate_source_suffix"] = ValidateSource
-
-# this binding exists because shared behavior needs one stable value
-globals()["_vector_values"] = VectorValues
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_destination"] = WriteTargetMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_attribute"] = XmlAttr
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_elements_by_id"] = XmlElementsById
-
-# this binding exists because shared behavior needs one stable value
-globals()["_yes_text"] = YesText
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_sldprt"] = BuildSldprt
-
-# this binding exists because shared behavior needs one stable value
-globals()["contains_parasolid_payload"] = ContainsParasolidPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = DataClass
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_brep_model"] = DecodeBrepModel
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_mate_list"] = DecodeMateList
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_native_assembly"] = DecodeNativeAsm
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_native_model"] = DecodeNativeModel
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_partition_stream"] = DecodePartitionStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["defaultdict"] = Defaultdict
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_blank_partition_stream"] = EncodeBlankPartition
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_brep_model"] = EncodeBrepModel
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_native_assembly"] = EncodeNativeAsm
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_native_assembly_envelope"] = EncodeNativeAsmEnvelope
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_native_part"] = EncodeNativePart
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_partition_stream"] = EncodePartitionStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["filter_document"] = FilterDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["frozen_mapping"] = FrozenMapping
-
-# this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
-
-# this binding exists because shared behavior needs one stable value
-globals()["infer_capabilities"] = InferCapabilities
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_binary_destination"] = IsBinaryTarget
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_native_parasolid_payload"] = IsNativeParasolidPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["json"] = JsonValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["operation_axis_subelement"] = OperationAxisSubElem
-
-# this binding exists because shared behavior needs one stable value
-globals()["os"] = OsModule
-
-# this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
-
-# this binding exists because shared behavior needs one stable value
-globals()["read_sldprt"] = ReadSldprt
-
-# this binding exists because shared behavior needs one stable value
-globals()["replace"] = Replace
-
-# this binding exists because shared behavior needs one stable value
-globals()["retained_capabilities"] = RetainedCapabilities
-
-# this binding exists because shared behavior needs one stable value
-globals()["semantic_metadata"] = SemanticMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["source_payload_indexes"] = SourcePayloadIndexes
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["suppress"] = Suppress
-
-# this binding exists because shared behavior needs one stable value
-globals()["tempfile"] = Tempfile
-
-# this binding exists because shared behavior needs one stable value
-globals()["with_wrapper_metadata"] = WithWrapperMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["write_sldprt"] = WriteSldprt
-
-# this binding exists because shared behavior needs one stable value
-globals()["ApplyNative"] = ApplyNativeMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["BundleSatisfied"] = IsBundleSatisfi
-
-# this binding exists because shared behavior needs one stable value
-globals()["GeneratedAsmB"] = IsGeneratedAsmB
-
-# this binding exists because shared behavior needs one stable value
-globals()["NativeFeatureA"] = IsNativeFeature
-
-# this binding exists because shared behavior needs one stable value
-globals()["NativeSourceDoc"] = IsNativeSourceD
-
-# this binding exists because shared behavior needs one stable value
-globals()["Orthonormal"] = IsOrthonormal
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchAsm"] = PatchAsmMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchAsmMates"] = PatchAsmMateMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchCoordinate"] = IsPatchCoordina
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchFeature"] = IsPatchFeatuMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchNative"] = PatchNativeMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchNativeAsm"] = PatchNativeAMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchParameters"] = IsPatchParamete
-
-# this binding exists because shared behavior needs one stable value
-globals()["PatchTemplate"] = PatchTemplatMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["SavedNativeMate"] = IsSavedNativeMa
-
-# this binding exists because shared behavior needs one stable value
-globals()["UnitVector"] = IsUnitVector
-
-# this binding exists because shared behavior needs one stable value
-globals()["WriteTarget"] = WriteTargetMut
+WriteTarget = WriteTargetMut

@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path as FilePath
+import sys as SysModule
 
 import pytest as Pytest
 
@@ -28,7 +30,10 @@ from tests.convert.registry.RegistryTestSupport import (
 
 
 # nested module discovery must not depend on packages reexporting their adapter class
-def CheckNestedPack(TmpPath, MonkeyPatch) -> None:
+def CheckNestedPack(
+    TmpPath: FilePath,
+    MonkeyPatch: Pytest.MonkeyPatch,
+) -> None:
     PackageName = f"kitnested{TmpPath.name.replace('-', '')}"
     PackagePath = TmpPath / PackageName
     FormatPath = PackagePath / "nested"
@@ -40,7 +45,7 @@ def CheckNestedPack(TmpPath, MonkeyPatch) -> None:
         "class NestedAdapter(JsonAdapter):\n    Discovered = True\n",
         encoding="utf-8",
     )
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     RegistryData = AdapterRegistry()
     assert RegistryData.introspect(PackageName) == ("interchange.json",)
     assert type(RegistryData.reader("interchange.json")).__name__ == "NestedAdapter"
@@ -51,7 +56,7 @@ def CheckReaderTie() -> None:
     RegistryData = AdapterRegistry()
     FormatIds = ("format.alpha", "format.beta", "format.gamma")
     RegistryData.extend(BuildAdapter(FormatId) for FormatId in FormatIds)
-    SourceData = BuildSource().to_json().encode("utf-8")
+    SourceData = BuildSource().ToJson().encode("utf-8")
     with Pytest.raises(AmbiguousAdapterError) as ErrorInfo:
         RegistryData.select_reader(SourceData)
     assert all(FormatId in str(ErrorInfo.value) for FormatId in FormatIds)
@@ -59,7 +64,7 @@ def CheckReaderTie() -> None:
 
 # attributed results prevent adapters from claiming formats outside their registered namespace
 def CheckResults() -> None:
-    SourceData = BuildSource().to_json().encode("utf-8")
+    SourceData = BuildSource().ToJson().encode("utf-8")
     ReaderRegistry = AdapterRegistry()
     ReaderRegistry.register(BuildAdapter("format.probe", ProbeFormat="format.other"))
     with Pytest.raises(AdapterRegistryError, match="returned probe format"):
@@ -92,7 +97,7 @@ def CheckAliasCase() -> None:
     )
     RegistryData = AdapterRegistry()
     RegistryData.register(AdapterData)
-    SourceData = BuildSource().to_json().encode("utf-8")
+    SourceData = BuildSource().ToJson().encode("utf-8")
     assert RegistryData.select_reader(SourceData) is AdapterData
     ResultData = RegistryData.write(
         BuildSource(),
@@ -110,7 +115,7 @@ def CheckLossGate() -> None:
             "Lossy",
             "1",
             (".lossy",),
-            capabilities=frozenset({Capability.PARAMETRIC_HISTORY}),
+            capabilities=frozenset({Capability.KParamHistory}),
         )
     )
     RegistryData = AdapterRegistry()
@@ -119,7 +124,7 @@ def CheckLossGate() -> None:
     with Pytest.raises(CapabilityLossError) as ErrorInfo:
         RegistryData.write(BuildSource(), TargetData, format_id="format.lossy")
     assert ErrorInfo.value.dropped
-    assert Capability.EDITABLE_SKETCHES in ErrorInfo.value.dropped
+    assert Capability.KEditableSketches in ErrorInfo.value.dropped
     assert TargetData.getvalue() == b""
 
 
@@ -131,7 +136,7 @@ def CheckNativeCaps() -> None:
             "Invalid native",
             "1",
             (".invalid",),
-            native_capabilities=frozenset({Capability.BREP}),
+            native_capabilities=frozenset({Capability.KBrep}),
         )
     )
     with Pytest.raises(AdapterRegistryError, match="preservation capabilities"):

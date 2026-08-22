@@ -9,26 +9,28 @@
 from __future__ import annotations
 from dataclasses import replace as ReplaceData
 from io import BytesIO
+from pathlib import Path as FilePath
 import struct as StructLib
 from convert import write_document as WriteDocument
 from convert.adapters.solidworks.core.Adapter import (
-    _ASSEMBLY_READER_REQUIRED_STREAMS as Streams,
-    _generated_streams as GeneratedStreams,
-    _native_attestation as NativeAttestation,
-    _replay_compatibility as ReplayCompatibility,
+    GeneratedB as GeneratedStreams,
+    KAsmReaderRequiredStreams as Streams,
+    Native as NativeAttestation,
+    Replay as ReplayCompatibility,
     write_sldprt as WriteSldprt,
 )
 from convert.adapters.solidworks.assembly.AssemblyCore import AsmCoreItem, EncodeAsmCore
 from convert.adapters.solidworks.container.Archive import encode_string as EncodeString
 from convert.adapters.solidworks.assembly.Assembly import (
-    MATE_ADVISORY_LOSS_REASONS as Reasons,
-    MATE_BLOCKING_LOSS_REASONS as ReasonsA,
-    MATE_LOSS_ENTITY_FRAME as Frame,
-    MATE_LOSS_ENTITY_REFERENCE as Reference,
-    MATE_LOSS_EXPRESSION as Expression,
-    MATE_LOSS_REASONS as ReasonsB,
-    MATE_LOSS_VALUE_MISSING as Missing,
-    MATE_REJECTION_REASONS as ReasonsC,
+    KMateAdvisoryLossReasons as Reasons,
+    KMateBlockingLossReasons as ReasonsA,
+    KMateLossEntityFrame as Frame,
+    KMateLossEntityRef as Reference,
+    KMateLossExpression as Expression,
+    KMateLossReasons as ReasonsB,
+    KMateLossValueMissing as Missing,
+    KMateRejectionReasons as ReasonsC,
+    NativeAssemblyEncoding,
     encode_native_assembly as EncodeNativeAssembly,
 )
 from convert.adapters.solidworks.container.Container import SldprtArchive
@@ -39,6 +41,7 @@ from convert.adapters.solidworks.core.Native import (
 )
 from interchange import (
     Capability,
+    CadDocument,
     MateAlignment,
     MateKind,
     Matrix4 as MatrixFour,
@@ -84,9 +87,10 @@ KMateInfoA = "moPlaneSurfIdRep_c,3,4, "
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def PersistentMD(**MateOverrides):
+def PersistentMD(**MateOverrides: object) -> CadDocument:
     SourceDoc = AssemblyDocument()
     Assembly = SourceDoc.assembly
+    assert Assembly is not None
     RootEntity, ComponentEntity = Assembly.mate_entities
     RootEntity = ReplaceData(
         RootEntity,
@@ -100,22 +104,25 @@ def PersistentMD(**MateOverrides):
     )
     MateInfo = ReplaceData(
         Assembly.mates[0],
-        entity_ids=(ComponentEntity.id, RootEntity.id),
+        EntityIds=(ComponentEntity.EntityId, RootEntity.EntityId),
         alignment=MateAlignment.ALIGNED,
         **MateOverrides,
     )
     return ReplaceData(
         SourceDoc,
         assembly=ReplaceData(
-            Assembly, mate_entities=(ComponentEntity, RootEntity), mates=(MateInfo,)
+            Assembly,
+            mate_entities=(ComponentEntity, RootEntity),
+            mates=(MateInfo,),
         ),
     )
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def Encode(SourceDoc):
-    Assembly = SourceDoc.assembly
-    return EncodeNativeAssembly(Assembly, SourceDoc.configurations, "Engine")
+def Encode(SourceDoc: CadDocument) -> NativeAssemblyEncoding:
+    Assembly = SourceDoc.Assembly
+    assert Assembly is not None
+    return EncodeNativeAssembly(Assembly, SourceDoc.Configurations, "Engine")
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -152,6 +159,7 @@ def TestGAHITCNHH() -> None:
 def TestFCFC() -> None:
     SourceData = AssemblyDocument()
     AssemblyValue = SourceData.assembly
+    assert AssemblyValue is not None
     FixedData = ReplaceData(
         SourceData,
         assembly=ReplaceData(
@@ -185,7 +193,7 @@ def TestPHOAUBTAR() -> None:
     PartDoc = EncodeNativePart(Document(), "Part")
     Header = DecodeNativeModelHeader(PartDoc.envelope_streams["Header2"])
     assert Header.reference_name == "Part1"
-    assert tuple((NameText for IgnoredValue, NameText in Header.objects)) == (
+    assert tuple((NameText for _, NameText in Header.objects)) == (
         "Annotations",
         "Front Plane",
         "Top Plane",
@@ -217,15 +225,15 @@ def TestPHOAUBTAR() -> None:
 def TestGAIVLWNRG() -> None:
     Output = BytesIO()
     ResultInfo = WriteSldprt(AssemblyDocument(), Output)
-    assert ResultInfo.vendor_loadable is True
-    assert ResultInfo.application_usable is False
-    assert ResultInfo.metadata["compatibility"] == "native-assembly-with-kit-neutral"
-    assert ResultInfo.metadata["native_assembly"] is True
-    assert ResultInfo.metadata["native_self_contained"] is False
+    assert ResultInfo.IsVendorLoadable is True
+    assert ResultInfo.IsAppUsable is False
+    assert ResultInfo.MetadataMap["compatibility"] == "native-assembly-with-kit-neutral"
+    assert ResultInfo.MetadataMap["native_assembly"] is True
+    assert ResultInfo.MetadataMap["native_self_contained"] is False
     assert all(
         (
             ItemValueA.code != "sldasm.vendor_reader_rejects"
-            for ItemValueA in ResultInfo.diagnostics
+            for ItemValueA in ResultInfo.Diagnostics
         )
     )
     for NameText in Streams:
@@ -450,7 +458,7 @@ def TestSIMCUTTVR() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPABHNSP(TmpPath) -> None:
+def TestPABHNSP(TmpPath: FilePath) -> None:
     OutputPath = TmpPath / "final" / "Engine.SLDASM"
     WriteDocument(AssemblyDocument(), OutputPath)
     HeaderData = b"".join(
@@ -490,6 +498,7 @@ def TestPABHNSP(TmpPath) -> None:
 def TestICSWVL() -> None:
     SourceDoc = AssemblyDocument()
     Assembly = SourceDoc.assembly
+    assert Assembly is not None
     Broken = ReplaceData(
         SourceDoc,
         assembly=ReplaceData(
@@ -512,6 +521,7 @@ def TestICSWVL() -> None:
 def TestAMLDNVTNMR() -> None:
     SourceDoc = PersistentMD()
     Assembly = SourceDoc.assembly
+    assert Assembly is not None
     Framed = ReplaceData(
         SourceDoc,
         assembly=ReplaceData(

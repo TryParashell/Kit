@@ -7,10 +7,11 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import suppress as Suppress
 from dataclasses import replace as Replace
 from datetime import datetime as Datetime, timezone as Timezone
+from enum import Enum
 import hashlib as Hashlib
 import io as IoStream
 import json as JsonValue
@@ -19,7 +20,7 @@ import os as OsModule
 from pathlib import Path as FilePath
 import re as RegexLib
 import tempfile as Tempfile
-from typing import Any as AnyValue
+from typing import TypeGuard
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 from convert.adapters.base import (
@@ -49,6 +50,7 @@ from interchange import (
     ExtrusionEndCondition,
     ExtrusionFeature,
     FeatureKind,
+    FeatureStep,
     FilletFeature,
     Mesh as MeshValue,
     PayloadRole,
@@ -59,18 +61,19 @@ from interchange import (
     semantic_metadata as SemanticMeta,
     source_payload_indexes as SourcePayloadIndexes,
 )
-from interchange.serialization import ToData
+from interchange.serialization.EncodeData import ToData
+from interchange.serialization.WireData import ValidateWireMap
 from convert.adapters.freecad.Archive import (
     DOCUMENT_ENTRY as DocEntry,
     MANIFEST_ENTRY as ManifestEntry,
     NATIVE_DOCUMENT_SHA256_ATTRIBUTE as KNativeDocHashAttr,
     NativeBrepKey,
-    _MAX_ENTRY_SIZE as MaxEntrySize,
-    _MAX_EXTERNAL_FILES as MaxOuterFiles,
-    _MAX_TOTAL_SIZE as MaxTotalSize,
-    _native_brep_key as ManifestNativeBrepKey,
-    _validated_archive_members as ValidatedArchiveMembers,
-    _validated_document_xml as ValidatedDocXml,
+    MAX_ENTRY_SIZE as MaxEntrySize,
+    MAX_EXTERNAL_FILES as MaxOuterFiles,
+    MAX_TOTAL_SIZE as MaxTotalSize,
+    native_brep_key as ManifestNativeBrepKey,
+    validated_archive_members as ValidatedArchiveMembers,
+    validated_document_xml as ValidatedDocXml,
     build_fcstd_archive as BuildFcstdArchive,
     extract_manifest_from_fcstd as ExtractManifestFromFcstd,
     native_expression_parts as NativeExpressionParts,
@@ -99,6 +102,19 @@ from convert.adapters.freecad.Protocol import (
     MATE_WRITE_KINDS as MateWriteKinds,
     XML_TRUE_VALUES as XmlTrueValues,
 )
+
+
+# mapping payloads require string keys before archive fields can be inspected safely
+def IsPayloadMap(Value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(Value, Mapping)
+
+
+# sequence payloads require a concrete element contract before archive fields are traversed
+def IsPayloadSeq(Value: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(Value, Sequence) and not isinstance(
+        Value, (str, bytes, bytearray)
+    )
+
 
 # this binding exists because shared behavior needs one stable value
 KNativeDocId = "freecad:native-document"
@@ -129,19 +145,21 @@ KMateWriteValues = frozenset((KindValue.value for KindValue in MateWriteKinds))
 class FreeCadAdapterA(RuntimeError):
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance, Message: str) -> None:
+    def __init__(self, Message: str) -> None:
         super().__init__(Message)
-
-    locals()["__init__"] = InitAction
 
 
 # this definition exists because focused behavior needs one stable owner
-def DocToManifest(DocValue: Any) -> dict[str, AnyValue]:
-    Manifest = ToData(DocValue)
-    if not isinstance(Manifest, dict):
+def DocToManifest(DocValue: CadDoc) -> dict[str, object]:
+    RawManifest: object = ToData(DocValue)
+    if not IsPayloadMap(RawManifest):
         raise TypeError("CadDocument.to_dict() must produce a mapping")
+    Manifest = dict(RawManifest)
     if Manifest.get("$type") == "CadDocument":
-        Required = set(DocValue.to_dict())
+        RawDocument: object = DocValue.to_dict()
+        if not IsPayloadMap(RawDocument):
+            raise TypeError("CadDocument.to_dict() must produce a mapping")
+        Required = set(RawDocument)
         Missing = sorted(Required.difference(Manifest))
         if Missing:
             raise ValueError("CadDocument manifest is missing: " + ", ".join(Missing))
@@ -193,20 +211,20 @@ def SourcePath(Source: Source) -> str:
 
 
 # this definition recursively filters linked documents while preserving invalid metadata
-def FilterOuters(Outer: AnyValue, Settings: ReadOptions) -> tuple[list[AnyValue], bool]:
-    if not isinstance(Outer, Sequence) or isinstance(Outer, (str, bytes, bytearray)):
+def FilterOuters(Outer: object, Settings: ReadOptions) -> tuple[list[object], bool]:
+    if not IsPayloadSeq(Outer):
         return ([], False)
-    StrippedOuter: list[AnyValue] = []
+    StrippedOuter: list[object] = []
     Changed = False
     for Value in Outer:
-        if not isinstance(Value, Mapping):
+        if not IsPayloadMap(Value):
             StrippedOuter.append(Value)
             continue
         Linked = Value.get("document")
-        Mapped = isinstance(Linked, Mapping)
+        Mapped = IsPayloadMap(Linked)
         if Mapped:
             try:
-                Linked = CadDoc.from_dict(Linked)
+                Linked = CadDoc.from_dict(ValidateWireMap(Linked))
             except (TypeError, ValueError, RecursionError):
                 StrippedOuter.append(Value)
                 continue
@@ -223,12 +241,11 @@ def FilterOuters(Outer: AnyValue, Settings: ReadOptions) -> tuple[list[AnyValue]
 
 # this definition updates only the external document metadata when filtering changes it
 def FilterOuterMeta(
-    MetaValue: Mapping[str, AnyValue], Settings: ReadOptions
-) -> Mapping[str, AnyValue]:
-    Freecad = MetaValue.get("freecad", {}) if isinstance(MetaValue, Mapping) else {}
-    Outer = (
-        Freecad.get("external_documents", []) if isinstance(Freecad, Mapping) else []
-    )
+    MetaValue: Mapping[str, object], Settings: ReadOptions
+) -> Mapping[str, object]:
+    FreecadValue = MetaValue.get("freecad")
+    Freecad: Mapping[str, object] = FreecadValue if IsPayloadMap(FreecadValue) else {}
+    Outer = Freecad.get("external_documents", [])
     StrippedOuter, Changed = FilterOuters(Outer, Settings)
     if not Changed:
         return MetaValue
@@ -243,11 +260,11 @@ def FilterOuterMeta(
 def FilteredDoc(DocValue: CadDocument, Settings: ReadOptions) -> CadDoc:
     Filtered = FilterDoc(
         DocValue,
-        include_brep=Settings.include_brep,
-        include_tessellation=Settings.include_tessellation,
+        include_brep=Settings.IncludeBrep,
+        include_tessellation=Settings.IncludeMesh,
         keep_payload_records=False,
     )
-    MetaValue: Mapping[str, AnyValue] = FilterOuterMeta(Filtered.metadata, Settings)
+    MetaValue: Mapping[str, object] = FilterOuterMeta(Filtered.metadata, Settings)
     return Replace(Filtered, metadata=MetaValue)
 
 
@@ -307,18 +324,18 @@ def NativeDocPair(DocValue: CadDocument) -> tuple[BrepPayload, BrepPayload] | No
 
 # this definition exists because focused behavior needs one stable owner
 def MappedOuter(
-    MetaValue: Mapping[str, Any], Transform: Callable[[CadDocument], CadDocument]
-) -> Mapping[str, AnyValue]:
+    MetaValue: Mapping[str, object], Transform: Callable[[CadDocument], CadDocument]
+) -> Mapping[str, object]:
     Freecad = MetaValue.get("freecad", {})
-    if not isinstance(Freecad, Mapping):
+    if not IsPayloadMap(Freecad):
         return MetaValue
     Values = Freecad.get("external_documents", [])
-    if not isinstance(Values, Sequence) or isinstance(Values, (str, bytes, bytearray)):
+    if not IsPayloadSeq(Values):
         return MetaValue
     Changed = False
-    Mapped: list[AnyValue] = []
+    Mapped: list[object] = []
     for Value in Values:
-        if not isinstance(Value, Mapping):
+        if not IsPayloadMap(Value):
             Mapped.append(Value)
             continue
         Linked = Value.get("document")
@@ -349,11 +366,7 @@ def SemanticDoc(DocValue: CadDocument) -> CadDoc:
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            SemanticDoc(ItemValue.document)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=SemanticDoc(ItemValue.document),
                     )
                     for ItemValue in AsmValue.documents
                 )
@@ -407,11 +420,7 @@ def AnnotateNative(DocValue: CadDocument) -> CadDoc:
                 (
                     Replace(
                         ItemValue,
-                        document=(
-                            AnnotateNative(ItemValue.document)
-                            if isinstance(ItemValue.document, CadDoc)
-                            else ItemValue.document
-                        ),
+                        document=AnnotateNative(ItemValue.document),
                     )
                     for ItemValue in AsmValue.documents
                 )
@@ -422,7 +431,7 @@ def AnnotateNative(DocValue: CadDocument) -> CadDoc:
     PairValue = NativeDocPair(Annotated)
     if PairValue is None:
         return Annotated
-    NativeDoc, Ignored = PairValue
+    NativeDoc, _ = PairValue
     Digest = SemanticDigest(Annotated)
     Payloads = tuple(
         (
@@ -447,7 +456,7 @@ def UnchangedNative(DocValue: CadDocument) -> bytes | None:
     PairValue = NativeDocPair(DocValue)
     if PairValue is None:
         return None
-    NativeDoc, Ignored = PairValue
+    NativeDoc, _ = PairValue
     Expected = NativeDoc.attributes.get(KReplaySemanticAttr)
     if not isinstance(Expected, str) or Expected != SemanticDigest(DocValue):
         return None
@@ -455,7 +464,7 @@ def UnchangedNative(DocValue: CadDocument) -> bytes | None:
     if DataValue is None:
         return None
     try:
-        Archive, Ignored = ValidatedArchiveMembers(DataValue)
+        Archive, _ = ValidatedArchiveMembers(DataValue)
         Archive.close()
     except (OSError, ValueError, Zipfile.BadZipFile):
         return None
@@ -469,8 +478,8 @@ def UnchangedNative(DocValue: CadDocument) -> bytes | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def EnumText(Value: Any) -> str:
-    return str(getattr(Value, "value", Value) or "").casefold()
+def EnumText(Value: str | Enum | None) -> str:
+    return str(Value.value if isinstance(Value, Enum) else Value or "").casefold()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -490,7 +499,6 @@ def DocTree(DocValue: CadDocument) -> tuple[CadDoc, ...]:
                 (
                     Component.document
                     for Component in reversed(ItemValue.assembly.documents)
-                    if isinstance(Component.document, CadDoc)
                 )
             )
     return tuple(Result)
@@ -499,19 +507,15 @@ def DocTree(DocValue: CadDocument) -> tuple[CadDoc, ...]:
 # this definition exists because focused behavior needs one stable owner
 def HasNativeGraph(DocValue: CadDocument) -> bool:
     Freecad = DocValue.metadata.get("freecad", {})
-    if not isinstance(Freecad, Mapping):
+    if not IsPayloadMap(Freecad):
         return False
     Objects = Freecad.get("objects", ())
-    return (
-        isinstance(Objects, Sequence)
-        and (not isinstance(Objects, (str, bytes, bytearray)))
-        and bool(Objects)
-    )
+    return IsPayloadSeq(Objects) and bool(Objects)
 
 
 # this definition exists because focused behavior needs one stable owner
-def HasFeatureEdges(DocValue: CadDocument, Feature: Any) -> bool:
-    Attributes = Feature.attributes
+def HasFeatureEdges(DocValue: CadDocument, Feature: FeatureStep) -> bool:
+    Attributes = Feature.Attributes
     for NameValue in (
         "selected_native_local_edge_ids",
         "native_local_edge_ids",
@@ -519,14 +523,12 @@ def HasFeatureEdges(DocValue: CadDocument, Feature: Any) -> bool:
         "edges",
     ):
         Values = Attributes.get(NameValue, ())
-        if (
-            isinstance(Values, Sequence)
-            and (not isinstance(Values, (str, bytes, bytearray)))
-            and any((isinstance(Value, (int, float)) and Value > 0 for Value in Values))
+        if IsPayloadSeq(Values) and any(
+            (isinstance(Value, (int, float)) and Value > 0 for Value in Values)
         ):
             return True
     Selections = {Selection.id: Selection for Selection in DocValue.selections}
-    for SelectionId in Feature.selection_ids:
+    for SelectionId in Feature.SelectionIds:
         Selection = Selections.get(SelectionId)
         if Selection is None:
             continue
@@ -544,20 +546,16 @@ def HasFeatureEdges(DocValue: CadDocument, Feature: Any) -> bool:
             == "extrusion_terminal_profile_boundary"
         ):
             return True
-        if any(
-            (
-                isinstance(Selection.query.get(NameValue), (int, float))
-                and Selection.query[NameValue] > 0
-                for NameValue in ("edge_index", "native_local_id", "index")
-            )
-        ):
-            return True
+        for NameValue in ("edge_index", "native_local_id", "index"):
+            QueryValue = Selection.query.get(NameValue)
+            if isinstance(QueryValue, (int, float)) and QueryValue > 0:
+                return True
     return False
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsExtrusion(Feature: Any) -> bool:
-    Definition = Feature.definition
+def IsExtrusion(Feature: FeatureStep) -> bool:
+    Definition = Feature.Definition
     if not isinstance(Definition, ExtrusionFeature):
         return False
     if EnumText(Definition.end_condition) not in KNativeExtrusionEnd:
@@ -581,39 +579,39 @@ def IsExtrusion(Feature: Any) -> bool:
         return False
     if Definition.up_to_reference or Definition.second_up_to_reference:
         return False
-    return EnumText(Feature.operation) in {"", "create", "join", "cut", "intersect"}
+    return EnumText(Feature.Operation) in {"", "create", "join", "cut", "intersect"}
 
 
 # this definition rejects records that do not represent transferable timeline features
 def IsFeatureNeeded(
-    Feature: AnyValue,
+    Feature: FeatureStep,
     DependentFeatureIds: set[str],
-    FinalFeatureIds: set[str | None],
+    FinalFeatureIds: Collection[str | None],
 ) -> bool:
-    KindValue = EnumText(Feature.kind)
+    KindValue = EnumText(Feature.EntityKind)
     if KindValue == FeatureKind.IMPORTED.value:
         return False
-    NativeType = str(Feature.attributes.get("native_type", "")).casefold()
+    NativeType = str(Feature.Attributes.get("native_type", "")).casefold()
     if KindValue == FeatureKind.REFERENCE.value and NativeType in {"plane", "sketch"}:
         return False
     IsUnusedNative = (
         KindValue == FeatureKind.NATIVE.value
-        and Feature.id not in DependentFeatureIds
-        and Feature.id not in FinalFeatureIds
-        and not Feature.input_feature_ids
-        and Feature.sketch_id is None
-        and not Feature.parameter_ids
-        and not Feature.selection_ids
+        and Feature.EntityId not in DependentFeatureIds
+        and Feature.EntityId not in FinalFeatureIds
+        and not Feature.InputFeatureIds
+        and Feature.SketchId is None
+        and not Feature.ParameterIds
+        and not Feature.SelectionIds
     )
     return not IsUnusedNative
 
 
 # this definition selects only timeline features that require transfer accounting
-def FeatureSet(DocValue: CadDocument) -> tuple[AnyValue, ...]:
+def FeatureSet(DocValue: CadDocument) -> tuple[FeatureStep, ...]:
     DependentFeatureIds = {
         FeatureId
         for Feature in DocValue.feature_timeline
-        for FeatureId in Feature.input_feature_ids
+        for FeatureId in Feature.InputFeatureIds
     }
     FinalFeatureIds = {BodyValue.final_feature_id for BodyValue in DocValue.bodies}
     return tuple(
@@ -625,33 +623,33 @@ def FeatureSet(DocValue: CadDocument) -> tuple[AnyValue, ...]:
 
 # this definition identifies feature kinds that the native writer can reconstruct
 def CanWriteFeature(
-    DocValue: CadDocument, Feature: AnyValue, SketchNative: Mapping[str, bool]
+    DocValue: CadDocument, Feature: FeatureStep, SketchNative: Mapping[str, bool]
 ) -> bool:
-    KindValue = EnumText(Feature.kind)
-    if Feature.suppressed or KindValue not in KFeatureWriteValues:
+    KindValue = EnumText(Feature.EntityKind)
+    if Feature.IsSuppressed or KindValue not in KFeatureWriteValues:
         return False
     if KindValue == FeatureKind.EXTRUSION.value:
         return (
-            bool(Feature.sketch_id)
-            and SketchNative.get(Feature.sketch_id or "", False)
+            bool(Feature.SketchId)
+            and SketchNative.get(Feature.SketchId or "", False)
             and IsExtrusion(Feature)
         )
     if KindValue == FeatureKind.FILLET.value:
-        Definition = Feature.definition
+        Definition = Feature.Definition
         return (
             isinstance(Definition, FilletFeature)
             and not Definition.variable_radius_parameter_ids
-            and bool(Feature.input_feature_ids)
+            and bool(Feature.InputFeatureIds)
             and HasFeatureEdges(DocValue, Feature)
         )
     if KindValue == FeatureKind.CHAMFER.value:
-        Definition = Feature.definition
+        Definition = Feature.Definition
         return (
             isinstance(Definition, ChamferFeature)
             and Definition.mode == "equal_distance"
             and Definition.second_distance is None
             and Definition.angle is None
-            and bool(Feature.input_feature_ids)
+            and bool(Feature.InputFeatureIds)
             and HasFeatureEdges(DocValue, Feature)
         )
     return False
@@ -659,19 +657,19 @@ def CanWriteFeature(
 
 # this definition explains why a timeline feature requires carrier preservation
 def FeatureReasons(
-    Feature: AnyValue, SketchCarrierReasons: Mapping[str, CarrierReason]
+    Feature: FeatureStep, SketchCarrierReasons: Mapping[str, CarrierReason]
 ) -> frozenset[CarrierReason]:
-    KindValue = EnumText(Feature.kind)
-    if Feature.suppressed or KindValue == FeatureKind.REFERENCE.value:
+    KindValue = EnumText(Feature.EntityKind)
+    if Feature.IsSuppressed or KindValue == FeatureKind.REFERENCE.value:
         return frozenset({CarrierReason.TARGET_UNSUPPORTED})
     if KindValue == FeatureKind.NATIVE.value:
         return frozenset({CarrierReason.SOURCE_OPAQUE})
     Reasons: set[CarrierReason] = set()
     if KindValue == FeatureKind.EXTRUSION.value:
-        SketchReason = SketchCarrierReasons.get(Feature.sketch_id or "")
+        SketchReason = SketchCarrierReasons.get(Feature.SketchId or "")
         if SketchReason is not None:
             Reasons.add(SketchReason)
-        if not Feature.sketch_id or not IsExtrusion(Feature):
+        if not Feature.SketchId or not IsExtrusion(Feature):
             Reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
     return frozenset(Reasons or {CarrierReason.WRITER_UNIMPLEMENTED})
 
@@ -749,11 +747,7 @@ def MateParts(DocValue: CadDocument) -> tuple[int, int]:
     for MateValue in AsmValue.mates:
         Attributes = MateValue.attributes
         References = Attributes.get("references", ())
-        HasNativeReferences = (
-            isinstance(References, Sequence)
-            and (not isinstance(References, (str, bytes, bytearray)))
-            and (len(References) >= 2)
-        )
+        HasNativeReferences = IsPayloadSeq(References) and (len(References) >= 2)
         Linked = [Entities.get(EntityId) for EntityId in MateValue.entity_ids[:2]]
         HasItemReferences = len(Linked) == 2 and all(
             (
@@ -776,37 +770,42 @@ def MateParts(DocValue: CadDocument) -> tuple[int, int]:
 
 # this definition exists because focused behavior needs one stable owner
 def IsExactPayload(Payload: BrepPayload) -> bool:
-    DataValue = Payload.data
-    Provenance = Payload.provenance
-    Attributes = Payload.attributes
+    DataValue = Payload.PayloadData
+    Provenance = Payload.Provenance
+    Attributes = Payload.Attributes
     FreecadObject = Attributes.get("freecad_object")
     FreecadObjectType = Attributes.get("freecad_object_type")
     FreecadProp = Attributes.get("freecad_property")
     NativeDigestText = Attributes.get(KNativeDocHashAttr)
-    PropData = Attributes.get("freecad_property_data")
-    PropAttributes = (
-        PropData.get("attributes", {}) if isinstance(PropData, Mapping) else {}
+    PropDataValue: object = Attributes.get("freecad_property_data")
+    PropData: Mapping[str, object] = (
+        PropDataValue if IsPayloadMap(PropDataValue) else {}
     )
-    PropChildren = PropData.get("children", ()) if isinstance(PropData, Mapping) else ()
+    PropAttributesValue = PropData.get("attributes")
+    PropAttributes: Mapping[str, object] = (
+        PropAttributesValue if IsPayloadMap(PropAttributesValue) else {}
+    )
+    PropChildrenValue = PropData.get("children")
+    PropChildren = PropChildrenValue if IsPayloadSeq(PropChildrenValue) else ()
     PartFiles = tuple(
         (
             ChildAttributes.get("file")
             for Child in PropChildren
-            if isinstance(Child, Mapping)
+            if IsPayloadMap(Child)
             and Child.get("tag") == "Part"
-            and isinstance((ChildAttributes := Child.get("attributes")), Mapping)
+            and IsPayloadMap((ChildAttributes := Child.get("attributes")))
         )
     )
     return (
-        Payload.role == PayloadRole.BREP
+        Payload.ValueRole == PayloadRole.BREP
         and DataValue is not None
-        and (Payload.format_id.casefold() in FreecadBrepFormatIds)
-        and (Payload.kind == "shape")
-        and Payload.schema.startswith("CASCADE Topology V")
-        and (Payload.sha256 == Hashlib.sha256(DataValue).hexdigest())
+        and (Payload.FormatId.casefold() in FreecadBrepFormatIds)
+        and (Payload.EntityKind == "shape")
+        and Payload.SchemaText.startswith("CASCADE Topology V")
+        and (Payload.SourceDigest == Hashlib.sha256(DataValue).hexdigest())
         and (Provenance is not None)
-        and (Provenance.adapter == InfoValue.format_id)
-        and (Provenance.confidence == 1.0)
+        and (Provenance.Adapter == InfoValue.format_id)
+        and (Provenance.Confidence == 1.0)
         and isinstance(FreecadObject, str)
         and bool(FreecadObject)
         and isinstance(FreecadObjectType, str)
@@ -815,24 +814,23 @@ def IsExactPayload(Payload: BrepPayload) -> bool:
         and bool(FreecadProp)
         and isinstance(NativeDigestText, str)
         and (RegexLib.fullmatch("[0-9a-f]{64}", NativeDigestText) is not None)
-        and (Provenance.native_id == f"{FreecadObject}.{FreecadProp}")
-        and (Payload.source_stream == f"{FreecadObject}.{FreecadProp}.brp")
-        and isinstance(PropData, Mapping)
+        and (Provenance.NativeId == f"{FreecadObject}.{FreecadProp}")
+        and (Payload.SourceStream == f"{FreecadObject}.{FreecadProp}.brp")
         and (PropData.get("tag") == "Property")
         and (PropAttributes.get("name") == FreecadProp)
         and (PropAttributes.get("type") == "Part::PropertyPartShape")
-        and (PartFiles == (Payload.source_stream,))
+        and (PartFiles == (Payload.SourceStream,))
     )
 
 
 # this definition exists because focused behavior needs one stable owner
-def ManifestBrep(DocValue: CadDocument) -> tuple[Mapping[str, AnyValue], ...]:
+def ManifestBrep(DocValue: CadDocument) -> tuple[Mapping[str, object], ...]:
     Values = DocToManifest(DocValue).get("brep_payloads", ())
-    if isinstance(Values, Mapping):
+    if IsPayloadMap(Values):
         Values = Values.get("$tuple", ())
-    if not isinstance(Values, Sequence) or isinstance(Values, (str, bytes, bytearray)):
+    if not IsPayloadSeq(Values):
         return ()
-    Result = tuple((Value for Value in Values if isinstance(Value, Mapping)))
+    Result = tuple((Value for Value in Values if IsPayloadMap(Value)))
     return Result if len(Result) == len(DocValue.brep_payloads) else ()
 
 
@@ -851,8 +849,8 @@ def NativeDocShaTwo(DocValue: CadDocument) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def XmlElemData(NodeValue: ET.Element) -> dict[str, AnyValue]:
-    Result: dict[str, AnyValue] = {
+def XmlElemData(NodeValue: ET.Element) -> dict[str, object]:
+    Result: dict[str, object] = {
         "tag": NodeValue.tag,
         "attributes": dict(sorted(NodeValue.attrib.items())),
     }
@@ -927,14 +925,12 @@ def HasSidecars(
         )
     )
     Sidecars = Attributes.get("freecad_sidecars", ())
-    if not isinstance(Sidecars, Sequence) or isinstance(
-        Sidecars, (str, bytes, bytearray)
-    ):
+    if not IsPayloadSeq(Sidecars):
         return False
     if len(Sidecars) != len(ReferencedSidecars):
         return False
     for Sidecar, SourceStream in zip(Sidecars, ReferencedSidecars, strict=True):
-        if not isinstance(Sidecar, Mapping):
+        if not IsPayloadMap(Sidecar):
             return False
         SidecarData = Sidecar.get("data")
         if (
@@ -979,7 +975,7 @@ def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
             continue
         try:
             Archive, Members = ValidatedArchiveMembers(NativeSource)
-            RootValue, Ignored = ValidatedDocXml(Archive, Members)
+            RootValue, _ = ValidatedDocXml(Archive, Members)
         except (OSError, TypeError, ValueError, Zipfile.BadZipFile):
             continue
         try:
@@ -1004,7 +1000,7 @@ def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
 # this definition exists because focused behavior needs one stable owner
 def PayloadNative(
     Payload: BrepPayload,
-    MappedPayload: Mapping[str, Any] | None = None,
+    MappedPayload: Mapping[str, object] | None = None,
     NativeDigestText: str = "",
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
 ) -> bytes | None:
@@ -1024,7 +1020,7 @@ def PayloadNative(
 # this definition exists because focused behavior needs one stable owner
 def IsBrepPayload(
     Payload: BrepPayload,
-    MappedPayload: Mapping[str, Any] | None = None,
+    MappedPayload: Mapping[str, object] | None = None,
     NativeDigestText: str = "",
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
 ) -> bool:
@@ -1046,24 +1042,61 @@ def IsNeutralBrep(DocValue: CadDocument) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsMeshUsable(MeshValue: Mesh) -> bool:
-    Points = tuple(((Value.x, Value.y, Value.z) for Value in MeshValue.vertices))
+def MeshCoord(Value: object) -> float:
+    if not isinstance(Value, (int, float)):
+        raise TypeError("mesh coordinates must be numeric")
+    return float(Value)
+
+
+# this definition exists because mesh indexing requires exactly three validated integer offsets
+def IsMeshTriangle(  # lgtm[py/mixed-returns]
+    Value: object,
+) -> TypeGuard[tuple[int, int, int]]:
+    match Value:
+        case (int(), int(), int()):
+            return True
+        case _:
+            return False
+
+
+# this definition exists because focused behavior needs one stable owner
+def IsMeshUsable(MeshValue: MeshValue) -> bool:
+    Points = tuple(
+        (
+            (
+                MeshCoord(Value.XCoord),
+                MeshCoord(Value.YCoord),
+                MeshCoord(Value.ZCoord),
+            )
+            for Value in MeshValue.Vertices
+        )
+    )
     if not Points or any((not all(map(MathValue.isfinite, Point)) for Point in Points)):
         return False
-    for Triangle in MeshValue.triangles:
+    for Triangle in MeshValue.Triangles:
+        if not IsMeshTriangle(Triangle):
+            continue
         if len(set(Triangle)) != 3 or any(
             (Index < 0 or Index >= len(Points) for Index in Triangle)
         ):
             continue
-        First, Second, Third = (Points[Index] for Index in Triangle)
-        LeftValue = tuple((Second[Index] - First[Index] for Index in range(3)))
-        Right = tuple((Third[Index] - First[Index] for Index in range(3)))
+        First, Second, Third = (Points[Triangle[Index]] for Index in range(3))
+        LeftValue = (
+            Second[0] - First[0],
+            Second[1] - First[1],
+            Second[2] - First[2],
+        )
+        Right = (
+            Third[0] - First[0],
+            Third[1] - First[1],
+            Third[2] - First[2],
+        )
         Cross = (
             LeftValue[1] * Right[2] - LeftValue[2] * Right[1],
             LeftValue[2] * Right[0] - LeftValue[0] * Right[2],
             LeftValue[0] * Right[1] - LeftValue[1] * Right[0],
         )
-        if sum((Value * Value for Value in Cross)) > 1e-24:
+        if Cross[0] ** 2 + Cross[1] ** 2 + Cross[2] ** 2 > 1e-24:
             return True
     return False
 
@@ -1077,7 +1110,6 @@ def IsNativeGeom(
         Documents = {
             ItemValue.id: ItemValue.document
             for ItemValue in DocValue.assembly.documents
-            if isinstance(ItemValue.document, CadDoc)
         }
         for Definition in DocValue.assembly.definitions:
             if Definition.id == DocValue.assembly.root_definition_id:
@@ -1126,7 +1158,7 @@ def IsNativeGeom(
         if any((IsMeshUsable(MeshValue) for MeshValue in ItemValue.meshes)):
             continue
         if (
-            ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold()
+            ItemValue.Source.FormatId.casefold() != InfoValue.FormatId.casefold()
             and NativeShapeFeatureCount(DocToManifest(ItemValue)) > 0
         ):
             continue
@@ -1160,7 +1192,7 @@ def CarrierReasonA(
 
 # this definition selects the strongest carrier reason for one sketch
 def SketchReason(
-    ReasonValues: Sequence[str],
+    ReasonValues: Iterable[str],
 ) -> tuple[CarrierReason, set[CarrierReason]]:
     Reasons = {CarrierReason(Value) for Value in ReasonValues} or {
         CarrierReason.WRITER_UNIMPLEMENTED
@@ -1178,7 +1210,7 @@ def SketchReason(
 # this definition records native and carrier sketch transfer parts
 def AddSketchMut(
     ItemValue: CadDocument,
-    Manifest: Mapping[str, AnyValue],
+    Manifest: Mapping[str, object],
     Parts: dict[Capability, list[bool]],
     CarrierReasons: dict[Capability, set[CarrierReason]],
 ) -> tuple[dict[str, bool], dict[str, CarrierReason]]:
@@ -1204,14 +1236,14 @@ def AddSketchMut(
 # this definition records feature selection configuration and expression transfer parts
 def AddBasicMut(
     ItemValue: CadDocument,
-    Manifest: Mapping[str, AnyValue],
+    Manifest: Mapping[str, object],
     SourceNative: bool,
     SketchNative: Mapping[str, bool],
     SketchReasons: Mapping[str, CarrierReason],
     Parts: dict[Capability, list[bool]],
     CarrierReasons: dict[Capability, set[CarrierReason]],
 ) -> None:
-    Parts[Capability.PARAMETERS].extend(True for Ignored in ItemValue.parameters)
+    Parts[Capability.PARAMETERS].extend(True for _ in ItemValue.parameters)
     NativeCount, CarrierCount, Reasons = FeatureParts(
         ItemValue, SketchNative, SketchReasons
     )
@@ -1219,16 +1251,14 @@ def AddBasicMut(
         [True] * NativeCount + [False] * CarrierCount
     )
     CarrierReasons[Capability.PARAMETRIC_HISTORY].update(Reasons)
-    Parts[Capability.SUPPORT_PLANES].extend(
-        True for Ignored in ItemValue.support_planes
-    )
+    Parts[Capability.SUPPORT_PLANES].extend(True for _ in ItemValue.support_planes)
     SelectionCounts = (
         (len(ItemValue.selections), 0) if SourceNative else SelectionParts(ItemValue)
     )
     Parts[Capability.SELECTIONS].extend(
         [True] * SelectionCounts[0] + [False] * SelectionCounts[1]
     )
-    Parts[Capability.BODY_STRUCTURE].extend(True for Ignored in ItemValue.bodies)
+    Parts[Capability.BODY_STRUCTURE].extend(True for _ in ItemValue.bodies)
     ConfigCounts = ConfigParts(ItemValue)
     Parts[Capability.CONFIGURATIONS].extend(
         [True] * ConfigCounts[0] + [False] * ConfigCounts[1]
@@ -1246,8 +1276,8 @@ def AddBasicMut(
 # this definition records geometric and tessellation transfer parts
 def AddGeomMut(
     ItemValue: CadDocument,
-    Manifest: Mapping[str, AnyValue],
-    MappedByIdentity: Mapping[int, Mapping[str, AnyValue]],
+    Manifest: Mapping[str, object],
+    MappedByIdentity: Mapping[int, Mapping[str, object]],
     NativeDigestText: str,
     TrustedNativeBreps: frozenset[NativeBrepKey],
     Parts: dict[Capability, list[bool]],
@@ -1274,12 +1304,12 @@ def AddGeomMut(
             CarrierReasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
     RebuiltCount = (
         NativeShapeFeatureCount(Manifest)
-        if ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold()
+        if ItemValue.Source.FormatId.casefold() != InfoValue.FormatId.casefold()
         else 0
     )
     if RebuiltCount and not all(Parts[Capability.BREP]):
-        Parts[Capability.BREP].extend(True for Ignored in range(RebuiltCount))
-    Parts[Capability.TESSELLATION].extend(True for Ignored in ItemValue.meshes)
+        Parts[Capability.BREP].extend(True for _ in range(RebuiltCount))
+    Parts[Capability.TESSELLATION].extend(True for _ in ItemValue.meshes)
     Parts[Capability.TESSELLATION].extend(
         False
         for Payload in ItemValue.brep_payloads
@@ -1302,7 +1332,7 @@ def AddRefsMut(
         )
         NativeDocuments = TargetPath is not None
         Parts[Capability.COMPONENT_DOCUMENTS].extend(
-            NativeDocuments for Ignored in ItemValue.assembly.documents
+            NativeDocuments for _ in ItemValue.assembly.documents
         )
         CanWriteOuter = TargetPath is not None and Portable
         Parts[Capability.EXTERNAL_REFERENCES].extend(
@@ -1311,7 +1341,7 @@ def AddRefsMut(
             if Definition.source_path
         )
     Parts[Capability.EXTERNAL_REFERENCES].extend(
-        TargetPath is not None and Portable for Ignored in NativeOuter(ItemValue)
+        TargetPath is not None and Portable for _ in NativeOuter(ItemValue)
     )
     Parts[Capability.MATERIALS].extend(
         True for BodyValue in ItemValue.bodies if BodyValue.material_id
@@ -1321,7 +1351,7 @@ def AddRefsMut(
 # this definition records native payload transfer parts and carrier reasons
 def AddPayloadMut(
     ItemValue: CadDocument,
-    MappedByIdentity: Mapping[int, Mapping[str, AnyValue]],
+    MappedByIdentity: Mapping[int, Mapping[str, object]],
     NativeDigestText: str,
     TrustedNativeBreps: frozenset[NativeBrepKey],
     Parts: dict[Capability, list[bool]],
@@ -1367,7 +1397,7 @@ def AddProvMut(ItemValue: CadDocument, Parts: dict[Capability, list[bool]]) -> N
         *ItemValue.brep_payloads,
     )
     Parts[Capability.PROVENANCE].extend(
-        False for Value in Values if Value.provenance is not None
+        False for Value in Values if getattr(Value, "provenance", None) is not None
     )
 
 
@@ -1449,8 +1479,12 @@ def CapabilityA(
             CapabilityTransfer(CapabilityValue, TransferMode.NATIVE)
             for CapabilityValue in sorted(Required, key=CapabilityKey)
         )
-    Parts = {CapabilityValue: [] for CapabilityValue in Capability}
-    CarrierReasons = {CapabilityValue: set() for CapabilityValue in Capability}
+    Parts: dict[Capability, list[bool]] = {
+        CapabilityValue: [] for CapabilityValue in Capability
+    }
+    CarrierReasons: dict[Capability, set[CarrierReason]] = {
+        CapabilityValue: set() for CapabilityValue in Capability
+    }
     for ItemValue in DocTree(DocValue):
         AddDocPartsMut(
             ItemValue, TargetPath, Portable, TrustedNativeBreps, Parts, CarrierReasons
@@ -1651,6 +1685,8 @@ def XmlLinkList(NodeValue: ET.Element, NameValue: str) -> list[str]:
 
 # this definition exists because focused behavior needs one stable owner
 def XmlNumber(Value: str | None, Default: float) -> float:
+    if Value is None:
+        return Default
     try:
         return float(Value)
     except (TypeError, ValueError):
@@ -1746,7 +1782,7 @@ def XmlScale(NodeValue: ET.Element) -> list[float]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, AnyValue]]]:
+def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, object]]]:
     with Zipfile.ZipFile(IoStream.BytesIO(DataValue)) as Archive:
         RootValue = XmlTree.fromstring(Archive.read(DocEntry))
     Value = RootValue.find(
@@ -1765,9 +1801,7 @@ def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, AnyValue]]]:
     }
 
     # this definition exists because focused behavior needs one stable owner
-    def ItemAction(
-        NameValue: str, Active: frozenset[str]
-    ) -> dict[str, AnyValue] | None:
+    def ItemAction(NameValue: str, Active: frozenset[str]) -> dict[str, object] | None:
         NodeValue = Objects.get(NameValue)
         TypeId = Types.get(NameValue, "")
         if (
@@ -1790,7 +1824,7 @@ def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, AnyValue]]]:
             )
         )
         RawInstanceData = XmlString(NodeValue, "InstanceDataJSON")
-        InstanceData: AnyValue = {}
+        InstanceData: object = {}
         if RawInstanceData:
             try:
                 InstanceData = JsonValue.loads(RawInstanceData)
@@ -1914,7 +1948,7 @@ def SourceKeys(
     Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]
 ) -> frozenset[tuple[str, str, str]]:
     Config = Definition.configuration_id or Definition.configuration_name
-    Scope = f"{Definition.kind.value}:{Config}"
+    Scope = f"{EnumText(Definition.kind)}:{Config}"
     Values: set[tuple[str, str, str]] = set()
 
     # this definition exists because focused behavior needs one stable owner
@@ -1942,8 +1976,8 @@ def MatchLink(
     Documents: Mapping[str, CadDocument],
     RootDefinitions: Mapping[str, ComponentDefinition],
     RootDocuments: Mapping[str, CadDocument],
-    Links: Mapping[str, Mapping[str, Any]],
-) -> Mapping[str, AnyValue] | None:
+    Links: Mapping[str, Mapping[str, object]],
+) -> Mapping[str, object] | None:
     Sources = SourceKeys(Definition, Documents)
     if not Sources:
         return None
@@ -1969,17 +2003,13 @@ def OuterLinkMap(
     ComponentPath: FilePath,
     RootDefinitions: Mapping[str, ComponentDefinition],
     RootDocuments: Mapping[str, CadDocument],
-    Links: Mapping[str, Mapping[str, Any]],
-) -> dict[str, dict[str, AnyValue]]:
+    Links: Mapping[str, Mapping[str, object]],
+) -> dict[str, dict[str, object]]:
     AsmValue = Component.assembly
     if AsmValue is None:
         return {}
-    Documents = {
-        ItemValue.id: ItemValue.document
-        for ItemValue in AsmValue.documents
-        if isinstance(ItemValue.document, CadDoc)
-    }
-    Result: dict[str, dict[str, AnyValue]] = {}
+    Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents}
+    Result: dict[str, dict[str, object]] = {}
     for Definition in AsmValue.definitions:
         if Definition.id == AsmValue.root_definition_id:
             continue
@@ -1988,14 +2018,19 @@ def OuterLinkMap(
         )
         if LinkValue is None:
             continue
-        PathValue = FilePath(LinkValue["path"])
+        RawPath = LinkValue.get("path")
+        if not isinstance(RawPath, (str, FilePath)):
+            continue
+        PathValue = FilePath(RawPath)
+        RawOccurrences = LinkValue.get("occurrences")
+        Occurrences = list(RawOccurrences) if IsPayloadSeq(RawOccurrences) else []
         Result[Definition.id] = {
             "file": FilePath(
                 OsModule.path.relpath(PathValue, ComponentPath.parent)
             ).as_posix(),
             "stamp": str(LinkValue.get("stamp", "")),
             "target": str(LinkValue.get("target", "")),
-            "occurrences": list(LinkValue.get("occurrences", [])),
+            "occurrences": Occurrences,
         }
     return Result
 
@@ -2014,11 +2049,7 @@ def ComponentPlans(
     AsmValue = DocValue.assembly
     if AsmValue is None:
         return []
-    Documents = {
-        ItemValue.id: ItemValue.document
-        for ItemValue in AsmValue.documents
-        if isinstance(ItemValue.document, CadDoc)
-    }
+    Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents}
     Definitions = {ItemValue.id: ItemValue for ItemValue in AsmValue.definitions}
     Plans: list[tuple[str, FilePath, ComponentDefinition, CadDoc]] = []
     for DefinitionId, PathValue in Paths.items():
@@ -2039,7 +2070,7 @@ def WriteComponents(
     DocTimestamp: str,
     TimestampEpoch: float,
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
-) -> tuple[dict[str, dict[str, AnyValue]], int]:
+) -> tuple[dict[str, dict[str, object]], int]:
     Paths = ComponentPaths(DocValue, Target)
     if not Overwrite:
         Existing = next(
@@ -2054,16 +2085,12 @@ def WriteComponents(
         else {}
     )
     Documents = (
-        {
-            ItemValue.id: ItemValue.document
-            for ItemValue in DocValue.assembly.documents
-            if isinstance(ItemValue.document, CadDoc)
-        }
+        {ItemValue.id: ItemValue.document for ItemValue in DocValue.assembly.documents}
         if DocValue.assembly is not None
         else {}
     )
-    ComponentLinks: dict[str, dict[str, AnyValue]] = {}
-    OuterLinks: dict[str, dict[str, AnyValue]] = {}
+    ComponentLinks: dict[str, dict[str, object]] = {}
+    OuterLinks: dict[str, dict[str, object]] = {}
     BytesWritten = 0
     for DefinitionId, PathValue, Definition, Component in Plans:
         if Validate:
@@ -2099,27 +2126,38 @@ def WriteComponents(
 
 
 # this definition exists because focused behavior needs one stable owner
+def NativePayloadSize(DocValue: CadDoc) -> int:
+    Total = 0
+    for Payload in DocValue.BrepPayloads:
+        DataValue = Payload.PayloadData
+        if Payload.ValueRole == PayloadRole.DOCUMENT and DataValue is not None:
+            Total += len(DataValue)
+    return Total
+
+
+# this definition exists because focused behavior needs one stable owner
 def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
     MetaValue = DocValue.metadata
-    Freecad = MetaValue.get("freecad", {}) if isinstance(MetaValue, Mapping) else {}
-    Values = (
-        Freecad.get("external_documents", []) if isinstance(Freecad, Mapping) else []
-    )
-    if not isinstance(Values, Sequence) or isinstance(Values, (str, bytes, bytearray)):
+    FreecadValue: object = MetaValue.get("freecad")
+    Freecad: Mapping[str, object] = FreecadValue if IsPayloadMap(FreecadValue) else {}
+    Values: object = Freecad.get("external_documents")
+    if Values is None:
+        Values = []
+    if not IsPayloadSeq(Values):
         raise FreeCadAdapterA("native FreeCAD external document metadata is invalid")
     Result: list[tuple[str, CadDoc]] = []
     SeenValue: set[str] = set()
     Total = 0
     for Value in Values:
-        if not isinstance(Value, Mapping):
+        if not IsPayloadMap(Value):
             raise FreeCadAdapterA(
                 "native FreeCAD external document metadata is invalid"
             )
         SourceFile = str(Value.get("file", ""))
-        Linked = Value.get("document")
-        if isinstance(Linked, Mapping):
+        Linked: object = Value.get("document")
+        if IsPayloadMap(Linked):
             try:
-                Linked = CadDoc.from_dict(Linked)
+                Linked = CadDoc.from_dict(ValidateWireMap(Linked))
             except (TypeError, ValueError, RecursionError) as ErrorInfo:
                 raise FreeCadAdapterA(
                     "native FreeCAD external document metadata is invalid"
@@ -2133,14 +2171,7 @@ def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
                 "native FreeCAD external document metadata contains duplicates"
             )
         SeenValue.add(SourceFile)
-        NativePayloadSize = sum(
-            (
-                len(Payload.data)
-                for Payload in Linked.brep_payloads
-                if Payload.role == PayloadRole.DOCUMENT and Payload.data is not None
-            )
-        )
-        Total += NativePayloadSize
+        Total += NativePayloadSize(Linked)
         if len(Result) >= MaxOuterFiles or Total > MaxTotalSize:
             raise FreeCadAdapterA(
                 "native FreeCAD external documents exceed safe limits"
@@ -2151,7 +2182,7 @@ def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
 
 # this definition exists because focused behavior needs one stable owner
 def WriteNative(
-    DocValue: CadDocument, Target: Path, Overwrite: bool, Validate: bool
+    DocValue: CadDocument, Target: FilePath, Overwrite: bool, Validate: bool
 ) -> tuple[dict[str, str], int]:
     Records = NativeOuter(DocValue)
     Folder = Target.parent / Target.stem
@@ -2160,29 +2191,31 @@ def WriteNative(
     BytesWritten = 0
     for SourceFile, Linked in Records:
         SourceName = FilePath(SourceFile).name
-        Suffix = FilePath(SourceName).suffix or Suffix
+        FileSuffix = FilePath(SourceName).suffix or Suffix
         BaseValue = ComponentStem(FilePath(SourceName).stem)
         Choice = BaseValue
         Index = 1
-        while (Choice + Suffix).casefold() in UsedValue:
+        while (Choice + FileSuffix).casefold() in UsedValue:
             Index += 1
             Ending = f"_{Index}"
             Choice = BaseValue[: 120 - len(Ending)].rstrip(" .") + Ending
-        FileName = Choice + Suffix
+        FileName = Choice + FileSuffix
         UsedValue.add(FileName.casefold())
         Output = Folder / FileName
         Result = FreeCadAdapter().write(
             Linked,
             Output,
             WriteOptions(
-                overwrite=Overwrite, validate=Validate, values={"portable": True}
+                Overwrite=Overwrite,
+                Validate=Validate,
+                OptionValues={"portable": True},
             ),
         )
-        if Result.bytes_written > MaxEntrySize:
+        if Result.ByteCount > MaxEntrySize:
             raise FreeCadAdapterA(
                 "native FreeCAD external document exceeds safe limits"
             )
-        BytesWritten += Result.bytes_written
+        BytesWritten += Result.ByteCount
         if BytesWritten > MaxTotalSize:
             raise FreeCadAdapterA(
                 "native FreeCAD external documents exceed safe limits"
@@ -2192,9 +2225,9 @@ def WriteNative(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ManifestDoc(Value: Mapping[str, Any]) -> CadDoc:
+def ManifestDoc(Value: Mapping[str, object]) -> CadDoc:
     try:
-        return CadDoc.from_dict(Value)
+        return CadDoc.from_dict(ValidateWireMap(Value))
     except (TypeError, ValueError, RecursionError) as ErrorInfo:
         raise FreeCadAdapterA(
             "embedded neutral document cannot be restored"
@@ -2223,7 +2256,7 @@ def Selected(
 
 
 # this definition probes embedded and native freecad archives without vendor runtime
-def ProbeSource(Instance: AnyValue, Source: Source) -> ProbeResult:
+def ProbeSource(Instance: FreeCadAdapter, Source: Source) -> ProbeResult:
     try:
         DataValue = SourceBytes(Source)
         Archive, Members = ValidatedArchiveMembers(DataValue)
@@ -2232,8 +2265,8 @@ def ProbeSource(Instance: AnyValue, Source: Source) -> ProbeResult:
             try:
                 ManifestDoc(ExtractManifestFromFcstd(DataValue))
             except (ValueError, FreeCadAdapterA) as ErrorInfo:
-                return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-            return ProbeResult(Instance.info.format_id, 1.0, "Kit FCStd archive")
+                return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
+            return ProbeResult(Instance.info.FormatId, 1.0, "Kit FCStd archive")
         if "Document.xml" in Members:
             try:
                 Value = ExtractManifestFromFcstd(DataValue)
@@ -2242,25 +2275,25 @@ def ProbeSource(Instance: AnyValue, Source: Source) -> ProbeResult:
                     str(ErrorInfo)
                     != "FCStd archive has no embedded Kit interchange document"
                 ):
-                    return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
+                    return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
             else:
                 try:
                     ManifestDoc(Value)
                 except FreeCadAdapterA as ErrorInfo:
-                    return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-                return ProbeResult(Instance.info.format_id, 1.0, "Kit FCStd archive")
+                    return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
+                return ProbeResult(Instance.info.FormatId, 1.0, "Kit FCStd archive")
             Confidence, Reason = ProbeNativeFcstd(DataValue)
-            return ProbeResult(Instance.info.format_id, Confidence, Reason)
+            return ProbeResult(Instance.info.FormatId, Confidence, Reason)
     except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as ErrorInfo:
-        return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
+        return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
     return ProbeResult(
-        Instance.info.format_id, 0.0, "ZIP archive has no FreeCAD document"
+        Instance.info.FormatId, 0.0, "ZIP archive has no FreeCAD document"
     )
 
 
 # this definition reads an embedded or native archive into the interchange model
 def ReadSource(Source: Source, Options: ReadOptions | None = None) -> CadDoc:
-    Settings = Options or ReadOptions(include_tessellation=True)
+    Settings = Options or ReadOptions(IncludeMesh=True)
     DataValue = SourceBytes(Source)
     Native = False
     try:
@@ -2279,10 +2312,10 @@ def ReadSource(Source: Source, Options: ReadOptions | None = None) -> CadDoc:
         DocValue = AnnotateNative(DocValue)
     DocValue = Replace(
         DocValue,
-        configurations=Selected(DocValue.configurations, Settings.configuration),
+        configurations=Selected(DocValue.configurations, Settings.ConfigName),
     )
     DocValue = FilteredDoc(DocValue, Settings)
-    if Settings.strict:
+    if Settings.StrictMode:
         DocValue.assert_valid()
     return DocValue
 
@@ -2310,7 +2343,7 @@ def SelectNative(
     Portable: bool,
     NativeOuters: Sequence[tuple[str, CadDoc]],
 ) -> bytes | None:
-    if Selected.values.get("rebuild", False) is True:
+    if Selected.OptionValues.get("rebuild", False) is True:
         return None
     if Portable and (DocValue.assembly is not None or bool(NativeOuters)):
         return None
@@ -2319,7 +2352,7 @@ def SelectNative(
 
 # this definition returns the exact native replay result and its reference contract
 def ExactResult(
-    Instance: AnyValue,
+    Instance: FreeCadAdapter,
     DocValue: CadDocument,
     Target: Destination,
     TargetPath: FilePath | None,
@@ -2332,12 +2365,12 @@ def ExactResult(
     OuterRequirements = DocValue.assembly is not None or bool(NativeOuters)
     Requirements = ("referenced FreeCAD component files",) if OuterRequirements else ()
     return WriteResult(
-        path=PathValue,
-        adapter=Instance.info.format_id,
-        bytes_written=len(NativeSource),
-        diagnostics=DocValue.diagnostics,
-        transfers=CapabilityA(DocValue, TargetPath, Portable, True),
-        metadata={
+        OutputPath=PathValue,
+        AdapterName=Instance.info.FormatId,
+        ByteCount=len(NativeSource),
+        Diagnostics=DocValue.Diagnostics,
+        Transfers=CapabilityA(DocValue, TargetPath, Portable, True),
+        MetadataMap={
             "mode": "exact_native_roundtrip",
             "compatibility": "native-exact",
             "vendor_loadable": True,
@@ -2346,9 +2379,9 @@ def ExactResult(
             "referenced_files_written": 0,
             "runtime": "python-stdlib",
         },
-        requirements=Requirements,
-        application_usable=True,
-        vendor_loadable=True,
+        Requirements=Requirements,
+        IsAppUsable=True,
+        IsVendorLoadable=True,
     )
 
 
@@ -2362,7 +2395,7 @@ def BundleArtifacts(
     NativeOuters: Sequence[tuple[str, CadDoc]],
     TrustedBreps: frozenset[NativeBrepKey],
 ) -> tuple[
-    dict[str, dict[str, AnyValue]],
+    dict[str, dict[str, object]],
     dict[str, str],
     int,
     int,
@@ -2370,7 +2403,7 @@ def BundleArtifacts(
     float | None,
     bool,
 ]:
-    OuterLinks: dict[str, dict[str, AnyValue]] = {}
+    OuterLinks: dict[str, dict[str, object]] = {}
     NativeLinks: dict[str, str] = {}
     ComponentBytes = 0
     NativeBytes = 0
@@ -2410,14 +2443,14 @@ def BundleArtifacts(
 # this definition builds stable metadata for a reconstructed freecad archive
 def RebuildMeta(
     DocValue: CadDocument,
-    OuterLinks: Mapping[str, AnyValue],
+    OuterLinks: Mapping[str, object],
     ComponentBytes: int,
     NativeLinks: Mapping[str, str],
     NativeBytes: int,
     NativeOuters: Sequence[tuple[str, CadDoc]],
     CarrierOnly: bool,
     AppUsable: bool,
-) -> dict[str, AnyValue]:
+) -> dict[str, object]:
     AsmValue = DocValue.assembly
     return {
         "schema_version": DocValue.schema_version,
@@ -2443,7 +2476,7 @@ def RebuildMeta(
 
 
 # this definition appends the diagnostic required for stream only references
-def RebuildDiags(DocValue: CadDocument, CarrierOnly: bool) -> tuple[AnyValue, ...]:
+def RebuildDiags(DocValue: CadDocument, CarrierOnly: bool) -> tuple[DiagValue, ...]:
     if not CarrierOnly:
         return DocValue.diagnostics
     return (
@@ -2458,7 +2491,7 @@ def RebuildDiags(DocValue: CadDocument, CarrierOnly: bool) -> tuple[AnyValue, ..
 
 # this definition rebuilds and writes a portable freecad archive
 def RebuildResult(
-    Instance: AnyValue,
+    Instance: FreeCadAdapter,
     DocValue: CadDocument,
     Target: Destination,
     TargetPath: FilePath | None,
@@ -2480,7 +2513,7 @@ def RebuildResult(
         DocValue,
         TargetPath,
         Overwrite,
-        Selected.validate,
+        Selected.Validate,
         Portable,
         NativeOuters,
         TrustedBreps,
@@ -2508,28 +2541,28 @@ def RebuildResult(
         AppUsable,
     )
     return WriteResult(
-        path=PathValue,
-        adapter=Instance.info.format_id,
-        bytes_written=len(DataValue),
-        diagnostics=RebuildDiags(DocValue, CarrierOnly),
-        metadata=MetaValue,
-        transfers=Transfers,
-        application_usable=AppUsable,
-        vendor_loadable=True,
+        OutputPath=PathValue,
+        AdapterName=Instance.info.FormatId,
+        ByteCount=len(DataValue),
+        Diagnostics=RebuildDiags(DocValue, CarrierOnly),
+        MetadataMap=MetaValue,
+        Transfers=Transfers,
+        IsAppUsable=AppUsable,
+        IsVendorLoadable=True,
     )
 
 
 # this definition selects exact replay or reconstruction for one write request
 def WriteTarget(
-    Instance: AnyValue,
+    Instance: FreeCadAdapter,
     DocValue: CadDocument,
     Target: Destination,
     Options: WriteOptions | None,
     Overwrite: bool | None,
 ) -> WriteResult:
     Selected = Options or WriteOptions()
-    ShouldOverwrite = Selected.overwrite if Overwrite is None else Overwrite
-    if Selected.validate:
+    ShouldOverwrite = Selected.Overwrite if Overwrite is None else Overwrite
+    if Selected.Validate:
         DocValue.assert_valid()
     if not Instance.supports(DocValue, Target):
         raise FreeCadAdapterA(
@@ -2538,7 +2571,7 @@ def WriteTarget(
     TargetPath = ResolveTarget(Target)
     if TargetPath is not None and TargetPath.exists() and not ShouldOverwrite:
         raise FileExistsError(TargetPath)
-    Portable = Selected.values.get("portable", True) is True
+    Portable = Selected.OptionValues.get("portable", True) is True
     NativeOuters = NativeOuter(DocValue)
     TrustedBreps = TrustedNative(DocValue)
     NativeSource = SelectNative(DocValue, Selected, Portable, NativeOuters)
@@ -2571,43 +2604,35 @@ class FreeCadAdapter:
 
     # this definition exposes immutable format metadata to adapter discovery
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def info(self) -> AdapterInfo:
         return InfoValue
 
     # this definition delegates archive probing to the focused probe implementation
-    def Probe(Instance, Source: Source) -> ProbeResult:
-        return ProbeSource(Instance, Source)
+    def probe(self, Source: Source) -> ProbeResult:
+        return ProbeSource(self, Source)
 
     # this definition delegates archive reading to the focused reader implementation
-    def ReadAction(
-        Instance, Source: Source, Options: ReadOptions | None = None
-    ) -> CadDoc:
+    def read(self, Source: Source, Options: ReadOptions | None = None) -> CadDoc:
         return ReadSource(Source, Options)
 
     # this definition delegates destination checks to the focused support implementation
-    def CanSupport(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+    def supports(self, DocValue: CadDocument, Target: Destination) -> bool:
         return CanWriteTarget(Target)
 
     # this definition delegates archive writing to the focused writer implementation
-    def Write(
-        Instance,
+    def write(
+        self,
         DocValue: CadDocument,
         Target: Destination,
         Options: WriteOptions | None = None,
         *,
         Overwrite: bool | None = None,
     ) -> WriteResult:
-        return WriteTarget(Instance, DocValue, Target, Options, Overwrite)
-
-    locals()["info"] = InfoAction
-    locals()["probe"] = Probe
-    locals()["read"] = ReadAction
-    locals()["supports"] = CanSupport
-    locals()["write"] = Write
+        return WriteTarget(self, DocValue, Target, Options, Overwrite)
 
 
 # this definition exists because focused behavior needs one stable owner
-def ExtractFreecad(Source: Source) -> dict[str, AnyValue]:
+def ExtractFreecad(Source: Source) -> dict[str, object]:
     return ExtractManifestFromFcstd(SourceBytes(Source))
 
 
@@ -2625,399 +2650,171 @@ def WriteFreecad(
     Validate: bool = True,
 ) -> WriteResult:
     return FreeCadAdapter().write(
-        DocValue, Target, WriteOptions(overwrite=Overwrite, validate=Validate)
+        DocValue, Target, WriteOptions(Overwrite=Overwrite, Validate=Validate)
     )
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+CAPABILITY_CARRIER_REASONS = CapabilityCarrierReasons
 
 # this binding exists because shared behavior needs one stable value
-globals()["CAPABILITY_CARRIER_REASONS"] = CapabilityCarrierReasons
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+Configuration = Config
 
 # this binding exists because shared behavior needs one stable value
-globals()["Configuration"] = Config
+DOCUMENT_ENTRY = DocEntry
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_ENTRY"] = DocEntry
+Destination = Target
 
 # this binding exists because shared behavior needs one stable value
-globals()["Destination"] = Target
+Diagnostic = DiagValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Diagnostic"] = DiagValue
+ET = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
+FEATURE_WRITE_KINDS = FeatureWriteKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_WRITE_KINDS"] = FeatureWriteKinds
+FREECAD_BREP_FORMAT_IDS = FreecadBrepFormatIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FREECAD_BREP_FORMAT_IDS"] = FreecadBrepFormatIds
+FreeCADAdapter = FreeCadAdapter
 
 # this binding exists because shared behavior needs one stable value
-globals()["FreeCADAdapter"] = FreeCadAdapter
+FreeCADAdapterError = FreeCadAdapterA
 
 # this binding exists because shared behavior needs one stable value
-globals()["FreeCADAdapterError"] = FreeCadAdapterA
+FreeCADBrepWriteError = FreeCadBrepWriteError
 
 # this binding exists because shared behavior needs one stable value
-globals()["FreeCADBrepWriteError"] = FreeCadBrepWriteError
+INFO = InfoValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["INFO"] = InfoValue
+MANIFEST_ENTRY = ManifestEntry
 
 # this binding exists because shared behavior needs one stable value
-globals()["MANIFEST_ENTRY"] = ManifestEntry
+MATE_WRITE_KINDS = MateWriteKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_WRITE_KINDS"] = MateWriteKinds
+Mesh = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["Mesh"] = MeshValue
+NATIVE_DOCUMENT_SHA256_ATTRIBUTE = KNativeDocHashAttr
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = KNativeDocHashAttr
+NativeFreeCADError = NativeFreeCadError
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeFreeCADError"] = NativeFreeCadError
+Path = FilePath
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = FilePath
+SUFFIX = Suffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUFFIX"] = Suffix
+XML_TRUE_VALUES = XmlTrueValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["XML_TRUE_VALUES"] = XmlTrueValues
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FEATURE_WRITE_VALUES"] = KFeatureWriteValues
+brep_model_brep = BrepModelBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MATE_WRITE_VALUES"] = KMateWriteValues
+build_fcstd_archive = BuildFcstdArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_ENTRY_SIZE"] = MaxEntrySize
+datetime = Datetime
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_EXTERNAL_FILES"] = MaxOuterFiles
+document_to_manifest = DocToManifest
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_TOTAL_SIZE"] = MaxTotalSize
+extract_freecad_manifest = ExtractFreecad
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NATIVE_DOCUMENT_BINDING_ID"] = KNativeDocBindingId
+extract_manifest_from_fcstd = ExtractManifestFromFcstd
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NATIVE_DOCUMENT_ID"] = KNativeDocId
+filter_document = FilterDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NATIVE_EXTRUSION_END_CONDITIONS"] = KNativeExtrusionEnd
+frozen_mapping = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REPLAY_SEMANTIC_ATTRIBUTE"] = KReplaySemanticAttr
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_annotate_native_sources"] = AnnotateNative
+infer_capabilities = InferCapabilities
 
 # this binding exists because shared behavior needs one stable value
-globals()["_archive_member_data"] = ArchiveMember
+io = IoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bundle_timestamp"] = BundleTimestamp
+is_binary_destination = IsBinaryTarget
 
 # this binding exists because shared behavior needs one stable value
-globals()["_capability_transfers"] = CapabilityA
+is_windows_device_name = IsWindowsDeviceName
 
 # this binding exists because shared behavior needs one stable value
-globals()["_carrier_reason"] = CarrierReasonA
+json = JsonValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_document"] = ComponentDoc
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_paths"] = ComponentPaths
+native_expression_parts = NativeExpressionParts
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_stem"] = ComponentStem
+native_shape_feature_count = NativeShapeFeatureCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_parts"] = ConfigParts
+native_sketch_carrier_reasons = NativeSketchCarrier
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_sources"] = SourceKeys
+native_sketch_parts = NativeSketchParts
 
 # this binding exists because shared behavior needs one stable value
-globals()["_destination_path"] = ResolveTarget
+os = OsModule
 
 # this binding exists because shared behavior needs one stable value
-globals()["_document_tree"] = DocTree
+probe_native_fcstd = ProbeNativeFcstd
 
 # this binding exists because shared behavior needs one stable value
-globals()["_enum_text"] = EnumText
+proven_ascii_brep = ProvenAsciiBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_existing_timestamps"] = FileTimestamps
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_external_link_details"] = OuterLink
+read_freecad = ReadFreecad
 
 # this binding exists because shared behavior needs one stable value
-globals()["_external_link_target"] = OuterLinkTarget
+read_native_fcstd = ReadNativeFcstd
 
 # this binding exists because shared behavior needs one stable value
-globals()["_extrusion_is_native"] = IsExtrusion
+replace = Replace
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_has_native_edges"] = HasFeatureEdges
+semantic_metadata = SemanticMeta
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_parts"] = FeatureParts
+source_payload_indexes = SourcePayloadIndexes
 
 # this binding exists because shared behavior needs one stable value
-globals()["_filtered_document"] = FilteredDoc
+suppress = Suppress
 
 # this binding exists because shared behavior needs one stable value
-globals()["_has_native_freecad_graph"] = HasNativeGraph
+tempfile = Tempfile
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_native_document"] = IsNativeDoc
+timezone = Timezone
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_native_document_binding"] = IsNativeDocA
+write_freecad = WriteFreecad
 
 # this binding exists because shared behavior needs one stable value
-globals()["_is_native_envelope"] = IsNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_brep_payloads"] = ManifestBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_document"] = ManifestDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manifest_native_brep_key"] = ManifestNativeBrepKey
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mapped_external_documents"] = MappedOuter
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matching_component_link"] = MatchLink
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mate_parts"] = MateParts
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mesh_component_document"] = MeshComponent
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mesh_is_usable"] = IsMeshUsable
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_document_pair"] = NativeDocPair
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_document_sha256"] = NativeDocShaTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_external_documents"] = NativeOuter
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_geometry_is_usable"] = IsNativeGeom
-
-# this binding exists because shared behavior needs one stable value
-globals()["_nested_external_links"] = OuterLinkMap
-
-# this binding exists because shared behavior needs one stable value
-globals()["_neutral_brep_is_native"] = IsNeutralBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parsed_timestamp"] = ParsedTimestamp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_is_exact_native_brep"] = IsExactPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_is_reattachable_brep"] = IsBrepPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_matches_native_archive"] = IsPayloadMatch
-
-# this binding exists because shared behavior needs one stable value
-globals()["_payload_native_brep"] = PayloadNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selected_configurations"] = Selected
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selected_meshes"] = ChooseMeshes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_selection_parts"] = SelectionParts
-
-# this binding exists because shared behavior needs one stable value
-globals()["_semantic_digest"] = SemanticDigest
-
-# this binding exists because shared behavior needs one stable value
-globals()["_semantic_document"] = SemanticDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_source_bytes"] = SourceBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_source_path"] = SourcePath
-
-# this binding exists because shared behavior needs one stable value
-globals()["_transfer_mode"] = TransferModeA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_trusted_native_breps"] = TrustedNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_unchanged_native_source"] = UnchangedNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_validated_archive_members"] = ValidatedArchiveMembers
-
-# this binding exists because shared behavior needs one stable value
-globals()["_validated_document_xml"] = ValidatedDocXml
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_bytes"] = WriteBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_components"] = WriteComponents
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_native_external_documents"] = WriteNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_bool"] = IsXmlBool
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_element_data"] = XmlElemData
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_link_list"] = XmlLinkList
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_number"] = XmlNumber
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_scale"] = XmlScale
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_string"] = XmlString
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_string_list"] = XmlStringList
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_transform"] = XmlTransform
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["brep_model_brep"] = BrepModelBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_fcstd_archive"] = BuildFcstdArchive
-
-# this binding exists because shared behavior needs one stable value
-globals()["datetime"] = Datetime
-
-# this binding exists because shared behavior needs one stable value
-globals()["document_to_manifest"] = DocToManifest
-
-# this binding exists because shared behavior needs one stable value
-globals()["extract_freecad_manifest"] = ExtractFreecad
-
-# this binding exists because shared behavior needs one stable value
-globals()["extract_manifest_from_fcstd"] = ExtractManifestFromFcstd
-
-# this binding exists because shared behavior needs one stable value
-globals()["filter_document"] = FilterDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["frozen_mapping"] = FrozenMapping
-
-# this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
-
-# this binding exists because shared behavior needs one stable value
-globals()["infer_capabilities"] = InferCapabilities
-
-# this binding exists because shared behavior needs one stable value
-globals()["io"] = IoStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_binary_destination"] = IsBinaryTarget
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_windows_device_name"] = IsWindowsDeviceName
-
-# this binding exists because shared behavior needs one stable value
-globals()["json"] = JsonValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_expression_parts"] = NativeExpressionParts
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_shape_feature_count"] = NativeShapeFeatureCount
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_sketch_carrier_reasons"] = NativeSketchCarrier
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_sketch_parts"] = NativeSketchParts
-
-# this binding exists because shared behavior needs one stable value
-globals()["os"] = OsModule
-
-# this binding exists because shared behavior needs one stable value
-globals()["probe_native_fcstd"] = ProbeNativeFcstd
-
-# this binding exists because shared behavior needs one stable value
-globals()["proven_ascii_brep"] = ProvenAsciiBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
-
-# this binding exists because shared behavior needs one stable value
-globals()["read_freecad"] = ReadFreecad
-
-# this binding exists because shared behavior needs one stable value
-globals()["read_native_fcstd"] = ReadNativeFcstd
-
-# this binding exists because shared behavior needs one stable value
-globals()["replace"] = Replace
-
-# this binding exists because shared behavior needs one stable value
-globals()["semantic_metadata"] = SemanticMeta
-
-# this binding exists because shared behavior needs one stable value
-globals()["source_payload_indexes"] = SourcePayloadIndexes
-
-# this binding exists because shared behavior needs one stable value
-globals()["suppress"] = Suppress
-
-# this binding exists because shared behavior needs one stable value
-globals()["tempfile"] = Tempfile
-
-# this binding exists because shared behavior needs one stable value
-globals()["timezone"] = Timezone
-
-# this binding exists because shared behavior needs one stable value
-globals()["write_freecad"] = WriteFreecad
-
-# this binding exists because shared behavior needs one stable value
-globals()["zipfile"] = Zipfile
+zipfile = Zipfile

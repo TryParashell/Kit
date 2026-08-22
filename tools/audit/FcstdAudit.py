@@ -9,17 +9,20 @@
 from __future__ import annotations
 
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 
 from tools.audit.FcstdContext import EnableSource
 from tools.audit.FcstdFeatures import FeatureTypes
-from tools.audit.FcstdResult import GetDisplayPath, MakeFailure, MakeUnsupported
-
+from tools.audit.FcstdResult import (
+    AuditRecord,
+    GetDisplayPath,
+    MakeFailure,
+    MakeUnsupported,
+)
 
 EnableSource()
 
 from convert import write_document as WriteDocument
-from convert.adapters.freecad.Init import read_freecad as ReadFreecad
+from convert.adapters.freecad import read_freecad as ReadFreecad
 from convert.adapters.solidworks import SldprtArchive
 from convert.adapters.solidworks.core.Native import HasVendorPartEncoding
 
@@ -29,7 +32,7 @@ def AuditSource(
     SourcePath: FilePath,
     OutputRoot: FilePath,
     SourceIndex: int,
-) -> dict[str, AnyValue]:
+) -> AuditRecord:
     try:
         DocumentData = ReadFreecad(SourcePath)
         SourceTypes = FeatureTypes(DocumentData)

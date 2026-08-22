@@ -31,6 +31,8 @@ from convert.adapters.solidworks.resolved.Core import (
 )
 from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Program import (
     EncodeProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Registry import (
     KFieldOwners,
     KResolvedOps,
 )
@@ -69,10 +71,10 @@ def TestBCCPWSTP(TmpPath: FilePath) -> None:
     ResultData = WriteDocument(SourceData, TargetPath, allow_carrier=False)
     ArchiveData = SldprtArchive.open(TargetPath)
     FeatureData = LocateFeatures(ArchiveData.require(StreamA))
-    assert ResultData.vendor_loadable is True
-    assert ResultData.application_usable is True
-    assert ResultData.near_lossless is True
-    assert ResultData.metadata["runtime"] == "python-stdlib"
+    assert ResultData.IsVendorLoadable is True
+    assert ResultData.IsAppUsable is True
+    assert ResultData.IsNearLossless is True
+    assert ResultData.MetadataMap["runtime"] == "python-stdlib"
     assert Stream not in ArchiveData.streams
     assert tuple((ItemData.name for ItemData in FeatureData)) == (
         "Boss-Extrude1",
@@ -104,7 +106,7 @@ def TestBCCPCETF() -> None:
     CursorPos = 0
     ObjectCount = 0
     DefineCount = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, IgnoredValue in KResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in KResolvedOps:
         assert StartPos == CursorPos
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KFieldOwners)
@@ -200,6 +202,7 @@ def TestBCCPASFE() -> None:
                 for OffsetPos in ItemData.depth_copy_offsets
             )
         )
+        assert ItemData.depth_mm is not None
         ExpectedDepth = ItemData.depth_mm / 1000.0
         assert CopyValues == PytestLib.approx(
             (

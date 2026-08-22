@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
+from convert.adapters.solidworks.programs.Common.ProgramContract import MethodProgram
 from convert.adapters.solidworks.programs.Owners.Sldmodu.MoSMAndFPFeatIdPair.Serialize import (
     KOwnerSites,
 )
 
 
 # isolated method data lets new reverse engineered serializers compose independently
-KMethodProgram = (
+KMethodProgram: MethodProgram = (
     KOwnerSites,
     {
         "Configuration": ((2243, 1, 4509, "primitive:uchar", 0),),

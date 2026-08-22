@@ -36,74 +36,73 @@ def InferCaps(
         raise TypeError(f"InferCaps got an unexpected keyword argument {UnknownName!r}")
     DocumentValues = tuple(WalkDocuments(DocumentValue))
     AssemblyValues = tuple(
-        ItemValue.Assembly
+        ItemValue.assembly
         for ItemValue in DocumentValues
-        if ItemValue.Assembly is not None
+        if ItemValue.assembly is not None
     )
     Conditions = {
         Capability.KParameters: any(
-            ItemValue.Parameters for ItemValue in DocumentValues
+            ItemValue.parameters for ItemValue in DocumentValues
         ),
         Capability.KParamHistory: any(
-            FeatureValue.EntityKind != FeatureKind.KImported
+            FeatureValue.kind != FeatureKind.KImported
             for ItemValue in DocumentValues
-            for FeatureValue in ItemValue.FeatureTimeline
+            for FeatureValue in ItemValue.feature_timeline
         ),
         Capability.KSupportPlanes: any(
-            ItemValue.SupportPlanes for ItemValue in DocumentValues
+            ItemValue.support_planes for ItemValue in DocumentValues
         ),
         Capability.KEditableSketches: any(
-            ItemValue.Sketches for ItemValue in DocumentValues
+            ItemValue.sketches for ItemValue in DocumentValues
         ),
         Capability.KSelections: any(
-            ItemValue.Selections for ItemValue in DocumentValues
+            ItemValue.selections for ItemValue in DocumentValues
         ),
         Capability.KBodyStructure: any(
-            ItemValue.Bodies for ItemValue in DocumentValues
+            ItemValue.bodies for ItemValue in DocumentValues
         ),
         Capability.KConfigurations: any(
-            ItemValue.Configurations for ItemValue in DocumentValues
+            ItemValue.configurations for ItemValue in DocumentValues
         ),
         Capability.KExpressions: any(
-            ParamValue.Expression is not None
+            ParamValue.expression is not None
             for ItemValue in DocumentValues
-            for ParamValue in ItemValue.Parameters
+            for ParamValue in ItemValue.parameters
         ),
         Capability.KBrep: any(
-            ItemValue.BrepModel is not None
+            ItemValue.brep is not None
             or any(
-                PayloadValue.ValueRole == PayloadRole.KBrep
-                and PayloadValue.PayloadData is not None
-                for PayloadValue in ItemValue.BrepPayloads
+                PayloadValue.role == PayloadRole.KBrep and PayloadValue.data is not None
+                for PayloadValue in ItemValue.brep_payloads
             )
             for ItemValue in DocumentValues
         ),
-        Capability.KTessellation: any(ItemValue.Meshes for ItemValue in DocumentValues)
+        Capability.KTessellation: any(ItemValue.meshes for ItemValue in DocumentValues)
         or any(
-            PayloadValue.ValueRole == PayloadRole.KTessellation
-            and PayloadValue.PayloadData is not None
+            PayloadValue.role == PayloadRole.KTessellation
+            and PayloadValue.data is not None
             for ItemValue in DocumentValues
-            for PayloadValue in ItemValue.BrepPayloads
+            for PayloadValue in ItemValue.brep_payloads
         ),
         Capability.KAssemblies: bool(AssemblyValues),
         Capability.KAssemblyMates: any(
-            AssemblyValue.Mates for AssemblyValue in AssemblyValues
+            AssemblyValue.mates for AssemblyValue in AssemblyValues
         ),
         Capability.KComponentDocs: any(
-            AssemblyValue.Documents for AssemblyValue in AssemblyValues
+            AssemblyValue.documents for AssemblyValue in AssemblyValues
         ),
         Capability.KExternalRefs: any(
-            DefinitionValue.SourcePath
+            DefinitionValue.source_path
             for AssemblyValue in AssemblyValues
-            for DefinitionValue in AssemblyValue.Definitions
+            for DefinitionValue in AssemblyValue.definitions
         ),
         Capability.KMaterials: any(
-            BodyValue.MaterialId
+            BodyValue.material_id
             for ItemValue in DocumentValues
-            for BodyValue in ItemValue.Bodies
+            for BodyValue in ItemValue.bodies
         ),
         Capability.KNativePayloads: any(
-            ItemValue.BrepPayloads for ItemValue in DocumentValues
+            ItemValue.brep_payloads for ItemValue in DocumentValues
         ),
         Capability.KProvenance: HasProvenance(DocumentValue),
         Capability.KRoundtripMeta: RoundtripMeta,
@@ -143,15 +142,15 @@ def GetRetainedCaps(
         RetainedCaps.discard(Capability.KBrep)
     DocumentValues = tuple(WalkDocuments(DocumentValue))
     if not IncludeMesh and not any(
-        ItemValue.Meshes
+        ItemValue.meshes
         or any(
-            PayloadValue.ValueRole == PayloadRole.KTessellation
-            and PayloadValue.PayloadData is not None
-            for PayloadValue in ItemValue.BrepPayloads
+            PayloadValue.role == PayloadRole.KTessellation
+            and PayloadValue.data is not None
+            for PayloadValue in ItemValue.brep_payloads
         )
         for ItemValue in DocumentValues
     ):
         RetainedCaps.discard(Capability.KTessellation)
-    if not any(ItemValue.BrepPayloads for ItemValue in DocumentValues):
+    if not any(ItemValue.brep_payloads for ItemValue in DocumentValues):
         RetainedCaps.discard(Capability.KNativePayloads)
     return frozenset(RetainedCaps)

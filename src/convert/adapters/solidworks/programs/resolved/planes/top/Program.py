@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     KPrimitiveFormats,
@@ -17,16 +19,17 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 )
 
 from .Registry import (
-    FieldOwners,
-    ResolvedOps,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
+    ResolvedOps as ResolvedOps,
 )
 
 
 # legacy format access remains available while shared encoding owns the mapping
-globals()["PrimitiveFormats"] = KPrimitiveFormats
+PrimitiveFormats = KPrimitiveFormats
 
 
 # callers can replace semantic fields while retaining recovered object framing
-def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
+def EncodeProgram(Overrides: Mapping[int, FieldType] | None = None) -> bytes:
     ExpectedLength = ResolvedOps[-1][0] + ResolvedOps[-1][1]
     return ReplayResolved(ResolvedOps, ExpectedLength, Overrides)

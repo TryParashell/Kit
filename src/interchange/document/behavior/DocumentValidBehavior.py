@@ -11,14 +11,38 @@
 class DocumentValid:
     locals()["__slots__"] = ()
 
-    # validation remains a model method while independent rules stay in focused modules
-    def GetErrors(SelfValue) -> tuple[str, ...]:
-        from interchange.document.validation.DocumentValidate import GetDocErrors
+    # validation remains concrete so callers receive the runtime tuple contract directly
+    def validate(self) -> tuple[str, ...]:
+        from interchange.document.validation.DocumentValidate import (  # lgtm[py/cyclic-import]
+            GetDocErrors,
+        )
+        from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
+            GetDocument,
+        )
 
-        return GetDocErrors(SelfValue)
+        DocumentValue = GetDocument(self)
+        if DocumentValue is None:
+            raise TypeError("validation requires a CadDocument")
+        return GetDocErrors(DocumentValue)
 
-    # explicit assertion gives model callers the established aggregate exception behavior
-    def AssertValid(SelfValue) -> None:
-        from interchange.document.validation.DocumentValidate import AssertValid
+    # assertion remains concrete so callers avoid object returning compatibility lookup
+    def assert_valid(self) -> None:
+        from interchange.document.validation.DocumentValidate import (  # lgtm[py/cyclic-import]
+            AssertValid,
+        )
+        from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
+            GetDocument,
+        )
 
-        AssertValid(SelfValue)
+        DocumentValue = GetDocument(self)
+        if DocumentValue is None:
+            raise TypeError("validation requires a CadDocument")
+        AssertValid(DocumentValue)
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def GetErrors(self) -> tuple[str, ...]:
+        return self.validate()
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def AssertValid(self) -> None:
+        self.assert_valid()

@@ -24,25 +24,43 @@ def CheckExactBrep(TmpPath: FilePath) -> None:
     DocumentData = ReplaceData(
         SourceData,
         brep_payloads=(
-            *SourceData.brep_payloads,
-            BrepPayload("history", "vendor", "native", "", "", data=b"history"),
+            *SourceData.BrepPayloads,
+            BrepPayload(
+                "history",
+                "vendor",
+                "native",
+                "",
+                "",
+                b"history",
+                "",
+                None,
+                {},
+                PayloadRole.KAuxiliary,
+                ".bin",
+            ),
             BrepPayload(
                 "missing",
                 "vendor",
                 "geometry",
                 "",
                 "",
-                role=PayloadRole.BREP,
-                file_extension=".geo",
+                None,
+                "",
+                None,
+                {},
+                PayloadRole.KBrep,
+                ".geo",
             ),
         ),
     )
     OutputPaths = ExtractLegacy(DocumentData, TmpPath)
     assert len(OutputPaths) == 3
     assert [OutputPath.read_bytes() for OutputPath in OutputPaths] == [
-        PayloadData.data
-        for PayloadData in DocumentData.brep_payloads
-        if PayloadData.role == PayloadRole.BREP and PayloadData.data is not None
+        PayloadBytes
+        for PayloadData in DocumentData.BrepPayloads
+        if PayloadData.ValueRole == PayloadRole.KBrep
+        for PayloadBytes in (PayloadData.PayloadData,)
+        if PayloadBytes is not None
     ]
     assert {OutputPath.suffix for OutputPath in OutputPaths} == {".x_b"}
     with Pytest.raises(FileExistsError):
@@ -57,9 +75,12 @@ def CheckDeviceBrep(TmpPath: FilePath) -> None:
         "shape",
         "",
         "",
-        data=b"shape",
-        role=PayloadRole.BREP,
-        file_extension=".x_b",
+        b"shape",
+        "",
+        None,
+        {},
+        PayloadRole.KBrep,
+        ".x_b",
     )
     DocumentData = ReplaceData(
         OpenLegacy(KSamplePath),

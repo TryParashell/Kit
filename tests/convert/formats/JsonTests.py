@@ -9,6 +9,9 @@
 from __future__ import annotations as Annotations
 from dataclasses import replace as Replace
 from io import BytesIO as BytesIo, StringIO as StringIo
+from pathlib import Path as FilePath
+from typing import Generic
+from typing import TypeVar
 import pytest as Pytest
 from convert import convert as Convert, open_document as OpenDoc
 from convert.adapters import (
@@ -16,10 +19,19 @@ from convert.adapters import (
     AdapterNotFoundError,
     AdapterRegistry,
     AdapterRegistryError,
+    Destination,
+    ProbeResult,
+    ReadOptions,
+    Source,
+    WriteOptions,
+    WriteResult,
 )
 from convert.adapters.json import JsonAdapter
-from interchange import Capability
+from interchange import CadDocument, Capability
 from tests.interchange.document.DocumentTests import document as DocValue
+
+# nonseekable test streams preserve their concrete text or binary payload type
+KStreamData = TypeVar("KStreamData", str, bytes)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -27,7 +39,7 @@ class FirstAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def InfoAction(self) -> AdapterInfo:
         return AdapterInfo("first", "First", "1", (".first",), ("second",))
 
     locals()["info"] = InfoAction
@@ -38,7 +50,7 @@ class SecondAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def InfoAction(self) -> AdapterInfo:
         return AdapterInfo("second", "Second", "1", (".second",))
 
     locals()["info"] = InfoAction
@@ -49,7 +61,7 @@ class Duplicate(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def InfoAction(self) -> AdapterInfo:
         return AdapterInfo("first", "Duplicate", "1", (".first",), ("orphan",))
 
     locals()["info"] = InfoAction
@@ -60,7 +72,7 @@ class SwapAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
+    def InfoAction(self) -> AdapterInfo:
         return AdapterInfo(
             "first", "Replacement", "2", (".replacement",), ("replacement",)
         )
@@ -70,95 +82,105 @@ class SwapAdapter(JsonAdapter):
 
 # this definition exists because focused behavior needs one stable owner
 class ReaderOnly:
+    InfoValue: AdapterInfo
+    Delegate: JsonAdapter
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance, InfoValue: AdapterInfo):
-        Instance.InfoValue = InfoValue
-        Instance.Delegate = JsonAdapter()
+    def __init__(self, InfoValue: AdapterInfo) -> None:
+        self.InfoValue = InfoValue
+        self.Delegate = JsonAdapter()
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
-        return Instance.InfoValue
+    def InfoAction(self) -> AdapterInfo:
+        return self.InfoValue
 
     # this definition exists because focused behavior needs one stable owner
-    def Probe(Instance, Source):
-        return Instance.Delegate.probe(Source)
+    def Probe(self, SourceValue: Source) -> ProbeResult:
+        return self.Delegate.probe(SourceValue)
 
     # this definition exists because focused behavior needs one stable owner
-    def ReadAction(Instance, Source, Options=None):
-        return Instance.Delegate.read(Source, Options)
+    def ReadAction(
+        self, SourceValue: Source, Options: ReadOptions | None = None
+    ) -> CadDocument:
+        return self.Delegate.read(SourceValue, Options)
 
-    locals()["__init__"] = InitAction
-    locals()["info"] = InfoAction
-    locals()["probe"] = Probe
-    locals()["read"] = ReadAction
+    info = InfoAction
+    probe = Probe
+    read = ReadAction
 
 
 # this definition exists because focused behavior needs one stable owner
 class WriterOnly:
+    InfoValue: AdapterInfo
+    Delegate: JsonAdapter
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance, InfoValue: AdapterInfo):
-        Instance.InfoValue = InfoValue
-        Instance.Delegate = JsonAdapter()
+    def __init__(self, InfoValue: AdapterInfo) -> None:
+        self.InfoValue = InfoValue
+        self.Delegate = JsonAdapter()
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def InfoAction(Instance) -> AdapterInfo:
-        return Instance.InfoValue
+    def InfoAction(self) -> AdapterInfo:
+        return self.InfoValue
 
     # this definition exists because focused behavior needs one stable owner
-    def Supports(Instance, Value, Target):
-        return Instance.Delegate.supports(Value, Target)
+    def Supports(self, DocValue: CadDocument, Target: Destination) -> bool:
+        return self.Delegate.supports(DocValue, Target)
 
     # this definition exists because focused behavior needs one stable owner
-    def Write(Instance, Value, Target, Options=None):
-        return Instance.Delegate.write(Value, Target, Options)
+    def Write(
+        self,
+        DocValue: CadDocument,
+        Target: Destination,
+        Options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return self.Delegate.write(DocValue, Target, Options)
 
-    locals()["__init__"] = InitAction
-    locals()["info"] = InfoAction
-    locals()["supports"] = Supports
-    locals()["write"] = Write
+    info = InfoAction
+    supports = Supports
+    write = Write
 
 
 # this definition exists because focused behavior needs one stable owner
-class PartialBytesIo(BytesIo):
+class PartialBytesIo:
 
     # this definition exists because focused behavior needs one stable owner
-    def Write(Instance, Value):
-        return super().write(Value[:-1])
+    def Write(self, Value: bytes) -> int:
+        return len(Value[:-1])
 
-    locals()["write"] = Write
+    write = Write
 
 
 # this definition exists because focused behavior needs one stable owner
-class PartialStringIo(StringIo):
+class PartialStringIo:
 
     # this definition exists because focused behavior needs one stable owner
-    def Write(Instance, Value):
-        return super().write(Value[:-1])
+    def Write(self, Value: str) -> int:
+        return len(Value[:-1])
 
-    locals()["write"] = Write
+    write = Write
 
 
 # this definition exists because focused behavior needs one stable owner
-class NonSeekable:
+class NonSeekable(Generic[KStreamData]):
+    StreamValue: KStreamData
+    IsConsumed: bool
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance, Value):
-        Instance.StreamValue = Value
-        Instance.IsConsumed = False
+    def __init__(self, Value: KStreamData) -> None:
+        self.StreamValue = Value
+        self.IsConsumed = False
 
     # this definition exists because focused behavior needs one stable owner
-    def ReadAction(Instance, SizeValue=-1):
-        if Instance.IsConsumed:
-            return Instance.StreamValue[:0]
-        Instance.IsConsumed = True
-        return Instance.StreamValue
+    def ReadAction(self, SizeValue: int | None = -1) -> KStreamData:
+        if self.IsConsumed:
+            return self.StreamValue[:0]
+        self.IsConsumed = True
+        return self.StreamValue
 
-    locals()["__init__"] = InitAction
-    locals()["read"] = ReadAction
+    read = ReadAction
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -167,7 +189,7 @@ def TestAdapter() -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestRegistryA(TmpPath) -> None:
+def TestRegistryA(TmpPath: FilePath) -> None:
     Adapter = JsonAdapter()
     Registry = AdapterRegistry()
     Registry.register(Adapter)
@@ -181,7 +203,7 @@ def TestRegistryA(TmpPath) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize("StreamType", (BytesIo, StringIo))
-def TestStreamUtf(StreamType) -> None:
+def TestStreamUtf(StreamType: type[BytesIo] | type[StringIo]) -> None:
     Adapter = JsonAdapter()
     Value = DocValue()
     Value = Replace(Value, source=Replace(Value.source, path="mémoire"))
@@ -193,23 +215,31 @@ def TestStreamUtf(StreamType) -> None:
     )
     assert "mémoire" in TextValue
     assert Result.bytes_written == len(TextValue.encode("utf-8"))
-    assert Adapter.read(StreamType(Serialized)) == Value
+    InputStream = (
+        BytesIo(Serialized) if isinstance(Serialized, bytes) else StringIo(Serialized)
+    )
+    assert Adapter.read(InputStream) == Value
 
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize("StreamType", (PartialBytesIo, PartialStringIo))
-def TestStream(StreamType) -> None:
+def TestStream(
+    StreamType: type[PartialBytesIo] | type[PartialStringIo],
+) -> None:
     with Pytest.raises(OSError, match="short JSON write"):
         JsonAdapter().write(DocValue(), StreamType())
 
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize("StreamType", (BytesIo, StringIo))
-def TestProbeStream(StreamType) -> None:
+def TestProbeStream(StreamType: type[BytesIo] | type[StringIo]) -> None:
     Serialized = DocValue().to_json() + "\n"
     Serialized = "prefix:" + Serialized
-    Value = Serialized.encode("utf-8") if StreamType is BytesIo else Serialized
-    Stream = StreamType(Value)
+    Stream = (
+        BytesIo(Serialized.encode("utf-8"))
+        if StreamType is BytesIo
+        else StringIo(Serialized)
+    )
     Stream.seek(7)
     assert JsonAdapter().probe(Stream).confidence == 1.0
     assert Stream.tell() == 7
@@ -229,22 +259,26 @@ def TestPublicSdk() -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize("Binary", (False, True))
-def TestPublicSdkA(Binary) -> None:
+def TestPublicSdkA(Binary: bool) -> None:
     Value = DocValue()
     Serialized = Value.to_json() + "\n"
-    Payload = Serialized.encode("utf-8") if Binary else Serialized
-    Source = NonSeekable(Payload)
-    assert OpenDoc(Source) == Value
+    SourceData: NonSeekable[bytes] | NonSeekable[str]
+    ConvertData: NonSeekable[bytes] | NonSeekable[str]
+    if Binary:
+        SourceData = NonSeekable(Serialized.encode("utf-8"))
+        ConvertData = NonSeekable(Serialized.encode("utf-8"))
+    else:
+        SourceData = NonSeekable(Serialized)
+        ConvertData = NonSeekable(Serialized)
+    assert OpenDoc(SourceData) == Value
     Target = StringIo()
-    Result = Convert(
-        NonSeekable(Payload), Target, destination_format="interchange.json"
-    )
+    Result = Convert(ConvertData, Target, destination_format="interchange.json")
     assert Result.document == Value
     assert JsonAdapter().read(StringIo(Target.getvalue())) == Value
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestExplicitNon(TmpPath) -> None:
+def TestExplicitNon(TmpPath: FilePath) -> None:
     Source = StringIo(DocValue().to_json())
     with Pytest.raises(AdapterNotFoundError, match="does not support"):
         Convert(

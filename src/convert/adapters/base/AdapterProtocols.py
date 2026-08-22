@@ -23,160 +23,85 @@ from convert.adapters.base.ReadOptions import ReadOptions
 from convert.adapters.base.WriteOptions import WriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 
-# historical source annotations need local resolution after protocol declarations move from the facade
-globals()["Source"] = KSourceType
+# compatibility annotations retain their public contract names for reflection
+Source = KSourceType
 
-# historical destination annotations need local resolution after protocol declarations move from the facade
-globals()["Destination"] = KTargetType
+# compatibility annotations retain their public contract names for reflection
+Destination = KTargetType
 
 
-# reader discovery needs one explicit structural contract that type checkers can inspect
+# reader registration needs a statically visible structural adapter boundary
 @RuntimeCheck
-class ReaderProtocol(Protocol):
+class CadReaderAdapter(Protocol):
 
-    # metadata access lets discovery validate formats before any source data is consumed
+    # discovery needs metadata before it attempts to consume source data
     @property
-    def GetInfo(SelfValue) -> AdapterInfo:
+    def info(self) -> AdapterInfo:
         raise TypeError("reader info requires a concrete implementation")
 
-    # probing lets registries select readers without consuming the source
-    def ProbeSource(SelfValue, SourceData: KSourceType) -> ProbeResult:
+    # selection needs a non destructive source compatibility assessment
+    def probe(self, source: Source) -> ProbeResult:
         raise TypeError("reader probing requires a concrete implementation")
 
-    # reading returns the neutral document boundary shared by independent adapters
-    def ReadSource(
-        SelfValue,
-        SourceData: KSourceType,
-        OptionsData: ReadOptions | None = None,
+    # conversion needs one neutral document result across reader implementations
+    def read(
+        self,
+        source: Source,
+        options: ReadOptions | None = None,
     ) -> CadDocument:
         raise TypeError("reader loading requires a concrete implementation")
 
-    locals()["info"] = locals().pop("GetInfo")
-    locals()["probe"] = locals().pop("ProbeSource")
-    locals()["read"] = locals().pop("ReadSource")
 
-
-# writer discovery needs one explicit structural contract that type checkers can inspect
+# writer registration needs a statically visible structural adapter boundary
 @RuntimeCheck
-class WriterProtocol(Protocol):
+class CadWriterAdapter(Protocol):
 
-    # metadata access lets selection validate formats before any destination is mutated
+    # discovery needs metadata before it attempts to stage destination output
     @property
-    def GetInfo(SelfValue) -> AdapterInfo:
+    def info(self) -> AdapterInfo:
         raise TypeError("writer info requires a concrete implementation")
 
-    # destination checks let registries select writers before staging output
-    def CanWrite(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: KTargetType,
-    ) -> bool:
+    # selection needs a non mutating destination compatibility assessment
+    def supports(self, document: CadDocument, destination: Destination) -> bool:
         raise TypeError("writer support requires a concrete implementation")
 
-    # writing returns structured preservation evidence for registry policy checks
-    def WriteTarget(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: KTargetType,
-        OptionsData: WriteOptions | None = None,
+    # conversion needs structured preservation evidence from every writer
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
         raise TypeError("writer output requires a concrete implementation")
 
-    locals()["info"] = locals().pop("GetInfo")
-    locals()["supports"] = locals().pop("CanWrite")
-    locals()["write"] = locals().pop("WriteTarget")
 
-
-# combined adapters remain distinguishable for callers that require both directions
+# bidirectional integrations need one contract combining both adapter directions
 @RuntimeCheck
-class AdapterProtocol(ReaderProtocol, WriterProtocol, Protocol):
-    locals()["__slots__"] = ()
+class CadAdapter(CadReaderAdapter, CadWriterAdapter, Protocol):
+    __slots__ = ()
 
 
-for ProtocolType, PublicName in (
-    (ReaderProtocol, "CadReaderAdapter"),
-    (WriterProtocol, "CadWriterAdapter"),
-    (AdapterProtocol, "CadAdapter"),
-):
-    setattr(ProtocolType, "__module__", "convert.adapters.base")
-    setattr(ProtocolType, "__name__", PublicName)
-    setattr(ProtocolType, "__qualname__", PublicName)
-
-for MethodValue in (
-    ReaderProtocol.info.fget,
-    ReaderProtocol.probe,
-    ReaderProtocol.read,
-    WriterProtocol.info.fget,
-    WriterProtocol.supports,
-    WriterProtocol.write,
-):
-    setattr(MethodValue, "__module__", "convert.adapters.base")
-
-for MethodValue, QualName in (
-    (ReaderProtocol.info.fget, "CadReaderAdapter.info"),
-    (ReaderProtocol.probe, "CadReaderAdapter.probe"),
-    (ReaderProtocol.read, "CadReaderAdapter.read"),
-    (WriterProtocol.info.fget, "CadWriterAdapter.info"),
-    (WriterProtocol.supports, "CadWriterAdapter.supports"),
-    (WriterProtocol.write, "CadWriterAdapter.write"),
-):
-    setattr(MethodValue, "__qualname__", QualName)
-
-for MethodValue, PublicName in (
-    (ReaderProtocol.info.fget, "info"),
-    (ReaderProtocol.probe, "probe"),
-    (ReaderProtocol.read, "read"),
-    (WriterProtocol.info.fget, "info"),
-    (WriterProtocol.supports, "supports"),
-    (WriterProtocol.write, "write"),
-):
-    setattr(MethodValue, "__name__", PublicName)
+CadReaderAdapter.__module__ = "convert.adapters.base"
+CadWriterAdapter.__module__ = "convert.adapters.base"
+CadAdapter.__module__ = "convert.adapters.base"
+CadReaderAdapter.read.__module__ = "convert.adapters.base"
+CadWriterAdapter.write.__module__ = "convert.adapters.base"
 
 setattr(
-    ReaderProtocol.probe,
-    "__annotations__",
-    {"source": "Source", "return": "ProbeResult"},
-)
-setattr(
-    ReaderProtocol.read,
-    "__annotations__",
-    {
-        "source": "Source",
-        "options": "ReadOptions | None",
-        "return": "CadDocument",
-    },
-)
-setattr(
-    WriterProtocol.supports,
-    "__annotations__",
-    {
-        "document": "CadDocument",
-        "destination": "Destination",
-        "return": "bool",
-    },
-)
-setattr(
-    WriterProtocol.write,
-    "__annotations__",
-    {
-        "document": "CadDocument",
-        "destination": "Destination",
-        "options": "WriteOptions | None",
-        "return": "WriteResult",
-    },
-)
-
-for MethodValue, ParamValues, ReturnType in (
-    (
-        ReaderProtocol.probe,
+    CadReaderAdapter.probe,
+    "__signature__",
+    CallSignature(
         (
             SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
             SigParam("source", SigParam.POSITIONAL_OR_KEYWORD, annotation="Source"),
         ),
-        "ProbeResult",
+        return_annotation="ProbeResult",
     ),
-    (
-        ReaderProtocol.read,
+)
+setattr(
+    CadReaderAdapter.read,
+    "__signature__",
+    CallSignature(
         (
             SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
             SigParam("source", SigParam.POSITIONAL_OR_KEYWORD, annotation="Source"),
@@ -187,10 +112,13 @@ for MethodValue, ParamValues, ReturnType in (
                 annotation="ReadOptions | None",
             ),
         ),
-        "CadDocument",
+        return_annotation="CadDocument",
     ),
-    (
-        WriterProtocol.supports,
+)
+setattr(
+    CadWriterAdapter.supports,
+    "__signature__",
+    CallSignature(
         (
             SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
             SigParam(
@@ -204,10 +132,13 @@ for MethodValue, ParamValues, ReturnType in (
                 annotation="Destination",
             ),
         ),
-        "bool",
+        return_annotation="bool",
     ),
-    (
-        WriterProtocol.write,
+)
+setattr(
+    CadWriterAdapter.write,
+    "__signature__",
+    CallSignature(
         (
             SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
             SigParam(
@@ -227,32 +158,6 @@ for MethodValue, ParamValues, ReturnType in (
                 annotation="WriteOptions | None",
             ),
         ),
-        "WriteResult",
+        return_annotation="WriteResult",
     ),
-):
-    setattr(
-        MethodValue,
-        "__signature__",
-        CallSignature(ParamValues, return_annotation=ReturnType),
-    )
-
-setattr(
-    ReaderProtocol.info.fget,
-    "__annotations__",
-    {"return": "AdapterInfo"},
 )
-setattr(
-    WriterProtocol.info.fget,
-    "__annotations__",
-    {"return": "AdapterInfo"},
-)
-
-
-# public reader protocol name stays stable because annotations and runtime checks depend on it
-globals()["CadReaderAdapter"] = ReaderProtocol
-
-# public writer protocol name stays stable because annotations and runtime checks depend on it
-globals()["CadWriterAdapter"] = WriterProtocol
-
-# public combined protocol name stays stable because existing callers import it directly
-globals()["CadAdapter"] = AdapterProtocol

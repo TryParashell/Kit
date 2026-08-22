@@ -19,13 +19,14 @@ from convert.adapters import (
     ApplicationUsabilityError,
     CarrierReason,
     CapabilityTransfer,
+    Destination,
     ReadOptions,
     TransferMode,
     WriteOptions,
     WriteResult,
 )
 from convert.engine import ConversionEngine
-from interchange import Capability
+from interchange import CadDocument, Capability
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
 
@@ -46,10 +47,10 @@ def CheckSrcAlias() -> None:
     SourceData = BuildSource()
     SourceData = ReplaceValue(
         SourceData,
-        source=ReplaceValue(SourceData.source, format_id="FORMAT.ALIAS"),
+        source=ReplaceValue(SourceData.Source, format_id="FORMAT.ALIAS"),
     )
     ResultData = ConversionEngine(RegistryData).convert(
-        SourceData.to_json().encode("utf-8"),
+        SourceData.ToJson().encode("utf-8"),
         BytesIO(),
         source_format="format.alias",
         destination_format="format.canonical",
@@ -83,24 +84,33 @@ def CheckSafety() -> None:
 
 # metadata cannot contradict typed usability fields because consumers trust both representations
 @Pytest.mark.parametrize(
-    ("MetadataMap", "FieldValues"),
+    ("MetadataMap", "FieldName"),
     (
-        ({"application_usable": True}, {"application_usable": False}),
-        ({"vendor_loadable": True}, {"vendor_loadable": False}),
+        ({"application_usable": True}, "application_usable"),
+        ({"vendor_loadable": True}, "vendor_loadable"),
     ),
 )
 def CheckMetaRule(
     MetadataMap: dict[str, bool],
-    FieldValues: dict[str, bool],
+    FieldName: str,
 ) -> None:
     with Pytest.raises(ValueError, match="contradicts the write result"):
-        WriteResult(
-            None,
-            "format.contradictory",
-            0,
-            metadata=MetadataMap,
-            **FieldValues,
-        )
+        if FieldName == "application_usable":
+            WriteResult(
+                None,
+                "format.contradictory",
+                0,
+                metadata=MetadataMap,
+                application_usable=False,
+            )
+        else:
+            WriteResult(
+                None,
+                "format.contradictory",
+                0,
+                metadata=MetadataMap,
+                vendor_loadable=False,
+            )
 
 
 # application usability implies vendor loading because unusable vendor output cannot satisfy that claim
@@ -123,14 +133,14 @@ def CheckMixedViews() -> None:
         1,
         transfers=(
             CapabilityTransfer(
-                Capability.PARAMETRIC_HISTORY,
-                TransferMode.MIXED,
+                Capability.KParamHistory,
+                TransferMode.KMixed,
             ),
         ),
         application_usable=True,
         vendor_loadable=True,
     )
-    ExpectedCaps = frozenset({Capability.PARAMETRIC_HISTORY})
+    ExpectedCaps = frozenset({Capability.KParamHistory})
     assert ResultData.native_capabilities == ExpectedCaps
     assert ResultData.carrier_capabilities == ExpectedCaps
 
@@ -164,20 +174,17 @@ def CheckCarFacts() -> None:
 class LoadableAdapter(ResultAdapter):
 
     # partial usability evidence exercises the registrys independent field preservation
-    def WriteData(
-        SelfValue,
-        DocumentData,
-        TargetData,
-        OptionsData=None,
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
         return ReplaceValue(
-            super().WriteData(DocumentData, TargetData, OptionsData),
-            application_usable=False,
-            vendor_loadable=True,
+            super().write(document, destination, options),
+            IsAppUsable=False,
+            IsVendorLoadable=True,
         )
-
-
-setattr(LoadableAdapter, "write", LoadableAdapter.WriteData)
 
 
 # registry policy must preserve truthful independent usability fields from writers
@@ -236,5 +243,5 @@ def CheckErrorMap() -> None:
         CapabilityData.value for CapabilityData in ErrorData.carrier_capabilities
     }
     assert set(PayloadData["carrier_reasons"].values()) == {
-        CarrierReason.WRITER_UNIMPLEMENTED.value
+        CarrierReason.KWriterGap.value
     }

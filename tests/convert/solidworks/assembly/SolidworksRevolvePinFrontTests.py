@@ -22,20 +22,24 @@ from convert.adapters.solidworks.programs.configuration.revolve.pin.front.Progra
 )
 from convert.adapters.solidworks.programs.configuration.revolve.pin.front.Program import (
     KAnnotationMatrixOffset,
-    KConfigOps,
-    KFieldOwners as KConfigOwners,
     KReferenceDigest as KConfigDigest,
     KReferenceLength as KConfigLength,
+)
+from convert.adapters.solidworks.programs.configuration.revolve.pin.front.Registry import (
+    KConfigOps,
+    KFieldOwners as KConfigOwners,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.resolved.revolve.pin.front.Program import (
     EncodeProgram,
     GetCoverage,
     KAngleOffsets,
-    KFieldOwners,
     KProfileOffsets,
     KReferenceDigest,
     KReferenceLength,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.pin.front.Registry import (
+    KFieldOwners,
     KResolvedOps,
 )
 from convert.adapters.solidworks.envelopes.revolve.pin.front.Envelope import (
@@ -107,7 +111,7 @@ def TestFPCPHETC() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFPCOTWG() -> None:
     CursorValue = 0
-    for StartPos, FieldWidth, OwnerIndex, KindNameA, DefaultValue in KConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, _, _ in KConfigOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KConfigOwners)
@@ -184,7 +188,7 @@ def TestFPPHETC() -> None:
 def TestFPPOTWG() -> None:
     CursorValue = 0
     AllowedKinds = {"definition", "classref", "objectref", "null", "string"}
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in KResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in KResolvedOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KFieldOwners)

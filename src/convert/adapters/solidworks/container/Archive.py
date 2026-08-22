@@ -9,10 +9,50 @@
 from __future__ import annotations as Annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass as Dataclass, field as Field
-import json as JsonValue
+import json as JsonModule
 from pathlib import Path as PathValue
 import struct as Struct
+from typing import TypeAlias, TypeGuard, TypedDict, TypeVar
 from convert.adapters.solidworks.container.Container import SldprtFormatError
+
+# this contract exists because decoded layouts need recursively concrete json values
+LayoutValue: TypeAlias = (
+    str | int | float | bool | None | list["LayoutValue"] | dict[str, "LayoutValue"]
+)
+
+# this contract exists because layout parsers only accept keyed json objects
+LayoutObject: TypeAlias = Mapping[str, LayoutValue]
+
+# this binding exists because layout constructors preserve concrete table subclasses
+LayoutTableType = TypeVar("LayoutTableType", bound="LayoutTable")
+
+
+# this guard exists because runtime json objects need a typed parsing boundary
+def IsLayoutObject(Value: object) -> TypeGuard[LayoutObject]:
+    return isinstance(Value, Mapping)
+
+
+# this guard exists because layout lists must exclude textual scalar values
+def IsLayoutSequence(Value: object) -> TypeGuard[Sequence[LayoutValue]]:
+    return not isinstance(Value, str) and isinstance(Value, Sequence)
+
+
+# this conversion exists because json scalar fields retain their existing numeric coercion
+def LayoutInteger(Value: LayoutValue) -> int:
+    if isinstance(Value, (str, int, float)):
+        return int(Value)
+    raise TypeError(f"layout value {Value!r} is not an integer")
+
+
+# this contract exists because tiling results need fixed concrete report fields
+class TilingReport(TypedDict):
+    header_bytes: int
+    gaps: list[tuple[int, int]]
+    overlaps: list[tuple[int, int]]
+    trailing_bytes: int
+    covered: int
+    tiles: bool
+
 
 # this binding exists because shared behavior needs one stable value
 KNullTag = 0
@@ -107,10 +147,20 @@ class ArchiveError(SldprtFormatError):
 # this definition exists because focused behavior needs one stable owner
 class Segmentation(ArchiveError):
     KSlots = ()
+    class_name: str
+    slot: str
+    offset: int
+    reason: str
+    base: int
+    progress: int
+    depth: int
+    unresolved_index: int
+    unresolved_kind: str
+    reached: tuple[StaticSegment, ...]
 
     # this definition exists because focused behavior needs one stable owner
-    def InitAction(
-        Instance,
+    def __init__(
+        self,
         ClassName: str,
         SlotValue: str,
         Offset: int,
@@ -122,34 +172,31 @@ class Segmentation(ArchiveError):
         UnresolvedIndex: int = -1,
         UnresolvedKind: str = "",
     ) -> None:
-        setattr(Instance, "class_name", ClassName)
-        setattr(Instance, "slot", SlotValue)
-        setattr(Instance, "offset", Offset)
-        setattr(Instance, "reason", Reason)
-        setattr(Instance, "base", BaseValue)
-        setattr(Instance, "progress", Progress)
-        setattr(Instance, "depth", Depth)
-        setattr(Instance, "unresolved_index", UnresolvedIndex)
-        setattr(Instance, "unresolved_kind", UnresolvedKind)
-        setattr(Instance, "reached", ())
+        self.class_name = ClassName
+        self.slot = SlotValue
+        self.offset = Offset
+        self.reason = Reason
+        self.base = BaseValue
+        self.progress = Progress
+        self.depth = Depth
+        self.unresolved_index = UnresolvedIndex
+        self.unresolved_kind = UnresolvedKind
+        self.reached = ()
         super().__init__(
             f"class {ClassName!r} slot {SlotValue!r} at byte offset {Offset}: {Reason}"
         )
-
-    locals()["__init__"] = InitAction
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TagAction:
-    locals().setdefault("__annotations__", {})
-    __annotations__["kind"] = "str"
-    __annotations__["size"] = "int"
-    __annotations__["token"] = "int"
-    __annotations__["index"] = "int"
-    __annotations__["schema"] = "int"
-    __annotations__["class_name"] = "str"
-    __annotations__["wide"] = "bool"
+    kind: str
+    size: int
+    token: int
+    index: int
+    schema: int
+    class_name: str
+    wide: bool
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -307,13 +354,16 @@ def EncodeObjectRef(Index: int, *, WideValue: bool = False, **Options: object) -
 
 # this definition exists because one legacy keyword alias needs consistent unknown option errors
 def CompatOption(
-    Options: Mapping[str, object], KeyValue: str, Current: object, Caller: str
-) -> object:
+    Options: Mapping[str, object], KeyValue: str, Current: bool, Caller: str
+) -> bool:
     Unknown = set(Options) - {KeyValue}
     if Unknown:
         NameValue = next(iter(Unknown))
         raise TypeError(f"{Caller}() got an unexpected keyword argument '{NameValue}'")
-    return Options.get(KeyValue, Current)
+    Value = Options.get(KeyValue, Current)
+    if not isinstance(Value, bool):
+        raise TypeError(f"{Caller}() {KeyValue} must be a boolean")
+    return Value
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -377,43 +427,31 @@ def EncodeString(TextValue: str) -> bytes:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class NodeAction:
-    locals().setdefault("__annotations__", {})
-    __annotations__["kind"] = "str"
-    __annotations__["body"] = "bytes"
-    __annotations__["schema"] = "int"
-    locals()["schema"] = 0
-    __annotations__["class_name"] = "str"
-    locals()["class_name"] = ""
-    __annotations__["target"] = "int"
-    locals()["target"] = -1
-    __annotations__["literal"] = "int"
-    locals()["literal"] = 0
-    __annotations__["wide"] = "bool"
-    locals()["wide"] = False
-    __annotations__["origin"] = "int"
-    locals()["origin"] = -1
-    __annotations__["class_index"] = "int"
-    locals()["class_index"] = 0
-    __annotations__["object_index"] = "int"
-    locals()["object_index"] = 0
+    kind: str
+    body: bytes
+    schema: int = 0
+    class_name: str = ""
+    target: int = -1
+    literal: int = 0
+    wide: bool = False
+    origin: int = -1
+    class_index: int = 0
+    object_index: int = 0
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class Model:
-    locals().setdefault("__annotations__", {})
-    __annotations__["header"] = "bytes"
-    __annotations__["base"] = "int"
-    __annotations__["nodes"] = "list[Node]"
-    locals()["nodes"] = Field(default_factory=list)
-    __annotations__["Trailer"] = "bytes"
-    locals()["Trailer"] = b""
+    header: bytes
+    base: int
+    nodes: list[NodeAction] = Field(default_factory=list[NodeAction])
+    Trailer: bytes = b""
 
     # this definition exists because focused behavior needs one stable owner
-    def Clone(Instance) -> Model:
+    def Clone(self) -> Model:
         return Model(
-            header=Instance.header,
-            base=Instance.base,
+            header=self.header,
+            base=self.base,
             nodes=[
                 NodeAction(
                     kind=NodeValue.kind,
@@ -425,30 +463,30 @@ class Model:
                     wide=NodeValue.wide,
                     origin=NodeValue.origin,
                 )
-                for NodeValue in Instance.nodes
+                for NodeValue in self.nodes
             ],
-            Trailer=Instance.Trailer,
+            Trailer=self.Trailer,
         )
 
     # this definition exists because focused behavior needs one stable owner
-    def DefinitionIndex(Instance, NameValue: str) -> int:
-        for Position, NodeValue in enumerate(Instance.nodes):
+    def DefinitionIndex(self, NameValue: str) -> int:
+        for Position, NodeValue in enumerate(self.nodes):
             if NodeValue.kind == KDefinitionKind and NodeValue.class_name == NameValue:
                 return Position
         raise KeyError(NameValue)
 
     # this definition exists because focused behavior needs one stable owner
-    def Assign(Instance) -> None:
-        AssignModel(Instance)
+    def Assign(self) -> None:
+        AssignModel(self)
 
     # this definition exists because focused behavior needs one stable owner
-    def EmitAction(Instance) -> bytes:
-        return EmitModelMut(Instance)
+    def EmitAction(self) -> bytes:
+        return EmitModelMut(self)
 
-    locals()["assign"] = Assign
-    locals()["clone"] = Clone
-    locals()["definition_index"] = DefinitionIndex
-    locals()["emit"] = EmitAction
+    assign = Assign
+    clone = Clone
+    definition_index = DefinitionIndex
+    emit = EmitAction
 
 
 # this definition exists because archive index assignment is independent from model storage
@@ -501,307 +539,308 @@ def EmitModelMut(ModelData: Model) -> bytes:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class StaticSegment:
-    locals().setdefault("__annotations__", {})
-    __annotations__["index"] = "int"
-    __annotations__["offset"] = "int"
-    __annotations__["header"] = "int"
-    __annotations__["end"] = "int"
-    __annotations__["kind"] = "str"
-    __annotations__["token"] = "int"
-    __annotations__["wide"] = "bool"
-    __annotations__["schema"] = "int"
-    __annotations__["class_name"] = "str"
-    __annotations__["class_index"] = "int"
-    __annotations__["object_index"] = "int"
-    __annotations__["depth"] = "int"
-    __annotations__["parent"] = "int"
+    index: int
+    offset: int
+    header: int
+    end: int
+    kind: str
+    token: int
+    wide: bool
+    schema: int
+    class_name: str
+    class_index: int
+    object_index: int
+    depth: int
+    parent: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class VariableRun:
-    locals().setdefault("__annotations__", {})
-    __annotations__["slot"] = "str"
-    __annotations__["rule"] = "str"
-    __annotations__["at"] = "int"
-    __annotations__["tail"] = "int"
-    __annotations__["TailByVersion"] = "Mapping[int, int]"
-    __annotations__["stride"] = "int"
-    __annotations__["count_width"] = "int"
-    __annotations__["width"] = "int"
-    __annotations__["predicate"] = "str"
-    __annotations__["predicate_at"] = "int"
-    __annotations__["predicate_width"] = "int"
-    __annotations__["values"] = "tuple[int, ...]"
-    __annotations__["note"] = "str"
+    slot: str
+    rule: str
+    at: int
+    tail: int
+    TailByVersion: Mapping[int, int]
+    stride: int
+    count_width: int
+    width: int
+    predicate: str
+    predicate_at: int
+    predicate_width: int
+    values: tuple[int, ...]
+    note: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RepeatField:
-    locals().setdefault("__annotations__", {})
-    __annotations__["run"] = "str"
-    __annotations__["at"] = "int"
-    __annotations__["Back"] = "int"
-    __annotations__["width"] = "int"
+    run: str
+    at: int
+    Back: int
+    width: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ChildCountBy:
-    locals().setdefault("__annotations__", {})
-    __annotations__["Slot"] = "int"
-    __annotations__["Counts"] = "Mapping[str, int]"
+    Slot: int
+    Counts: Mapping[str, int]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RunGroupCount:
-    locals().setdefault("__annotations__", {})
-    __annotations__["At"] = "int"
-    __annotations__["Back"] = "int"
-    __annotations__["Width"] = "int"
-    __annotations__["Lead"] = "int"
+    At: int
+    Back: int
+    Width: int
+    Lead: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RunGroupCountA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["Versions"] = "tuple[int, ...]"
-    __annotations__["PredicateAt"] = "int"
-    __annotations__["PredicateWidth"] = "int"
-    __annotations__["Values"] = "tuple[int, ...]"
-    __annotations__["Count"] = "int"
-    __annotations__["Lead"] = "int"
+    Versions: tuple[int, ...]
+    PredicateAt: int
+    PredicateWidth: int
+    Values: tuple[int, ...]
+    Count: int
+    Lead: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RunGroupVariant:
-    locals().setdefault("__annotations__", {})
-    __annotations__["Slot"] = "int"
-    __annotations__["Last"] = "bool"
-    __annotations__["StopGroups"] = "bool"
-    __annotations__["Versions"] = "tuple[int, ...]"
-    __annotations__["PredicateAt"] = "int"
-    __annotations__["PredicateWidth"] = "int"
-    __annotations__["Values"] = "tuple[int, ...]"
-    __annotations__["ChildClasses"] = "tuple[str, ...]"
-    __annotations__["Run"] = "int"
-    __annotations__["RunsByVersion"] = "Mapping[int, int]"
-    __annotations__["Trailer"] = "int"
+    Slot: int
+    Last: bool
+    StopGroups: bool
+    Versions: tuple[int, ...]
+    PredicateAt: int
+    PredicateWidth: int
+    Values: tuple[int, ...]
+    ChildClasses: tuple[str, ...]
+    Run: int
+    RunsByVersion: Mapping[int, int]
+    Trailer: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RunGroupTrailer:
-    locals().setdefault("__annotations__", {})
-    __annotations__["Versions"] = "tuple[int, ...]"
-    __annotations__["PredicateAt"] = "int"
-    __annotations__["PredicateWidth"] = "int"
-    __annotations__["Values"] = "tuple[int, ...]"
-    __annotations__["Trailer"] = "int"
+    Versions: tuple[int, ...]
+    PredicateAt: int
+    PredicateWidth: int
+    Values: tuple[int, ...]
+    Trailer: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RunGroup:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["repeat"] = "int"
-    __annotations__["count_back"] = "int"
-    __annotations__["count_width"] = "int"
-    __annotations__["CountByChildClass"] = "Mapping[str, RunGroupCount]"
-    __annotations__["CountVariants"] = "tuple[RunGroupCountA, ...]"
-    __annotations__["slots"] = "tuple[str, ...]"
-    __annotations__["element"] = "tuple[int, ...]"
-    __annotations__["element_by_version"] = "Mapping[int, tuple[int, ...]]"
-    __annotations__["ElementRunVariants"] = "tuple[RunGroupVariant, ...]"
-    __annotations__["trailer"] = "int"
-    __annotations__["TrailerVariants"] = "tuple[RunGroupTrailer, ...]"
-    __annotations__["note"] = "str"
+    name: str
+    repeat: int
+    count_back: int
+    count_width: int
+    CountByChildClass: Mapping[str, RunGroupCount]
+    CountVariants: tuple[RunGroupCountA, ...]
+    slots: tuple[str, ...]
+    element: tuple[int, ...]
+    element_by_version: Mapping[int, tuple[int, ...]]
+    ElementRunVariants: tuple[RunGroupVariant, ...]
+    trailer: int
+    TrailerVariants: tuple[RunGroupTrailer, ...]
+    note: str
 
     # this definition exists because focused behavior needs one stable owner
-    def ElemRuns(Instance, MoVersion: int | None) -> tuple[int, ...]:
+    def ElemRuns(self, MoVersion: int | None) -> tuple[int, ...]:
         if MoVersion is not None:
-            Gated = Instance.element_by_version.get(MoVersion)
+            Gated = self.element_by_version.get(MoVersion)
             if Gated is not None:
                 return Gated
-        return Instance.element
+        return self.element
 
-    locals()["element_runs"] = ElemRuns
+    element_runs = ElemRuns
 
 
 # this definition exists because layout state predicates form one focused property interface
 class LayoutFlags:
+    groups: tuple[RunGroup, ...]
+    repeat_unresolved: bool
+    repeat_prefix: int
+    runs: Mapping[str, int]
+    runs_by_version: Mapping[str, Mapping[int, int]]
+    RunsByChildClass: Mapping[str, Mapping[str, int]]
+    child_slots: tuple[str, ...]
+    variable_runs: Mapping[str, tuple[VariableRun, ...]]
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def IsWalksGroups(Instance) -> bool:
-        return bool(Instance.groups)
+    def IsWalksGroups(self) -> bool:
+        return bool(self.groups)
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def IsRepeats(Instance) -> bool:
-        return Instance.repeat_unresolved and Instance.repeat_prefix <= 0
+    def IsRepeats(self) -> bool:
+        return self.repeat_unresolved and self.repeat_prefix <= 0
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def IsWalksAPrefix(Instance) -> bool:
-        return Instance.repeat_unresolved and Instance.repeat_prefix > 0
+    def IsWalksAPrefix(self) -> bool:
+        return self.repeat_unresolved and self.repeat_prefix > 0
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def ConstantRunKeys(Instance) -> frozenset[str]:
+    def ConstantRunKeys(self) -> frozenset[str]:
         return frozenset(
-            set(Instance.runs)
-            | set(Instance.runs_by_version)
-            | set(Instance.RunsByChildClass)
+            set(self.runs) | set(self.runs_by_version) | set(self.RunsByChildClass)
         )
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def TemplateSlot(Instance) -> int:
-        return len(Instance.child_slots) - 2
+    def TemplateSlot(self) -> int:
+        return len(self.child_slots) - 2
 
-    locals()["constant_run_keys"] = ConstantRunKeys
-    locals()["repeats"] = IsRepeats
-    locals()["template_slot"] = TemplateSlot
-    locals()["walks_a_prefix"] = IsWalksAPrefix
-    locals()["walks_groups"] = IsWalksGroups
-    locals()["Repeats"] = IsRepeats
-    locals()["WalksAPrefix"] = IsWalksAPrefix
-    locals()["WalksGroups"] = IsWalksGroups
+    constant_run_keys = ConstantRunKeys
+    repeats = IsRepeats
+    template_slot = TemplateSlot
+    walks_a_prefix = IsWalksAPrefix
+    walks_groups = IsWalksGroups
+    Repeats = IsRepeats
+    WalksAPrefix = IsWalksAPrefix
+    WalksGroups = IsWalksGroups
 
 
 # this definition exists because layout run selection forms one focused lookup interface
 class LayoutRuns:
+    child_slots: tuple[str, ...]
+    groups: tuple[RunGroup, ...]
+    repeat_count: RepeatField | None
+    repeat_prefix: int
+    template_slot: int
+    runs: Mapping[str, int]
+    runs_by_version: Mapping[str, Mapping[int, int]]
+    variable_runs: Mapping[str, tuple[VariableRun, ...]]
+    walks_a_prefix: bool
+    constant_run_keys: frozenset[str]
 
     # this definition exists because focused behavior needs one stable owner
-    def ConstantRun(Instance, KeyValue: str, MoVersion: int | None) -> int | None:
-        Gated = Instance.runs_by_version.get(KeyValue)
+    def ConstantRun(self, KeyValue: str, MoVersion: int | None) -> int | None:
+        Gated = self.runs_by_version.get(KeyValue)
         if Gated is not None and MoVersion is not None:
             Length = Gated.get(MoVersion)
             if Length is not None:
                 return Length
-        return Instance.runs.get(KeyValue)
+        return self.runs.get(KeyValue)
 
     # this definition exists because focused behavior needs one stable owner
-    def RunKey(Instance, SlotValue: int) -> str:
-        if Instance.walks_a_prefix and SlotValue >= Instance.repeat_prefix - 1:
+    def RunKey(self, SlotValue: int) -> str:
+        if self.walks_a_prefix and SlotValue >= self.repeat_prefix - 1:
             return KTailRun
-        if Instance.repeat_count is not None and SlotValue >= Instance.template_slot:
-            return str(Instance.template_slot)
+        if self.repeat_count is not None and SlotValue >= self.template_slot:
+            return str(self.template_slot)
         return str(SlotValue)
 
     # this definition exists because focused behavior needs one stable owner
-    def RunKeys(Instance) -> tuple[str, ...]:
-        if Instance.groups:
-            if (
-                KTailRun in Instance.constant_run_keys
-                or KTailRun in Instance.variable_runs
-            ):
+    def RunKeys(self) -> tuple[str, ...]:
+        if self.groups:
+            if KTailRun in self.constant_run_keys or KTailRun in self.variable_runs:
                 return (KLeadRun, KTailRun)
             return (KLeadRun,)
-        if not Instance.child_slots:
+        if not self.child_slots:
             return (KLeafRun,)
-        if Instance.walks_a_prefix:
+        if self.walks_a_prefix:
             return (
                 (KLeadRun,)
-                + tuple(
-                    (str(SlotValue) for SlotValue in range(Instance.repeat_prefix - 1))
-                )
+                + tuple((str(SlotValue) for SlotValue in range(self.repeat_prefix - 1)))
                 + (KTailRun,)
             )
         SpanValue = (
-            Instance.template_slot + 1
-            if Instance.repeat_count is not None
-            else len(Instance.child_slots)
+            self.template_slot + 1
+            if self.repeat_count is not None
+            else len(self.child_slots)
         )
         return (KLeadRun,) + tuple((str(SlotValue) for SlotValue in range(SpanValue)))
 
-    locals()["constant_run"] = ConstantRun
-    locals()["run_key"] = RunKey
-    locals()["run_keys"] = RunKeys
+    constant_run = ConstantRun
+    run_key = RunKey
+    run_keys = RunKeys
 
 
 # this definition exists because class layout storage composes state and run selection behavior
 @Dataclass(frozen=True, slots=True)
 class ClassLayout(LayoutFlags, LayoutRuns):
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["child_slots"] = "tuple[str, ...]"
-    __annotations__["runs"] = "Mapping[str, int]"
-    __annotations__["variable_runs"] = "Mapping[str, tuple[VariableRun, ...]]"
-    __annotations__["confidence"] = "str"
-    __annotations__["source"] = "str"
-    __annotations__["repeat_note"] = "str"
-    locals()["repeat_note"] = ""
-    __annotations__["repeat_count"] = "RepeatField | None"
-    locals()["repeat_count"] = None
-    __annotations__["repeat_unresolved"] = "bool"
-    locals()["repeat_unresolved"] = False
-    __annotations__["repeat_prefix"] = "int"
-    locals()["repeat_prefix"] = 0
-    __annotations__["RepeatTrailer"] = "int"
-    locals()["RepeatTrailer"] = 0
-    __annotations__["ChildCounts"] = "ChildCountBy | None"
-    locals()["ChildCounts"] = None
-    __annotations__["runs_by_version"] = "Mapping[str, Mapping[int, int]]"
-    locals()["runs_by_version"] = Field(default_factory=dict)
-    __annotations__["RunsByChildClass"] = "Mapping[str, Mapping[str, int]]"
-    locals()["RunsByChildClass"] = Field(default_factory=dict)
-    __annotations__["groups"] = "tuple[RunGroup, ...]"
-    locals()["groups"] = ()
+    name: str
+    child_slots: tuple[str, ...]
+    runs: Mapping[str, int]
+    variable_runs: Mapping[str, tuple[VariableRun, ...]]
+    confidence: str
+    source: str
+    repeat_note: str = ""
+    repeat_count: RepeatField | None = None
+    repeat_unresolved: bool = False
+    repeat_prefix: int = 0
+    RepeatTrailer: int = 0
+    ChildCounts: ChildCountBy | None = None
+    runs_by_version: Mapping[str, Mapping[int, int]] = Field(
+        default_factory=dict[str, Mapping[int, int]]
+    )
+    RunsByChildClass: Mapping[str, Mapping[str, int]] = Field(
+        default_factory=dict[str, Mapping[str, int]]
+    )
+    groups: tuple[RunGroup, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class LayoutTable:
-    locals().setdefault("__annotations__", {})
-    __annotations__["version"] = "int"
-    __annotations__["source"] = "str"
-    __annotations__["classes"] = "Mapping[str, ClassLayout]"
+    version: int
+    source: str
+    classes: Mapping[str, ClassLayout]
 
     # this definition exists because focused behavior needs one stable owner
-    def IsContains(Instance, NameValue: object) -> bool:
-        return NameValue in Instance.classes
+    def IsContains(self, NameValue: object) -> bool:
+        return NameValue in self.classes
 
     # this definition exists because focused behavior needs one stable owner
-    def Getitem(Instance, NameValue: str) -> ClassLayout:
-        return Instance.classes[NameValue]
+    def Getitem(self, NameValue: str) -> ClassLayout:
+        return self.classes[NameValue]
 
     # this definition exists because focused behavior needs one stable owner
-    def GetAction(Instance, NameValue: str) -> ClassLayout | None:
-        return Instance.classes.get(NameValue)
-
-    # this definition exists because focused behavior needs one stable owner
-    @classmethod
-    def FromMapping(ClassType, Payload: Mapping[str, object]) -> LayoutTable:
-        return ParseLayouts(ClassType, Payload)
+    def GetAction(self, NameValue: str) -> ClassLayout | None:
+        return self.classes.get(NameValue)
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def LoadAction(ClassType, SourcePath: str | Path) -> LayoutTable:
-        return LoadLayouts(ClassType, SourcePath)
+    def FromMapping(
+        cls: type[LayoutTableType], Payload: LayoutObject
+    ) -> LayoutTableType:
+        return ParseLayouts(cls, Payload)
 
-    locals()["__contains__"] = IsContains
-    locals()["__getitem__"] = Getitem
-    locals()["from_mapping"] = FromMapping
-    locals()["get"] = GetAction
-    locals()["load"] = LoadAction
-    locals()["Contains"] = IsContains
+    # this definition exists because focused behavior needs one stable owner
+    @classmethod
+    def LoadAction(
+        cls: type[LayoutTableType], SourcePath: str | Path
+    ) -> LayoutTableType:
+        return LoadLayouts(cls, SourcePath)
+
+    __contains__ = IsContains
+    __getitem__ = Getitem
+    from_mapping = FromMapping
+    get = GetAction
+    load = LoadAction
+    Contains = IsContains
 
 
 # this definition exists because layout mapping validation is independent from table storage
-def ParseLayouts(ClassType, Payload: Mapping[str, object]) -> LayoutTable:
+def ParseLayouts(
+    ClassType: type[LayoutTableType], Payload: LayoutObject
+) -> LayoutTableType:
     RawClasses = Payload.get("classes")
-    if not isinstance(RawClasses, Mapping):
+    if not IsLayoutObject(RawClasses):
         raise ArchiveError("layout table has no classes mapping")
     Classes: dict[str, ClassLayout] = {}
     for NameValue, Entry in RawClasses.items():
-        if not isinstance(Entry, Mapping):
+        if not IsLayoutObject(Entry):
             raise ArchiveError(f"layout entry for {NameValue!r} is not a mapping")
         Classes[NameValue] = ClassLayoutA(str(NameValue), Entry)
     Version = Payload.get("version", 1)
@@ -814,31 +853,33 @@ def ParseLayouts(ClassType, Payload: Mapping[str, object]) -> LayoutTable:
 
 
 # this definition exists because layout file loading owns filesystem and json failures
-def LoadLayouts(ClassType, SourcePath: str | Path) -> LayoutTable:
+def LoadLayouts(
+    ClassType: type[LayoutTableType], SourcePath: str | Path
+) -> LayoutTableType:
     Location = PathValue(SourcePath)
     try:
-        Payload = JsonValue.loads(Location.read_text(encoding="utf-8"))
+        Payload: object = JsonModule.loads(Location.read_text(encoding="utf-8"))
     except OSError as ErrorInfo:
         raise ArchiveError(f"cannot read layout table {Location}") from ErrorInfo
-    except JsonValue.JSONDecodeError as ErrorInfo:
+    except JsonModule.JSONDecodeError as ErrorInfo:
         raise ArchiveError(f"layout table {Location} is not valid json") from ErrorInfo
-    if not isinstance(Payload, Mapping):
+    if not IsLayoutObject(Payload):
         raise ArchiveError(f"layout table {Location} is not a json object")
     return ClassType.from_mapping(Payload)
 
 
 # this definition exists because focused behavior needs one stable owner
 def ParseRunGroup(
-    OwnerName: str, GroupName: str, Entry: Mapping[str, object], HasLead: bool
+    OwnerName: str, GroupName: str, Entry: LayoutObject, HasLead: bool
 ) -> RunGroupCount:
     RawAt = Entry.get("at")
     RawBack = Entry.get("back")
     HasAt = RawAt is not None
     HasBack = RawBack is not None
-    AtValue = int(RawAt) if HasAt else 0
-    BackValue = int(RawBack) if HasBack else 0
-    Width = int(Entry.get("width", 0) or 0)
-    LeadValue = int(Entry.get("lead", 0) or 0)
+    AtValue = LayoutInteger(RawAt) if HasAt else 0
+    BackValue = LayoutInteger(RawBack) if HasBack else 0
+    Width = LayoutInteger(Entry.get("width", 0) or 0)
+    LeadValue = LayoutInteger(Entry.get("lead", 0) or 0)
     if (
         HasAt == HasBack
         or Width not in (1, 2, 4)
@@ -859,7 +900,7 @@ def ParseRunGroup(
 
 
 # this definition exists because focused behavior needs one stable owner
-def RunGroupA(NameValue: str, Entry: Mapping[str, object]) -> RunGroup:
+def RunGroupA(NameValue: str, Entry: LayoutObject) -> RunGroup:
     Label, ElemValue, Slots, TrailerA = GroupBase(NameValue, Entry)
     Gated = GroupGated(NameValue, Label, ElemValue, Entry)
     Variants = GroupVariants(NameValue, Label, ElemValue, Entry)
@@ -883,28 +924,28 @@ def RunGroupA(NameValue: str, Entry: Mapping[str, object]) -> RunGroup:
 
 # this definition exists because group element and slot validation forms one structural boundary
 def GroupBase(
-    NameValue: str, Entry: Mapping[str, object]
+    NameValue: str, Entry: LayoutObject
 ) -> tuple[str, tuple[int, ...], tuple[str, ...], int]:
     Label = str(Entry.get("name", ""))
     if not Label:
         raise ArchiveError(f"a run group of {NameValue!r} has no name")
     RawElem = Entry.get("element", ())
-    if isinstance(RawElem, str) or not isinstance(RawElem, Sequence):
+    if not IsLayoutSequence(RawElem):
         raise ArchiveError(f"run group {NameValue}@{Label} has a malformed element")
-    ElemValue = tuple((int(Value) for Value in RawElem))
+    ElemValue = tuple((LayoutInteger(Value) for Value in RawElem))
     if not ElemValue or any((Value < 0 for Value in ElemValue)):
         raise ArchiveError(
             f"run group {NameValue}@{Label} needs one non negative run per element child"
         )
     RawSlots = Entry.get("slots", ())
-    if isinstance(RawSlots, str) or not isinstance(RawSlots, Sequence):
+    if not IsLayoutSequence(RawSlots):
         raise ArchiveError(f"run group {NameValue}@{Label} has a malformed slots list")
     Slots = tuple((str(Value) for Value in RawSlots))
     if len(Slots) != len(ElemValue):
         raise ArchiveError(
             f"run group {NameValue}@{Label} names {len(Slots)} slots for {len(ElemValue)} element runs"
         )
-    TrailerA = int(Entry.get("trailer", 0) or 0)
+    TrailerA = LayoutInteger(Entry.get("trailer", 0) or 0)
     if TrailerA < 0:
         raise ArchiveError(f"run group {NameValue}@{Label} has a negative trailer")
     return (Label, ElemValue, Slots, TrailerA)
@@ -912,10 +953,10 @@ def GroupBase(
 
 # this definition exists because version gated element widths share one validation boundary
 def GroupGated(
-    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: Mapping[str, object]
+    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: LayoutObject
 ) -> dict[int, tuple[int, ...]]:
     RawGated = Entry.get("element_by_version", {})
-    if not isinstance(RawGated, Mapping):
+    if not IsLayoutObject(RawGated):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has a malformed element_by_version"
         )
@@ -926,11 +967,11 @@ def GroupGated(
             raise ArchiveError(
                 f"run group {NameValue}@{Label} names a non numeric document version {TextValue!r}"
             )
-        if isinstance(Values, str) or not isinstance(Values, Sequence):
+        if not IsLayoutSequence(Values):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} at document version {TextValue} has no element"
             )
-        Widths = tuple((int(Value) for Value in Values))
+        Widths = tuple((LayoutInteger(Value) for Value in Values))
         if len(Widths) != len(ElemValue) or any((Value < 0 for Value in Widths)):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} at document version {TextValue} does not hold {len(ElemValue)} non negative runs"
@@ -941,16 +982,16 @@ def GroupGated(
 
 # this definition exists because element variant lists require mapping entries exclusively
 def GroupVariants(
-    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: Mapping[str, object]
+    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: LayoutObject
 ) -> list[RunGroupVariant]:
     RawVariants = Entry.get("element_run_variants", ())
-    if isinstance(RawVariants, (str, Mapping)) or not isinstance(RawVariants, Sequence):
+    if not IsLayoutSequence(RawVariants):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed element_run_variants"
         )
     Variants: list[RunGroupVariant] = []
     for RawVariant in RawVariants:
-        if not isinstance(RawVariant, Mapping):
+        if not IsLayoutObject(RawVariant):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} has a malformed element run variant"
             )
@@ -963,26 +1004,26 @@ def GroupVariant(
     NameValue: str,
     Label: str,
     ElemValue: tuple[int, ...],
-    RawVariant: Mapping[str, object],
+    RawVariant: LayoutObject,
 ) -> RunGroupVariant:
-    SlotValue = int(RawVariant.get("slot", -1))
-    PredicateAt = int(RawVariant.get("predicate_at", 0))
-    PredicateWidth = int(RawVariant.get("predicate_width", 0))
+    SlotValue = LayoutInteger(RawVariant.get("slot", -1))
+    PredicateAt = LayoutInteger(RawVariant.get("predicate_at", 0))
+    PredicateWidth = LayoutInteger(RawVariant.get("predicate_width", 0))
     RawValues = RawVariant.get("values", ())
     RawChildClasses = RawVariant.get("child_classes", ())
     RawLast = RawVariant.get("last", False)
     RawStopGroups = RawVariant.get("stop_groups", False)
     RawVersions = RawVariant.get("versions", ())
-    RunValue = int(RawVariant.get("run", -1))
+    RunValue = LayoutInteger(RawVariant.get("run", -1))
     RawVersionRuns = RawVariant.get("runs_by_version", {})
     RawTrailer = RawVariant.get("trailer")
-    Trailer = int(RawTrailer) if RawTrailer is not None else -1
+    Trailer = LayoutInteger(RawTrailer) if RawTrailer is not None else -1
     if (
         SlotValue < 0
         or SlotValue >= len(ElemValue)
         or PredicateAt < 0
         or isinstance(RawValues, str)
-        or (not isinstance(RawValues, Sequence))
+        or (not IsLayoutSequence(RawValues))
         or any(
             (
                 not isinstance(Value, int) or isinstance(Value, bool) or Value < 0
@@ -990,7 +1031,7 @@ def GroupVariant(
             )
         )
         or isinstance(RawChildClasses, str)
-        or (not isinstance(RawChildClasses, Sequence))
+        or (not IsLayoutSequence(RawChildClasses))
         or any(
             (
                 not isinstance(ChildClass, str) or not ChildClass
@@ -999,8 +1040,7 @@ def GroupVariant(
         )
         or (not isinstance(RawLast, bool))
         or (not isinstance(RawStopGroups, bool))
-        or isinstance(RawVersions, (str, Mapping))
-        or (not isinstance(RawVersions, Sequence))
+        or (not IsLayoutSequence(RawVersions))
         or any(
             (
                 not isinstance(Version, int) or isinstance(Version, bool) or Version < 0
@@ -1008,7 +1048,7 @@ def GroupVariant(
             )
         )
         or (RunValue < 0)
-        or (not isinstance(RawVersionRuns, Mapping))
+        or (not IsLayoutObject(RawVersionRuns))
         or (Trailer < -1)
         or (not RawValues and (not RawChildClasses))
         or (RawValues and PredicateWidth not in (1, 2, 4, 8))
@@ -1022,10 +1062,10 @@ def GroupVariant(
         Slot=SlotValue,
         Last=RawLast,
         StopGroups=RawStopGroups,
-        Versions=tuple((int(Version) for Version in RawVersions)),
+        Versions=tuple((LayoutInteger(Version) for Version in RawVersions)),
         PredicateAt=PredicateAt,
         PredicateWidth=PredicateWidth,
-        Values=tuple((int(Value) for Value in RawValues)),
+        Values=tuple((LayoutInteger(Value) for Value in RawValues)),
         ChildClasses=tuple((str(ChildClass) for ChildClass in RawChildClasses)),
         Run=RunValue,
         RunsByVersion=VersionRuns,
@@ -1034,9 +1074,7 @@ def GroupVariant(
 
 
 # this definition exists because version run overrides require numeric keys and widths
-def VariantRuns(
-    NameValue: str, Label: str, RawRuns: Mapping[object, object]
-) -> dict[int, int]:
+def VariantRuns(NameValue: str, Label: str, RawRuns: LayoutObject) -> dict[int, int]:
     VersionRuns: dict[int, int] = {}
     for Version, Width in RawRuns.items():
         VersionText = str(Version)
@@ -1055,18 +1093,16 @@ def VariantRuns(
 
 # this definition exists because trailer variants share predicate and version validation
 def GroupTrailers(
-    NameValue: str, Label: str, Entry: Mapping[str, object]
+    NameValue: str, Label: str, Entry: LayoutObject
 ) -> list[RunGroupTrailer]:
     RawTrailerVariants = Entry.get("trailer_variants", ())
-    if isinstance(RawTrailerVariants, (str, Mapping)) or not isinstance(
-        RawTrailerVariants, Sequence
-    ):
+    if not IsLayoutSequence(RawTrailerVariants):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed trailer_variants"
         )
     TrailerVariants: list[RunGroupTrailer] = []
     for RawVariant in RawTrailerVariants:
-        if not isinstance(RawVariant, Mapping):
+        if not IsLayoutObject(RawVariant):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} has a malformed trailer variant"
             )
@@ -1076,8 +1112,7 @@ def GroupTrailers(
         RawValues = RawVariant.get("values", ())
         RawTrailer = RawVariant.get("trailer", -1)
         if (
-            isinstance(RawVersions, (str, Mapping))
-            or not isinstance(RawVersions, Sequence)
+            not IsLayoutSequence(RawVersions)
             or any(
                 (
                     not isinstance(Version, int)
@@ -1089,9 +1124,9 @@ def GroupTrailers(
             or (not isinstance(PredicateAt, int))
             or isinstance(PredicateAt, bool)
             or (PredicateAt < 0)
+            or (not isinstance(PredicateWidth, int))
             or (PredicateWidth not in (1, 2, 4, 8))
-            or isinstance(RawValues, (str, Mapping))
-            or (not isinstance(RawValues, Sequence))
+            or (not IsLayoutSequence(RawValues))
             or (not RawValues)
             or any(
                 (
@@ -1108,10 +1143,10 @@ def GroupTrailers(
             )
         TrailerVariants.append(
             RunGroupTrailer(
-                Versions=tuple((int(Version) for Version in RawVersions)),
+                Versions=tuple((LayoutInteger(Version) for Version in RawVersions)),
                 PredicateAt=PredicateAt,
                 PredicateWidth=PredicateWidth,
-                Values=tuple((int(Value) for Value in RawValues)),
+                Values=tuple((LayoutInteger(Value) for Value in RawValues)),
                 Trailer=RawTrailer,
             )
         )
@@ -1120,18 +1155,16 @@ def GroupTrailers(
 
 # this definition exists because count variants share predicate and version validation
 def CountVariantsA(
-    NameValue: str, Label: str, Entry: Mapping[str, object]
+    NameValue: str, Label: str, Entry: LayoutObject
 ) -> list[RunGroupCountA]:
     RawCountVariants = Entry.get("count_variants", ())
-    if isinstance(RawCountVariants, (str, Mapping)) or not isinstance(
-        RawCountVariants, Sequence
-    ):
+    if not IsLayoutSequence(RawCountVariants):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed count_variants"
         )
     CountVariants: list[RunGroupCountA] = []
     for RawVariant in RawCountVariants:
-        if not isinstance(RawVariant, Mapping):
+        if not IsLayoutObject(RawVariant):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} has a malformed count variant"
             )
@@ -1142,8 +1175,7 @@ def CountVariantsA(
         RawCount = RawVariant.get("count", -1)
         RawLead = RawVariant.get("lead", 0)
         if (
-            isinstance(RawVersions, (str, Mapping))
-            or not isinstance(RawVersions, Sequence)
+            not IsLayoutSequence(RawVersions)
             or any(
                 (
                     not isinstance(Version, int)
@@ -1155,9 +1187,9 @@ def CountVariantsA(
             or (not isinstance(PredicateAt, int))
             or isinstance(PredicateAt, bool)
             or (PredicateAt < 0)
+            or (not isinstance(PredicateWidth, int))
             or (PredicateWidth not in (1, 2, 4, 8))
-            or isinstance(RawValues, (str, Mapping))
-            or (not isinstance(RawValues, Sequence))
+            or (not IsLayoutSequence(RawValues))
             or (not RawValues)
             or any(
                 (
@@ -1177,10 +1209,10 @@ def CountVariantsA(
             )
         CountVariants.append(
             RunGroupCountA(
-                Versions=tuple((int(Version) for Version in RawVersions)),
+                Versions=tuple((LayoutInteger(Version) for Version in RawVersions)),
                 PredicateAt=PredicateAt,
                 PredicateWidth=PredicateWidth,
-                Values=tuple((int(Value) for Value in RawValues)),
+                Values=tuple((LayoutInteger(Value) for Value in RawValues)),
                 Count=RawCount,
                 Lead=RawLead,
             )
@@ -1190,16 +1222,16 @@ def CountVariantsA(
 
 # this definition exists because child class count branches share locator parsing
 def CountBranchesA(
-    NameValue: str, Label: str, Entry: Mapping[str, object]
+    NameValue: str, Label: str, Entry: LayoutObject
 ) -> dict[str, RunGroupCount]:
     RawCountBranches = Entry.get("count_by_child_class", {})
-    if not isinstance(RawCountBranches, Mapping):
+    if not IsLayoutObject(RawCountBranches):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed count_by_child_class"
         )
     CountBranches: dict[str, RunGroupCount] = {}
     for ChildClass, RawBranch in RawCountBranches.items():
-        if not str(ChildClass) or not isinstance(RawBranch, Mapping):
+        if not str(ChildClass) or not IsLayoutObject(RawBranch):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} has a malformed count branch"
             )
@@ -1221,7 +1253,7 @@ def FinalRunGroup(
     TrailerVariants: list[RunGroupTrailer],
     CountVariants: list[RunGroupCountA],
     CountBranches: dict[str, RunGroupCount],
-    Entry: Mapping[str, object],
+    Entry: LayoutObject,
 ) -> RunGroup:
     RawCountA = Entry.get("count")
     RawRepeat = Entry.get("repeat")
@@ -1262,7 +1294,7 @@ def FinalRunGroup(
             TrailerVariants=tuple(TrailerVariants),
             note=NoteValue,
         )
-    if not isinstance(RawCountA, Mapping):
+    if not IsLayoutObject(RawCountA):
         raise ArchiveError(f"run group {NameValue}@{Label} has a malformed count")
     Count = ParseRunGroup(NameValue, Label, RawCountA, False)
     if not Count.Back:
@@ -1287,7 +1319,7 @@ def FinalRunGroup(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ClassLayoutA(NameValue: str, Entry: Mapping[str, object]) -> ClassLayout:
+def ClassLayoutA(NameValue: str, Entry: LayoutObject) -> ClassLayout:
     Slots = LayoutSlots(NameValue, Entry)
     RunsValue = LayoutRunsA(NameValue, Entry)
     Gated = VersionedRuns(NameValue, Entry)
@@ -1321,9 +1353,9 @@ def ClassLayoutA(NameValue: str, Entry: Mapping[str, object]) -> ClassLayout:
 
 
 # this definition exists because child slot parsing has one sequence validation boundary
-def LayoutSlots(NameValue: str, Entry: Mapping[str, object]) -> tuple[str, ...]:
+def LayoutSlots(NameValue: str, Entry: LayoutObject) -> tuple[str, ...]:
     RawSlots = Entry.get("child_slots", ())
-    if isinstance(RawSlots, str) or not isinstance(RawSlots, Sequence):
+    if not IsLayoutSequence(RawSlots):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed child_slots"
         )
@@ -1331,9 +1363,9 @@ def LayoutSlots(NameValue: str, Entry: Mapping[str, object]) -> tuple[str, ...]:
 
 
 # this definition exists because constant layout runs require non negative integer widths
-def LayoutRunsA(NameValue: str, Entry: Mapping[str, object]) -> dict[str, int]:
+def LayoutRunsA(NameValue: str, Entry: LayoutObject) -> dict[str, int]:
     RawRuns = Entry.get("runs", {})
-    if not isinstance(RawRuns, Mapping):
+    if not IsLayoutObject(RawRuns):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed runs mapping"
         )
@@ -1343,22 +1375,20 @@ def LayoutRunsA(NameValue: str, Entry: Mapping[str, object]) -> dict[str, int]:
             raise ArchiveError(
                 f"run {NameValue}@{KeyValue} is not a non negative integer"
             )
-        RunsValue[str(KeyValue)] = int(Value)
+        RunsValue[str(KeyValue)] = LayoutInteger(Value)
     return RunsValue
 
 
 # this definition exists because versioned layout runs require numeric version mappings
-def VersionedRuns(
-    NameValue: str, Entry: Mapping[str, object]
-) -> dict[str, Mapping[int, int]]:
+def VersionedRuns(NameValue: str, Entry: LayoutObject) -> dict[str, Mapping[int, int]]:
     RawGated = Entry.get("runs_by_version", {})
-    if not isinstance(RawGated, Mapping):
+    if not IsLayoutObject(RawGated):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed runs_by_version"
         )
     Gated: dict[str, Mapping[int, int]] = {}
     for KeyValue, RawMapping in RawGated.items():
-        if not isinstance(RawMapping, Mapping):
+        if not IsLayoutObject(RawMapping):
             raise ArchiveError(
                 f"runs_by_version {NameValue}@{KeyValue} does not hold a version mapping"
             )
@@ -1373,7 +1403,7 @@ def VersionedRuns(
                 raise ArchiveError(
                     f"run {NameValue}@{KeyValue} at document version {TextValue} is not a non negative integer"
                 )
-            ByVersion[int(TextValue)] = int(Value)
+            ByVersion[int(TextValue)] = LayoutInteger(Value)
         if not ByVersion:
             raise ArchiveError(
                 f"runs_by_version {NameValue}@{KeyValue} names no version"
@@ -1383,17 +1413,15 @@ def VersionedRuns(
 
 
 # this definition exists because child class run branches require complete class mappings
-def ChildClassRuns(
-    NameValue: str, Entry: Mapping[str, object]
-) -> dict[str, Mapping[str, int]]:
+def ChildClassRuns(NameValue: str, Entry: LayoutObject) -> dict[str, Mapping[str, int]]:
     RawChildRuns = Entry.get("runs_by_child_class", {})
-    if not isinstance(RawChildRuns, Mapping):
+    if not IsLayoutObject(RawChildRuns):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has malformed runs_by_child_class"
         )
     ChildRuns: dict[str, Mapping[str, int]] = {}
     for RunKey, RawClassRuns in RawChildRuns.items():
-        if not isinstance(RawClassRuns, Mapping) or not RawClassRuns:
+        if not IsLayoutObject(RawClassRuns) or not RawClassRuns:
             raise ArchiveError(
                 f"runs_by_child_class {NameValue}@{RunKey} has no class mapping"
             )
@@ -1408,23 +1436,21 @@ def ChildClassRuns(
                 raise ArchiveError(
                     f"run {NameValue}@{RunKey} for child {ChildClass!r} is malformed"
                 )
-            ClassRuns[str(ChildClass)] = int(RunValue)
+            ClassRuns[str(ChildClass)] = LayoutInteger(RunValue)
         ChildRuns[str(RunKey)] = ClassRuns
     return ChildRuns
 
 
 # this definition exists because variable run lists group validated entries by slot
-def VariableRunsA(
-    NameValue: str, Entry: Mapping[str, object]
-) -> dict[str, list[VariableRun]]:
+def VariableRunsA(NameValue: str, Entry: LayoutObject) -> dict[str, list[VariableRun]]:
     RawVariable = Entry.get("variable_runs", ())
-    if isinstance(RawVariable, str) or not isinstance(RawVariable, Sequence):
+    if not IsLayoutSequence(RawVariable):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed variable_runs"
         )
     Variable: dict[str, list[VariableRun]] = {}
     for ItemValue in RawVariable:
-        if not isinstance(ItemValue, Mapping):
+        if not IsLayoutObject(ItemValue):
             raise ArchiveError(f"variable run of {NameValue!r} is not a mapping")
         SlotValue, Parsed = VariableEntry(NameValue, ItemValue)
         Variable.setdefault(SlotValue, []).append(Parsed)
@@ -1432,15 +1458,13 @@ def VariableRunsA(
 
 
 # this definition exists because one variable run owns its value and version gates
-def VariableEntry(
-    NameValue: str, ItemValue: Mapping[str, object]
-) -> tuple[str, VariableRun]:
+def VariableEntry(NameValue: str, ItemValue: LayoutObject) -> tuple[str, VariableRun]:
     SlotValue = str(ItemValue.get("slot", ""))
     RawValues = ItemValue.get("values", ())
-    if isinstance(RawValues, str) or not isinstance(RawValues, Sequence):
+    if not IsLayoutSequence(RawValues):
         raise ArchiveError(f"variable run {NameValue}@{SlotValue} has malformed values")
     RawTailGate = ItemValue.get("tail_by_version", {})
-    if not isinstance(RawTailGate, Mapping):
+    if not IsLayoutObject(RawTailGate):
         raise ArchiveError(
             f"variable run {NameValue}@{SlotValue} has malformed tail_by_version"
         )
@@ -1459,20 +1483,20 @@ def VariableEntry(
             raise ArchiveError(
                 f"variable run {NameValue}@{SlotValue} has an invalid tail for document version {VersionName}"
             )
-        TailGate[int(VersionName)] = int(TailValue)
+        TailGate[int(VersionName)] = LayoutInteger(TailValue)
     Parsed = VariableRun(
         slot=SlotValue,
         rule=str(ItemValue.get("rule", KOpaqueRule)),
-        at=int(ItemValue.get("at", 0) or 0),
-        tail=int(ItemValue.get("tail", 0) or 0),
+        at=LayoutInteger(ItemValue.get("at", 0) or 0),
+        tail=LayoutInteger(ItemValue.get("tail", 0) or 0),
         TailByVersion=TailGate,
-        stride=int(ItemValue.get("stride", 0) or 0),
-        count_width=int(ItemValue.get("count_width", 0) or 0),
-        width=int(ItemValue.get("width", 0) or 0),
+        stride=LayoutInteger(ItemValue.get("stride", 0) or 0),
+        count_width=LayoutInteger(ItemValue.get("count_width", 0) or 0),
+        width=LayoutInteger(ItemValue.get("width", 0) or 0),
         predicate=str(ItemValue.get("predicate", "")),
-        predicate_at=int(ItemValue.get("predicate_at", 0) or 0),
-        predicate_width=int(ItemValue.get("predicate_width", 0) or 0),
-        values=tuple((int(Value) for Value in RawValues)),
+        predicate_at=LayoutInteger(ItemValue.get("predicate_at", 0) or 0),
+        predicate_width=LayoutInteger(ItemValue.get("predicate_width", 0) or 0),
+        values=tuple((LayoutInteger(Value) for Value in RawValues)),
         note=str(ItemValue.get("note", "")),
     )
     return (SlotValue, Parsed)
@@ -1482,16 +1506,16 @@ def VariableEntry(
 def RepeatRule(
     NameValue: str, Slots: tuple[str, ...], RawRepeat: object
 ) -> RepeatField | None:
-    if not isinstance(RawRepeat, Mapping) or KRepeatedSlot not in Slots:
+    if not IsLayoutObject(RawRepeat) or KRepeatedSlot not in Slots:
         return None
     RunValueA = str(RawRepeat.get("run", ""))
     RawAt = RawRepeat.get("at")
     RawBack = RawRepeat.get("back")
     HasAt = RawAt is not None
     HasBack = RawBack is not None
-    AtValue = int(RawAt) if HasAt else 0
-    BackValue = int(RawBack) if HasBack else 0
-    Width = int(RawRepeat.get("width", 0))
+    AtValue = LayoutInteger(RawAt) if HasAt else 0
+    BackValue = LayoutInteger(RawBack) if HasBack else 0
+    Width = LayoutInteger(RawRepeat.get("width", 0))
     if (
         not RunValueA
         or HasAt == HasBack
@@ -1510,7 +1534,7 @@ def RepeatRule(
 def RepeatSettings(
     NameValue: str,
     Slots: tuple[str, ...],
-    Entry: Mapping[str, object],
+    Entry: LayoutObject,
     Repeat: RepeatField | None,
     Unresolved: bool,
 ) -> tuple[int, int]:
@@ -1548,7 +1572,7 @@ def RepeatSettings(
 def ChildCountRule(
     NameValue: str,
     Slots: tuple[str, ...],
-    Entry: Mapping[str, object],
+    Entry: LayoutObject,
     Repeat: RepeatField | None,
     Unresolved: bool,
     Prefix: int,
@@ -1556,17 +1580,17 @@ def ChildCountRule(
     RawChildCounts = Entry.get("child_count_by_class")
     if RawChildCounts is None:
         return None
-    if not isinstance(RawChildCounts, Mapping):
+    if not IsLayoutObject(RawChildCounts):
         raise ArchiveError(f"child_count_by_class of {NameValue!r} is malformed")
     RawCountSlot = RawChildCounts.get("slot")
     RawCounts = RawChildCounts.get("counts")
     if (
         not isinstance(RawCountSlot, int)
         or isinstance(RawCountSlot, bool)
-        or (not isinstance(RawCounts, Mapping))
+        or (not IsLayoutObject(RawCounts))
     ):
         raise ArchiveError(f"child_count_by_class of {NameValue!r} is malformed")
-    CountSlot = int(RawCountSlot)
+    CountSlot = LayoutInteger(RawCountSlot)
     Counts: dict[str, int] = {}
     for ClassName, CountValue in RawCounts.items():
         if (
@@ -1579,7 +1603,7 @@ def ChildCountRule(
             raise ArchiveError(
                 f"child count branch {NameValue}@{ClassName} is malformed"
             )
-        Counts[str(ClassName)] = int(CountValue)
+        Counts[str(ClassName)] = LayoutInteger(CountValue)
     if CountSlot < 0 or CountSlot >= len(Slots) or (not Counts):
         raise ArchiveError(f"child_count_by_class of {NameValue!r} is malformed")
     if Repeat is not None or Unresolved or Prefix:
@@ -1593,7 +1617,7 @@ def ChildCountRule(
 def GroupRules(
     NameValue: str,
     Slots: tuple[str, ...],
-    Entry: Mapping[str, object],
+    Entry: LayoutObject,
     Repeat: RepeatField | None,
     Unresolved: bool,
     Prefix: int,
@@ -1601,13 +1625,13 @@ def GroupRules(
     Gated: dict[str, Mapping[int, int]],
 ) -> tuple[RunGroup, ...]:
     RawGroups = Entry.get("groups", ())
-    if isinstance(RawGroups, str) or not isinstance(RawGroups, Sequence):
+    if not IsLayoutSequence(RawGroups):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed groups list"
         )
     Parsed: list[RunGroup] = []
     for ItemValue in RawGroups:
-        if not isinstance(ItemValue, Mapping):
+        if not IsLayoutObject(ItemValue):
             raise ArchiveError(f"a run group of {NameValue!r} is not a mapping")
         Parsed.append(RunGroupA(NameValue, ItemValue))
     Groups = tuple(Parsed)
@@ -1625,22 +1649,16 @@ def GroupRules(
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class Frame:
-    locals().setdefault("__annotations__", {})
-    __annotations__["node"] = "int"
-    __annotations__["class_name"] = "str"
-    __annotations__["layout"] = "ClassLayout"
-    __annotations__["slot"] = "int"
-    __annotations__["total"] = "int"
-    __annotations__["group"] = "int"
-    locals()["group"] = 0
-    __annotations__["step"] = "int"
-    locals()["step"] = 0
-    __annotations__["plan"] = "tuple[int, ...]"
-    locals()["plan"] = ()
-    __annotations__["key"] = "str"
-    locals()["key"] = KLeadRun
-    __annotations__["ChildClass"] = "str"
-    locals()["ChildClass"] = ""
+    node: int
+    class_name: str
+    layout: ClassLayout
+    slot: int
+    total: int
+    group: int = 0
+    step: int = 0
+    plan: tuple[int, ...] = ()
+    key: str = KLeadRun
+    ChildClass: str = ""
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1706,7 +1724,7 @@ def StringElem(
     TailValue: int,
 ) -> int:
     try:
-        Ignored, Consumed = ReadString(BlobValue, Cursor + ElemValue.at)
+        _, Consumed = ReadString(BlobValue, Cursor + ElemValue.at)
     except ArchiveError as ErrorInfo:
         raise Segmentation(
             Layout.name, KeyValue, Offset, str(ErrorInfo), BaseValue=BaseValue
@@ -1925,7 +1943,7 @@ def Advance(
 def GroupElemLength(
     BlobValue: bytes,
     Cursor: int,
-    Frame: _Frame,
+    Frame: Frame,
     Offset: int,
     BaseValue: int,
     MoVersion: int | None,
@@ -2006,7 +2024,7 @@ def GetTailSize(BlobValue: bytes, BaseValue: int, HeaderSize: int) -> int:
 def GroupOpenMut(
     BlobValue: bytes,
     Cursor: int,
-    Frame: _Frame,
+    Frame: Frame,
     Offset: int,
     BaseValue: int,
     MoVersion: int | None,
@@ -2095,7 +2113,7 @@ def GroupCount(
 
 
 # this definition exists because focused behavior needs one stable owner
-def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
+def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[Frame]) -> str:
     if not Frames:
         return ""
     Frame = Frames[-1]
@@ -2121,7 +2139,7 @@ def DeclaredSlot(Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OuterName(ClassIndex: int, Layouts: LayoutTable, Frames: Sequence[_Frame]) -> str:
+def OuterName(ClassIndex: int, Layouts: LayoutTable, Frames: Sequence[Frame]) -> str:
     Alias = f"{KOuterPrefix}{ClassIndex}"
     if Alias in Layouts:
         return Alias
@@ -2681,7 +2699,7 @@ def Segment(
     MoVersion: int | None = None,
     **Options: object,
 ) -> tuple[StaticSegment, ...]:
-    HeaderSize, MoVersion, Ignored = ArchiveOptions(
+    HeaderSize, MoVersion, _ = ArchiveOptions(
         Options, HeaderSize, MoVersion, None, "Segment"
     )
     if MoVersion is not None and MoVersion < 0:
@@ -2716,37 +2734,49 @@ def ArchiveOptions(
     if Unknown:
         NameValue = next(iter(Unknown))
         raise TypeError(f"{Caller}() got an unexpected keyword argument '{NameValue}'")
-    HeaderSize = Options.get("header_size", HeaderSize)
-    MoVersion = Options.get("mo_version", MoVersion)
-    Limit = Options.get("limit", Limit)
+    RawHeaderSize = Options.get("header_size", HeaderSize)
+    RawMoVersion = Options.get("mo_version", MoVersion)
+    RawLimit = Options.get("limit", Limit)
+    if not isinstance(RawHeaderSize, int) or isinstance(RawHeaderSize, bool):
+        raise TypeError(f"{Caller}() header_size must be an integer")
+    if RawMoVersion is not None and (
+        not isinstance(RawMoVersion, int) or isinstance(RawMoVersion, bool)
+    ):
+        raise TypeError(f"{Caller}() mo_version must be an integer or none")
+    if RawLimit is not None and (
+        not isinstance(RawLimit, int) or isinstance(RawLimit, bool)
+    ):
+        raise TypeError(f"{Caller}() limit must be an integer or none")
+    HeaderSize = RawHeaderSize
+    MoVersion = RawMoVersion
+    Limit = RawLimit
     return (HeaderSize, MoVersion, Limit)
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class BaseResolution:
-    locals().setdefault("__annotations__", {})
-    __annotations__["base"] = "int"
-    __annotations__["seed"] = "int"
-    __annotations__["segmented"] = "bool"
-    __annotations__["progress"] = "int"
-    __annotations__["offset"] = "int"
-    __annotations__["tried"] = "tuple[int, ...]"
-    __annotations__["implied"] = "tuple[int, ...]"
+    base: int
+    seed: int
+    segmented: bool
+    progress: int
+    offset: int
+    tried: tuple[int, ...]
+    implied: tuple[int, ...]
 
     # this definition exists because focused behavior needs one stable owner
-    def AsDict(Instance) -> dict[str, object]:
+    def AsDict(self) -> dict[str, object]:
         return {
-            "base": Instance.base,
-            "seed": Instance.seed,
-            "segmented": Instance.segmented,
-            "progress": Instance.progress,
-            "offset": Instance.offset,
-            "tried": list(Instance.tried),
-            "implied": list(Instance.implied),
+            "base": self.base,
+            "seed": self.seed,
+            "segmented": self.segmented,
+            "progress": self.progress,
+            "offset": self.offset,
+            "tried": list(self.tried),
+            "implied": list(self.implied),
         }
 
-    locals()["as_dict"] = AsDict
+    as_dict = AsDict
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2779,9 +2809,12 @@ def ResolveBase(
     Limit: int = KBaseResolutionLimit,
     **Options: object,
 ) -> BaseResolution:
-    HeaderSize, MoVersion, Limit = ArchiveOptions(
+    HeaderSize, MoVersion, ResolvedLimit = ArchiveOptions(
         Options, HeaderSize, MoVersion, Limit, "ResolveBase"
     )
+    if ResolvedLimit is None:
+        raise ArchiveError("base resolution limit must be provided")
+    Limit = ResolvedLimit
     Queue, Tried, Implied, Chosen, BestValue = BaseState(SeedValue, Limit)
     while Queue and len(Tried) < Limit:
         Choice = Queue.pop(0)
@@ -2930,7 +2963,7 @@ def Tiling(
     Segments: Sequence[StaticSegment],
     HeaderSize: int,
     TrailerSize: int = 0,
-) -> dict[str, object]:
+) -> TilingReport:
     GapsValue: list[tuple[int, int]] = []
     Overlaps: list[tuple[int, int]] = []
     Cursor = HeaderSize
@@ -2954,46 +2987,45 @@ def Tiling(
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class VerifyReport:
-    locals().setdefault("__annotations__", {})
-    __annotations__["length"] = "int"
-    __annotations__["base"] = "int"
-    __annotations__["header_bytes"] = "int"
-    __annotations__["segmented"] = "bool"
-    __annotations__["tiled"] = "bool"
-    __annotations__["identical"] = "bool"
-    __annotations__["object_count"] = "int"
-    __annotations__["definition_count"] = "int"
-    __annotations__["gaps"] = "tuple[tuple[int, int], ...]"
-    __annotations__["overlaps"] = "tuple[tuple[int, int], ...]"
-    __annotations__["trailing_bytes"] = "int"
-    __annotations__["error"] = "str"
-    __annotations__["blocking_class"] = "str"
-    __annotations__["blocking_slot"] = "str"
-    __annotations__["blocking_offset"] = "int"
-    __annotations__["blocking_depth"] = "int"
+    length: int
+    base: int
+    header_bytes: int
+    segmented: bool
+    tiled: bool
+    identical: bool
+    object_count: int
+    definition_count: int
+    gaps: tuple[tuple[int, int], ...]
+    overlaps: tuple[tuple[int, int], ...]
+    trailing_bytes: int
+    error: str
+    blocking_class: str
+    blocking_slot: str
+    blocking_offset: int
+    blocking_depth: int
 
     # this definition exists because focused behavior needs one stable owner
-    def AsDict(Instance) -> dict[str, object]:
+    def AsDict(self) -> dict[str, object]:
         return {
-            "length": Instance.length,
-            "base": Instance.base,
-            "header_bytes": Instance.header_bytes,
-            "segmented": Instance.segmented,
-            "tiled": Instance.tiled,
-            "identical": Instance.identical,
-            "object_count": Instance.object_count,
-            "definition_count": Instance.definition_count,
-            "gaps": [list(ItemValue) for ItemValue in Instance.gaps],
-            "overlaps": [list(ItemValue) for ItemValue in Instance.overlaps],
-            "trailing_bytes": Instance.trailing_bytes,
-            "error": Instance.error,
-            "blocking_class": Instance.blocking_class,
-            "blocking_slot": Instance.blocking_slot,
-            "blocking_offset": Instance.blocking_offset,
-            "blocking_depth": Instance.blocking_depth,
+            "length": self.length,
+            "base": self.base,
+            "header_bytes": self.header_bytes,
+            "segmented": self.segmented,
+            "tiled": self.tiled,
+            "identical": self.identical,
+            "object_count": self.object_count,
+            "definition_count": self.definition_count,
+            "gaps": [list(ItemValue) for ItemValue in self.gaps],
+            "overlaps": [list(ItemValue) for ItemValue in self.overlaps],
+            "trailing_bytes": self.trailing_bytes,
+            "error": self.error,
+            "blocking_class": self.blocking_class,
+            "blocking_slot": self.blocking_slot,
+            "blocking_offset": self.blocking_offset,
+            "blocking_depth": self.blocking_depth,
         }
 
-    locals()["as_dict"] = AsDict
+    as_dict = AsDict
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3006,7 +3038,7 @@ def Verify(
     MoVersion: int | None = None,
     **Options: object,
 ) -> VerifyReport:
-    HeaderSize, MoVersion, Ignored = ArchiveOptions(
+    HeaderSize, MoVersion, _ = ArchiveOptions(
         Options, HeaderSize, MoVersion, None, "Verify"
     )
     try:
@@ -3073,8 +3105,8 @@ def Verify(
         identical=Identical,
         object_count=len(Segments),
         definition_count=Definitions,
-        gaps=tuple((tuple(ItemValue) for ItemValue in Shape["gaps"])),
-        overlaps=tuple((tuple(ItemValue) for ItemValue in Shape["overlaps"])),
+        gaps=tuple(Shape["gaps"]),
+        overlaps=tuple(Shape["overlaps"]),
         trailing_bytes=int(Shape["trailing_bytes"]),
         error=Message,
         blocking_class="",
@@ -3094,214 +3126,172 @@ def ClassNames(Segments: Iterable[StaticSegment]) -> tuple[str, ...]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["BASE_RESOLUTION_LIMIT"] = KBaseResolutionLimit
+BASE_RESOLUTION_LIMIT = KBaseResolutionLimit
 
 # this binding exists because shared behavior needs one stable value
-globals()["BIG_CLASS_TAG_BIT"] = KBigClassTagBit
+BIG_CLASS_TAG_BIT = KBigClassTagBit
 
 # this binding exists because shared behavior needs one stable value
-globals()["BIG_OBJECT_TAG"] = KBigObjectTag
+BIG_OBJECT_TAG = KBigObjectTag
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_REFERENCE_KIND"] = KClassRefKind
+CLASS_REFERENCE_KIND = KClassRefKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_TAG_BIT"] = KClassTagBit
+CLASS_TAG_BIT = KClassTagBit
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONDITIONAL_RULE"] = KConditionalRule
+CONDITIONAL_RULE = KConditionalRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["COUNT_RULE"] = KCountRule
+COUNT_RULE = KCountRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["ChildCountByClass"] = ChildCountBy
+ChildCountByClass = ChildCountBy
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFINITION_KIND"] = KDefinitionKind
+DEFINITION_KIND = KDefinitionKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["EXTERNAL_PREFIX"] = KOuterPrefix
+EXTERNAL_PREFIX = KOuterPrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["LEAD_RUN"] = KLeadRun
+LEAD_RUN = KLeadRun
 
 # this binding exists because shared behavior needs one stable value
-globals()["LEAF_RUN"] = KLeafRun
+LEAF_RUN = KLeafRun
 
 # this binding exists because shared behavior needs one stable value
-globals()["LONG_STRING_LIMIT"] = KLongStringLimit
+LONG_STRING_LIMIT = KLongStringLimit
 
 # this binding exists because shared behavior needs one stable value
-globals()["MAX_MAP_INDEX"] = KMaxMapIndex
+MAX_MAP_INDEX = KMaxMapIndex
 
 # this binding exists because shared behavior needs one stable value
-globals()["MO_VERSION_PREFIX"] = KMoVersionPrefix
+MO_VERSION_PREFIX = KMoVersionPrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["NEW_CLASS_TAG"] = KNewClassTag
+NEW_CLASS_TAG = KNewClassTag
 
 # this binding exists because shared behavior needs one stable value
-globals()["NULL_KIND"] = KNullKind
+NULL_KIND = KNullKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["NULL_TAG"] = KNullTag
+NULL_TAG = KNullTag
 
 # this binding exists because shared behavior needs one stable value
-globals()["Node"] = NodeAction
+Node = NodeAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["OBJECT_REFERENCE_KIND"] = KObjectRefKind
+OBJECT_REFERENCE_KIND = KObjectRefKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["OPAQUE_RULE"] = KOpaqueRule
+OPAQUE_RULE = KOpaqueRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["POLYMORPHIC_SLOT"] = KPolymorphicSlot
+POLYMORPHIC_SLOT = KPolymorphicSlot
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParseArchiveStringLength"] = ParseArchive
+ParseArchiveStringLength = ParseArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParseRunGroupCount"] = ParseRunGroup
+ParseRunGroupCount = ParseRunGroup
 
 # this binding exists because shared behavior needs one stable value
-globals()["Path"] = PathValue
+Path = PathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["REPEATED_SLOT"] = KRepeatedSlot
+REPEATED_SLOT = KRepeatedSlot
 
 # this binding exists because shared behavior needs one stable value
-globals()["RunGroupCountVariant"] = RunGroupCountA
+RunGroupCountVariant = RunGroupCountA
 
 # this binding exists because shared behavior needs one stable value
-globals()["RunGroupTrailerVariant"] = RunGroupTrailer
+RunGroupTrailerVariant = RunGroupTrailer
 
 # this binding exists because shared behavior needs one stable value
-globals()["SHORT_STRING_LIMIT"] = KShortStringLimit
+SHORT_STRING_LIMIT = KShortStringLimit
 
 # this binding exists because shared behavior needs one stable value
-globals()["STREAM_HEADER_SIZE"] = KStreamHeaderSize
+STREAM_HEADER_SIZE = KStreamHeaderSize
 
 # this binding exists because shared behavior needs one stable value
-globals()["STRING_MARKER"] = KStringMarker
+STRING_MARKER = KStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["STRING_RULE"] = KStringRule
+STRING_RULE = KStringRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["SegmentationError"] = Segmentation
+SegmentationError = Segmentation
 
 # this binding exists because shared behavior needs one stable value
-globals()["TAIL_RUN"] = KTailRun
+TAIL_RUN = KTailRun
 
 # this binding exists because shared behavior needs one stable value
-globals()["Tag"] = TagAction
+Tag = TagAction
 
 # this binding exists because shared behavior needs one stable value
-globals()["_Frame"] = Frame
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_advance"] = Advance
+build_model = BuildModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["_class_layout"] = ClassLayoutA
+class_names = ClassNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["_declared_slot_class"] = DeclaredSlot
+container_mo_version = ContainerMo
 
 # this binding exists because shared behavior needs one stable value
-globals()["_element_length"] = ElemLength
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_external_name"] = OuterName
+encode_class_definition = EncodeClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_group_element_length"] = GroupElemLength
+encode_class_reference = EncodeClassRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_group_open"] = GroupOpenMut
+encode_null = EncodeNull
 
 # this binding exists because shared behavior needs one stable value
-globals()["_group_trailer_length"] = GroupTrailer
+encode_object_reference = EncodeObjectRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_repeat_total"] = RepeatTotal
+encode_string = EncodeString
 
 # this binding exists because shared behavior needs one stable value
-globals()["_run_group"] = RunGroupA
+field = Field
 
 # this binding exists because shared behavior needs one stable value
-globals()["_run_length"] = RunLength
+implied_bases = ImpliedBases
 
 # this binding exists because shared behavior needs one stable value
-globals()["_scalar"] = Scalar
+json = JsonModule
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segment_walk"] = SegmentWalkMut
+read_string = ReadString
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+read_tag = ReadTag
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_model"] = BuildModel
+resolve_base = ResolveBase
 
 # this binding exists because shared behavior needs one stable value
-globals()["class_names"] = ClassNames
+segment = Segment
 
 # this binding exists because shared behavior needs one stable value
-globals()["container_mo_version"] = ContainerMo
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+tiling = Tiling
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_class_definition"] = EncodeClass
+verify = Verify
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_class_reference"] = EncodeClassRef
+GroupOpen = GroupOpenMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_null"] = EncodeNull
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_object_reference"] = EncodeObjectRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_string"] = EncodeString
-
-# this binding exists because shared behavior needs one stable value
-globals()["field"] = Field
-
-# this binding exists because shared behavior needs one stable value
-globals()["implied_bases"] = ImpliedBases
-
-# this binding exists because shared behavior needs one stable value
-globals()["json"] = JsonValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["read_string"] = ReadString
-
-# this binding exists because shared behavior needs one stable value
-globals()["read_tag"] = ReadTag
-
-# this binding exists because shared behavior needs one stable value
-globals()["resolve_base"] = ResolveBase
-
-# this binding exists because shared behavior needs one stable value
-globals()["segment"] = Segment
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["tiling"] = Tiling
-
-# this binding exists because shared behavior needs one stable value
-globals()["verify"] = Verify
-
-# this binding exists because shared behavior needs one stable value
-globals()["GroupOpen"] = GroupOpenMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["SegmentWalk"] = SegmentWalkMut
+SegmentWalk = SegmentWalkMut

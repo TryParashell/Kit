@@ -58,14 +58,14 @@ KMmThree = (1476.0000000000002, 11954.000000000002)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestOFDMTMD():
+def TestOFDMTMD() -> None:
     StreamA = EncodeCmgrStream()
     assert len(StreamA) == KBytesA
     assert Hashlib.sha256(StreamA).hexdigest() == KDigest
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestTFDMTMD():
+def TestTFDMTMD() -> None:
     StreamA = EncodeCmgrStream(feature_tree_ids=TreeIdsFor(3))
     assert len(StreamA) == KBytesD
     assert Hashlib.sha256(StreamA).hexdigest() == KDigestA
@@ -73,7 +73,7 @@ def TestTFDMTMD():
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.mark.parametrize("Features", (1, 2, 3, 4, 5, 6, 7, 8))
-def TestSFTMPFSL(Features):
+def TestSFTMPFSL(Features: int) -> None:
     StreamA = EncodeCmgrStream(feature_tree_ids=TreeIdsFor(Features))
     assert len(StreamA) == KBytesA + KBytesC * (Features - 1)
 
@@ -148,7 +148,7 @@ def TestTFHUTRLB() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestDAOBTTS():
+def TestDAOBTTS() -> None:
     Split = DeclaredOpaqueSplit()
     assert Split["stream_bytes"] == KBytesA
     assert Split["declared"] == KBytes
@@ -159,19 +159,19 @@ def TestDAOBTTS():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestDGCIFTRZD():
+def TestDGCIFTRZD() -> None:
     assert Spans == ()
     assert KBytesB == 0
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestTSDCIRZD():
+def TestTSDCIRZD() -> None:
     StreamA = EncodeCmgrStream()
     assert bytes(Bytes) in StreamA
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestTSCEFC():
+def TestTSCEFC() -> None:
     for Features in (1, 4, 8):
         Split = DeclaredOpaqueSplit(feature_tree_ids=TreeIdsFor(Features))
         assert Split["opaque"] == 0
@@ -179,7 +179,7 @@ def TestTSCEFC():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestTHTRV():
+def TestTHTRV() -> None:
     assert Generation == 18000
     assert Build == 2025268
     assert IdInfo == 101
@@ -189,64 +189,64 @@ def TestTHTRV():
     assert len(Style) == 9
     assert len(TailInfo) == 7
     assert (
-        dict(
-            ((NameText, ItemValue) for NameText, IgnoredValue, ItemValue in Properties)
-        )["material_name"]
+        dict(((NameText, ItemValue) for NameText, _, ItemValue in Properties))[
+            "material_name"
+        ]
         == "Steel"
     )
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestAIATIRFTRFV():
+def TestAIATIRFTRFV() -> None:
     assert AtomIdsFor(3) == (101, 102, 103)
     assert TreeIdsFor(3) == (32, 40, 48)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSOWTCMCD():
+def TestSOWTCMCD() -> None:
     StreamA = EncodeCmgrStream()
     assert StreamA.startswith(b"\xff\xff\x01\x00" + bytes((len(Class), 0)))
     assert Class.encode("ascii") in StreamA
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def NamedTPNLMTSBTB():
+def NamedTPNLMTSBTB() -> None:
     Short = EncodeCmgrStream(part_name="Part1")
     LongInfo = EncodeCmgrStream(part_name="Part70")
     assert len(LongInfo) == len(Short) + 2
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestMVARATPD():
+def TestMVARATPD() -> None:
     assert KMmThree == (1476.0000000000002, 11954.000000000002)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestAFDGIR():
+def TestAFDGIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="generation"):
         EncodeCmgrStream(generation=14000)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestAEFSIR():
+def TestAEFSIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="at least one solid feature"):
         EncodeCmgrStream(feature_tree_ids=())
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestASDGCIR():
+def TestASDGCIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="display_geometry_cache"):
         EncodeCmgrStream(display_geometry_cache=bytes(64))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestANDGCIR():
+def TestANDGCIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="display_geometry_cache"):
         EncodeCmgrStream(display_geometry_cache=b"\x01" + bytes(Bytes - 1))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestALCWOTIPAIR():
+def TestALCWOTIPAIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="tree ids"):
         EncodeCmgrStream(
             feature_tree_ids=(32, 40), link_atom_ids=(101, 102), link_tree_ids=(32,)
@@ -254,7 +254,7 @@ def TestALCWOTIPAIR():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestAZFATIR():
+def TestAZFATIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="at least one solid feature"):
         AtomIdsFor(0)
     with PytestLib.raises(SldprtFormatError, match="at least one solid feature"):

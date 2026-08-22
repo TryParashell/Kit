@@ -23,6 +23,7 @@ from convert.adapters.freecad import (
     write_freecad as WriteFreecad,
 )
 from interchange import (
+    CadDocument as CadDoc,
     CadSource,
     ComponentDocument as ComponentDoc,
     MateKind,
@@ -35,12 +36,15 @@ from tests.interchange.assembly.AssemblyTests import (
 )
 from tests.interchange.document.DocumentTests import document as DocValue
 
+# this binding keeps xml element annotations aligned with the imported parser
+ET = XmlTree
+
 # this binding exists because shared behavior needs one stable value
 KOracle = GetFreecadPath()
 
 
 # this definition exists because focused behavior needs one stable owner
-def AsmDoc():
+def AsmDoc() -> CadDoc:
     Source = InterchangeAsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -58,7 +62,7 @@ def PropAction(NodeValue: ET.Element, NameValue: str) -> XmlTree.Element:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshDoc():
+def MeshDoc() -> CadDoc:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -102,7 +106,7 @@ def MeshDoc():
 
 
 # this definition exists because focused behavior needs one stable owner
-def NestedAsmDoc():
+def NestedAsmDoc() -> CadDoc:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -160,7 +164,7 @@ def NestedAsmDoc():
 
 
 # this definition exists because focused behavior needs one stable owner
-def GeomFree(Source):
+def GeomFree(Source: CadDoc) -> CadDoc:
     AsmValue = Source.assembly
     if AsmValue is not None:
         AsmValue = Replace(
@@ -214,10 +218,10 @@ def VerifyAsmNodes(RootValue: ET.Element) -> None:
         for ItemValue in RootValue.findall("./ObjectData/Object")
     }
     LinkData = [DataValue[ItemValue.get("name", "")] for ItemValue in Links]
-    assert all(
-        PropAction(ItemValue, "LinkTransform").find("Bool").get("value") == "true"
-        for ItemValue in LinkData
-    )
+    for ItemValue in LinkData:
+        LinkTransform = PropAction(ItemValue, "LinkTransform").find("Bool")
+        assert LinkTransform is not None
+        assert LinkTransform.get("value") == "true"
     Placement = PropAction(LinkData[0], "Placement").find("PropertyPlacement")
     assert Placement is not None
     assert tuple(
@@ -252,7 +256,7 @@ def AsmMateContext(
 
 # this definition exists because native mate identity and proxy fields form one contract
 def VerifyMateIds(RootValue: ET.Element) -> None:
-    MateValue, Ignored, Ignored, Ignored = AsmMateContext(RootValue)
+    MateValue, _, _, _ = AsmMateContext(RootValue)
     JointType = PropAction(MateValue, "JointType").find("Integer")
     EntityIds = PropAction(MateValue, "EntityIds").findall("./StringList/String")
     assert JointType is not None and JointType.get("value") == "0"
@@ -276,7 +280,9 @@ def VerifyMateRefs(RootValue: ET.Element) -> None:
     ComponentLinks = PropAction(MateValue, "ComponentLinks").findall(
         "./StringList/String"
     )
-    RootOrigin = PropAction(AsmRoot, "Origin").find("Link").get("value")
+    RootOriginNode = PropAction(AsmRoot, "Origin").find("Link")
+    assert RootOriginNode is not None
+    RootOrigin = RootOriginNode.get("value")
     assert len(ComponentLinks) == 2
     assert ComponentLinks[0].get("value") == RootOrigin
     RefOne = PropAction(MateValue, "Reference1").find("XLink")
@@ -286,10 +292,14 @@ def VerifyMateRefs(RootValue: ET.Element) -> None:
     assert RefOne.get("name") == RootOrigin
     assert RefTwo.get("name") == LinkValue.get("name")
     assert [ItemValue.get("value") for ItemValue in RefOne.findall("Sub")] == ["", ""]
-    assert PropAction(MateValue, "Suppressed").find("Bool").get("value") == "false"
-    assert PropAction(MateValue, "Detach1").find("Bool").get("value") == "false"
-    assert PropAction(MateValue, "Detach2").find("Bool").get("value") == "false"
-    assert PropAction(AsmRoot, "OccurrenceCount").find("Integer").get("value") == "1"
+    Suppressed = PropAction(MateValue, "Suppressed").find("Bool")
+    DetachOne = PropAction(MateValue, "Detach1").find("Bool")
+    DetachTwo = PropAction(MateValue, "Detach2").find("Bool")
+    OccurrenceCount = PropAction(AsmRoot, "OccurrenceCount").find("Integer")
+    assert Suppressed is not None and Suppressed.get("value") == "false"
+    assert DetachOne is not None and DetachOne.get("value") == "false"
+    assert DetachTwo is not None and DetachTwo.get("value") == "false"
+    assert OccurrenceCount is not None and OccurrenceCount.get("value") == "1"
     RootChildren = {
         ItemValue.get("value")
         for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")
@@ -303,7 +313,7 @@ def VerifyMateRefs(RootValue: ET.Element) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdAsmHas(TmpPath) -> None:
+def TestFcstdAsmHas(TmpPath: FilePath) -> None:
     Output = TmpPath / "assembly.FCStd"
     WriteFreecad(AsmDoc(), Output)
     with Zipfile.ZipFile(Output) as Archive:
@@ -314,7 +324,7 @@ def TestFcstdAsmHas(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdMate(TmpPath) -> None:
+def TestFcstdMate(TmpPath: FilePath) -> None:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -353,9 +363,12 @@ def TestFcstdMate(TmpPath) -> None:
         "Face1",
     ]
     assert [ItemValue.get("value") for ItemValue in RefTwo.findall("Sub")] == ["", ""]
-    assert PropAction(MateValue, "Detach1").find("Bool").get("value") == "false"
-    assert PropAction(MateValue, "Detach2").find("Bool").get("value") == "true"
-    assert PropAction(MateValue, "Suppressed").find("Bool").get("value") == "false"
+    DetachOne = PropAction(MateValue, "Detach1").find("Bool")
+    DetachTwo = PropAction(MateValue, "Detach2").find("Bool")
+    Suppressed = PropAction(MateValue, "Suppressed").find("Bool")
+    assert DetachOne is not None and DetachOne.get("value") == "false"
+    assert DetachTwo is not None and DetachTwo.get("value") == "true"
+    assert Suppressed is not None and Suppressed.get("value") == "false"
     ComponentLinks = PropAction(MateValue, "ComponentLinks").findall(
         "./StringList/String"
     )
@@ -381,7 +394,7 @@ def TestFcstdMate(TmpPath) -> None:
         MateKind.NATIVE,
     ),
 )
-def TestFcstdMates(TmpPath, KindValue: MateKind) -> None:
+def TestFcstdMates(TmpPath: FilePath, KindValue: MateKind) -> None:
     Source = GeomFree(AsmDoc())
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -416,7 +429,7 @@ def TestFcstdMates(TmpPath, KindValue: MateKind) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdAsm(TmpPath) -> None:
+def TestFcstdAsm(TmpPath: FilePath) -> None:
     Source = MeshDoc()
     Output = TmpPath / "mesh_assembly.FCStd"
     WriteFreecad(Source, Output)
@@ -437,29 +450,40 @@ def TestFcstdAsm(TmpPath) -> None:
                 if ItemValue.get("name") == MeshValue.get("name")
             )
         )
-        BrepValue = PropAction(DataValue, "BRep").find("Link").get("value")
+        BrepNode = PropAction(DataValue, "BRep").find("Link")
+        assert BrepNode is not None
+        BrepValue = BrepNode.get("value")
         Target = RootValue.find(
             "./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String"
-        ).get("value")
-        TargetData = RootValue.find(f"./ObjectData/Object[@name='{Target}']")
+        )
+        assert Target is not None
+        TargetName = Target.get("value")
+        assert TargetName is not None
+        TargetData = RootValue.find(f"./ObjectData/Object[@name='{TargetName}']")
+        assert TargetData is not None
         TargetDependencies = next(
             (
                 ItemValue
                 for ItemValue in RootValue.findall("./Objects/ObjectDeps")
-                if ItemValue.get("Name") == Target
+                if ItemValue.get("Name") == TargetName
             )
         )
-        FileName = PropAction(DataValue, "Mesh").find("Mesh").get("file")
+        MeshNode = PropAction(DataValue, "Mesh").find("Mesh")
+        assert MeshNode is not None
+        FileName = MeshNode.get("file")
+        assert FileName is not None
         Payload = Archive.read(FileName)
-    assert Target == BrepValue
+    assert TargetName == BrepValue
     TargetGroups = {
-        PropAction(TargetData, NameValue).find("Link").get("value")
+        LinkNode.get("value")
         for NameValue in ("Sketches", "FeatureTimeline")
+        if (LinkNode := PropAction(TargetData, NameValue).find("Link")) is not None
     }
     assert TargetGroups.issubset(
         {ItemValue.get("Name") for ItemValue in TargetDependencies.findall("Dep")}
     )
-    assert PropAction(DataValue, "Visibility").find("Bool").get("value") == "true"
+    Visibility = PropAction(DataValue, "Visibility").find("Bool")
+    assert Visibility is not None and Visibility.get("value") == "true"
     Magic, Version = Struct.unpack_from("<II", Payload)
     VertexCount, TriangleCount = Struct.unpack_from("<II", Payload, 264)
     FirstTriangle = Struct.unpack_from("<iiiiii", Payload, 320)
@@ -471,7 +495,7 @@ def TestFcstdAsm(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdKeeps(TmpPath) -> None:
+def TestFcstdKeeps(TmpPath: FilePath) -> None:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -518,7 +542,8 @@ def TestFcstdKeeps(TmpPath) -> None:
             is not None
         )
     )
-    assert PropAction(AsmRoot, "MateCount").find("Integer").get("value") == "0"
+    MateCount = PropAction(AsmRoot, "MateCount").find("Integer")
+    assert MateCount is not None and MateCount.get("value") == "0"
     Restored = ReadFreecad(Output)
     assert Restored.assembly is not None
     assert Restored.assembly.mates == (MateValue,)
@@ -526,7 +551,7 @@ def TestFcstdKeeps(TmpPath) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdNesteA(TmpPath) -> None:
+def TestFcstdNesteA(TmpPath: FilePath) -> None:
     Source = GeomFree(NestedAsmDoc())
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -591,7 +616,7 @@ def TestFcstdNesteA(TmpPath) -> None:
 # this definition exists because nested component history has an independent xml contract
 def VerifyNestedDoc(
     ComponentRoot: ET.Element,
-) -> tuple[dict[str, str | None], list[str]]:
+) -> tuple[dict[str, str], list[str]]:
     ComponentObjects = ComponentRoot.findall("./Objects/Object")
     ComponentTypes = {
         ItemValue.get("name", ""): ItemValue.get("type", "")
@@ -611,22 +636,28 @@ def VerifyNestedDoc(
     assert any(
         ItemValue.get("type") == "Part::Extrusion" for ItemValue in ComponentObjects
     )
-    ComponentTarget = ComponentRoot.find(
+    ComponentTargetNode = ComponentRoot.find(
         "./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String"
-    ).get("value")
+    )
+    assert ComponentTargetNode is not None
+    ComponentTarget = ComponentTargetNode.get("value")
+    assert ComponentTarget is not None
     SourceAsm = ComponentData[ComponentTarget]
     SourceChildren = [
-        ItemValue.get("value")
+        Value
         for ItemValue in PropAction(SourceAsm, "Group").findall("./LinkList/Link")
-        if ComponentData[ItemValue.get("value")].find(
-            "./Properties/Property[@name='InstanceId']"
-        )
+        if (Value := ItemValue.get("value")) is not None
+        and ComponentData[Value].find("./Properties/Property[@name='InstanceId']")
         is not None
     ]
     assert len(SourceChildren) == 1
     assert ComponentTypes[SourceChildren[0]] == "App::Link"
-    SourceSketches = PropAction(SourceAsm, "Sketches").find("Link").get("value")
-    SourceTimeline = PropAction(SourceAsm, "FeatureTimeline").find("Link").get("value")
+    SourceSketchesNode = PropAction(SourceAsm, "Sketches").find("Link")
+    SourceTimelineNode = PropAction(SourceAsm, "FeatureTimeline").find("Link")
+    assert SourceSketchesNode is not None
+    assert SourceTimelineNode is not None
+    SourceSketches = SourceSketchesNode.get("value")
+    SourceTimeline = SourceTimelineNode.get("value")
     SourceDependencies = next(
         ItemValue
         for ItemValue in ComponentRoot.findall("./Objects/ObjectDeps")
@@ -641,15 +672,15 @@ def VerifyNestedDoc(
 # this definition exists because nested assembly assertions share one decoded object graph
 def NestedContext(
     RootValue: ET.Element,
-    ComponentTypes: dict[str, str | None],
+    ComponentTypes: dict[str, str],
     SourceChildren: list[str],
 ) -> tuple[
     list[ET.Element],
     dict[str, ET.Element],
     str,
     ET.Element,
-    str | None,
-    list[str | None],
+    str,
+    list[str],
     ET.Element,
 ]:
     Objects = RootValue.findall("./Objects/Object")
@@ -671,10 +702,14 @@ def NestedContext(
     assert [ItemValue.get("type") for ItemValue in Extensions.findall("Extension")] == [
         "App::OriginGroupExtension"
     ]
-    Origin = PropAction(AsmLink, "Origin").find("Link").get("value")
+    OriginNode = PropAction(AsmLink, "Origin").find("Link")
+    assert OriginNode is not None
+    Origin = OriginNode.get("value")
+    assert Origin is not None
     Children = [
-        ItemValue.get("value")
+        Value
         for ItemValue in PropAction(AsmLink, "Group").findall("./LinkList/Link")
+        if (Value := ItemValue.get("value")) is not None
     ]
     assert Types[Origin] == "App::Origin"
     assert len(Children) == 1
@@ -689,13 +724,15 @@ def VerifyProxyIds(
     Objects: list[ET.Element],
     AsmLinkName: str,
     AsmLink: ET.Element,
-    Origin: str | None,
-    Children: list[str | None],
+    Origin: str,
+    Children: list[str],
     Proxy: ET.Element,
     SourceChildren: list[str],
 ) -> None:
     ParentXlink = PropAction(AsmLink, "LinkedObject").find("XLink")
     ProxyXlink = PropAction(Proxy, "LinkedObject").find("XLink")
+    assert ParentXlink is not None
+    assert ProxyXlink is not None
     assert ProxyXlink.get("file") == ParentXlink.get("file")
     assert ProxyXlink.get("stamp") == ParentXlink.get("stamp")
     assert ProxyXlink.get("name") == SourceChildren[0]
@@ -725,15 +762,17 @@ def VerifyNestMate(
     Proxy: ET.Element,
     DataValue: dict[str, ET.Element],
     AsmLinkName: str,
-    Children: list[str | None],
+    Children: list[str],
 ) -> None:
     AsmPlacement = PropAction(AsmLink, "Placement").find("PropertyPlacement")
     assert AsmPlacement is not None
     assert tuple(
         float(AsmPlacement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")
     ) == Pytest.approx((100.0, 20.0, 30.0))
-    assert PropAction(AsmLink, "Visibility").find("Bool").get("value") == "true"
+    Visibility = PropAction(AsmLink, "Visibility").find("Bool")
+    assert Visibility is not None and Visibility.get("value") == "true"
     ProxyPlacement = PropAction(Proxy, "Placement").find("PropertyPlacement")
+    assert ProxyPlacement is not None
     assert tuple(
         float(ProxyPlacement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")
     ) == Pytest.approx((0.0, 0.0, 0.0))
@@ -743,6 +782,7 @@ def VerifyNestMate(
         if ItemValue.find("./Properties/Property[@name='MateId']") is not None
     )
     RefValue = PropAction(MateValue, "Reference2").find("XLink")
+    assert RefValue is not None
     assert RefValue.get("name") == AsmLinkName
     assert [ItemValue.get("value") for ItemValue in RefValue.findall("Sub")] == [
         f"{Children[0]}.",
@@ -771,7 +811,7 @@ def VerifyRootGroup(DataValue: dict[str, ET.Element], AsmLinkName: str) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdNested(TmpPath) -> None:
+def TestFcstdNested(TmpPath: FilePath) -> None:
     Output = TmpPath / "nested_history.FCStd"
     WriteFreecad(NestedAsmDoc(), Output)
     Component = TmpPath / "nested_history" / "Piston.FCStd"
@@ -799,7 +839,7 @@ def TestFcstdNested(TmpPath) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
-def TestLoadsAsm(TmpPath) -> None:
+def TestLoadsAsm(TmpPath: FilePath) -> None:
     Output = ResolveTemp(TmpPath / "assembly.FCStd")
     WriteFreecad(MeshDoc(), Output)
     CodeValue = "import os;import FreeCAD as App;d=App.open(os.environ['KIT_ORACLE_PATH']);d.recompute();d.recompute();links=[o for o in d.Objects if o.TypeId=='App::Link'];mates=[o for o in d.Objects if hasattr(o,'MateId')];shapelinks=[o for o in links if o.LinkedObject is not None and hasattr(o.LinkedObject,'Shape') and not o.LinkedObject.Shape.isNull()];documents=tuple(App.listDocuments().values());sources=[o for document in documents for o in document.Objects if o.TypeId=='Mesh::Feature'];target=shapelinks[0].LinkedObject;print('KIT_ASSEMBLY',len(links),len(mates),links[0].Placement.Base.x,links[0].Placement.Base.y,links[0].Placement.Base.z,links[0].LinkedObject is not None,len(shapelinks),len(target.Shape.Faces),target.Shape.BoundBox.XLength,target.TypeId,getattr(target,'Representation',''),len(sources),all(o.Visibility for o in sources),not any('Touched' in o.State for o in d.Objects))"
@@ -840,7 +880,7 @@ def TestLoadsAsm(TmpPath) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
-def TestLoadsNested(TmpPath) -> None:
+def TestLoadsNested(TmpPath: FilePath) -> None:
     Output = ResolveTemp(TmpPath / "nested.FCStd")
     WriteFreecad(NestedAsmDoc(), Output)
     CodeValue = "import os;import FreeCAD as App;d=App.open(os.environ['KIT_ORACLE_PATH']);links=[o for o in d.Objects if o.TypeId=='Assembly::AssemblyLink'];a=links[0];before=tuple(o.Name for o in a.Group);d.recompute();first=tuple(o.Name for o in a.Group);d.recompute();second=tuple(o.Name for o in a.Group);children=[o for o in a.Group if o.TypeId=='App::Link'];c=children[0];print('KIT_NESTED',len(links),a.Origin is not None,len(children),before==first==second,c.getParentGeoFeatureGroup()==a,c.LinkedObject in a.LinkedObject.Group,c.LinkedObject.Document==a.LinkedObject.Document,a.Placement.Base.x,a.Placement.Base.y,a.Placement.Base.z,c.Placement.Base.x,c.Placement.Base.y,c.Placement.Base.z,c.LinkedObject is not None,a.LinkedObject is not None,a.Visibility,c.Visibility)"

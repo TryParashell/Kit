@@ -6,12 +6,18 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from typing import TYPE_CHECKING, ClassVar
+
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
 # spatial vectors give every geometry subsystem one coordinate contract
 @ModelDataMut
 class SpaceVector(ModelBase):
-    XCoord: float
-    YCoord: float
-    ZCoord: float
+    x: float
+    y: float
+    z: float
+    if TYPE_CHECKING:
+        XCoord: ClassVar[float]
+        YCoord: ClassVar[float]
+        ZCoord: ClassVar[float]

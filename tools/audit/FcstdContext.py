@@ -11,7 +11,6 @@ from __future__ import annotations
 import sys as System
 from pathlib import Path as FilePath
 
-
 # repository location keeps reverse engineering tools independent from package installation
 KRepositoryRoot = FilePath(__file__).resolve().parents[2]
 

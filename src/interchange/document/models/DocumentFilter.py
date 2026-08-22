@@ -27,14 +27,14 @@ def FilterPayloads(
     KeepPayloads: bool,
 ) -> tuple[BrepPayload, ...]:
     PayloadValues: list[BrepPayload] = []
-    for PayloadValue in DocumentValue.BrepPayloads:
-        IsExcluded = (
-            PayloadValue.ValueRole == PayloadRole.KBrep and not IncludeBrep
-        ) or (PayloadValue.ValueRole == PayloadRole.KTessellation and not IncludeMesh)
+    for PayloadValue in DocumentValue.brep_payloads:
+        IsExcluded = (PayloadValue.role == PayloadRole.KBrep and not IncludeBrep) or (
+            PayloadValue.role == PayloadRole.KTessellation and not IncludeMesh
+        )
         if not IsExcluded:
             PayloadValues.append(PayloadValue)
         elif KeepPayloads:
-            PayloadValues.append(ReplaceValue(PayloadValue, PayloadData=None))
+            PayloadValues.append(ReplaceValue(PayloadValue, data=None))
     return tuple(PayloadValues)
 
 
@@ -48,7 +48,7 @@ def FilterDocument(
     **LegacyValues: bool,
 ) -> CadDocument:
     from interchange.document.models.DocumentCaps import GetRetainedCaps
-    from interchange.document.models.DocumentModel import CadDocument
+    from interchange.document.validation.DocumentBoundary import GetDocument
 
     RemainingValues = dict(LegacyValues)
     if "include_brep" in RemainingValues:
@@ -62,44 +62,45 @@ def FilterDocument(
         raise TypeError(
             f"FilterDocument got an unexpected keyword argument {UnknownName!r}"
         )
-    AssemblyValue = DocumentValue.Assembly
+    AssemblyValue = DocumentValue.assembly
     if AssemblyValue is not None:
         AssemblyValue = ReplaceValue(
             AssemblyValue,
-            Documents=tuple(
+            documents=tuple(
                 ReplaceValue(
                     ComponentValue,
-                    Document=(
+                    document=(
                         FilterDocument(
-                            ComponentValue.Document,
+                            NestedValue,
                             IncludeBrep=IncludeBrep,
                             IncludeMesh=IncludeMesh,
                             KeepPayloads=KeepPayloads,
                         )
-                        if isinstance(ComponentValue.Document, CadDocument)
-                        else ComponentValue.Document
+                        if (NestedValue := GetDocument(ComponentValue.document))
+                        is not None
+                        else ComponentValue.document
                     ),
                 )
-                for ComponentValue in AssemblyValue.Documents
+                for ComponentValue in AssemblyValue.documents
             ),
         )
     FilteredDoc = ReplaceValue(
         DocumentValue,
-        Meshes=DocumentValue.Meshes if IncludeMesh else (),
-        BrepPayloads=FilterPayloads(
+        meshes=DocumentValue.meshes if IncludeMesh else (),
+        brep_payloads=FilterPayloads(
             DocumentValue,
             IncludeBrep=IncludeBrep,
             IncludeMesh=IncludeMesh,
             KeepPayloads=KeepPayloads,
         ),
-        Assembly=AssemblyValue,
-        BrepModel=DocumentValue.BrepModel if IncludeBrep else None,
+        assembly=AssemblyValue,
+        brep=DocumentValue.brep if IncludeBrep else None,
     )
     return ReplaceValue(
         FilteredDoc,
-        Capabilities=GetRetainedCaps(
+        capabilities=GetRetainedCaps(
             FilteredDoc,
-            DocumentValue.Capabilities,
+            DocumentValue.capabilities,
             IncludeBrep=IncludeBrep,
             IncludeMesh=IncludeMesh,
         ),

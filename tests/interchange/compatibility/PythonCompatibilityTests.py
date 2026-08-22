@@ -7,12 +7,14 @@
 # to you under it immediately and permanently.
 
 from dataclasses import asdict as AsDict
-from dataclasses import fields as GetFields
+from dataclasses import is_dataclass as IsDataclass
 from enum import Enum as EnumBase
 from importlib import import_module as ImportModule
 from inspect import getattr_static as GetStaticAttr
 from inspect import signature as GetSignature
 import pickle as PickleCodec
+from types import FunctionType as FuncType
+from typing import Protocol, cast as TypeCast, runtime_checkable, TypeVar
 
 import interchange as InterchangeApi
 from interchange.serialization import KTypeRegistry
@@ -32,6 +34,24 @@ from tests.interchange.compatibility.CompatFieldsMesh import KCompatFieldsMesh
 from tests.interchange.compatibility.CompatFieldsTypes import KCompatFieldsTypes
 from tests.interchange.compatibility.PythonCompatTopNames import KPythonCompatTopNames
 
+# compatibility construction must validate dynamic calls before tests trust their concrete result
+CompatType = TypeVar("CompatType")
+
+
+# historical constructors remain callable even when reflected keywords differ from storage names
+def CallLegacy(
+    ClassType: type[CompatType],
+    *ArgValues: object,
+    **NamedValues: object,
+) -> CompatType:
+    FactoryValue: object = ClassType
+    if not callable(FactoryValue):
+        raise TypeError("compatibility constructor is not callable")
+    ResultValue: object = FactoryValue(*ArgValues, **NamedValues)
+    if not isinstance(ResultValue, ClassType):
+        raise TypeError("compatibility constructor returned the wrong model")
+    return ResultValue
+
 
 # split field expectations combine here so reflection checks use one immutable sequence
 KPythonCompatFields = (
@@ -43,6 +63,27 @@ KPythonCompatFields = (
     *KCompatFieldsMesh,
     *KCompatFieldsTypes,
 )
+
+
+# reflection assertions require the narrow dataclass field surface shared by supported records
+class CompatField(Protocol):
+    name: str
+    kw_only: bool
+
+
+# reflection assertions require the dataclass metadata exposed by every supported compatibility record
+class CompatDataclass(Protocol):
+    __match_args__: tuple[str, ...]
+    __annotations__: dict[str, object]
+    __dataclass_fields__: dict[str, CompatField]
+
+
+# descriptor checks need a runtime structural contract for wrapped class and static methods
+@runtime_checkable
+class MethodDescriptor(Protocol):
+
+    @property
+    def __func__(self) -> FuncType: ...  # lgtm[py/ineffectual-statement]
 
 
 # top level names are contractual because adapters historically imported them without module qualification
@@ -67,22 +108,28 @@ def CheckExports() -> None:
 def CheckClasses() -> None:
     for QualifiedName, FieldNames in KPythonCompatFields:
         ModuleName, ClassName = QualifiedName.rsplit(".", 1)
-        ClassType = getattr(ImportModule(ModuleName), ClassName)
+        ClassType = TypeCast(type[object], getattr(ImportModule(ModuleName), ClassName))
+        assert IsDataclass(ClassType)
+        DataclassType = TypeCast(type[CompatDataclass], ClassType)
         assert ClassType.__name__ == ClassName
         assert ClassType.__qualname__ == ClassName
         assert ClassType.__module__ == ModuleName
         assert (
-            tuple(FieldValue.name for FieldValue in GetFields(ClassType)) == FieldNames
+            tuple(
+                FieldValue.name
+                for FieldValue in DataclassType.__dataclass_fields__.values()
+            )
+            == FieldNames
         )
-        assert ClassType.__match_args__ == tuple(
+        assert DataclassType.__match_args__ == tuple(
             FieldValue.name
-            for FieldValue in GetFields(ClassType)
+            for FieldValue in DataclassType.__dataclass_fields__.values()
             if not FieldValue.kw_only
         )
-        assert tuple(ClassType.__annotations__) == tuple(
+        assert tuple(DataclassType.__annotations__) == tuple(
             FieldValue.name
-            for FieldValue in GetFields(ClassType)
-            if FieldValue.name in ClassType.__annotations__
+            for FieldValue in DataclassType.__dataclass_fields__.values()
+            if FieldValue.name in DataclassType.__annotations__
         )
 
 
@@ -104,11 +151,14 @@ def CheckMethods() -> None:
         ClassType = getattr(ImportModule(ModuleName), ClassName)
         for MethodName in MethodNames:
             DescriptorValue = GetStaticAttr(ClassType, MethodName)
-            MethodValue = (
+            RawMethod: object = (
                 DescriptorValue.__func__
-                if isinstance(DescriptorValue, (classmethod, staticmethod))
+                if isinstance(DescriptorValue, MethodDescriptor)
                 else DescriptorValue
             )
+            if not isinstance(RawMethod, FuncType):
+                raise TypeError(f"compatibility method {MethodName} is not a function")
+            MethodValue = RawMethod
             assert MethodValue.__name__ == MethodName
             assert MethodValue.__qualname__ == f"{ClassName}.{MethodName}"
             assert MethodValue.__module__ == ModuleName
@@ -132,11 +182,11 @@ def CheckEnumNames() -> None:
 
 # adapters require the exact historical constructor attribute and predicate contract
 def CheckAdapters() -> None:
-    ValuesSet = frozenset({InterchangeApi.Capability.PARAMETERS})
-    AdapterValue = InterchangeApi.AdapterCapabilities(values=ValuesSet)
+    ValuesSet = frozenset({InterchangeApi.Capability.KParameters})
+    AdapterValue = CallLegacy(InterchangeApi.AdapterCapabilities, values=ValuesSet)
     assert AdapterValue.values == ValuesSet
-    assert AdapterValue.supports(InterchangeApi.Capability.PARAMETERS)
-    assert not AdapterValue.supports(InterchangeApi.Capability.BREP)
+    assert AdapterValue.supports(InterchangeApi.Capability.KParameters)
+    assert not AdapterValue.supports(InterchangeApi.Capability.KBrep)
     assert (
         str(GetSignature(InterchangeApi.AdapterCapabilities))
         == "(values: 'frozenset[Capability]' = frozenset()) -> None"
@@ -146,10 +196,10 @@ def CheckAdapters() -> None:
 
 # historical global identities ensure existing pickle streams resolve after internal module splits
 def CheckPickle() -> None:
-    ValuesSet = frozenset({InterchangeApi.Capability.PARAMETERS})
+    ValuesSet = frozenset({InterchangeApi.Capability.KParameters})
     SourceValues = (
         InterchangeApi.Vector2(1.0, 2.0),
-        InterchangeApi.AdapterCapabilities(values=ValuesSet),
+        CallLegacy(InterchangeApi.AdapterCapabilities, values=ValuesSet),
         InterchangeApi.FeatureConfigurationState("default"),
         InterchangeApi.Matrix4(),
     )
@@ -163,8 +213,9 @@ def CheckPickle() -> None:
 def CheckOldPickle() -> None:
     ExpectedValues = (
         InterchangeApi.Vector2(1, 2),
-        InterchangeApi.AdapterCapabilities(
-            frozenset({InterchangeApi.Capability.PARAMETERS})
+        CallLegacy(
+            InterchangeApi.AdapterCapabilities,
+            frozenset({InterchangeApi.Capability.KParameters}),
         ),
         InterchangeApi.FeatureConfigurationState("x"),
         InterchangeApi.Matrix4(),

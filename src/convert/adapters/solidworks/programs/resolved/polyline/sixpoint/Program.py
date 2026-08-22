@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import math as MathLib
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
@@ -19,10 +21,13 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 )
 
 from .Registry import (
-    KFieldOwners,
-    KResolvedOps,
+    KFieldOwners as KFieldOwners,
+    KResolvedOps as KResolvedOps,
 )
 
+
+# compatibility binding preserves the generated owner catalog facade
+FieldOwners = KFieldOwners
 
 # six unique vertices drive the closed line chain without duplicated endpoints
 KPointOffsets = (
@@ -144,6 +149,6 @@ def PadFieldMap(
 
 
 # callers can replace semantic fields while retaining recovered object framing
-def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
+def EncodeProgram(Overrides: Mapping[int, FieldType] | None = None) -> bytes:
     ExpectedLength = KResolvedOps[-1][0] + KResolvedOps[-1][1]
     return ReplayResolved(KResolvedOps, ExpectedLength, Overrides, KPrimitiveFormats)

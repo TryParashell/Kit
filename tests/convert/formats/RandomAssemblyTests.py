@@ -13,21 +13,22 @@ import itertools as Itertools
 import os as OsModule
 from pathlib import Path as PathValue, PureWindowsPath
 import subprocess as Subprocess
+from typing import cast as CastValue
 import xml.etree.ElementTree as ElementTree
 import zipfile as Zipfile
 
 import pytest as Pytest
 from convert.Security.PathBoundary import ResolveTemp
 from convert.Security.ProgramBoundary import GetFreecadPath
-
-from convert import open_document as OpenDocument, write_document as WriteDocument
-from interchange import (
-    CadDocument,
-    ComponentKind,
-    Matrix4 as MatrixFour,
-    PayloadRole,
-    ValueKind,
-)
+from convert.api.ApiOpen import OpenDocument
+from convert.api.ApiWrite import WriteDocument
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyEnums import ComponentKind
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.TransformMatrix import TransformMatrix
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.enums.EnumValues import ValueKind
+from interchange.payloads.PayloadRoles import PayloadRole
 
 # this binding exists because shared behavior needs one stable value
 KRandom = PathValue(__file__).parents[3] / "examples" / "Random" / "V8_engine.SLDASM"
@@ -43,12 +44,12 @@ def RandomDocument() -> CadDocument:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Multiply(LeftValue: MatrixFour, Right: MatrixFour) -> MatrixFour:
-    return MatrixFour(
+def Multiply(LeftValue: TransformMatrix, Right: TransformMatrix) -> TransformMatrix:
+    return TransformMatrix(
         tuple(
             sum(
-                LeftValue.values[RowValue * 4 + Index]
-                * Right.values[Index * 4 + Column]
+                LeftValue.Values[RowValue * 4 + Index]
+                * Right.Values[Index * 4 + Column]
                 for Index in range(4)
             )
             for RowValue in range(4)
@@ -60,35 +61,37 @@ def Multiply(LeftValue: MatrixFour, Right: MatrixFour) -> MatrixFour:
 # this definition exists because focused behavior needs one stable owner
 def ExpandedI(
     Document: CadDocument,
-) -> tuple[tuple[object, MatrixFour], ...]:
-    Assembly = Document.assembly
+) -> tuple[tuple[ComponentInst, TransformMatrix], ...]:
+    Assembly = Document.Assembly
     assert Assembly is not None
-    Children: dict[str, list[object]] = {}
-    for Instance in Assembly.instances:
-        Children.setdefault(Instance.owner_definition_id, []).append(Instance)
-    Result: list[tuple[object, MatrixFour]] = []
+    Children: dict[str, list[ComponentInst]] = {}
+    for Instance in Assembly.Instances:
+        Children.setdefault(Instance.OwnerDefinitionId, []).append(Instance)
+    Result: list[tuple[ComponentInst, TransformMatrix]] = []
 
     # this definition exists because focused behavior needs one stable owner
-    def Visit(DefinitionId: str, Parent: MatrixFour) -> None:
+    def Visit(DefinitionId: str, Parent: TransformMatrix) -> None:
         for Instance in Children.get(DefinitionId, []):
-            World = Multiply(Parent, Instance.transform)
+            World = Multiply(Parent, Instance.Transform)
             Result.append((Instance, World))
-            Visit(Instance.definition_id, World)
+            Visit(Instance.DefinitionId, World)
 
-    Visit(Assembly.root_definition_id, MatrixFour())
+    Visit(Assembly.RootDefinitionId, TransformMatrix())
     return tuple(Result)
 
 
 # this definition exists because focused behavior needs one stable owner
 def DocumentCounts(Document: CadDocument) -> tuple[int, int]:
-    Sketches = len(Document.sketches)
-    Timeline = len(Document.feature_timeline)
-    Assembly = Document.assembly
+    Sketches = len(Document.Sketches)
+    Timeline = len(Document.FeatureTimeline)
+    Assembly = Document.Assembly
     if Assembly is None:
         return Sketches, Timeline
-    Documents = {ItemValue.id: ItemValue.document for ItemValue in Assembly.documents}
-    for Definition in Assembly.definitions:
-        Child = Documents.get(Definition.document_id)
+    Documents = {
+        ItemValue.EntityId: ItemValue.Document for ItemValue in Assembly.Documents
+    }
+    for Definition in Assembly.Definitions:
+        Child = Documents.get(Definition.DocumentId)
         if Child is None:
             continue
         ChildSketches, ChildTimeline = DocumentCounts(Child)
@@ -99,22 +102,22 @@ def DocumentCounts(Document: CadDocument) -> tuple[int, int]:
 
 # this definition exists because focused behavior needs one stable owner
 def PlacedMB(Document: CadDocument) -> tuple[float, ...]:
-    Assembly = Document.assembly
+    Assembly = Document.Assembly
     assert Assembly is not None
-    Definitions = {ItemValue.id: ItemValue for ItemValue in Assembly.definitions}
-    Meshes = {ItemValue.id: ItemValue for ItemValue in Document.meshes}
+    Definitions = {ItemValue.EntityId: ItemValue for ItemValue in Assembly.Definitions}
+    Meshes = {ItemValue.EntityId: ItemValue for ItemValue in Document.Meshes}
     CornersByDefinition: dict[str, tuple[tuple[float, float, float], ...]] = {}
-    for Definition in Assembly.definitions:
+    for Definition in Assembly.Definitions:
         Points = [
-            (Vertex.x, Vertex.y, Vertex.z)
-            for MeshId in Definition.mesh_ids
-            for Vertex in Meshes[MeshId].vertices
+            (Vertex.XCoord, Vertex.YCoord, Vertex.ZCoord)
+            for MeshId in Definition.MeshIds
+            for Vertex in Meshes[MeshId].Vertices
         ]
         if not Points:
             continue
         Minimum = tuple(min(Point[Index] for Point in Points) for Index in range(3))
         Maximum = tuple(max(Point[Index] for Point in Points) for Index in range(3))
-        CornersByDefinition[Definition.id] = tuple(
+        CornersByDefinition[Definition.EntityId] = tuple(
             Itertools.product(
                 (Minimum[0], Maximum[0]),
                 (Minimum[1], Maximum[1]),
@@ -122,10 +125,10 @@ def PlacedMB(Document: CadDocument) -> tuple[float, ...]:
             )
         )
     Placed = [
-        World.transform_point(Corner)
+        World.TransformPoint(Corner)
         for Instance, World in ExpandedI(Document)
-        if Definitions[Instance.definition_id].kind == ComponentKind.PART
-        for Corner in CornersByDefinition[Instance.definition_id]
+        if Definitions[Instance.DefinitionId].EntityKind == ComponentKind.KPart
+        for Corner in CornersByDefinition[Instance.DefinitionId]
     ]
     return tuple(
         [min(Point[Index] for Point in Placed) for Index in range(3)]
@@ -135,52 +138,50 @@ def PlacedMB(Document: CadDocument) -> tuple[float, ...]:
 
 # this helper verifies root document history geometry and payload counts
 def AssertRootStats(Document: CadDocument) -> None:
-    Assembly = Document.assembly
+    Assembly = Document.Assembly
     assert Assembly is not None
-    assert (len(Document.sketches), len(Document.feature_timeline)) == (3, 327)
+    assert (len(Document.Sketches), len(Document.FeatureTimeline)) == (3, 327)
     assert len(
-        {
-            Feature.attributes["native_object_id"]
-            for Feature in Document.feature_timeline
-        }
-    ) == len(Document.feature_timeline)
+        {Feature.Attributes["native_object_id"] for Feature in Document.FeatureTimeline}
+    ) == len(Document.FeatureTimeline)
     assert all(
-        Feature.attributes["native_type"] and Feature.attributes["xml_tag"]
-        for Feature in Document.feature_timeline
+        Feature.Attributes["native_type"] and Feature.Attributes["xml_tag"]
+        for Feature in Document.FeatureTimeline
     )
-    assert (len(Document.parameters), len(Document.brep_payloads)) == (3, 15)
-    assert Counter(Payload.role for Payload in Document.brep_payloads) == {
-        PayloadRole.BREP: 12,
-        PayloadRole.ASSEMBLY_STRUCTURE: 3,
+    assert (len(Document.Parameters), len(Document.BrepPayloads)) == (3, 15)
+    assert Counter(Payload.ValueRole for Payload in Document.BrepPayloads) == {
+        PayloadRole.KBrep: 12,
+        PayloadRole.KAssemblyStructure: 3,
     }
 
 
 # this helper verifies expanded assembly structure and source format counts
 def AssertAsmStats(Document: CadDocument) -> None:
-    Assembly = Document.assembly
+    Assembly = Document.Assembly
     assert Assembly is not None
     assert (
-        len(Assembly.definitions),
-        len(Assembly.instances),
-        len(Assembly.documents),
-        len(Document.meshes),
+        len(Assembly.Definitions),
+        len(Assembly.Instances),
+        len(Assembly.Documents),
+        len(Document.Meshes),
     ) == (68, 288, 53, 65)
-    assert Counter(Definition.kind for Definition in Assembly.definitions) == {
-        ComponentKind.PART: 65,
-        ComponentKind.ASSEMBLY: 3,
+    assert Counter(Definition.EntityKind for Definition in Assembly.Definitions) == {
+        ComponentKind.KPart: 65,
+        ComponentKind.KAssembly: 3,
     }
     Expanded = ExpandedI(Document)
-    Definitions = {ItemValue.id: ItemValue for ItemValue in Assembly.definitions}
+    Definitions = {ItemValue.EntityId: ItemValue for ItemValue in Assembly.Definitions}
     assert len(Expanded) == 358
     assert (
         sum(
-            Definitions[Instance.definition_id].kind == ComponentKind.PART
-            for Instance, ValueA in Expanded
+            World.IsFinite()
+            and Definitions[Instance.DefinitionId].EntityKind == ComponentKind.KPart
+            for Instance, World in Expanded
         )
         == 342
     )
     assert Counter(
-        ItemValue.document.source.format_id for ItemValue in Assembly.documents
+        ItemValue.Document.Source.FormatId for ItemValue in Assembly.Documents
     ) == {
         "solidworks.sldprt": 51,
         "solidworks.sldasm": 2,
@@ -189,70 +190,73 @@ def AssertAsmStats(Document: CadDocument) -> None:
 
 # this helper verifies linked equation variables and their driven parameters
 def AssertVariables(Document: CadDocument) -> None:
-    Assembly = Document.assembly
+    Assembly = Document.Assembly
     assert Assembly is not None
     GlobalVariables = {
-        (PathValue(str(ItemValue.document.source.path)).name, Parameter.name): Parameter
-        for ItemValue in Assembly.documents
-        for Parameter in ItemValue.document.parameters
-        if Parameter.id.startswith("sldprt:parameter:equation:")
+        (
+            PathValue(str(ItemValue.Document.Source.FilePath)).name,
+            Parameter.EntityName,
+        ): Parameter
+        for ItemValue in Assembly.Documents
+        for Parameter in ItemValue.Document.Parameters
+        if Parameter.EntityId.startswith("sldprt:parameter:equation:")
     }
     assert {KeyValue[1] for KeyValue in GlobalVariables} == {"d", "r1", "r2"}
     assert {KeyValue[0] for KeyValue in GlobalVariables} == {"Camshaft.SLDPRT"}
     assert {
-        NameValue: GlobalVariables[("Camshaft.SLDPRT", NameValue)].value.value
+        NameValue: GlobalVariables[("Camshaft.SLDPRT", NameValue)].Value.Value
         for NameValue in ("d", "r1", "r2")
     } == {"d": 8.0, "r1": 18.0, "r2": 10.0}
     assert all(
-        Parameter.value.kind is ValueKind.NUMBER
+        Parameter.Value.EntityKind is ValueKind.KNumber
         for Parameter in GlobalVariables.values()
     )
-    GlobalVariableIds = {ItemValue.id for ItemValue in GlobalVariables.values()}
+    GlobalVariableIds = {ItemValue.EntityId for ItemValue in GlobalVariables.values()}
     Driven = [
         Parameter
-        for ItemValue in Assembly.documents
-        for Parameter in ItemValue.document.parameters
-        if Parameter.expression is not None
-        and GlobalVariableIds & set(Parameter.expression.parameter_ids)
+        for ItemValue in Assembly.Documents
+        for Parameter in ItemValue.Document.Parameters
+        if Parameter.Expression is not None
+        and GlobalVariableIds & set(Parameter.Expression.ParameterIds)
     ]
     assert len(Driven) == 22
 
 
 # this helper verifies aggregate linked document and nested assembly data
 def AssertLinkDocs(Document: CadDocument) -> None:
-    Assembly = Document.assembly
+    Assembly = Document.Assembly
     assert Assembly is not None
     LinkedCounts = (
-        sum(len(ItemValue.document.sketches) for ItemValue in Assembly.documents),
+        sum(len(ItemValue.Document.Sketches) for ItemValue in Assembly.Documents),
         sum(
-            len(ItemValue.document.feature_timeline) for ItemValue in Assembly.documents
+            len(ItemValue.Document.FeatureTimeline) for ItemValue in Assembly.Documents
         ),
-        sum(len(ItemValue.document.parameters) for ItemValue in Assembly.documents),
-        sum(len(ItemValue.document.brep_payloads) for ItemValue in Assembly.documents),
+        sum(len(ItemValue.Document.Parameters) for ItemValue in Assembly.Documents),
+        sum(len(ItemValue.Document.BrepPayloads) for ItemValue in Assembly.Documents),
     )
     assert LinkedCounts == (391, 2147, 1695, 303)
     assert Counter(
-        Payload.role
-        for ItemValue in Assembly.documents
-        for Payload in ItemValue.document.brep_payloads
+        Payload.ValueRole
+        for ItemValue in Assembly.Documents
+        for Payload in ItemValue.Document.BrepPayloads
     ) == {
-        PayloadRole.BREP: 301,
-        PayloadRole.ASSEMBLY_STRUCTURE: 2,
+        PayloadRole.KBrep: 301,
+        PayloadRole.KAssemblyStructure: 2,
     }
     assert LinkedCounts[:2] == (
-        Assembly.attributes["linked_sketch_count"],
-        Assembly.attributes["linked_feature_count"],
+        Assembly.Attributes["linked_sketch_count"],
+        Assembly.Attributes["linked_feature_count"],
     )
-    Nested = {
-        PureWindowsPath(
-            ItemValue.document.source.path
-        ).name: ItemValue.document.assembly
-        for ItemValue in Assembly.documents
-        if ItemValue.document.assembly is not None
-    }
+    Nested: dict[str, AssemblyData] = {}
+    for ItemValue in Assembly.Documents:
+        NestedAssembly = ItemValue.Document.Assembly
+        if NestedAssembly is not None:
+            Nested[PureWindowsPath(ItemValue.Document.Source.FilePath).name] = (
+                NestedAssembly
+            )
     assert set(Nested) == {"Conrod.SLDASM", "Piston.SLDASM"}
-    assert len(Nested["Conrod.SLDASM"].mates) == 13
-    assert len(Nested["Piston.SLDASM"].mates) == 6
+    assert len(Nested["Conrod.SLDASM"].Mates) == 13
+    assert len(Nested["Piston.SLDASM"].Mates) == 6
     assert DocumentCounts(Document) == (394, 2474)
 
 
@@ -261,8 +265,8 @@ def TestRAPSRCNG(
     RandomDocument: CadDocument,
 ) -> None:
     Document = RandomDocument
-    assert Document.source.format_id == "solidworks.sldasm"
-    assert Document.validate() == ()
+    assert Document.Source.FormatId == "solidworks.sldasm"
+    assert Document.GetErrors() == ()
     AssertRootStats(Document)
     AssertAsmStats(Document)
     AssertVariables(Document)
@@ -273,57 +277,66 @@ def TestRAPSRCNG(
 def TestRAPMMAMT(
     RandomDocument: CadDocument,
 ) -> None:
-    Assembly = RandomDocument.assembly
+    Assembly = RandomDocument.Assembly
     assert Assembly is not None
-    assert sum(len(MeshValue.vertices) for MeshValue in RandomDocument.meshes) == 492148
+    assert sum(len(MeshValue.Vertices) for MeshValue in RandomDocument.Meshes) == 492148
     assert (
-        sum(len(MeshValue.triangles) for MeshValue in RandomDocument.meshes) == 391218
+        sum(len(MeshValue.Triangles) for MeshValue in RandomDocument.Meshes) == 391218
     )
     PartDefinitions = [
         ItemValue
-        for ItemValue in Assembly.definitions
-        if ItemValue.kind == ComponentKind.PART
+        for ItemValue in Assembly.Definitions
+        if ItemValue.EntityKind == ComponentKind.KPart
     ]
     assert len(PartDefinitions) == 65
-    assert all(len(ItemValue.mesh_ids) == 1 for ItemValue in PartDefinitions)
+    assert all(len(ItemValue.MeshIds) == 1 for ItemValue in PartDefinitions)
     assert {
-        MeshId for ItemValue in PartDefinitions for MeshId in ItemValue.mesh_ids
-    } == {MeshValue.id for MeshValue in RandomDocument.meshes}
+        MeshId for ItemValue in PartDefinitions for MeshId in ItemValue.MeshIds
+    } == {MeshValue.EntityId for MeshValue in RandomDocument.Meshes}
     assert (
-        len(Assembly.mate_entities),
-        len(Assembly.mates),
-        len(Assembly.mate_groups),
+        len(Assembly.MateEntities),
+        len(Assembly.Mates),
+        len(Assembly.MateGroups),
     ) == (1261, 632, 3)
-    assert Counter(MateValue.owner_definition_id for MateValue in Assembly.mates) == {
+    assert Counter(MateValue.OwnerDefinitionId for MateValue in Assembly.Mates) == {
         "sldasm:definition:2": 613,
         "sldasm:definition:218": 6,
         "sldasm:definition:231": 13,
     }
-    assert [len(Group.mate_ids) for Group in Assembly.mate_groups] == [6, 2, 9]
-    for Instance in Assembly.instances:
-        Native = Instance.attributes["native_transform"]
+    assert [len(Group.MateIds) for Group in Assembly.MateGroups] == [6, 2, 9]
+    for Instance in Assembly.Instances:
+        Native = Instance.Attributes["native_transform"]
+        if not isinstance(Native, tuple):
+            raise TypeError("native transform must contain sixteen values")
+        NativeItems = CastValue(tuple[object, ...], Native)
+        if len(NativeItems) != 16 or not all(
+            isinstance(Value, (int, float)) and not isinstance(Value, bool)
+            for Value in NativeItems
+        ):
+            raise TypeError("native transform must contain sixteen numeric values")
+        NativeValues = CastValue(tuple[float, ...], NativeItems)
         Expected = (
-            Native[0],
-            Native[4],
-            Native[8],
-            Native[12] * 1000.0,
-            Native[1],
-            Native[5],
-            Native[9],
-            Native[13] * 1000.0,
-            Native[2],
-            Native[6],
-            Native[10],
-            Native[14] * 1000.0,
+            NativeValues[0],
+            NativeValues[4],
+            NativeValues[8],
+            NativeValues[12] * 1000.0,
+            NativeValues[1],
+            NativeValues[5],
+            NativeValues[9],
+            NativeValues[13] * 1000.0,
+            NativeValues[2],
+            NativeValues[6],
+            NativeValues[10],
+            NativeValues[14] * 1000.0,
             0.0,
             0.0,
             0.0,
-            Native[15],
+            NativeValues[15],
         )
-        assert Instance.transform.values == Pytest.approx(Expected, abs=1e-12)
+        assert Instance.Transform.Values == Pytest.approx(Expected, abs=1e-12)
     assert max(
-        abs(Instance.transform.values[Index])
-        for Instance in Assembly.instances
+        abs(Instance.Transform.Values[Index])
+        for Instance in Assembly.Instances
         for Index in (3, 7, 11)
     ) == Pytest.approx(395.0340546095202)
     assert PlacedMB(RandomDocument) == Pytest.approx(
@@ -358,25 +371,35 @@ def CountTimeline(Output: PathValue, Components: tuple[PathValue, ...]) -> int:
 
 
 # this helper extracts the root assembly link collections under test
-def RootLinkData(RootValue: ElementTree.Element):
+def RootLinkData(
+    RootValue: ElementTree.Element,
+) -> tuple[
+    tuple[ElementTree.Element, ...],
+    tuple[ElementTree.Element, ...],
+    set[str],
+    dict[str, ElementTree.Element],
+]:
     Objects = {
         ItemValue.get("name", ""): ItemValue.get("type", "")
         for ItemValue in RootValue.findall("./Objects/Object")
     }
-    AssemblyLinks = [
+    AssemblyLinks = tuple(
         ItemValue
         for ItemValue in RootValue.findall("./ObjectData/Object")
         if Objects.get(ItemValue.get("name", "")) == "Assembly::AssemblyLink"
-    ]
-    Occurrences = [
+    )
+    Occurrences = tuple(
         ItemValue
         for ItemValue in RootValue.findall("./ObjectData/Object")
         if ItemValue.find("./Properties/Property[@name='InstanceId']") is not None
-    ]
-    LinkedFiles = {
-        ItemValue.find("./Properties/Property[@name='LinkedObject']/XLink").get("file")
-        for ItemValue in AssemblyLinks
-    }
+    )
+    LinkedFiles: set[str] = set()
+    for ItemValue in AssemblyLinks:
+        LinkValue = ItemValue.find("./Properties/Property[@name='LinkedObject']/XLink")
+        assert LinkValue is not None
+        Filename = LinkValue.get("file")
+        assert Filename is not None
+        LinkedFiles.add(Filename)
     DataValue = {
         ItemValue.get("name", ""): ItemValue
         for ItemValue in RootValue.findall("./ObjectData/Object")
@@ -385,52 +408,61 @@ def RootLinkData(RootValue: ElementTree.Element):
 
 
 # this helper verifies every root assembly proxy targets matching component data
-def AssertProxies(AssemblyLinks, DataValue, TmpPath: PathValue) -> None:
+def AssertProxies(
+    AssemblyLinks: tuple[ElementTree.Element, ...],
+    DataValue: dict[str, ElementTree.Element],
+    TmpPath: PathValue,
+) -> None:
     ProxyCount = 0
     ComponentRoots: dict[str, ElementTree.Element] = {}
     for AssemblyLink in AssemblyLinks:
         ParentLink = AssemblyLink.find(
             "./Properties/Property[@name='LinkedObject']/XLink"
         )
-        Children = [
-            DataValue[ItemValue.get("value")]
-            for ItemValue in AssemblyLink.findall(
-                "./Properties/Property[@name='Group']/LinkList/Link"
-            )
-        ]
+        assert ParentLink is not None
+        ParentFile = ParentLink.get("file")
+        assert ParentFile is not None
+        Children: list[ElementTree.Element] = []
+        for ItemValue in AssemblyLink.findall(
+            "./Properties/Property[@name='Group']/LinkList/Link"
+        ):
+            ChildName = ItemValue.get("value")
+            assert ChildName is not None
+            Children.append(DataValue[ChildName])
         assert Children
         ProxyCount += len(Children)
-        ComponentRoot = ComponentRoots.get(ParentLink.get("file"))
+        ComponentRoot = ComponentRoots.get(ParentFile)
         if ComponentRoot is None:
-            ComponentRoot = ReadDocRoot(TmpPath / PathValue(ParentLink.get("file")))
-            ComponentRoots[ParentLink.get("file")] = ComponentRoot
+            ComponentRoot = ReadDocRoot(TmpPath / ParentFile)
+            ComponentRoots[ParentFile] = ComponentRoot
         for Child in Children:
             Linked = Child.find("./Properties/Property[@name='LinkedObject']/XLink")
-            assert Linked.get("file") == ParentLink.get("file")
+            assert Linked is not None
+            assert Linked.get("file") == ParentFile
             assert Linked.get("stamp") == ParentLink.get("stamp")
-            Source = ComponentRoot.find(
-                f"./ObjectData/Object[@name='{Linked.get('name')}']"
-            )
+            LinkedName = Linked.get("name")
+            assert LinkedName is not None
+            Source = ComponentRoot.find(f"./ObjectData/Object[@name='{LinkedName}']")
             assert Source is not None
             assert Source.find("./Properties/Property[@name='InstanceId']") is not None
     assert ProxyCount == 80
 
 
 # this helper verifies nested component links resolve to native part features
-def AssertCompLinks(LinkedFiles, TmpPath: PathValue) -> None:
+def AssertCompLinks(LinkedFiles: set[str], TmpPath: PathValue) -> None:
     for Filename in LinkedFiles:
         Component = TmpPath / PathValue(Filename)
         Restored = OpenDocument(Component)
-        assert Restored.assembly is not None
+        assert Restored.Assembly is not None
         ComponentRoot = ReadDocRoot(Component)
         Target = ComponentRoot.find(
             "./ObjectData/Object[@name='KitMetadata']/Properties/"
             "Property[@name='ExternalLinkTarget']/String"
         )
         assert Target is not None
-        TargetObject = ComponentRoot.find(
-            f"./Objects/Object[@name='{Target.get('value')}']"
-        )
+        TargetName = Target.get("value")
+        assert TargetName is not None
+        TargetObject = ComponentRoot.find(f"./Objects/Object[@name='{TargetName}']")
         assert TargetObject is not None
         assert TargetObject.get("type") == "Assembly::AssemblyObject"
         ComponentTypes = {
@@ -449,12 +481,13 @@ def AssertCompLinks(LinkedFiles, TmpPath: PathValue) -> None:
                 "./Properties/Property[@name='LinkedObject']/XLink"
             )
             assert Linked is not None
-            assert Linked.get("file")
-            LinkedComponent = Component.parent / Linked.get("file")
+            LinkedFile = Linked.get("file")
+            assert LinkedFile is not None
+            LinkedComponent = Component.parent / LinkedFile
             LinkedRoot = ReadDocRoot(LinkedComponent)
-            LinkedTarget = LinkedRoot.find(
-                f"./Objects/Object[@name='{Linked.get('name')}']"
-            )
+            LinkedName = Linked.get("name")
+            assert LinkedName is not None
+            LinkedTarget = LinkedRoot.find(f"./Objects/Object[@name='{LinkedName}']")
             assert LinkedTarget is not None
             assert LinkedTarget.get("type") == "Part::Feature"
 
@@ -462,14 +495,14 @@ def AssertCompLinks(LinkedFiles, TmpPath: PathValue) -> None:
 # this test verifies the emitted freecad assembly and every external link
 def TestRAWECF(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
     Output = TmpPath / "V8_engine.FCStd"
-    Result = WriteDocument(RandomDocument, Output, allow_carrier=True)
-    assert Result.application_usable is True
-    assert Result.vendor_loadable is True
-    assert Result.near_lossless is False
+    Result = WriteDocument(RandomDocument, Output, AllowCarrier=True)
+    assert Result.IsAppUsable is True
+    assert Result.IsVendorLoadable is True
+    assert Result.IsNearLossless is False
     ComponentDirectory = TmpPath / "V8_engine"
     Components = tuple(ComponentDirectory.glob("*.FCStd"))
     assert len(Components) == 67
-    assert Result.metadata["component_file_count"] == 67
+    assert Result.MetadataMap["component_file_count"] == 67
     assert CountTimeline(Output, Components) == 2474
     RootValue = ReadDocRoot(Output)
     AssemblyLinks, Occurrences, LinkedFiles, DataValue = RootLinkData(RootValue)
@@ -478,16 +511,15 @@ def TestRAWECF(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
         for ItemValue in DataValue.values()
         if ItemValue.find("./Properties/Property[@name='RootDefinitionId']") is not None
     )
-    DirectOccurrences = [
-        DataValue[ItemValue.get("value")]
-        for ItemValue in AssemblyRoot.findall(
-            "./Properties/Property[@name='Group']/LinkList/Link"
-        )
-        if DataValue[ItemValue.get("value")].find(
-            "./Properties/Property[@name='InstanceId']"
-        )
-        is not None
-    ]
+    DirectOccurrences: list[ElementTree.Element] = []
+    for ItemValue in AssemblyRoot.findall(
+        "./Properties/Property[@name='Group']/LinkList/Link"
+    ):
+        OccurrenceName = ItemValue.get("value")
+        assert OccurrenceName is not None
+        Occurrence = DataValue[OccurrenceName]
+        if Occurrence.find("./Properties/Property[@name='InstanceId']") is not None:
+            DirectOccurrences.append(Occurrence)
     assert len(AssemblyLinks) == 16
     assert len(DirectOccurrences) == 278
     assert len(Occurrences) == 358

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyEnums import MateAlignment, MateKind
@@ -21,27 +21,41 @@ from interchange.records.RecordProvenance import Provenance
 # mate constraints preserve relationships values and bindings across systems
 @ModelDataMut(
     DefaultMap={
-        "Order": 0,
-        "Value": None,
-        "ParameterIds": (),
-        "Alignment": MateAlignment.KUnknown,
-        "IsSuppressed": False,
-        "IsDriving": True,
-        "Provenance": None,
+        "order": 0,
+        "value": None,
+        "parameter_ids": (),
+        "alignment": MateAlignment.KUnknown,
+        "suppressed": False,
+        "driving": True,
+        "provenance": None,
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class MateConstraint(ModelBase):
-    EntityId: str
-    EntityName: str
-    EntityKind: MateKind | str
-    OwnerDefinitionId: str
-    EntityIds: tuple[str, ...]
-    Order: int
-    Value: ParameterValue | None
-    ParameterIds: tuple[str, ...]
-    Alignment: MateAlignment | str
-    IsSuppressed: bool
-    IsDriving: bool
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    kind: MateKind | str
+    owner_definition_id: str
+    entity_ids: tuple[str, ...]
+    order: int
+    value: ParameterValue | None
+    parameter_ids: tuple[str, ...]
+    alignment: MateAlignment | str
+    suppressed: bool
+    driving: bool
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        EntityKind: ClassVar[MateKind | str]
+        OwnerDefinitionId: ClassVar[str]
+        EntityIds: ClassVar[tuple[str, ...]]
+        Order: ClassVar[int]
+        Value: ClassVar[ParameterValue | None]
+        ParameterIds: ClassVar[tuple[str, ...]]
+        Alignment: ClassVar[MateAlignment | str]
+        IsSuppressed: ClassVar[bool]
+        IsDriving: ClassVar[bool]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

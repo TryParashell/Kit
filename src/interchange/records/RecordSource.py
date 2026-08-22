@@ -8,8 +8,9 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar
 from typing import Mapping as TypeMap
+from typing import TYPE_CHECKING
 
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
@@ -17,13 +18,20 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 # source identity anchors every portable document to original bytes and application
 @ModelDataMut(
-    DefaultMap={"ContainerVersion": "", "ApplicationVersion": ""},
-    FactoryMap={"Attributes": FreezeMapping},
+    DefaultMap={"container_version": "", "application_version": ""},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class CadSource(ModelBase):
-    FormatId: str
-    FilePath: str
-    SourceDigest: str
-    ContainerVersion: str
-    ApplicationVersion: str
-    Attributes: TypeMap[str, AnyValue]
+    format_id: str
+    path: str
+    sha256: str
+    container_version: str
+    application_version: str
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        FormatId: ClassVar[str]
+        FilePath: ClassVar[str]
+        SourceDigest: ClassVar[str]
+        ContainerVersion: ClassVar[str]
+        ApplicationVersion: ClassVar[str]
+        Attributes: ClassVar[TypeMap[str, object]]

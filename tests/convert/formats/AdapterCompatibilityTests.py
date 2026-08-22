@@ -29,16 +29,40 @@ from convert.adapters.json import JsonAdapter
 from interchange import Capability
 
 
+# dynamic compatibility checks need runtime invocation without weakening production contracts
+def CallCompat(
+    TargetValue: object,
+    *ArgValues: object,
+    **NamedValues: object,
+) -> object:
+    if not callable(TargetValue):
+        raise TypeError("compatibility target must be callable")
+    return TargetValue(*ArgValues, **NamedValues)
+
+
+# protocol metadata remains intentionally runtime owned across supported python versions
+def GetTypeMember(ClassValue: type[object], MemberName: str) -> object:
+    return Typing.cast(object, type.__getattribute__(ClassValue, MemberName))
+
+
 # this definition exists because focused behavior needs one stable owner
 def CheckProtocols() -> None:
     for ProtocolType in (CadReaderAdapter, CadWriterAdapter, CadAdapter):
         assert ProtocolType.__module__ == "convert.adapters.base"
         assert Pickle.loads(Pickle.dumps(ProtocolType)) is ProtocolType
-        assert ProtocolType._is_runtime_protocol
+        assert GetTypeMember(ProtocolType, "_is_runtime_protocol") is True
     if hasattr(CadReaderAdapter, "__protocol_attrs__"):
-        assert CadReaderAdapter.__protocol_attrs__ == {"info", "probe", "read"}
+        assert GetTypeMember(CadReaderAdapter, "__protocol_attrs__") == {
+            "info",
+            "probe",
+            "read",
+        }
     if hasattr(CadWriterAdapter, "__protocol_attrs__"):
-        assert CadWriterAdapter.__protocol_attrs__ == {"info", "supports", "write"}
+        assert GetTypeMember(CadWriterAdapter, "__protocol_attrs__") == {
+            "info",
+            "supports",
+            "write",
+        }
     assert isinstance(JsonAdapter(), CadAdapter)
     assert isinstance(JsonAdapter(), CadReaderAdapter)
     assert isinstance(JsonAdapter(), CadWriterAdapter)
@@ -94,10 +118,11 @@ def CheckInfo() -> None:
     for ProtocolValue in range(Pickle.HIGHEST_PROTOCOL + 1):
         EncodedData = Pickle.dumps(InfoData, protocol=ProtocolValue)
         assert Pickle.loads(EncodedData) == InfoData
-    assert (
-        DataClasses.replace(InfoData, format_id="format.other").format_id
-        == "format.other"
+    ReplacedInfo = Typing.cast(
+        AdapterInfo,
+        CallCompat(DataClasses.replace, InfoData, format_id="format.other"),
     )
+    assert ReplacedInfo.format_id == "format.other"
     assert (
         str(Inspect.signature(AdapterInfo.__init__))
         == "(self, format_id: 'str', name: 'str', version: 'str', extensions: 'tuple[str, ...]', aliases: 'tuple[str, ...]' = (), capabilities: 'frozenset[Capability]' = frozenset(), media_types: 'tuple[str, ...]' = (), native_capabilities: 'frozenset[Capability]' = frozenset(), part_extensions: 'tuple[str, ...]' = (), assembly_extensions: 'tuple[str, ...]' = ()) -> None"
@@ -110,12 +135,25 @@ def CheckInfo() -> None:
     assert AdapterInfo.extensions_for.__module__ == "convert.adapters.base"
     assert InfoData.extensions_for(assembly=False) == ()
     with Pytest.raises(TypeError):
-        InfoData.extensions_for(assembly=False, Assembly=False)
+        CallCompat(InfoData.extensions_for, assembly=False, Assembly=False)
     with Pytest.raises(TypeError):
-        AdapterInfo("format.test", "Test", "1", (".test",), format_id="other")
+        CallCompat(
+            AdapterInfo,
+            "format.test",
+            "Test",
+            "1",
+            (".test",),
+            format_id="other",
+        )
     with Pytest.raises(TypeError):
-        AdapterInfo(
-            "format.test", "Test", "1", (".test",), FormatId="other", format_id="other"
+        CallCompat(
+            AdapterInfo,
+            "format.test",
+            "Test",
+            "1",
+            (".test",),
+            FormatId="other",
+            format_id="other",
         )
     with Pytest.raises(TypeError):
         DataClasses.replace(InfoData, FormatId="format.other")
@@ -150,9 +188,9 @@ def CheckBinding() -> None:
         == "(self, reader: 'CadReaderAdapter | None' = None, writer: 'CadWriterAdapter | None' = None) -> None"
     )
     with Pytest.raises(TypeError):
-        AdapterBinding(reader=AdapterData, ReaderData=AdapterData)
+        CallCompat(AdapterBinding, reader=AdapterData, ReaderData=AdapterData)
     with Pytest.raises(TypeError):
-        AdapterBinding(writer=AdapterData, WriterData=AdapterData)
+        CallCompat(AdapterBinding, writer=AdapterData, WriterData=AdapterData)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -170,11 +208,21 @@ def CheckErrors() -> None:
         assert ErrorType.__module__ == "convert.adapters.registry"
         assert Pickle.loads(Pickle.dumps(ErrorType)) is ErrorType
     with Pytest.raises(TypeError):
-        CapabilityLossError("format.test", frozenset(), format_id="other")
+        CallCompat(
+            CapabilityLossError,
+            "format.test",
+            frozenset[Capability](),
+            format_id="other",
+        )
     with Pytest.raises(TypeError):
         AppUsabilityError("format.test", ResultData, result=ResultData)
     with Pytest.raises(TypeError):
-        CapabilityLossError(format_id="format.test", dropped=frozenset(), unknown=True)
+        CallCompat(
+            CapabilityLossError,
+            format_id="format.test",
+            dropped=frozenset[Capability](),
+            unknown=True,
+        )
     with Pytest.raises(TypeError):
         AppUsabilityError(format_id="format.test", result=ResultData, unknown=True)
 
@@ -199,21 +247,29 @@ def CheckRegistry() -> None:
         assert "NamedValues" not in str(Inspect.signature(MethodData))
         assert Typing.get_type_hints(MethodData)
     with Pytest.raises(TypeError):
-        RegistryData.register(AdapterData, unknown=True)
+        CallCompat(RegistryData.register, AdapterData, unknown=True)
     with Pytest.raises(TypeError):
-        RegistryData.register(AdapterData, replace=False, ReplaceFlag=False)
-    with Pytest.raises(TypeError):
-        RegistryData.read(b"{}", unknown=True)
-    with Pytest.raises(TypeError):
-        RegistryData.read(
-            b"{}", format_id="interchange.json", FormatId="interchange.json"
+        CallCompat(
+            RegistryData.register,
+            AdapterData,
+            replace=False,
+            ReplaceFlag=False,
         )
     with Pytest.raises(TypeError):
-        RegistryData.write(None, None, unknown=True)
+        CallCompat(RegistryData.read, b"{}", unknown=True)
     with Pytest.raises(TypeError):
-        RegistryData.extend((), unknown=True)
+        CallCompat(
+            RegistryData.read,
+            b"{}",
+            format_id="interchange.json",
+            FormatId="interchange.json",
+        )
     with Pytest.raises(TypeError):
-        RegistryData.extend((), replace=False, ReplaceFlag=False)
+        CallCompat(RegistryData.write, None, None, unknown=True)
+    with Pytest.raises(TypeError):
+        CallCompat(RegistryData.extend, (), unknown=True)
+    with Pytest.raises(TypeError):
+        CallCompat(RegistryData.extend, (), replace=False, ReplaceFlag=False)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -245,9 +301,15 @@ def CheckReadWords() -> None:
 def CheckWriteWords() -> None:
     RegistryData = AdapterRegistry()
     with Pytest.raises(TypeError):
-        RegistryData.write(None, None, format_id="test", FormatId="test")
+        CallCompat(
+            RegistryData.write,
+            None,
+            None,
+            format_id="test",
+            FormatId="test",
+        )
     with Pytest.raises(TypeError):
-        RegistryData.write(None, None, options=None, OptionsData=None)
+        CallCompat(RegistryData.write, None, None, options=None, OptionsData=None)
 
 
 # this definition exists because focused behavior needs one stable owner

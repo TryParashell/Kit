@@ -33,47 +33,44 @@ KMaxOsmxSymbolBytes = 16 * 1024 * 1024
 
 # this definition exists because focused behavior needs one stable owner
 class CfvTwoFormat(ValueError):
-    KSlots = ()
+    __slots__ = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 class OsmxFormatError(ValueError):
-    KSlots = ()
+    __slots__ = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoExtent:
-    locals().setdefault("__annotations__", {})
-    __annotations__["physical_offset"] = "int"
-    __annotations__["physical_length"] = "int"
-    __annotations__["logical_offset"] = "int"
-    __annotations__["flags"] = "int"
+    physical_offset: int
+    physical_length: int
+    logical_offset: int
+    flags: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoStream:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["logical_length"] = "int"
-    __annotations__["descriptor_offset"] = "int"
-    __annotations__["extents"] = "tuple[CfvTwoExtent, ...]"
+    name: str
+    logical_length: int
+    descriptor_offset: int
+    extents: tuple[CfvTwoExtent, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoFolder:
-    locals().setdefault("__annotations__", {})
-    __annotations__["physical_base"] = "int"
-    __annotations__["offset"] = "int"
-    __annotations__["length"] = "int"
-    __annotations__["streams"] = "tuple[CfvTwoStream, ...]"
+    physical_base: int
+    offset: int
+    length: int
+    streams: tuple[CfvTwoStream, ...]
 
     # this definition exists because focused behavior needs one stable owner
-    def Stream(Instance, NameValue: str) -> CfvTwoStream | None:
+    def stream(self, NameValue: str) -> CfvTwoStream | None:
         Matches = tuple(
-            (ItemValue for ItemValue in Instance.streams if ItemValue.name == NameValue)
+            (ItemValue for ItemValue in self.streams if ItemValue.name == NameValue)
         )
         if not Matches:
             return None
@@ -92,93 +89,78 @@ class CfvTwoFolder:
             raise CfvTwoFormat(f"ambiguous CFV2 stream {NameValue!r}")
         return Selected
 
-    locals()["stream"] = Stream
-
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoDecl:
-    locals().setdefault("__annotations__", {})
-    __annotations__["ordinal"] = "int"
-    __annotations__["class_name"] = "str"
-    __annotations__["base_class"] = "str"
-    __annotations__["stream_name"] = "str"
+    ordinal: int
+    class_name: str
+    base_class: str
+    stream_name: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class OsmxSymbol:
-    locals().setdefault("__annotations__", {})
-    __annotations__["index"] = "int"
-    __annotations__["offset"] = "int"
-    __annotations__["value"] = "str"
+    index: int
+    offset: int
+    value: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class OsmxArchive:
-    locals().setdefault("__annotations__", {})
-    __annotations__["data"] = "bytes"
-    __annotations__["version"] = "str"
-    __annotations__["symbol_table_offset"] = "int"
-    __annotations__["symbol_data_offset"] = "int"
-    __annotations__["symbols"] = "tuple[OsmxSymbol, ...]"
+    data: bytes
+    version: str
+    symbol_table_offset: int
+    symbol_data_offset: int
+    symbols: tuple[OsmxSymbol, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def FromBytes(ClassType, Source: bytes | bytearray) -> OsmxArchive:
-        return ParseOsmx(ClassType, Source)
+    def from_bytes(cls, Source: bytes | bytearray) -> OsmxArchive:
+        return ParseOsmx(cls, Source)
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def Values(Instance) -> tuple[str, ...]:
-        return tuple((Symbol.value for Symbol in Instance.symbols))
+    def values(self) -> tuple[str, ...]:
+        return tuple((Symbol.value for Symbol in self.symbols))
 
     # this definition exists because focused behavior needs one stable owner
-    def FirstAfter(Instance, Value: str) -> OsmxSymbol | None:
-        for Index, Symbol in enumerate(Instance.symbols[:-1]):
+    def first_after(self, Value: str) -> OsmxSymbol | None:
+        for Index, Symbol in enumerate(self.symbols[:-1]):
             if Symbol.value == Value:
-                return Instance.symbols[Index + 1]
+                return self.symbols[Index + 1]
         return None
-
-    locals()["first_after"] = FirstAfter
-    locals()["from_bytes"] = FromBytes
-    locals()["values"] = Values
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoArchive:
-    locals().setdefault("__annotations__", {})
-    __annotations__["data"] = "bytes"
-    __annotations__["outer"] = "CfvTwoFolder"
-    __annotations__["nested"] = "tuple[CfvTwoFolder, ...]"
+    data: bytes
+    outer: CfvTwoFolder
+    nested: tuple[CfvTwoFolder, ...]
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def FromBytes(ClassType, Source: bytes | bytearray) -> CfvTwoArchive:
-        return ParseCfvTwo(ClassType, Source)
+    def from_bytes(cls, Source: bytes | bytearray) -> CfvTwoArchive:
+        return ParseCfvTwo(cls, Source)
 
     # this definition exists because focused behavior needs one stable owner
-    def StreamBytes(
-        Instance, Stream: Cfv2Stream, Folder: Cfv2Directory | None = None
+    def stream_bytes(
+        self, Stream: Cfv2Stream, Folder: Cfv2Directory | None = None
     ) -> bytes:
-        return ReadStreamBytes(Instance, Stream, Folder)
+        return ReadStreamBytes(self, Stream, Folder)
 
     # this definition exists because focused behavior needs one stable owner
-    def NamedStream(
-        Instance, NameValue: str, Folder: Cfv2Directory | None = None
+    def named_stream(
+        self, NameValue: str, Folder: Cfv2Directory | None = None
     ) -> bytes | None:
-        return ReadNamedStream(Instance, NameValue, Folder)
+        return ReadNamedStream(self, NameValue, Folder)
 
     # this definition exists because focused behavior needs one stable owner
-    def Declarations(Instance) -> tuple[CfvTwoDecl, ...]:
-        return ArchiveDecls(Instance)
-
-    locals()["declarations"] = Declarations
-    locals()["from_bytes"] = FromBytes
-    locals()["named_stream"] = NamedStream
-    locals()["stream_bytes"] = StreamBytes
+    def declarations(self) -> tuple[CfvTwoDecl, ...]:
+        return ArchiveDecls(self)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -269,7 +251,7 @@ def ArchiveDecls(Archive: CfvTwoArchive) -> tuple[CfvTwoDecl, ...]:
 def BuildCfvTwo(Streams: Sequence[tuple[str, bytes]]) -> bytes:
     if not Streams:
         raise ValueError("a CFV2 container requires at least one stream")
-    Names = [NameValue for NameValue, Ignored in Streams]
+    Names = [NameValue for NameValue, _ in Streams]
     if len(Names) != len(set(Names)):
         raise ValueError("CFV2 stream names must be unique")
     Offset = 16
@@ -687,9 +669,7 @@ def Parse(DataValue: bytes, StreamNames: set[str]) -> tuple[CfvTwoDecl, ...]:
         UuidAt = TerminalAt + len(Terminal)
         if UuidAt + 16 > len(DataValue):
             continue
-        Ignored, First, Middle, LastValue = Struct.unpack_from(
-            ">IIII", DataValue, UuidAt
-        )
+        _, First, Middle, LastValue = Struct.unpack_from(">IIII", DataValue, UuidAt)
         Canonical = f"{First:x}_{Middle:08x}_{LastValue:x}"
         Selected = Canonical if Canonical in StreamNames else f"_{Canonical}"
         if Selected not in StreamNames:
@@ -798,7 +778,7 @@ def DecodeOsmx(
 def UThreeTwobe(DataValue: bytes, Offset: int) -> int:
     if Offset < 0 or Offset + 4 > len(DataValue):
         return -1
-    return Struct.unpack_from(">I", DataValue, Offset)[0]
+    return int.from_bytes(DataValue[Offset : Offset + 4], "big")
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -810,106 +790,58 @@ def StreamItems(
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Archive"] = CfvTwoArchive
+Cfv2Archive = CfvTwoArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Declaration"] = CfvTwoDecl
+Cfv2Declaration = CfvTwoDecl
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Directory"] = CfvTwoFolder
+Cfv2Directory = CfvTwoFolder
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Extent"] = CfvTwoExtent
+Cfv2Extent = CfvTwoExtent
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2FormatError"] = CfvTwoFormat
+Cfv2FormatError = CfvTwoFormat
 
 # this binding exists because shared behavior needs one stable value
-globals()["Cfv2Stream"] = CfvTwoStream
+Cfv2Stream = CfvTwoStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIRECTORY_END"] = KFolderEnd
+DIRECTORY_END = KFolderEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIRECTORY_MAGIC"] = KFolderMagic
+DIRECTORY_MAGIC = KFolderMagic
 
 # this binding exists because shared behavior needs one stable value
-globals()["MAGIC"] = KMagic
+MAGIC = KMagic
 
 # this binding exists because shared behavior needs one stable value
-globals()["OSMX_MAGIC"] = KOsmxMagic
+OSMX_MAGIC = KOsmxMagic
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_OSMX_SYMBOLS"] = KMaxOsmxSymbols
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MAX_OSMX_SYMBOL_BYTES"] = KMaxOsmxSymbolBytes
+append_cfv2_stream = AppendCfvTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["_contiguous_stream_range"] = ContiguousRange
+build_cfv2 = BuildCfvTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decode_osmx_symbols"] = DecodeOsmx
+build_declaration = BuildDecl
 
 # this binding exists because shared behavior needs one stable value
-globals()["_descriptor"] = BuildDescriptor
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_descriptor_name"] = DescriptorName
+extract_ascii_values = ExtractAscii
 
 # this binding exists because shared behavior needs one stable value
-globals()["_nested_directories"] = FindNested
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_osmx_symbol_candidates"] = OsmxSymbolA
+stream_items = StreamItems
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parse_declarations"] = Parse
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_directory"] = ParseFolder
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sequential_name"] = SequentialName
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sequential_streams"] = ReadSequential
-
-# this binding exists because shared behavior needs one stable value
-globals()["_u32be"] = UThreeTwobe
-
-# this binding exists because shared behavior needs one stable value
-globals()["_validate_class_name"] = ValidateClass
-
-# this binding exists because shared behavior needs one stable value
-globals()["_validate_extent_layout"] = ValidateExtent
-
-# this binding exists because shared behavior needs one stable value
-globals()["_validate_stream_name"] = ValidateStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["append_cfv2_stream"] = AppendCfvTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_cfv2"] = BuildCfvTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_declaration"] = BuildDecl
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
-
-# this binding exists because shared behavior needs one stable value
-globals()["extract_ascii_values"] = ExtractAscii
-
-# this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
-
-# this binding exists because shared behavior needs one stable value
-globals()["stream_items"] = StreamItems
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct

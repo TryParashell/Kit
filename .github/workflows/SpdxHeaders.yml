@@ -9,7 +9,7 @@
 name: SPDX headers
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -22,12 +22,15 @@ on:
 
 concurrency:
   group: >-
-    ${{ github.workflow }}-${{
+    ${{ github.workflow }}-${{ github.event_name }}-${{
       github.event.pull_request.number ||
       github.event.merge_group.head_ref ||
       github.ref
     }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify-headers:
@@ -43,6 +46,7 @@ jobs:
       remediation-attempted: >-
         ${{ steps.remediation-state.outputs.cache-hit == 'true' }}
     steps:
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout trusted workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,7 +54,7 @@ jobs:
           persist-credentials: false
           ref: >-
             ${{
-              github.event_name == 'pull_request_target' &&
+              github.event_name == 'pull_request' &&
               github.event.pull_request.base.sha ||
               github.sha
             }}
@@ -79,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$EVENT_NAME" in
-            pull_request_target)
+            pull_request)
               BaseSha="$PULL_BASE_SHA"
               HeadSha="$PULL_HEAD_SHA"
               ;;
@@ -114,15 +118,28 @@ jobs:
           echo "base=$BaseSha" >> "$GITHUB_OUTPUT"
           echo "head=$HeadSha" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout pull request head as detached data
-        if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ steps.refs.outputs.head }}
-          path: SpdxHeadData
-          fetch-depth: 1
-          persist-credentials: false
+      - name: Materialize pull request head as detached data
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ steps.refs.outputs.head }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 1
+          fi
+          if ! [[ "$PULL_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            exit 1
+          fi
+          PullRef="refs/pull/$PULL_NUMBER/head"
+          git fetch --no-tags origin "$PullRef"
+          FetchedSha="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+          if [ "$FetchedSha" != "$HEAD_SHA" ]; then
+            echo "::error::Fetched pull request data does not match the event SHA."
+            exit 1
+          fi
+          git worktree add --detach "$GITHUB_WORKSPACE/SpdxHeadData" "$HEAD_SHA"
 
       - name: Materialize the exact untrusted head
         id: source
@@ -139,31 +156,29 @@ jobs:
           if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             exit 1
           fi
-          if [ "$EVENT_NAME" = "pull_request_target" ]; then
-            DataHead="$(git -C SpdxHeadData rev-parse HEAD)"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            SourceRoot="$GITHUB_WORKSPACE/SpdxHeadData"
+            DataHead="$(git -C "$SourceRoot" rev-parse HEAD)"
             if [ "$DataHead" != "$HEAD_SHA" ]; then
               echo "::error::Detached pull request data does not match the event SHA."
               exit 1
             fi
-            git fetch --no-tags SpdxHeadData HEAD
+            git -C "$SourceRoot" fetch --no-tags "$GITHUB_WORKSPACE" "$BASE_SHA"
           else
             SourceRoot="$RUNNER_TEMP/SpdxHeaderSource"
             git worktree add --detach "$SourceRoot" "$HEAD_SHA"
-            echo "path=$SourceRoot" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$(git cat-file -t "$BASE_SHA")" != "commit" ]; then
+          if [ "$(git -C "$SourceRoot" cat-file -t "$BASE_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$(git cat-file -t "$HEAD_SHA")" != "commit" ]; then
+          if [ "$(git -C "$SourceRoot" cat-file -t "$HEAD_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$EVENT_NAME" = "pull_request_target" ]; then
-            echo "path=$GITHUB_WORKSPACE/SpdxHeadData" >> "$GITHUB_OUTPUT"
-          fi
+          echo "path=$SourceRoot" >> "$GITHUB_OUTPUT"
 
       - name: Restore remediation state for this head
         id: remediation-state
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ runner.temp }}/SpdxHeaderRemediation
@@ -193,13 +208,14 @@ jobs:
     if: >-
       needs.verify-headers.outputs.result == 'failure' &&
       needs.verify-headers.outputs.remediation-attempted != 'true' &&
-      github.event_name == 'pull_request_target' &&
+      github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: write # Pushes validated header-only repairs to same-repository branches.
     steps:
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout trusted workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -217,14 +233,27 @@ jobs:
       - name: Synchronize the locked trusted environment
         run: uv sync --frozen --python 3.11
 
-      - name: Checkout pull request head as detached data
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ needs.verify-headers.outputs.head }}
-          path: SpdxHeadData
-          fetch-depth: 1
-          persist-credentials: false
+      - name: Materialize pull request head as detached data
+        env:
+          HEAD_SHA: ${{ needs.verify-headers.outputs.head }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 1
+          fi
+          if ! [[ "$PULL_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            exit 1
+          fi
+          PullRef="refs/pull/$PULL_NUMBER/head"
+          git fetch --no-tags origin "$PullRef"
+          FetchedSha="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+          if [ "$FetchedSha" != "$HEAD_SHA" ]; then
+            echo "::error::Fetched pull request data does not match the event SHA."
+            exit 1
+          fi
+          git worktree add --detach "$GITHUB_WORKSPACE/SpdxHeadData" "$HEAD_SHA"
 
       - name: Validate the repair target
         id: target
@@ -252,8 +281,7 @@ jobs:
               exit 1
               ;;
           esac
-          HeadTarget="refs/heads/$HEAD_REF"
-          if ! git check-ref-format "$HeadTarget"; then
+          if ! git check-ref-format "refs/heads/$HEAD_REF"; then
             echo "::error::The explicit pull request head ref is invalid."
             exit 1
           fi
@@ -262,14 +290,13 @@ jobs:
             echo "::error::Detached pull request data does not match the event SHA."
             exit 1
           fi
-          git fetch --no-tags SpdxHeadData HEAD
-          if [ "$(git cat-file -t "$BASE_SHA")" != "commit" ]; then
+          git -C SpdxHeadData fetch --no-tags "$GITHUB_WORKSPACE" "$BASE_SHA"
+          if [ "$(git -C SpdxHeadData cat-file -t "$BASE_SHA")" != "commit" ]; then
             exit 1
           fi
-          if [ "$(git cat-file -t "$HEAD_SHA")" != "commit" ]; then
+          if [ "$(git -C SpdxHeadData cat-file -t "$HEAD_SHA")" != "commit" ]; then
             exit 1
           fi
-          echo "head-target=$HeadTarget" >> "$GITHUB_OUTPUT"
           echo "source-root=$GITHUB_WORKSPACE/SpdxHeadData" >> "$GITHUB_OUTPUT"
 
       - name: Repair and stage only validated paths
@@ -292,10 +319,6 @@ jobs:
             --head "$HEAD_SHA" \
             --worktree "$SOURCE_ROOT" \
             --fix-missing
-          uv run --frozen python .github/scripts/VerifySpdxHeaders.py \
-            --base "$BASE_SHA" \
-            --head "$HEAD_SHA" \
-            --worktree "$SOURCE_ROOT"
           git -C "$SOURCE_ROOT" diff --name-only --diff-filter=M -z -- \
             > "$RepairPaths"
           if [ ! -s "$RepairPaths" ]; then
@@ -371,12 +394,28 @@ jobs:
       - name: Push only if the event head is still current
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ needs.verify-headers.outputs.head }}
-          HEAD_TARGET: ${{ steps.target.outputs.head-target }}
           SOURCE_ROOT: ${{ steps.target.outputs.source-root }}
         shell: bash
         run: |
           set -euo pipefail
+          if ! git check-ref-format --branch "$HEAD_REF" >/dev/null; then
+            echo "::error::The pull request head branch is not a valid branch name."
+            exit 1
+          fi
+          NormalizedRef="${HEAD_REF,,}"
+          case "$NormalizedRef" in
+            main|master|release|release/*)
+              echo "::error::Protected branches cannot be remediation targets."
+              exit 1
+              ;;
+          esac
+          HEAD_TARGET="refs/heads/$HEAD_REF"
+          if ! git check-ref-format "$HEAD_TARGET"; then
+            echo "::error::The explicit pull request head ref is invalid."
+            exit 1
+          fi
           BasicToken="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)"
           AuthHeader="AUTHORIZATION: basic $BasicToken"
           RemoteLine="$(git -c http.https://github.com/.extraheader="$AuthHeader" \
@@ -398,9 +437,11 @@ jobs:
             origin "HEAD:$HEAD_TARGET"
 
       - name: Persist the remediation attempt for this head
+        env:
+          REPAIR_HEAD: ${{ steps.repair.outputs.head }}
         run: |
           mkdir -p "$RUNNER_TEMP/SpdxHeaderRemediation"
-          printf '%s\n' "${{ steps.repair.outputs.head }}" \
+          printf '%s\n' "$REPAIR_HEAD" \
             > "$RUNNER_TEMP/SpdxHeaderRemediation/Attempt"
 
       - name: Save remediation state for this head

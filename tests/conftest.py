@@ -14,7 +14,6 @@ from pathlib import Path as FilePath
 
 import pytest as Pytest
 
-
 # mixed prefixes preserve legacy coverage while compliant method names replace generated aliases
 KTestPrefixes = ("test", "Test", "Check")
 

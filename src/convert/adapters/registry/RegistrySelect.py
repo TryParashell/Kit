@@ -23,18 +23,21 @@ from convert.adapters.base.WritePolicy import GetFormatKeys
 
 
 # probe validation protects reader ranking from malformed or misattributed results
+def RequireProbe(ResultData: object, FormatId: str) -> ProbeResult:
+    if not isinstance(ResultData, ProbeResult):
+        raise RegistryError(f"reader {FormatId} returned an invalid probe result")
+    return ResultData
+
+
+# probe validation protects reader ranking from malformed or misattributed results
 def GetProbeResult(
     AdapterData: CadReaderAdapter,
     SourceData: KSourceType,
 ) -> ProbeResult:
-    ResultData = AdapterData.probe(SourceData)
-    if not isinstance(ResultData, ProbeResult):
-        raise RegistryError(
-            f"reader {AdapterData.info.format_id} returned an invalid probe result"
-        )
+    ResultData = RequireProbe(AdapterData.probe(SourceData), AdapterData.info.FormatId)
     if GetFormatKey(ResultData.FormatId) not in GetFormatKeys(AdapterData.info):
         raise RegistryError(
-            f"reader {AdapterData.info.format_id} returned probe format {ResultData.FormatId}"
+            f"reader {AdapterData.info.FormatId} returned probe format {ResultData.FormatId}"
         )
     return ResultData
 
@@ -58,7 +61,7 @@ def SelectReader(
     )
     TopConfidence = SortedValues[0][0].Confidence
     TiedNames = tuple(
-        AdapterData.info.format_id
+        AdapterData.info.FormatId
         for ResultData, AdapterData in SortedValues
         if ResultData.Confidence == TopConfidence
     )
@@ -98,7 +101,7 @@ def SelectWriter(
         AdapterData
         for AdapterData in CandidateValues
         if ExtensionText
-        in {ValueText.casefold() for ValueText in AdapterData.info.extensions}
+        in {ValueText.casefold() for ValueText in AdapterData.info.Extensions}
     )
     if len(ExactValues) == 1:
         return ExactValues[0]

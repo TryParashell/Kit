@@ -9,47 +9,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
+from dataclasses import Field as DataFieldInfo
 from dataclasses import field as MakeDataField
-from typing import Any as AnyValue
+from typing import ClassVar
+from typing import Callable as ValueFactory
+from typing import cast as CastValue
 from typing import Mapping as TypeMap
+from typing import overload as TypeOverload
+from typing import TypeVar
 
-from interchange.serialization.Wire import GetModelField, GetSlotNames, ResolveField
+from interchange.core.Reflection import GetFieldMap
+from interchange.serialization.RecordType import DataRecord
+from interchange.serialization.Wire import ResolveField
 
 
-# historical method names remain reachable so identifier cleanup does not break existing callers
-KMethodAliases: TypeMap[str, str] = {
-    "assert_valid": "AssertValid",
-    "children": "GetChildren",
-    "Definition": "GetDefinition",
-    "definition": "GetDefinition",
-    "Document": "GetDocument",
-    "document": "GetDocument",
-    "feature": "GetFeature",
-    "from_dict": "FromMapping",
-    "from_json": "FromJson",
-    "is_finite": "IsFinite",
-    "parameter": "GetParameter",
-    "plane": "GetPlane",
-    "read_json": "ReadJson",
-    "rows": "GetRows",
-    "sketch": "GetSketch",
-    "supports": "HasCapability",
-    "to_dict": "ToMapping",
-    "to_json": "ToJson",
-    "transform_point": "TransformPoint",
-    "validate": "GetErrors",
-    "write_json": "WriteJson",
-}
+# model decorators preserve each concrete class identity through dataclass transformation
+ModelValue = TypeVar("ModelValue")
+
+
+# wire lookup requires validated dataclass metadata before accepting dynamic model classes
+def GetRecordType(ClassType: type[object]) -> type[DataRecord]:
+    GetFieldMap(ClassType)
+    return CastValue(type[DataRecord], ClassType)
 
 
 # model construction translates historical keywords so compliant fields retain source compatibility
 class ModelMeta(type):
 
     # old constructor keywords remain accepted because adapters may upgrade independently
-    def __call__(ClassType, *ArgValues: AnyValue, **NamedValues: AnyValue) -> AnyValue:
-        TranslatedValues: dict[str, AnyValue] = {}
+    def __call__(
+        self: type[ModelValue],
+        *ArgValues: object,
+        **NamedValues: object,
+    ) -> ModelValue:
+        ClassType = CastValue(type[object], self)
+        RecordType = GetRecordType(ClassType)
+        TranslatedValues: dict[str, object] = {}
         for FieldName, FieldValue in NamedValues.items():
-            ModelName = ResolveField(ClassType, FieldName)
+            ModelName = ResolveField(RecordType, FieldName)
             if ModelName in TranslatedValues:
                 if FieldName == ModelName:
                     TranslatedValues[ModelName] = FieldValue
@@ -58,55 +55,51 @@ class ModelMeta(type):
                     continue
                 raise TypeError(f"duplicate model field {ModelName!r}")
             TranslatedValues[ModelName] = FieldValue
-        return super().__call__(*ArgValues, **TranslatedValues)
-
-    # implementation names remain available after historical reflection identity is restored
-    def __canonical_name__(ClassType) -> str:
-        CanonicalName = type.__getattribute__(ClassType, "__dict__").get(
-            "__canonical_name__"
-        )
-        return CanonicalName if isinstance(CanonicalName, str) else ClassType.__name__
-
-    # old class method spellings remain available without declaring noncompliant identifiers
-    def __getattr__(ClassType, FieldName: str) -> AnyValue:
-        FieldNames = type.__getattribute__(ClassType, "__dict__").get(
-            "__dataclass_fields__",
-            {},
-        )
-        ResolvedName = ResolveField(ClassType, FieldName) if FieldNames else None
-        ModelName = (
-            ResolvedName
-            if ResolvedName in FieldNames
-            else KMethodAliases.get(FieldName, GetModelField(FieldName))
-        )
-        return type.__getattribute__(ClassType, ModelName)
+        ResultValue: object = type.__call__(self, *ArgValues, **TranslatedValues)
+        return CastValue(ModelValue, ResultValue)
 
 
 # shared alias behavior keeps compatibility logic out of every immutable model record
 class ModelBase(metaclass=ModelMeta):
     locals()["__slots__"] = ()
+    __match_args__: ClassVar[tuple[str, ...]]
+    __dataclass_fields__: ClassVar[dict[str, DataFieldInfo[object]]]
 
-    # old attribute spellings remain readable while stored field names follow steering
-    def __getattr__(SelfValue, FieldName: str) -> AnyValue:
-        ClassType = type(SelfValue)
-        ResolvedName = ResolveField(ClassType, FieldName)
-        SlotNames = GetSlotNames(ClassType)
-        ModelName = (
-            ResolvedName
-            if ResolvedName in SlotNames
-            else KMethodAliases.get(FieldName, ResolvedName)
-        )
-        return object.__getattribute__(SelfValue, ModelName)
+    # undecorated model bases reject construction while transformed subclasses replace this initializer
+    def __init__(self, *ArgValues: object, **NamedValues: object) -> None:
+        raise TypeError(f"{type(self).__name__} must be transformed into a dataclass")
+
+
+# direct decoration retains concrete model types when no configuration wrapper is needed
+@TypeOverload
+def ModelDataMut(
+    ClassType: type[ModelValue],
+    *,
+    DefaultMap: TypeMap[str, object] | None = None,
+    FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
+    KeywordOnly: frozenset[str] = frozenset(),
+) -> type[ModelValue]: ...  # lgtm[py/ineffectual-statement]
+
+
+# configured decoration retains concrete model types after defaults are installed
+@TypeOverload
+def ModelDataMut(
+    ClassType: None = None,
+    *,
+    DefaultMap: TypeMap[str, object] | None = None,
+    FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
+    KeywordOnly: frozenset[str] = frozenset(),
+) -> ValueFactory[[type[ModelValue]], type[ModelValue]]: ...  # lgtm[py/ineffectual-statement]
 
 
 # dynamic defaults keep instance fields distinct from true class constants during static checks
 def ModelDataMut(
-    ClassType: type | None = None,
+    ClassType: type[object] | None = None,
     *,
-    DefaultMap: TypeMap[str, AnyValue] | None = None,
-    FactoryMap: TypeMap[str, AnyValue] | None = None,
+    DefaultMap: TypeMap[str, object] | None = None,
+    FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = frozenset(),
-) -> AnyValue:
+) -> object:
 
     # class mutation is isolated here because dataclasses require defaults before transformation
     def ApplyModelMut(TargetType: type) -> type:
@@ -122,7 +115,13 @@ def ModelDataMut(
                 kw_only=FieldName in KeywordOnly,
             )
             setattr(TargetType, FieldName, FieldInfo)
-        return MakeDataClass(frozen=True, slots=True)(TargetType)
+        RawType = CastValue(
+            object,
+            MakeDataClass(frozen=True, slots=True)(TargetType),
+        )
+        if not isinstance(RawType, type):
+            raise TypeError("dataclass transformation did not return a type")
+        return RawType
 
     if ClassType is None:
         return ApplyModelMut

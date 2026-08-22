@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from convert.adapters.registry.AdapterDiscovery import HasMethods
+from convert.adapters.registry.AdapterDiscovery import IsReaderAdapter
+from convert.adapters.registry.AdapterDiscovery import IsWriterAdapter
 from convert.adapters.base.AdapterMetadata import ValidateInfo
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
@@ -16,6 +17,7 @@ from convert.adapters.registry.RegistryBinding import AdapterBinding
 from convert.adapters.registry.RegistryState import BindReaderMut
 from convert.adapters.registry.RegistryState import BindWriterMut
 from convert.adapters.registry.RegistryState import CopyState
+from convert.adapters.registry.RegistryState import RegistryHost
 
 
 # compatibility keywords stay centralized because historical registration calls use replace
@@ -39,17 +41,6 @@ def IsReplaceFlag(
     return ReplaceFlag
 
 
-# protocol classification requires concrete methods because runtime protocols accept data attributes
-def GetAdapterKinds(AdapterData: object) -> tuple[bool, bool]:
-    IsReader = isinstance(AdapterData, CadReaderAdapter) and HasMethods(
-        AdapterData, CadReaderAdapter
-    )
-    IsWriter = isinstance(AdapterData, CadWriterAdapter) and HasMethods(
-        AdapterData, CadWriterAdapter
-    )
-    return IsReader, IsWriter
-
-
 # paired registration mutates both maps transactionally so partial adapters never remain visible
 def RegisterPairMut(
     BindingMap: dict[str, AdapterBinding],
@@ -58,30 +49,32 @@ def RegisterPairMut(
     ReplaceFlag: bool,
 ) -> None:
     PriorState = CopyState(BindingMap, AliasMap)
-    IsReader, IsWriter = GetAdapterKinds(AdapterData)
-    IsCoordinated = IsReader and IsWriter and ReplaceFlag
+    ReaderData = AdapterData if IsReaderAdapter(AdapterData) else None
+    WriterData = AdapterData if IsWriterAdapter(AdapterData) else None
+    InfoAdapter = ReaderData if ReaderData is not None else WriterData
+    if InfoAdapter is None:
+        raise TypeError("adapter implements neither reader nor writer protocol")
+    IsCoordinated = ReaderData is not None and WriterData is not None and ReplaceFlag
     try:
-        InfoData = ValidateInfo(AdapterData)
-        if IsReader:
+        InfoData = ValidateInfo(InfoAdapter)
+        if ReaderData is not None:
             BindReaderMut(
-                AdapterData,
+                ReaderData,
                 InfoData,
                 BindingMap,
                 AliasMap,
                 ReplaceFlag,
                 IsCoordinated,
             )
-        if IsWriter:
+        if WriterData is not None:
             BindWriterMut(
-                AdapterData,
+                WriterData,
                 InfoData,
                 BindingMap,
                 AliasMap,
                 ReplaceFlag,
                 IsCoordinated,
             )
-        if not IsReader and not IsWriter:
-            raise TypeError("adapter implements neither reader nor writer protocol")
     except Exception:
         BindingMap.clear()
         BindingMap.update(PriorState[0])
@@ -91,11 +84,11 @@ def RegisterPairMut(
 
 
 # focused public bindings keep reader and writer registration independently reviewable
-class BindingApi:
+class BindingApi(RegistryHost):
 
     # reader registration validates metadata before mutating the shared format namespace
     def RegisterReader(
-        SelfValue,
+        self,
         AdapterData: CadReaderAdapter,
         **NamedValues: object,
     ) -> None:
@@ -103,15 +96,15 @@ class BindingApi:
         BindReaderMut(
             AdapterData,
             ValidateInfo(AdapterData),
-            SelfValue.BindingMap,
-            SelfValue.AliasMap,
+            self.BindingMap,
+            self.AliasMap,
             ReplaceFlag,
             False,
         )
 
     # writer registration validates metadata before mutating the shared format namespace
     def RegisterWriter(
-        SelfValue,
+        self,
         AdapterData: CadWriterAdapter,
         **NamedValues: object,
     ) -> None:
@@ -119,25 +112,25 @@ class BindingApi:
         BindWriterMut(
             AdapterData,
             ValidateInfo(AdapterData),
-            SelfValue.BindingMap,
-            SelfValue.AliasMap,
+            self.BindingMap,
+            self.AliasMap,
             ReplaceFlag,
             False,
         )
 
 
 # dual protocol registration owns transaction coordination without growing the registry facade
-class RegisterApi:
+class RegisterApi(RegistryHost):
 
     # one adapter may fill either or both registry roles with atomic rollback
     def RegisterOne(
-        SelfValue,
+        self,
         AdapterData: object,
         **NamedValues: object,
     ) -> None:
         RegisterPairMut(
-            SelfValue.BindingMap,
-            SelfValue.AliasMap,
+            self.BindingMap,
+            self.AliasMap,
             AdapterData,
             IsReplaceFlag(NamedValues, "register"),
         )

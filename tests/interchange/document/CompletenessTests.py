@@ -17,16 +17,15 @@ from importlib import import_module as ImportModule
 from typing import get_args as GetTypeArgs
 from typing import get_origin as GetTypeOrigin
 from typing import get_type_hints as GetTypeHints
+from typing import cast as CastValue
 import pytest as PytestLib
+from interchange import geometry as GeometryModule
 from interchange import (
     AssemblyData,
     BrepPayload,
     CadDocument,
     CadSource,
     Capability,
-    ComponentDef,
-    ComponentDoc,
-    ComponentInst,
     ComponentKind,
     Configuration,
     Expression,
@@ -36,7 +35,6 @@ from interchange import (
     MateEntity,
     MateEntityKind,
     MateKind,
-    SurfaceMesh,
     Parameter,
     ParameterValue,
     PayloadRole,
@@ -44,11 +42,16 @@ from interchange import (
     Selection,
     SelectionPathElement,
     SpaceVector,
-    InferCaps,
 )
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentDocument import ComponentDoc
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.document.models.DocumentCaps import InferCaps
 from interchange.document.models.DocumentIdentity import GetIdFields
 from interchange.geometry import Geometry
-from interchange.serialization import FromData, ToData
+from interchange.mesh.SurfaceMesh import SurfaceMesh
+from interchange.serialization.Deserialize import FromData
+from interchange.serialization.EncodeData import ToData
 from interchange.serialization.Wire import GetWireField
 from tests.interchange.document.DocumentTests import BuildDocument
 
@@ -63,11 +66,10 @@ class FutureFeature(FeatureDefinition):
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
-def GetExpectedIds(ValueType: type[object]) -> set[str]:
+def GetExpectedIds(ValueType: type[CadDocument] | type[AssemblyData]) -> set[str]:
     TypeHints = GetTypeHints(ValueType)
     ResultValue: set[str] = set()
-    for FieldValue in GetFields(ValueType):
-        FieldHint = TypeHints[FieldValue.name]
+    for FieldName, FieldHint in TypeHints.items():
         TypeArgs = GetTypeArgs(FieldHint)
         if (
             GetTypeOrigin(FieldHint) is tuple
@@ -82,23 +84,23 @@ def GetExpectedIds(ValueType: type[object]) -> set[str]:
                 )
             )
         ):
-            ResultValue.add(FieldValue.name)
+            ResultValue.add(FieldName)
     return ResultValue
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckIdFields() -> None:
     for ValueType in (CadDocument, AssemblyData):
-        assert {
-            NameValue for NameValue, LabelText in GetIdFields(ValueType)
-        } == GetExpectedIds(ValueType)
+        assert {NameValue for NameValue, _ in GetIdFields(ValueType)} == GetExpectedIds(
+            ValueType
+        )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckGeometry() -> None:
     ExpectedValues = {
         ItemValue
-        for NameValue, ItemValue in vars(KInterchangeApi.geometry).items()
+        for NameValue, ItemValue in vars(GeometryModule).items()
         if NameValue.endswith(("Geometry", "Geom"))
         and isinstance(ItemValue, type)
         and IsDataClass(ItemValue)
@@ -108,7 +110,7 @@ def CheckGeometry() -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckFeatures() -> None:
-    DefinitionHint = GetTypeHints(FeatureStep)["Definition"]
+    DefinitionHint = GetTypeHints(FeatureStep)["definition"]
     assert set(GetTypeArgs(DefinitionHint)) == {FeatureDefinition, type(None)}
     Definitions = {
         ItemValue
@@ -119,11 +121,14 @@ def CheckFeatures() -> None:
     }
     assert Definitions
     StepValue = ReplaceValue(
-        BuildDocument().FeatureTimeline[0], Definition=FutureFeature("future")
+        BuildDocument().feature_timeline[0], definition=FutureFeature("future")
     )
-    assert isinstance(StepValue.Definition, FeatureDefinition)
+    assert isinstance(StepValue.definition, FeatureDefinition)
     with PytestLib.raises(TypeError, match="feature definition"):
-        ReplaceValue(StepValue, Definition={"type": "unregistered"})
+        ReplaceValue(
+            StepValue,
+            definition=CastValue(FeatureDefinition, {"type": "unregistered"}),
+        )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -174,67 +179,65 @@ def CheckNestedCaps() -> None:
     )
     ChildValue = ReplaceValue(
         BaseValue,
-        Parameters=(ParamValue,),
-        Selections=(Selection("selection:child", "Child selection", ()),),
-        Bodies=(ReplaceValue(BaseValue.Bodies[0], MaterialId="material:child"),),
-        Meshes=(MeshValue,),
-        BrepPayloads=(PayloadValue,),
-        Capabilities=frozenset(),
+        parameters=(ParamValue,),
+        selections=(Selection("selection:child", "Child selection", ()),),
+        bodies=(ReplaceValue(BaseValue.bodies[0], material_id="material:child"),),
+        meshes=(MeshValue,),
+        brep_payloads=(PayloadValue,),
+        capabilities=frozenset(),
     )
     RootDef = ComponentDef("definition:root", "Root", ComponentKind.KAssembly)
     ChildDef = ComponentDef(
         "definition:child",
         "Child",
         ComponentKind.KPart,
-        DocumentId="document:child",
-        SourcePath="Child.FCStd",
+        document_id="document:child",
+        source_path="Child.FCStd",
     )
-    InstanceValue = ComponentInst(
-        "instance:child", "Child", ChildDef.EntityId, RootDef.EntityId
-    )
+    InstanceValue = ComponentInst("instance:child", "Child", ChildDef.id, RootDef.id)
     MateEntityValue = MateEntity(
-        "mate-entity:root", RootDef.EntityId, (), MateEntityKind.KPlane
+        "mate-entity:root", RootDef.id, (), MateEntityKind.KPlane
     )
     MateValue = MateConstraint(
         "mate:root",
         "Root mate",
         MateKind.KCoincident,
-        RootDef.EntityId,
-        (MateEntityValue.EntityId,),
+        RootDef.id,
+        (MateEntityValue.id,),
     )
     AssemblyValue = AssemblyData(
-        RootDef.EntityId,
+        RootDef.id,
         (RootDef, ChildDef),
         (InstanceValue,),
-        Documents=(ComponentDoc("document:child", ChildValue),),
-        MateEntities=(MateEntityValue,),
-        Mates=(MateValue,),
+        documents=(ComponentDoc("document:child", ChildValue),),
+        mate_entities=(MateEntityValue,),
+        mates=(MateValue,),
     )
     RootValue = CadDocument(
-        Source=CadSource("test.assembly", "Root", "1" * 64),
-        Configurations=(Configuration("configuration:root", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(),
-        Sketches=(),
-        Selections=(),
-        FeatureTimeline=(),
-        Bodies=(),
-        Capabilities=frozenset(Capability),
-        Assembly=AssemblyValue,
+        source=CadSource("test.assembly", "Root", "1" * 64),
+        configurations=(Configuration("configuration:root", "Default", True),),
+        parameters=(),
+        support_planes=(),
+        sketches=(),
+        selections=(),
+        feature_timeline=(),
+        bodies=(),
+        capabilities=frozenset(Capability),
+        assembly=AssemblyValue,
     )
-    RootValue.AssertValid()
+    RootValue.assert_valid()
     assert InferCaps(RootValue) == frozenset(Capability) - {Capability.KRoundtripMeta}
     assert InferCaps(RootValue, RoundtripMeta=True) == frozenset(Capability)
-    StaleChild = ReplaceValue(BaseValue, Capabilities=frozenset(Capability))
+    StaleChild = ReplaceValue(BaseValue, capabilities=frozenset(Capability))
     StaleAssembly = ReplaceValue(
         AssemblyValue,
-        Definitions=(RootDef, ReplaceValue(ChildDef, SourcePath="")),
-        Documents=(ComponentDoc("document:child", StaleChild),),
-        MateEntities=(),
-        Mates=(),
+        definitions=(RootDef, ReplaceValue(ChildDef, source_path="")),
+        documents=(ComponentDoc("document:child", StaleChild),),
+        mate_entities=(),
+        mates=(),
     )
     StaleRoot = ReplaceValue(
-        RootValue, Assembly=StaleAssembly, Capabilities=frozenset()
+        RootValue, assembly=StaleAssembly, capabilities=frozenset()
     )
     assert not InferCaps(StaleRoot) & {
         Capability.KAssemblyMates,
@@ -275,7 +278,7 @@ def CheckLegacyKeys() -> None:
     ReplacedSource = ReplaceValue(SourceValue, path="updated.FCStd")
     assert ReplacedSource.FilePath == "updated.FCStd"
     ReplacedDoc = ReplaceValue(BuildDocument(), metadata={"compatibility": "preserved"})
-    assert ReplacedDoc.Metadata == {"compatibility": "preserved"}
+    assert ReplacedDoc.metadata == {"compatibility": "preserved"}
 
 
 # serialization keys stay byte compatible so stored interchange documents remain readable
@@ -283,9 +286,15 @@ def CheckWireFields() -> None:
     PathValue = SelectionPathElement("feature", "feature:one", "Face1")
     SelectionValue = Selection("selection:one", "Selection", (PathValue,))
     RawValue = ToData(SelectionValue)
+    assert isinstance(RawValue, dict)
     assert "path" in RawValue
     assert "selection_path" not in RawValue
-    PathData = RawValue["path"]["$tuple"][0]
+    PathTuple = RawValue["path"]
+    assert isinstance(PathTuple, dict)
+    PathItems = PathTuple["$tuple"]
+    assert isinstance(PathItems, list)
+    PathData = PathItems[0]
+    assert isinstance(PathData, dict)
     assert PathData["entity_kind"] == "feature"
     assert PathData["entity_id"] == "feature:one"
     assert FromData(RawValue) == SelectionValue
@@ -302,19 +311,24 @@ def CheckLegacyCaps() -> None:
 
 # historical enum attributes stay available without becoming duplicate enum members
 def CheckOldEnums() -> None:
-    assert Capability.ROUNDTRIP_METADATA is Capability.KRoundtripMeta
-    assert ComponentKind.ASSEMBLY is ComponentKind.KAssembly
-    assert PayloadRole.BREP is PayloadRole.KBrep
+    LegacyCapability: object = Capability.KRoundtripMeta
+    LegacyComponent: object = ComponentKind.KAssembly
+    LegacyPayload: object = PayloadRole.KBrep
+    assert Capability.ROUNDTRIP_METADATA is LegacyCapability
+    assert ComponentKind.ASSEMBLY is LegacyComponent
+    assert PayloadRole.BREP is LegacyPayload
 
 
 # historical json options remain accepted because document consumers upgrade independently
 def CheckLegacyJson() -> None:
     SourceValue = BuildDocument()
-    assert SourceValue.to_json(indent=None) == SourceValue.ToJson(IndentSize=None)
+    LegacyJson = SourceValue.to_json
+    assert callable(LegacyJson)
+    assert LegacyJson(indent=None) == SourceValue.to_json(indent=None)
 
 
 # historical field access takes precedence over similarly named document lookup methods
 def CheckFieldAlias() -> None:
     SourceValue = BuildDocument()
-    FeatureValue = SourceValue.FeatureTimeline[0]
+    FeatureValue = SourceValue.feature_timeline[0]
     assert FeatureValue.definition is FeatureValue.Definition

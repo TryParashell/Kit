@@ -6,9 +6,10 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
+from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.AssemblyEnums import ComponentKind
 
 
@@ -33,43 +34,42 @@ def HasGraphCycle(DefinitionGraph: TypeMap[str, set[str]]) -> bool:
 
 # component graph checks protect roots definitions owners transforms and acyclic nesting
 def GetGraphErrors(
-    AssemblyValue: AnyValue, Definitions: TypeMap[str, AnyValue]
+    AssemblyValue: AssemblyData, Definitions: TypeMap[str, ComponentDef]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    if AssemblyValue.RootDefinitionId not in Definitions:
+    if AssemblyValue.root_definition_id not in Definitions:
         ErrorValues.append("assembly references missing root component definition")
-    elif (
-        Definitions[AssemblyValue.RootDefinitionId].EntityKind
-        != ComponentKind.KAssembly
-    ):
+    elif Definitions[AssemblyValue.root_definition_id].kind != ComponentKind.KAssembly:
         ErrorValues.append("assembly root component definition is not an assembly")
-    DefinitionGraph = {DefinitionId: set() for DefinitionId in Definitions}
-    for InstanceValue in AssemblyValue.Instances:
-        if InstanceValue.DefinitionId not in Definitions:
+    DefinitionGraph: dict[str, set[str]] = {
+        DefinitionId: set() for DefinitionId in Definitions
+    }
+    for InstanceValue in AssemblyValue.instances:
+        if InstanceValue.definition_id not in Definitions:
             ErrorValues.append(
-                f"component instance {InstanceValue.EntityId} references missing definition"
+                f"component instance {InstanceValue.id} references missing definition"
             )
-        if InstanceValue.OwnerDefinitionId not in Definitions:
+        if InstanceValue.owner_definition_id not in Definitions:
             ErrorValues.append(
-                f"component instance {InstanceValue.EntityId} references missing owner definition"
+                f"component instance {InstanceValue.id} references missing owner definition"
             )
         elif (
-            Definitions[InstanceValue.OwnerDefinitionId].EntityKind
+            Definitions[InstanceValue.owner_definition_id].kind
             != ComponentKind.KAssembly
         ):
             ErrorValues.append(
-                f"component instance {InstanceValue.EntityId} owner is not an assembly"
+                f"component instance {InstanceValue.id} owner is not an assembly"
             )
-        if not InstanceValue.Transform.IsFinite():
+        if not InstanceValue.transform.IsFinite():
             ErrorValues.append(
-                f"component instance {InstanceValue.EntityId} has an invalid transform"
+                f"component instance {InstanceValue.id} has an invalid transform"
             )
         if (
-            InstanceValue.OwnerDefinitionId in DefinitionGraph
-            and InstanceValue.DefinitionId in Definitions
+            InstanceValue.owner_definition_id in DefinitionGraph
+            and InstanceValue.definition_id in Definitions
         ):
-            DefinitionGraph[InstanceValue.OwnerDefinitionId].add(
-                InstanceValue.DefinitionId
+            DefinitionGraph[InstanceValue.owner_definition_id].add(
+                InstanceValue.definition_id
             )
     if HasGraphCycle(DefinitionGraph):
         ErrorValues.append("component definition graph contains a cycle")

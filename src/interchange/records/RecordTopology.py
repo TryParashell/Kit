@@ -8,31 +8,32 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass as MakeDataClass
+from typing import ClassVar, TYPE_CHECKING
+
 from interchange.geometry.models.BoundingBox import BoundingBox
-from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelBase import ModelBase
 
 
 # topology summaries expose counts without requiring every caller to inspect boundary data
-@ModelDataMut(
-    DefaultMap={
-        "SolidCount": 0,
-        "ShellCount": 0,
-        "FaceCount": 0,
-        "EdgeCount": 0,
-        "VertexCount": 0,
-        "Volume": None,
-        "SurfaceArea": None,
-        "BoundingBox": None,
-        "IsValid": None,
-    }
-)
+@MakeDataClass(frozen=True, slots=True)
 class TopologyCounts(ModelBase):
-    SolidCount: int
-    ShellCount: int
-    FaceCount: int
-    EdgeCount: int
-    VertexCount: int
-    Volume: float | None
-    SurfaceArea: float | None
-    BoundingBox: BoundingBox | None
-    IsValid: bool | None
+    solid_count: int = 0
+    shell_count: int = 0
+    face_count: int = 0
+    edge_count: int = 0
+    vertex_count: int = 0
+    volume: float | None = None
+    surface_area: float | None = None
+    bounding_box: BoundingBox | None = None
+    valid: bool | None = None
+    if TYPE_CHECKING:
+        SolidCount: ClassVar[int]
+        ShellCount: ClassVar[int]
+        FaceCount: ClassVar[int]
+        EdgeCount: ClassVar[int]
+        VertexCount: ClassVar[int]
+        Volume: ClassVar[float | None]
+        SurfaceArea: ClassVar[float | None]
+        BoundingBox: ClassVar[BoundingBox | None]
+        IsValid: ClassVar[bool | None]

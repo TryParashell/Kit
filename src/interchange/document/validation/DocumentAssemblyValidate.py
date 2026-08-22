@@ -6,49 +6,75 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.MateGroup import MateGroup
 from interchange.document.models.DocumentIdentity import GetIdGroups
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
+    CadDocument,
+)
+from interchange.document.validation.DocumentBoundary import (  # lgtm[py/cyclic-import]
+    GetDocument,
+)
 
 
 # assembly validation composes focused graph link mesh and mate checks deterministically
 def GetAssemblyErrs(
-    DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
+    DocumentValue: CadDocument, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
-    from interchange.document.validation.DocumentComponentValidate import (
+    from interchange.document.validation.DocumentComponentValidate import (  # lgtm[py/cyclic-import]
         GetDefLinkErrs,
         GetDocLinkErrs,
     )
-    from interchange.document.validation.DocumentGraphValidate import GetGraphErrors
-    from interchange.document.validation.DocumentMateEntityValidate import (
+    from interchange.document.validation.DocumentGraphValidate import (  # lgtm[py/cyclic-import]
+        GetGraphErrors,
+    )
+    from interchange.document.validation.DocumentMateEntityValidate import (  # lgtm[py/cyclic-import]
         GetMateEntErrs,
     )
-    from interchange.document.validation.DocumentMateGroupValidate import GetMateGroups
-    from interchange.document.validation.DocumentMateValidate import GetMateErrors
-    from interchange.document.validation.DocumentMeshValidate import GetMeshErrors
+    from interchange.document.validation.DocumentMateGroupValidate import (  # lgtm[py/cyclic-import]
+        GetMateGroups,
+    )
+    from interchange.document.validation.DocumentMateValidate import (  # lgtm[py/cyclic-import]
+        GetMateErrors,
+    )
+    from interchange.document.validation.DocumentMeshValidate import (  # lgtm[py/cyclic-import]
+        GetMeshErrors,
+    )
 
-    AssemblyValue = DocumentValue.Assembly
+    AssemblyValue = DocumentValue.assembly
     if AssemblyValue is None:
         return ()
     ErrorValues: list[str] = []
-    for UnusedName, LabelText, ItemValues in GetIdGroups(AssemblyValue):
-        IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
+    for GroupValue in GetIdGroups(AssemblyValue):
+        LabelText = GroupValue[1]
+        ItemValues = GroupValue[2]
+        IdValues = [ItemValue.id for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
-    Definitions = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Definitions
+    Definitions: dict[str, ComponentDef] = {
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.definitions
     }
-    Instances = {ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Instances}
+    Instances: dict[str, ComponentInst] = {
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.instances
+    }
     DocumentValues = {
-        ItemValue.EntityId: ItemValue.Document for ItemValue in AssemblyValue.Documents
+        ItemValue.id: NestedValue
+        for ItemValue in AssemblyValue.documents
+        if (NestedValue := GetDocument(ItemValue.document)) is not None
     }
-    Entities = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.MateEntities
+    Entities: dict[str, MateEntity] = {
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.mate_entities
     }
-    MateValues = {ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.Mates}
-    GroupById = {
-        ItemValue.EntityId: ItemValue for ItemValue in AssemblyValue.MateGroups
+    MateValues: dict[str, MateConstraint] = {
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.mates
+    }
+    GroupById: dict[str, MateGroup] = {
+        ItemValue.id: ItemValue for ItemValue in AssemblyValue.mate_groups
     }
     ErrorValues.extend(GetGraphErrors(AssemblyValue, Definitions))
     ErrorValues.extend(GetDocLinkErrs(DocumentValue, AssemblyValue))

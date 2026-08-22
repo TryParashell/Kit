@@ -6,37 +6,77 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from dataclasses import make_dataclass as MakeDataClass
+from __future__ import annotations
 
-from convert.adapters.base.TransferContract import CapTransfer
-from convert.results.ResultDetails import ResultDetails
-from convert.results.ResultFlags import ResultFlags
+from collections.abc import Callable
+from dataclasses import dataclass as DataClass
+from typing import TypeVar
+
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.enums.EnumDocument import Capability
+
+from convert.adapters.base.TransferContract import CapTransfer as CapabilityTransfer
+from convert.adapters.base.WriteResult import WriteResult
+
+# reflected getters need their public package owner without replacing concrete descriptors
+GetterType = TypeVar("GetterType", bound=Callable[..., object])
 
 
-# dynamic construction preserves historical field names while implementation identifiers remain compliant
-def BuildResult() -> type:
-    TransferGetter = vars(ResultDetails)["transfers"].fget
-    TransferGetter.__globals__["CapabilityTransfer"] = CapTransfer
-    ClassScope = {
-        "transfers": vars(ResultDetails)["transfers"],
-        "dropped": vars(ResultDetails)["dropped"],
-        "requirements": vars(ResultDetails)["requirements"],
-        "application_usable": vars(ResultFlags)["application_usable"],
-        "vendor_loadable": vars(ResultFlags)["vendor_loadable"],
-        "roundtrip_safe": vars(ResultFlags)["roundtrip_safe"],
-        "near_lossless": vars(ResultFlags)["near_lossless"],
-    }
-    ResultType = MakeDataClass(
-        "ConversionResult",
-        (
-            ("document", "CadDocument"),
-            ("output", "WriteResult"),
-            ("source_format", "str"),
-            ("destination_format", "str"),
-        ),
-        namespace=ClassScope,
-        frozen=True,
-        slots=True,
-    )
-    ResultType.__module__ = "convert.engine"
-    return ResultType
+# public schema ownership differs from the focused implementation module by design
+def SetResultOwner(GetterValue: GetterType) -> GetterType:
+    GetterValue.__module__ = "convert.engine"
+    return GetterValue
+
+
+# conversion outcomes need a stable static record for callers and type checkers
+@DataClass(frozen=True, slots=True)
+class ConversionResult:
+    document: CadDocument
+    output: WriteResult
+    source_format: str
+    destination_format: str
+
+    # transfer evidence stays beside the conversion outcome for direct caller policy checks
+    @property
+    @SetResultOwner
+    def transfers(self) -> tuple[CapabilityTransfer, ...]:
+        return self.output.Transfers
+
+    # loss evidence remains direct because callers gate conversion success on it
+    @property
+    @SetResultOwner
+    def dropped(self) -> frozenset[Capability]:
+        return self.output.DroppedCaps
+
+    # output requirements stay visible without exposing writer implementation details
+    @property
+    @SetResultOwner
+    def requirements(self) -> tuple[str, ...]:
+        return self.output.Requirements
+
+    # usability remains a conversion level predicate because clients consume conversion results
+    @property
+    @SetResultOwner
+    def application_usable(self) -> bool:
+        return self.output.IsAppUsable
+
+    # vendor readability remains separate from broader application usability
+    @property
+    @SetResultOwner
+    def vendor_loadable(self) -> bool:
+        return self.output.IsVendorLoadable
+
+    # loss status stays explicit because output evidence can be independently inspected
+    @property
+    @SetResultOwner
+    def roundtrip_safe(self) -> bool:
+        return self.output.IsRoundtripSafe
+
+    # near losslessness remains direct because it is a primary conversion guarantee
+    @property
+    @SetResultOwner
+    def near_lossless(self) -> bool:
+        return self.output.IsNearLossless
+
+
+ConversionResult.__module__ = "convert.engine"

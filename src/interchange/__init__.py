@@ -42,20 +42,20 @@ from .types import (
     Vector3 as LegacyVectorThree,
     frozen_mapping as FrozenMapping,
 )
-from .assembly import (
-    AssemblyData,
-    ComponentDef,
-    ComponentDoc,
-    ComponentInst,
+from interchange.assembly.AssemblyData import AssemblyData
+from interchange.assembly.AssemblyEnums import (
     ComponentKind,
     MateAlignment,
-    MateConstraint,
-    MateEntity,
     MateEntityKind,
-    MateGroup,
     MateKind,
-    TransformMatrix,
 )
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentDocument import ComponentDoc
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.MateGroup import MateGroup
+from interchange.assembly.TransformMatrix import TransformMatrix
 from .brep import (
     BrepBody,
     BrepCoedge,
@@ -92,19 +92,14 @@ from .brep import (
     SphereSurface,
     TorusSurface,
 )
-from interchange.core.Common import FreezeMapping, KJsonScalar, KJsonValue
-from .document import (
-    AddWrapperMeta,
-    CadDocument,
-    DocumentError,
-    FilterDocument,
-    GetPayloadIds,
-    GetRetainedCaps,
-    GetSemanticMeta,
-    InferCaps,
-)
+from interchange.document.models.DocumentCaps import GetRetainedCaps, InferCaps
+from interchange.document.models.DocumentError import DocumentError
+from interchange.document.models.DocumentFilter import FilterDocument
+from interchange.document.models.DocumentMetadata import AddWrapperMeta, GetSemanticMeta
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.document.models.DocumentPayload import GetPayloadIds
 from interchange.enums.EnumDocument import Capability, Severity
-from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
+from interchange.enums.EnumFeatures import FeatureKind
 from interchange.enums.EnumGeometry import ConstraintKind, GeometryKind
 from interchange.enums.EnumUnits import UnitSystem
 from interchange.enums.EnumValues import ParameterRole, ValueKind
@@ -127,132 +122,264 @@ from interchange.features.FeatureKinds import (
     ShellFeature,
 )
 from interchange.features.FeatureStep import FeatureCfgState, FeatureStep
-from .geometry import (
+from interchange.geometry.models.GeometryConics import (
     ArcEllipseGeom,
-    ArcGeometry,
     ArcHyperGeom,
     ArcParabGeom,
-    CircleGeometry,
-    ConstraintRef,
     EllipseGeometry,
     HyperbolaGeom,
+    ParabolaGeom,
+)
+from interchange.geometry.models.GeometryCurves import (
+    ArcGeometry,
+    CircleGeometry,
     LineGeometry,
     NativeGeometry,
-    ParabolaGeom,
     PointGeometry,
-    SelectPathElem,
-    Selection,
+    SplineGeometry,
+)
+from interchange.geometry.models.Selection import Selection, SelectPathElem
+from interchange.geometry.models.Sketch import (
+    ConstraintRef,
     Sketch,
     SketchEntity,
     SketchRelation,
-    SplineGeometry,
-    SupportPlane,
 )
+from interchange.geometry.models.SupportPlane import SupportPlane
+from .geometry.models.VectorPlane import PlaneVector
+from .geometry.models.VectorSpace import SpaceVector
 from .history import AdapterCaps
-from .mesh import SurfaceMesh
+from interchange.mesh.SurfaceMesh import SurfaceMesh
 from interchange.payloads.PayloadMigrate import MigratePayload
 from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.payloads.PayloadRoles import PayloadRole
-from interchange.core.PackageExports import KPackageExports
 from interchange.compatibility.PythonCompat import BindTypeGlobals
-from interchange.records.RecordConfig import Configuration, ParamOverride
+from interchange.records.RecordConfig import Configuration
 from interchange.records.RecordDiagnostic import Diagnostic
 from interchange.records.RecordParameter import Expression, Parameter, ParameterValue
 from interchange.records.RecordProvenance import Provenance, ProvenanceSpan
 from interchange.records.RecordSource import CadSource
 from interchange.records.RecordTopology import TopologyCounts
-from .serialization import RegMigration, RegisterTypes
+from interchange.serialization.MigrationRegistry import RegMigration
+from interchange.serialization.TypeRegistry import RegisterTypes
 from interchange.geometry.models.Vectors import (
     BoundingBox,
-    PlaneVector,
-    SpaceVector,
     Transform,
 )
 
-globals().update(
-    {
-        "AdapterCapabilities": AdapterCaps,
-        "ArcEllipseGeometry": ArcEllipseGeom,
-        "ArcHyperbolaGeometry": ArcHyperGeom,
-        "ArcParabolaGeometry": ArcParabGeom,
-        "Body": DesignBody,
-        "BooleanOperation": BooleanOperation,
-        "CircularPatternFeature": CirclePattern,
-        "ComponentDefinition": ComponentDef,
-        "ComponentDocument": ComponentDoc,
-        "ComponentInstance": ComponentInst,
-        "ConstraintReference": ConstraintRef,
-        "CadDocumentValidationError": DocumentError,
-        "ExtrusionEndCondition": ExtrudeEnd,
-        "ExtrusionFeature": ExtrudeFeature,
-        "FeatureDefinition": FeatureDef,
-        "FeatureConfigurationState": FeatureCfgState,
-        "HyperbolaGeometry": HyperbolaGeom,
-        "LinearPatternFeature": LinearPattern,
-        "Matrix4": TransformMatrix,
-        "Mesh": SurfaceMesh,
-        "NativeFeatureDefinition": NativeFeature,
-        "ParabolaGeometry": ParabolaGeom,
-        "ParameterOverride": ParameterOverride,
-        "ReferencePlaneFeature": RefPlaneFeature,
-        "RevolutionFeature": RevolveFeature,
-        "SelectionPathElement": SelectPathElem,
-        "SketchConstraint": SketchRelation,
-        "TopologySummary": TopologyCounts,
-        "Vector2": LegacyVectorTwo,
-        "Vector3": LegacyVectorThree,
-        "filter_document": FilterDocument,
-        "frozen_mapping": FrozenMapping,
-        "infer_capabilities": InferCaps,
-        "retained_capabilities": GetRetainedCaps,
-        "register_migration": RegMigration,
-        "register_types": RegisterTypes,
-        "semantic_metadata": GetSemanticMeta,
-        "source_payload_indexes": GetPayloadIds,
-        "with_wrapper_metadata": AddWrapperMeta,
-    }
-)
-
-globals().update(
-    {
-        "assembly": AssemblyModule,
-        "brep": BrepModule,
-        "document": DocumentModule,
-        "geometry": GeometryModule,
-        "history": HistoryModule,
-        "mesh": MeshModule,
-        "serialization": SerialModule,
-        "types": TypesModule,
-    }
-)
+# direct aliases make the runtime public contract visible to static analyzers
+AdapterCapabilities = AdapterCaps
+ArcEllipseGeometry = ArcEllipseGeom
+ArcHyperbolaGeometry = ArcHyperGeom
+ArcParabolaGeometry = ArcParabGeom
+Body = DesignBody
+CircularPatternFeature = CirclePattern
+ComponentDefinition = ComponentDef
+ComponentDocument = ComponentDoc
+ComponentInstance = ComponentInst
+ConstraintReference = ConstraintRef
+CadDocumentValidationError = DocumentError
+ExtrusionEndCondition = ExtrudeEnd
+ExtrusionFeature = ExtrudeFeature
+FeatureDefinition = FeatureDef
+FeatureConfigurationState = FeatureCfgState
+HyperbolaGeometry = HyperbolaGeom
+LinearPatternFeature = LinearPattern
+Matrix4 = TransformMatrix
+Mesh = SurfaceMesh
+NativeFeatureDefinition = NativeFeature
+ParabolaGeometry = ParabolaGeom
+ReferencePlaneFeature = RefPlaneFeature
+RevolutionFeature = RevolveFeature
+SelectionPathElement = SelectPathElem
+SketchConstraint = SketchRelation
+TopologySummary = TopologyCounts
+Vector2 = LegacyVectorTwo
+Vector3 = LegacyVectorThree
+filter_document = FilterDocument
+frozen_mapping = FrozenMapping
+infer_capabilities = InferCaps
+retained_capabilities = GetRetainedCaps
+register_migration = RegMigration
+register_types = RegisterTypes
+semantic_metadata = GetSemanticMeta
+source_payload_indexes = GetPayloadIds
+with_wrapper_metadata = AddWrapperMeta
+assembly = AssemblyModule
+brep = BrepModule
+document = DocumentModule
+geometry = GeometryModule
+history = HistoryModule
+mesh = MeshModule
+serialization = SerialModule
+types = TypesModule
 
 # package consumers need one intentional stable list of supported public symbols
-__all__ = KPackageExports
+__all__ = (
+    "AdapterCapabilities",
+    "ArcEllipseGeometry",
+    "ArcGeometry",
+    "ArcHyperbolaGeometry",
+    "ArcParabolaGeometry",
+    "AssemblyData",
+    "Body",
+    "BooleanOperation",
+    "BoundingBox",
+    "BrepBody",
+    "BrepCoedge",
+    "BrepCurve",
+    "BrepEdge",
+    "BrepEntity",
+    "BrepFace",
+    "BrepFaceUse",
+    "BrepLoop",
+    "BrepModel",
+    "BrepPayload",
+    "BrepPcurve",
+    "BrepRegion",
+    "BrepShell",
+    "BrepShellUse",
+    "BrepSurface",
+    "BrepVertex",
+    "BrepWire",
+    "CadDocument",
+    "CadDocumentValidationError",
+    "CadSource",
+    "Capability",
+    "ChamferFeature",
+    "CircleCurve",
+    "CircleGeometry",
+    "CirclePcurve",
+    "CircularPatternFeature",
+    "CombineFeature",
+    "ComponentDefinition",
+    "ComponentDocument",
+    "ComponentInstance",
+    "ComponentKind",
+    "Configuration",
+    "ConeSurface",
+    "ConstraintKind",
+    "ConstraintReference",
+    "CylinderSurface",
+    "Diagnostic",
+    "DomeFeature",
+    "EllipseCurve",
+    "EllipseGeometry",
+    "Expression",
+    "ExtrusionEndCondition",
+    "ExtrusionFeature",
+    "FeatureConfigurationState",
+    "FeatureDefinition",
+    "FeatureKind",
+    "FeatureStep",
+    "FilletFeature",
+    "GeometryKind",
+    "HoleFeature",
+    "HyperbolaGeometry",
+    "IntersectionCurve",
+    "LineCurve",
+    "LineGeometry",
+    "LinePcurve",
+    "LinearPatternFeature",
+    "MateAlignment",
+    "MateConstraint",
+    "MateEntity",
+    "MateEntityKind",
+    "MateGroup",
+    "MateKind",
+    "Matrix4",
+    "Mesh",
+    "MoveBodyFeature",
+    "NativeCurve",
+    "NativeFeatureDefinition",
+    "NativeGeometry",
+    "NativePcurve",
+    "NativeSurface",
+    "NurbsCurve",
+    "NurbsPcurve",
+    "NurbsSurface",
+    "OffsetSurface",
+    "Parameter",
+    "ParameterOverride",
+    "ParameterRole",
+    "ParameterValue",
+    "ParabolaGeometry",
+    "PayloadRole",
+    "PlaneSurface",
+    "PointGeometry",
+    "PlaneVector",
+    "Provenance",
+    "ProvenanceSpan",
+    "ReferencePlaneFeature",
+    "RevolutionFeature",
+    "ScaleFeature",
+    "Selection",
+    "SelectionPathElement",
+    "Severity",
+    "ShellFeature",
+    "Sketch",
+    "SketchConstraint",
+    "SketchEntity",
+    "SphereSurface",
+    "SplineGeometry",
+    "SupportPlane",
+    "SpaceVector",
+    "TopologySummary",
+    "TorusSurface",
+    "Transform",
+    "UnitSystem",
+    "ValueKind",
+    "Vector2",
+    "Vector3",
+    "assembly",
+    "brep",
+    "document",
+    "filter_document",
+    "frozen_mapping",
+    "geometry",
+    "history",
+    "infer_capabilities",
+    "mesh",
+    "register_migration",
+    "register_types",
+    "retained_capabilities",
+    "semantic_metadata",
+    "serialization",
+    "source_payload_indexes",
+    "with_wrapper_metadata",
+    "types",
+)
 
 BindTypeGlobals(
     (
-        vars(AssemblyModule),
-        vars(BrepModule),
-        vars(DocumentModule),
-        vars(GeometryModule),
-        vars(HistoryModule),
-        vars(MeshModule),
-        vars(TypesModule),
+        AssemblyModule,
+        BrepModule,
+        DocumentModule,
+        GeometryModule,
+        HistoryModule,
+        MeshModule,
+        TypesModule,
     ),
     tuple(
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         globals()[NameValue]
         for NameValue in __all__
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         if isinstance(globals()[NameValue], type)
     ),
 )
 
 RegisterTypes(
     *(
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         globals()[NameValue]
         for NameValue in __all__
+        # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
         if isinstance(globals()[NameValue], type)
         and (
+            # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
             IsDataClass(globals()[NameValue])
+            # nosemgrep: python.lang.security.dangerous-globals-use.dangerous-globals-use
             or issubclass(globals()[NameValue], EnumBase)
         )
     )

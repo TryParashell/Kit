@@ -19,17 +19,13 @@ from convert import (
     open_document as OpenDoc,
 )
 from convert.adapters import ReadOptions
-from convert.adapters.catia import (
-    CatiaAdapter,
-    Cfv2Archive as CfvTwoArchive,
-    build_cfv2 as BuildCfvTwo,
-    write_catia as WriteCatia,
-)
+from convert.adapters.catia.Adapter import CatiaAdapter, WriteCatia
 from convert.adapters.catia.Assembly import (
-    _under_root as UnderRoot,
-    decode_product_table as DecodeProductTable,
-    native_product_assembly as NativeProductAsm,
+    DecodeProductA as DecodeProductTable,
+    IsUnderRoot as UnderRoot,
+    NativeProductE as NativeProductAsm,
 )
+from convert.adapters.catia.Container import BuildCfvTwo, CfvTwoArchive
 from convert.adapters.freecad import (
     read_freecad as ReadFreecad,
     write_freecad as WriteFreecad,
@@ -39,6 +35,9 @@ from interchange import (
     Matrix4 as MatrixFour,
     frozen_mapping as FrozenMapping,
 )
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.payloads.PayloadRecord import BrepPayload
+from tests.convert.catia.MetadataAccess import GetObjectRows, GetString
 
 # this binding exists because shared behavior needs one stable value
 KRootValue = FilePath(__file__).parents[3]
@@ -49,7 +48,7 @@ KCatproducts = KRootValue / "examples" / ".CATProduct"
 
 # this definition exists because focused behavior needs one stable owner
 def ProductStream(Tokens: tuple[tuple[str, str], ...]) -> bytes:
-    Values = []
+    Values: list[bytes] = []
     for Value, Encoding in Tokens:
         RawValue = Value.encode(Encoding)
         if len(RawValue) > 254:
@@ -271,7 +270,9 @@ def TestCatproductI() -> None:
     assert DocValue.assembly is not None
     assert [
         ItemValue["root_name"]
-        for ItemValue in DocValue.assembly.attributes["native_table_candidates"]
+        for ItemValue in GetObjectRows(
+            DocValue.assembly.attributes["native_table_candidates"]
+        )
     ] == ["RootA", "RootB"]
     assert "catia.product.root_ambiguous" in {
         ItemValue.code for ItemValue in DocValue.diagnostics
@@ -279,7 +280,7 @@ def TestCatproductI() -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductG(TmpPath: Path) -> None:
+def TestCatproductG(TmpPath: FilePath) -> None:
     Source = KRootValue / "examples" / ".CATPart" / "4876.CATPart"
     Renamed = TmpPath / "unrelated-name.CATPart"
     Renamed.write_bytes(Source.read_bytes())
@@ -299,7 +300,7 @@ def TestCatproductG(TmpPath: Path) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductJ(TmpPath: Path) -> None:
+def TestCatproductJ(TmpPath: FilePath) -> None:
     Source = KRootValue / "examples" / ".CATPart" / "4876.CATPart"
     First = TmpPath / "a.CATPart"
     Second = TmpPath / "b.CATPart"
@@ -319,8 +320,10 @@ def TestCatproductJ(TmpPath: Path) -> None:
     assert Definition.source_path == ""
     assert Definition.document_id == ""
     assert {
-        FilePath(ItemValue["path"]).name
-        for ItemValue in Definition.attributes["native_reference_candidates"]
+        FilePath(GetString(ItemValue["path"])).name
+        for ItemValue in GetObjectRows(
+            Definition.attributes["native_reference_candidates"]
+        )
     } == {"a.CATPart", "b.CATPart"}
     DiagValue = next(
         (
@@ -444,7 +447,7 @@ def TestCatproductP() -> None:
         "Tilton_Set.CATProduct",
     ),
 )
-def TestEveryByte(NameValue: str, TmpPath: Path) -> None:
+def TestEveryByte(NameValue: str, TmpPath: FilePath) -> None:
     Source = KCatproducts / NameValue
     DocValue = CatiaAdapter().read(Source)
     Output = TmpPath / NameValue
@@ -454,7 +457,7 @@ def TestEveryByte(NameValue: str, TmpPath: Path) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestChangedBase(TmpPath: Path) -> None:
+def TestChangedBase(TmpPath: FilePath) -> None:
     Source = KCatproducts / "Tilton_Set.CATProduct"
     Original = CfvTwoArchive.from_bytes(Source.read_bytes())
     DocValue = CatiaAdapter().read(Source)
@@ -541,7 +544,7 @@ def TestCatproductB(Values: dict[str, object], Limit: str) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductC(TmpPath: Path) -> None:
+def TestCatproductC(TmpPath: FilePath) -> None:
     LinkValue = TmpPath / "outside-parts"
     try:
         LinkValue.symlink_to(
@@ -573,7 +576,7 @@ def TestCatproductC(TmpPath: Path) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductA(TmpPath: Path) -> None:
+def TestCatproductA(TmpPath: FilePath) -> None:
     RootValue = TmpPath / "components"
     RootValue.mkdir()
     Inside = RootValue / "inside.CATPart"
@@ -591,11 +594,16 @@ def TestCatproduct() -> None:
     Adapter = CatiaAdapter()
 
     # this definition exists because focused behavior needs one stable owner
-    def Mismatched(Component: Path, Options: ReadOptions):
+    def Mismatched(Component: FilePath, Options: ReadOptions) -> CadDocument:
         Values = dict(Options.values)
         Values["resolve_components"] = False
         DocValue = Adapter.read(
-            Component, Replace(Options, strict=False, values=FrozenMapping(Values))
+            Component,
+            Replace(
+                Options,
+                StrictMode=False,
+                OptionValues=FrozenMapping(Values),
+            ),
         )
         return Replace(DocValue, source=Replace(DocValue.source, sha256="0" * 64))
 
@@ -634,7 +642,11 @@ def VerifyNeutral(RootValue: XmlTree.Element, Names: set[str]) -> None:
 
 
 # optional native geometry needs one proof point shared across every component archive
-def HasCgmPayload(Archive, Names: set[str], CgmPayloads: tuple) -> bool:
+def HasCgmPayload(
+    Archive: Zipfile.ZipFile,
+    Names: set[str],
+    CgmPayloads: tuple[BrepPayload, ...],
+) -> bool:
     if not CgmPayloads:
         return False
     assert len(CgmPayloads) == 1
@@ -703,7 +715,7 @@ def VerifyLinks(
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductO(TmpPath: Path) -> None:
+def TestCatproductO(TmpPath: FilePath) -> None:
     Source = KCatproducts / "Brake_Pedal_Assembly - Backup 1.CATProduct"
     Output = TmpPath / "Brake.FCStd"
     with Pytest.raises(AppUsabilityError) as Captured:

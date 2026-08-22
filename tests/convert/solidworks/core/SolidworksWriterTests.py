@@ -45,13 +45,14 @@ from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
 )
 from convert.adapters.solidworks.container.Container import (
+    SldprtArchive as SldprtArchiveContract,
     container_signatures as ContainerSignatures,
 )
 from convert.adapters.solidworks.core.Adapter import (
-    _ASSEMBLY_DONOR_CARRIED_STREAMS as Streams,
-    _document_without_source as DocumentWithoutSource,
-    _native_stream_sha256 as NativeStreamShaTwoFiveSix,
-    _semantic_sha256 as SemanticShaTwoFiveSix,
+    DocWithout as DocumentWithoutSource,
+    KAsmDonorCarriedStreams as Streams,
+    NativeStreamSha as NativeStreamShaTwoFiveSix,
+    SemanticShaTwo as SemanticShaTwoFiveSix,
 )
 from convert.adapters.solidworks.container.Cmgr import (
     CONFIGURATION_MANAGER_STREAM as StreamA,
@@ -71,6 +72,7 @@ from convert.adapters.solidworks.container.Format import (
 )
 from convert.adapters.solidworks.core.Native import (
     HasVendorPartEncoding,
+    NativeModel,
     VENDOR_UNLOADABLE_NOTES as Notes,
     decode_native_model_header as DecodeNativeModelHeader,
     encode_native_part as EncodeNativePart,
@@ -78,6 +80,7 @@ from convert.adapters.solidworks.core.Native import (
 )
 from convert.adapters.solidworks.resolved.Core import (
     BLIND_END_CONDITION as Condition,
+    FeatureLayout,
     locate_features as LocateFeatures,
 )
 from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program import (
@@ -88,12 +91,15 @@ from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program i
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
     BuildEnvelope as BuildRevolvePinEnvelope,
     KPinPointsMm,
+    PinEnvelope,
 )
+from convert.adapters.base.WriteResult import WriteResult
 from convert.geometry.Parasolid import (
-    _parasolid_header as ParasolidHeader,
-    _scan_partition_records as ScanPartitionRecords,
+    ParaHeaderData as ParasolidHeader,
+    ScanPartRecords as ScanPartitionRecords,
 )
 from interchange import (
+    AssemblyData,
     BooleanOperation,
     BrepPayload,
     CadDocument,
@@ -187,6 +193,13 @@ KFreeCadRevPin = (
 )
 
 
+# assembly fixtures are intentionally complete so missing graphs must fail immediately
+def GetAssembly(DocumentValue: CadDocument) -> AssemblyData:
+    AssemblyValue = DocumentValue.assembly
+    assert AssemblyValue is not None
+    return AssemblyValue
+
+
 # keeps this focused behavior isolated so regressions remain immediately visible
 def FreecadRPD(
     Bounds: tuple[float, float, float, float] = (-30.0, -15.0, 30.0, 15.0),
@@ -221,7 +234,7 @@ def FreecadRPD(
     Feature = ReplaceData(
         SourceDoc.feature_timeline[0],
         name="Pad",
-        operation=BooleanOperation.CREATE,
+        operation=BooleanOperation.KCreate,
         definition=ExtrusionFeature(
             ParameterValue(Depth, ValueKind.LENGTH, "mm"),
             direction=VectorThree(0.0, 0.0, 1.0),
@@ -283,16 +296,16 @@ def FreecadRPD(
         bodies=(ReplaceData(SourceDoc.bodies[0], final_feature_id=Feature.id),),
         capabilities=frozenset(
             {
-                Capability.PARAMETERS,
-                Capability.PARAMETRIC_HISTORY,
-                Capability.SUPPORT_PLANES,
-                Capability.EDITABLE_SKETCHES,
-                Capability.BODY_STRUCTURE,
-                Capability.CONFIGURATIONS,
-                Capability.BREP,
-                Capability.NATIVE_PAYLOADS,
-                Capability.PROVENANCE,
-                Capability.ROUNDTRIP_METADATA,
+                Capability.KParameters,
+                Capability.KParamHistory,
+                Capability.KSupportPlanes,
+                Capability.KEditableSketches,
+                Capability.KBodyStructure,
+                Capability.KConfigurations,
+                Capability.KBrep,
+                Capability.KNativePayloads,
+                Capability.KProvenance,
+                Capability.KRoundtripMeta,
             }
         ),
     )
@@ -337,7 +350,9 @@ def FreeCPPD(*, ThroughAll: bool = False, JoinInfo: bool = False) -> CadDocument
         id=f"freecad:feature:{SecondName}",
         name=SecondName,
         order=1,
-        operation=BooleanOperation.JOIN if JoinInfo else BooleanOperation.CUT,
+        operation=(
+            BooleanOperation.KJoin if JoinInfo else BooleanOperation.KCutOperation
+        ),
         sketch_id=SketchTwo.id,
         input_feature_ids=(FeatureOne.id,),
         definition=ExtrusionFeature(
@@ -345,9 +360,9 @@ def FreeCPPD(*, ThroughAll: bool = False, JoinInfo: bool = False) -> CadDocument
                 25.0 if JoinInfo else 5.0 if ThroughAll else 6.0, ValueKind.LENGTH, "mm"
             ),
             end_condition=(
-                ExtrusionEndCondition.THROUGH_ALL
+                ExtrusionEndCondition.KThroughAll
                 if ThroughAll
-                else ExtrusionEndCondition.BLIND
+                else ExtrusionEndCondition.KBlind
             ),
             reversed=not JoinInfo,
             direction=VectorThree(0.0, 0.0, 1.0 if JoinInfo else -1.0),
@@ -619,8 +634,8 @@ def FreeCRRD() -> CadDocument:
     FeatureData = ReplaceData(
         SourceFeature,
         name="Revolution",
-        kind=FeatureKind.REVOLUTION,
-        operation=BooleanOperation.CREATE,
+        kind=FeatureKind.KRevolution,
+        operation=BooleanOperation.KCreate,
         definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Revolution"),
         selection_ids=(SelectionData.id,),
         provenance=Provenance("freecad.fcstd", "Revolution"),
@@ -662,7 +677,7 @@ def FreeCRRD() -> CadDocument:
         selections=(SelectionData,),
         feature_timeline=(FeatureData,),
         bodies=(ReplaceData(SourceData.bodies[0], final_feature_id=FeatureData.id),),
-        capabilities=SourceData.capabilities | {Capability.SELECTIONS},
+        capabilities=SourceData.capabilities | {Capability.KSelections},
     )
 
 
@@ -714,8 +729,8 @@ def FreeCPGD() -> CadDocument:
         PocketFeature,
         id="freecad:feature:Groove",
         name="Groove",
-        kind=FeatureKind.REVOLUTION,
-        operation=BooleanOperation.CUT,
+        kind=FeatureKind.KRevolution,
+        operation=BooleanOperation.KCutOperation,
         definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Groove"),
         selection_ids=(SelectionData.id,),
         provenance=Provenance("freecad.fcstd", "Groove"),
@@ -765,7 +780,7 @@ def FreeCPGD() -> CadDocument:
         selections=(SelectionData,),
         feature_timeline=(PadFeature, GrooveFeature),
         bodies=(ReplaceData(SourceData.bodies[0], final_feature_id=GrooveFeature.id),),
-        capabilities=SourceData.capabilities | {Capability.SELECTIONS},
+        capabilities=SourceData.capabilities | {Capability.KSelections},
     )
 
 
@@ -857,7 +872,7 @@ def TestPPFSCRPS() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSSREAFR(TmpPath) -> None:
+def TestSSREAFR(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Fcstd = TmpPath / "source.FCStd"
     Output = TmpPath / "source.SLDPRT"
@@ -874,7 +889,7 @@ def TestSSREAFR(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSSREACC(TmpPath) -> None:
+def TestSSREACC(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Catpart = TmpPath / "source.CATPart"
     Output = TmpPath / "source.SLDPRT"
@@ -887,7 +902,8 @@ def TestSSREACC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPSADACCE(TmpPath) -> None:
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
+def TestPSADACCE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Catproduct = TmpPath / "source.CATProduct"
     Output = TmpPath / "source.SLDASM"
@@ -905,7 +921,7 @@ def TestSEDESR(Change: str) -> None:
     Document = ReadSldprt(KSample)
     if Change == "capabilities":
         Changed = ReplaceData(
-            Document, capabilities=Document.capabilities | {Capability.MATERIALS}
+            Document, capabilities=Document.capabilities | {Capability.KMaterials}
         )
     elif Change == "metadata":
         Changed = ReplaceData(
@@ -967,7 +983,7 @@ def TestRSSDCFNER() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertNeutral(Archive) -> None:
+def AssertNeutral(Archive: SldprtArchiveContract) -> None:
     assert Archive.format_version == 4
     assert Archive.require("Kit/Interchange")
     assert StreamK not in Archive.streams
@@ -983,7 +999,9 @@ def AssertNeutral(Archive) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertNeutDoc(SourceDoc, Output, ResultInfo) -> None:
+def AssertNeutDoc(
+    SourceDoc: CadDocument, Output: FilePath, ResultInfo: WriteResult
+) -> None:
     Reread = ReadSldprt(Output)
     assert Reread.configurations == SourceDoc.configurations
     assert Reread.support_planes == SourceDoc.support_planes
@@ -1020,7 +1038,7 @@ def AssertNeutDoc(SourceDoc, Output, ResultInfo) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestFDWSSC(TmpPath) -> None:
+def TestFDWSSC(TmpPath: FilePath) -> None:
     SourceDoc = Document()
     Fcstd = TmpPath / "neutral.FCStd"
     Output = TmpPath / "neutral.SLDPRT"
@@ -1055,7 +1073,7 @@ def TestFDWSSC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def BuildStablePart():
+def BuildStablePart() -> SldprtArchiveContract:
     First = BytesIO()
     Second = BytesIO()
     WriteSldprt(Document(), First)
@@ -1065,7 +1083,7 @@ def BuildStablePart():
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPartRels(Archive) -> None:
+def AssertPartRels(Archive: SldprtArchiveContract) -> None:
     ContentTypes = Archive.require(StreamC)
     Relationships = Archive.require(StreamJ)
     assert len(ContentTypes) == 556
@@ -1086,7 +1104,7 @@ def AssertPartRels(Archive) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPartXml(Archive) -> None:
+def AssertPartXml(Archive: SldprtArchiveContract) -> None:
     Keywords = Archive.require(StreamE)
     Features = Archive.require(StreamD)
     assert Keywords.startswith(
@@ -1124,7 +1142,7 @@ def AssertPartXml(Archive) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertDefaults(Archive) -> None:
+def AssertDefaults(Archive: SldprtArchiveContract) -> None:
     assert Archive.require("Contents/CnfgObjs") == bytes.fromhex(
         "00000000fffeff00fffeff00"
     )
@@ -1172,6 +1190,7 @@ def TestSLBPWNBP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KRingInfo.is_file(), reason="piston ring corpus unavailable")
 def TestSLNSFAEO() -> None:
     SourceDoc = DocumentWithoutSource(ReadSldprt(KRingInfo, include_brep=False))
     Output = BytesIO()
@@ -1259,7 +1278,7 @@ def TestSLNDSR() -> None:
     Feature = ReplaceData(
         Feature,
         parameter_ids=(ParameterA.id,),
-        operation=BooleanOperation.JOIN,
+        operation=BooleanOperation.KJoin,
         definition=ExtrusionFeature(ItemValueA),
     )
     SourceDoc = ReplaceData(
@@ -1406,7 +1425,7 @@ def TestSLNRBRAP() -> None:
     Feature = ReplaceData(
         SourceDoc.feature_timeline[0],
         name="Boss-Extrude1",
-        operation=BooleanOperation.JOIN,
+        operation=BooleanOperation.KJoin,
         definition=ExtrusionFeature(Length),
     )
     SourceDoc = ReplaceData(SourceDoc, sketches=(SketchA,), feature_timeline=(Feature,))
@@ -1437,7 +1456,7 @@ def TestSLNRBRAP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRectData(Archive, ResultInfo) -> None:
+def AssertRectData(Archive: SldprtArchiveContract, ResultInfo: WriteResult) -> None:
     assert StreamK in Archive.streams
     assert StreamH not in Archive.streams
     assert Archive.require(StreamA)
@@ -1459,19 +1478,21 @@ def AssertRectData(Archive, ResultInfo) -> None:
     assert Native.operations[0].length_mm == PytestLib.approx(12.0)
     assert Native.operations[0].termination_code == Condition
     for CapabilityA in (
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BREP,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBrep,
     ):
         assert Transfers[CapabilityA].mode.value == "native"
     for CapabilityA in (
-        Capability.NATIVE_PAYLOADS,
-        Capability.PROVENANCE,
-        Capability.ROUNDTRIP_METADATA,
+        Capability.KNativePayloads,
+        Capability.KProvenance,
+        Capability.KRoundtripMeta,
     ):
         assert Transfers[CapabilityA].mode.value == "carrier"
-        assert Transfers[CapabilityA].carrier_reason.value == "target_unsupported"
+        CarrierCause = Transfers[CapabilityA].carrier_reason
+        assert CarrierCause is not None
+        assert CarrierCause.value == "target_unsupported"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1599,7 +1620,7 @@ def TestVPPRAUFF() -> None:
     assert HasVendorPartEncoding(SourceData)
     UnsupportedFeature = ReplaceData(
         SourceData.feature_timeline[0],
-        kind=FeatureKind.LOFT,
+        kind=FeatureKind.KLoft,
         definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Loft", {}),
     )
     UnsupportedData = ReplaceData(SourceData, feature_timeline=(UnsupportedFeature,))
@@ -1609,44 +1630,35 @@ def TestVPPRAUFF() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def FreeCDV(SourceData: CadDocument, VariantName: str) -> CadDocument:
     FeatureData = SourceData.feature_timeline[0]
+    assert isinstance(FeatureData.definition, ExtrusionFeature)
     DefinitionData = ReplaceData(
         FeatureData.definition,
         reversed=VariantName == "reversed",
         symmetric=VariantName == "midplane",
     )
-    ParametersData = tuple(
-        (
-            (
-                ReplaceData(
-                    ItemData,
-                    value=ParameterValue(
-                        (
-                            2
-                            if ItemData.attributes.get("freecad_path") == "SideType"
-                            and VariantName == "midplane"
-                            else (
-                                0
-                                if ItemData.attributes.get("freecad_path") == "SideType"
-                                else VariantName
-                                == ItemData.attributes.get(
-                                    "freecad_path", ""
-                                ).casefold()
-                            )
-                        ),
-                        (
-                            ValueKind.INTEGER
-                            if ItemData.attributes.get("freecad_path") == "SideType"
-                            else ValueKind.BOOLEAN
-                        ),
-                    ),
-                )
-                if ItemData.attributes.get("freecad_path")
-                in {"Midplane", "Reversed", "SideType"}
-                else ItemData
+    ParameterList: list[Parameter] = []
+    for ItemData in SourceData.parameters:
+        PathValue = ItemData.attributes.get("freecad_path")
+        if not isinstance(PathValue, str) or PathValue not in {
+            "Midplane",
+            "Reversed",
+            "SideType",
+        }:
+            ParameterList.append(ItemData)
+            continue
+        if PathValue == "SideType":
+            ResultValue = 2 if VariantName == "midplane" else 0
+            KindValue = ValueKind.KInteger
+        else:
+            ResultValue = VariantName == PathValue.casefold()
+            KindValue = ValueKind.KBoolean
+        ParameterList.append(
+            ReplaceData(
+                ItemData,
+                value=ParameterValue(ResultValue, KindValue),
             )
-            for ItemData in SourceData.parameters
         )
-    )
+    ParametersData = tuple(ParameterList)
     return ReplaceData(
         SourceData,
         parameters=ParametersData,
@@ -1703,30 +1715,18 @@ def TestFPPWTENF() -> None:
             ItemData.kind,
             ItemData.sketch_id,
             ItemData.reversed,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            False,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Cut-Extrude1",
-            "cut",
-            33,
-            True,
-            PytestLib.approx(6.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26, False),
+        (40, "Cut-Extrude1", "cut", 33, True),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(6.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
     assert ResultData.application_usable is True
     assert ResultData.metadata["native_brep"] == "feature-rebuilt"
     assert ResultData.metadata["native_geometry"] is True
@@ -1734,10 +1734,10 @@ def TestFPPWTENF() -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -1767,39 +1767,29 @@ def TestFPPWTENB() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Boss-Extrude2",
-            "boss",
-            33,
-            PytestLib.approx(25.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (40, "Boss-Extrude2", "boss", 33),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(25.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
     assert [ItemData.kind for ItemData in NativeData.operations] == ["join", "join"]
     assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 40]
     TransferData = {
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.BREP,
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
+        Capability.KBrep,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -1829,31 +1819,22 @@ def TestFPGWENRC() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.angle_radians,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            None,
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            39,
-            "Cut-Revolve1",
-            "revolve-cut",
-            33,
-            None,
-            PytestLib.approx(2.0 * 3.141592653589793),
-            PytestLib.approx((-25.0, 0.0, 25.0, 3.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (39, "Cut-Revolve1", "revolve-cut", 33),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].angle_radians is None
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm is None
+    assert FeatureData[1].angle_radians == PytestLib.approx(
+        2.0 * 3.141592653589793
+    )
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-25.0, 0.0, 25.0, 3.0))
     assert [ItemData.kind for ItemData in NativeData.operations] == [
         "join",
         "revolve_cut",
@@ -1869,12 +1850,12 @@ def TestFPGWENRC() -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.BREP,
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
-        Capability.SELECTIONS,
+        Capability.KBrep,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
+        Capability.KSelections,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -1910,10 +1891,10 @@ def TestFPTAPWDNC() -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -1942,36 +1923,21 @@ def TestFPTPWTENF() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Cut-Extrude1",
-            "cut",
-            33,
-            PytestLib.approx(6.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
-        (
-            47,
-            "Cut-Extrude2",
-            "cut",
-            41,
-            PytestLib.approx(5.0),
-            PytestLib.approx((15.0, -5.0, 25.0, 5.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (40, "Cut-Extrude1", "cut", 33),
+        (47, "Cut-Extrude2", "cut", 41),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(6.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
+    assert FeatureData[2].depth_mm == PytestLib.approx(5.0)
+    assert FeatureData[2].bounds_mm == PytestLib.approx((15.0, -5.0, 25.0, 5.0))
     assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 40, 47]
     assert [ItemData.length_mm for ItemData in NativeData.operations] == [
         PytestLib.approx(15.0),
@@ -1988,11 +1954,11 @@ def TestFPTPWTENF() -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.BREP,
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
+        Capability.KBrep,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -2021,44 +1987,24 @@ def TestFPTPWFENF() -> None:
             ItemData.name,
             ItemData.kind,
             ItemData.sketch_id,
-            ItemData.depth_mm,
-            ItemData.bounds_mm,
         )
         for ItemData in FeatureData
     ] == [
-        (
-            32,
-            "Boss-Extrude1",
-            "boss",
-            26,
-            PytestLib.approx(15.0),
-            PytestLib.approx((-30.0, -20.0, 30.0, 20.0)),
-        ),
-        (
-            40,
-            "Cut-Extrude1",
-            "cut",
-            33,
-            PytestLib.approx(6.0),
-            PytestLib.approx((-10.0, -8.0, 10.0, 8.0)),
-        ),
-        (
-            47,
-            "Cut-Extrude2",
-            "cut",
-            41,
-            PytestLib.approx(5.0),
-            PytestLib.approx((15.0, -5.0, 25.0, 5.0)),
-        ),
-        (
-            54,
-            "Cut-Extrude3",
-            "cut",
-            48,
-            PytestLib.approx(4.0),
-            PytestLib.approx((-25.0, -4.0, -17.0, 4.0)),
-        ),
+        (32, "Boss-Extrude1", "boss", 26),
+        (40, "Cut-Extrude1", "cut", 33),
+        (47, "Cut-Extrude2", "cut", 41),
+        (54, "Cut-Extrude3", "cut", 48),
     ]
+    assert FeatureData[0].depth_mm == PytestLib.approx(15.0)
+    assert FeatureData[0].bounds_mm == PytestLib.approx(
+        (-30.0, -20.0, 30.0, 20.0)
+    )
+    assert FeatureData[1].depth_mm == PytestLib.approx(6.0)
+    assert FeatureData[1].bounds_mm == PytestLib.approx((-10.0, -8.0, 10.0, 8.0))
+    assert FeatureData[2].depth_mm == PytestLib.approx(5.0)
+    assert FeatureData[2].bounds_mm == PytestLib.approx((15.0, -5.0, 25.0, 5.0))
+    assert FeatureData[3].depth_mm == PytestLib.approx(4.0)
+    assert FeatureData[3].bounds_mm == PytestLib.approx((-25.0, -4.0, -17.0, 4.0))
     assert [ItemData.object_id for ItemData in NativeData.operations] == [
         32,
         40,
@@ -2081,17 +2027,22 @@ def TestFPTPWFENF() -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.BREP,
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
+        Capability.KBrep,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
     ):
         assert TransferData[CapabilityValue] == "native"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
+def AssertRevCore(
+    ResultData: WriteResult,
+    ArchiveData: SldprtArchiveContract,
+    FeatureData: tuple[FeatureLayout, ...],
+    NativeData: NativeModel,
+) -> None:
     assert ResultData.vendor_loadable is True
     assert ResultData.application_usable is True
     assert ResultData.metadata["native_brep"] == "feature-rebuilt"
@@ -2114,7 +2065,7 @@ def AssertRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRevHead(ArchiveData, NativeData) -> None:
+def AssertRevHead(ArchiveData: SldprtArchiveContract, NativeData: NativeModel) -> None:
     HeaderData = ArchiveData.require("Contents/Config-0-ModelHeader")
     assert DecodeNativeModelHeader(HeaderData).objects[-2:] == (
         (26, "Sketch1"),
@@ -2156,7 +2107,7 @@ def AssertRevHead(ArchiveData, NativeData) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertRevCfg(ArchiveData, ResultData) -> None:
+def AssertRevCfg(ArchiveData: SldprtArchiveContract, ResultData: WriteResult) -> None:
     ConfigurationData = ArchiveData.require(StreamB)
     AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
     AtomPos = ConfigurationData.index(AtomDefinition)
@@ -2165,12 +2116,12 @@ def AssertRevCfg(ArchiveData, ResultData) -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.BREP,
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
-        Capability.SELECTIONS,
+        Capability.KBrep,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
+        Capability.KSelections,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -2195,7 +2146,11 @@ def TestFFRWENRB() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def AssertPinProg(
-    SourceData, ResultData, ArchiveData, ProgramData, EnvelopeData
+    SourceData: CadDocument,
+    ResultData: WriteResult,
+    ArchiveData: SldprtArchiveContract,
+    ProgramData: bytes,
+    EnvelopeData: PinEnvelope,
 ) -> None:
     assert len(ProgramData) == 12337
     assert (
@@ -2220,7 +2175,9 @@ def AssertPinProg(
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
+def AssertPinNative(
+    ArchiveData: SldprtArchiveContract, ProgramData: bytes, EnvelopeData: PinEnvelope
+) -> None:
     NativeData = DecodeNativeModel(
         ArchiveData.require(StreamE),
         ProgramData,
@@ -2242,17 +2199,17 @@ def AssertPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def AssertPinModes(ResultData) -> None:
+def AssertPinModes(ResultData: WriteResult) -> None:
     TransferData = {
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
-        Capability.BREP,
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
-        Capability.BODY_STRUCTURE,
-        Capability.SELECTIONS,
+        Capability.KBrep,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
+        Capability.KBodyStructure,
+        Capability.KSelections,
     ):
         assert TransferData[CapabilityValue] == "native"
 
@@ -2530,6 +2487,7 @@ def TestFRPNGRNEM(Variant: str) -> None:
             ),
         )
     else:
+        assert isinstance(Feature.definition, ExtrusionFeature)
         SourceDoc = ReplaceData(
             SourceDoc,
             feature_timeline=(
@@ -2583,7 +2541,7 @@ def TestSLNRBPPCN() -> None:
     Feature = ReplaceData(
         SourceDoc.feature_timeline[0],
         name="CustomBoss",
-        operation=BooleanOperation.JOIN,
+        operation=BooleanOperation.KJoin,
         definition=ExtrusionFeature(ParameterValue(10.0, ValueKind.LENGTH, "mm")),
     )
     SourceDoc = ReplaceData(SourceDoc, sketches=(SketchA,), feature_timeline=(Feature,))
@@ -2627,7 +2585,7 @@ def NonNRBD() -> CadDocument:
     Feature = ReplaceData(
         SourceDoc.feature_timeline[0],
         name="CustomBoss",
-        operation=BooleanOperation.JOIN,
+        operation=BooleanOperation.KJoin,
         definition=ExtrusionFeature(ParameterValue(10.0, ValueKind.LENGTH, "mm")),
     )
     return ReplaceData(
@@ -2727,7 +2685,7 @@ def TestNBWNPP() -> None:
     SourceDoc = ReplaceData(
         BaseInfo,
         brep=TriangleBrep(),
-        capabilities=BaseInfo.capabilities | {Capability.BREP},
+        capabilities=BaseInfo.capabilities | {Capability.KBrep},
     )
     Output = BytesIO()
     ResultInfo = WriteSldprt(SourceDoc, Output)
@@ -2738,8 +2696,10 @@ def TestNBWNPP() -> None:
     PartInfo = EncodeNativePart(SourceDoc, "Part1")
     FeatureId = PartInfo.object_ids[f"feature:{SourceDoc.bodies[0].final_feature_id}"]
     assert Native.schema == "SCH_1200000_12006"
+    BrepInfo = SourceDoc.brep
+    assert BrepInfo is not None
     assert Native.data == EncodeBrepModel(
-        SourceDoc.brep, solidworks_feature_ids={SourceDoc.brep.bodies[0].id: FeatureId}
+        BrepInfo, solidworks_feature_ids={BrepInfo.bodies[0].id: FeatureId}
     )
     assert b"LAST_BODY_MODIFYING_FEATURE_ID" in Native.data
     assert Partition != Native.data
@@ -2772,7 +2732,7 @@ def TestSLBOWNIFM() -> None:
         feature_timeline=(Feature,),
         bodies=(BodyInfo,),
         brep=TriangleBrep(),
-        capabilities=frozenset({Capability.BREP}),
+        capabilities=frozenset({Capability.KBrep}),
     )
     Output = BytesIO()
     WriteSldprt(SourceDoc, Output)
@@ -2790,6 +2750,7 @@ def TestSLBOWNIFM() -> None:
     Classes = {ItemValue.offset: ItemValue.name for ItemValue in Native.classes}
     assert Imported.name == "Imported1"
     assert Imported.kind == "Imported"
+    assert Imported.native_offset is not None
     assert Classes[Imported.native_offset - 18] == "moBaseBody_c"
     assert Native.diagnostics == ()
     assert Imported.native_end == len(Resolved)
@@ -2797,22 +2758,22 @@ def TestSLBOWNIFM() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestGPPINB(TmpPath) -> None:
+def TestGPPINB(TmpPath: FilePath) -> None:
     BaseInfo = Document()
     SourceDoc = ReplaceData(
         BaseInfo,
         brep=TriangleBrep(),
-        capabilities=BaseInfo.capabilities | {Capability.BREP},
+        capabilities=BaseInfo.capabilities | {Capability.KBrep},
     )
     Blocked = TmpPath / "blocked.SLDPRT"
     with PytestLib.raises(ApplicationUsabilityError) as Captured:
         WriteDocument(SourceDoc, Blocked, allow_carrier=False)
-    assert Capability.BREP not in Captured.value.unimplemented_capabilities
+    assert Capability.KBrep not in Captured.value.unimplemented_capabilities
     assert Captured.value.unimplemented_capabilities == frozenset(
         {
-            Capability.BODY_STRUCTURE,
-            Capability.EDITABLE_SKETCHES,
-            Capability.PARAMETRIC_HISTORY,
+            Capability.KBodyStructure,
+            Capability.KEditableSketches,
+            Capability.KParamHistory,
         }
     )
     assert not Blocked.exists()
@@ -2824,7 +2785,7 @@ def TestGPPINB(TmpPath) -> None:
             (
                 ItemValue
                 for ItemValue in ResultInfo.transfers
-                if ItemValue.capability is Capability.BREP
+                if ItemValue.capability is Capability.KBrep
             )
         ).mode.value
         == "native"
@@ -2839,7 +2800,7 @@ def TestPPDTKNB() -> None:
     Encoded = EncodeBrepModel(TriangleBrep())
     Decoded = DecodeBrepModel(Encoded)
     assert Decoded is not None
-    assert Decoded.validate() == ()
+    assert Decoded.GetErrors() == ()
     assert len(Decoded.bodies) == 1
     assert len(Decoded.faces) == 1
     assert len(Decoded.edges) == 3
@@ -2864,7 +2825,7 @@ def TestNSRPPAATB() -> None:
     )
     Decoded = ReadSldprt(Native)
     assert Decoded.brep is not None
-    assert Decoded.brep.validate() == ()
+    assert Decoded.brep.GetErrors() == ()
     assert len(Decoded.brep_payloads) == 1
     assert Decoded.brep_payloads[0].data == Encoded
 
@@ -2912,7 +2873,7 @@ def TestUNBRAHC() -> None:
     SourceDoc = ReplaceData(
         BaseInfo,
         brep=Unsupported,
-        capabilities=BaseInfo.capabilities | {Capability.BREP},
+        capabilities=BaseInfo.capabilities | {Capability.KBrep},
     )
     Output = BytesIO()
     ResultInfo = WriteSldprt(SourceDoc, Output)
@@ -2921,14 +2882,16 @@ def TestUNBRAHC() -> None:
     assert Archive.get(StreamI) is None
     assert Restored.brep == SourceDoc.brep
     assert ResultInfo.metadata["native_content"] == "native-metadata"
-    assert ResultInfo.metadata["native_brep"].startswith("unsupported:")
+    NativeBrepValue = ResultInfo.metadata["native_brep"]
+    assert isinstance(NativeBrepValue, str)
+    assert NativeBrepValue.startswith("unsupported:")
     assert ResultInfo.metadata["native_geometry"] is False
     assert ResultInfo.metadata["vendor_loadable"] is False
     assert ResultInfo.diagnostics[-1].code == "sldprt.native_brep_unsupported"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestGCIBFRNGP(TmpPath) -> None:
+def TestGCIBFRNGP(TmpPath: FilePath) -> None:
     BaseInfo = Document()
     SourceDoc = ReplaceData(
         BaseInfo,
@@ -2954,14 +2917,14 @@ def TestGCIBFRNGP(TmpPath) -> None:
             ),
         ),
         capabilities=BaseInfo.capabilities
-        | frozenset({Capability.BREP, Capability.NATIVE_PAYLOADS}),
+        | frozenset({Capability.KBrep, Capability.KNativePayloads}),
     )
     TargetDoc = TmpPath / "payloads.SLDPRT"
     WriteSldprt(SourceDoc, TargetDoc)
     WithoutBrep = ReadSldprt(TargetDoc, include_brep=False)
     assert [Payload.id for Payload in WithoutBrep.brep_payloads] == ["history"]
     assert WithoutBrep.brep_payloads[0].data == b"history"
-    assert WithoutBrep.capabilities == SourceDoc.capabilities - {Capability.BREP}
+    assert WithoutBrep.capabilities == SourceDoc.capabilities - {Capability.KBrep}
     WithBrep = ReadSldprt(TargetDoc, include_brep=True)
     assert [Payload.id for Payload in WithBrep.brep_payloads] == ["geometry", "history"]
     assert WithBrep.capabilities == SourceDoc.capabilities
@@ -2969,7 +2932,7 @@ def TestGCIBFRNGP(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.mark.parametrize("SourceDoc", (Document(), AssemblyDocument()))
-def TestGCPDSC(SourceDoc) -> None:
+def TestGCPDSC(SourceDoc: CadDocument) -> None:
     Output = BytesIO()
     WriteSldprt(SourceDoc, Output)
     Restored = ReadSldprt(Output.getvalue())
@@ -3045,7 +3008,7 @@ def TestFDPMIOR(PayloadIndex: int, Changes: dict[str, bytes | str]) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSEUNTWCNE(TmpPath) -> None:
+def TestSEUNTWCNE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     EditedFeature = ReplaceData(SourceDoc.feature_timeline[0], name="Edited in Kit")
     Edited = ReplaceData(
@@ -3069,7 +3032,7 @@ def TestSEUNTWCNE(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestNTPDDWCOI(TmpPath) -> None:
+def TestNTPDDWCOI(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     TargetValue = float(ParameterA.value.value) + 1.25
@@ -3089,9 +3052,9 @@ def TestNTPDDWCOI(TmpPath) -> None:
     assert ResultInfo.near_lossless is True
     assert ResultInfo.metadata["compatibility"] == "native-template"
     assert {
-        Capability.PARAMETERS,
-        Capability.PARAMETRIC_HISTORY,
-        Capability.EDITABLE_SKETCHES,
+        Capability.KParameters,
+        Capability.KParamHistory,
+        Capability.KEditableSketches,
     } <= ResultInfo.native_capabilities
     Archive = SldprtArchive.open(Output)
     StreamsA = Archive.streams
@@ -3112,7 +3075,7 @@ def TestNTPDDWCOI(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def ForgeAttest(TmpPath) -> tuple[bytes, float]:
+def ForgeAttest(TmpPath: FilePath) -> tuple[bytes, float]:
     SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     NativeValue = float(ParameterA.value.value) + 1.25
@@ -3164,7 +3127,7 @@ def ForgeAttest(TmpPath) -> tuple[bytes, float]:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestRACFNTC(TmpPath) -> None:
+def TestRACFNTC(TmpPath: FilePath) -> None:
     Forged, ForgedValue = ForgeAttest(TmpPath)
     Restored = ReadSldprt(Forged)
     assert Restored.parameters[0].value.value == PytestLib.approx(ForgedValue)
@@ -3182,7 +3145,7 @@ def TestRACFNTC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestACPKSTNE(TmpPath) -> None:
+def TestACPKSTNE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     Edited = ReplaceData(
@@ -3228,7 +3191,7 @@ def TestACPKSTNE(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestNTPSWFN(TmpPath) -> None:
+def TestNTPSWFN(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Feature = SourceDoc.feature_timeline[0]
     TargetName = "X" * len(Feature.name)
@@ -3258,7 +3221,7 @@ def TestNTPSWFN(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSAEDK(TmpPath) -> None:
+def TestSAEDK(TmpPath: FilePath) -> None:
     Adapter = Registry.writer("solidworks.sldprt")
     assert Registry.reader("solidworks.sldasm") is Registry.reader("solidworks.sldprt")
     assert Registry.writer("solidworks.sldasm") is Adapter
@@ -3305,7 +3268,9 @@ def TestSAEDK(TmpPath) -> None:
 @PytestLib.mark.parametrize(
     ("SourceDoc", "WrongSuffix"), ((KSample, ".SLDASM"), (KAssembly, ".SLDPRT"))
 )
-def TestSRRNSKM(SourceDoc, WrongSuffix, TmpPath) -> None:
+def TestSRRNSKM(SourceDoc: FilePath, WrongSuffix: str, TmpPath: FilePath) -> None:
+    if not SourceDoc.is_file():
+        PytestLib.skip("solidworks corpus unavailable")
     Renamed = TmpPath / f"renamed{WrongSuffix}"
     Renamed.write_bytes(SourceDoc.read_bytes())
     with PytestLib.raises(SldprtFormatError, match="content requires"):
@@ -3313,7 +3278,7 @@ def TestSRRNSKM(SourceDoc, WrongSuffix, TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestSRRCSKM(TmpPath) -> None:
+def TestSRRCSKM(TmpPath: FilePath) -> None:
     Valid = TmpPath / "valid.SLDPRT"
     WriteSldprt(Document(), Valid)
     Renamed = TmpPath / "renamed.SLDASM"
@@ -3344,8 +3309,8 @@ def TestSLAERNCG() -> None:
         ItemValue.capability: ItemValue.mode.value for ItemValue in ResultInfo.transfers
     }
     assert Stream in Archive.streams
-    assert Transfers[Capability.ASSEMBLIES] == "native"
-    assert Transfers[Capability.ASSEMBLY_MATES] == "carrier"
+    assert Transfers[Capability.KAssemblies] == "native"
+    assert Transfers[Capability.KAssemblyMates] == "carrier"
     assert ResultInfo.application_usable is False
     assert ResultInfo.vendor_loadable is True
     assert Native.name == "Engine"
@@ -3365,7 +3330,7 @@ def TestSLAERNCG() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSLAEOERM() -> None:
     SourceDoc = AssemblyDocument()
-    Assembly = SourceDoc.assembly
+    Assembly = GetAssembly(SourceDoc)
     ComponentEntity, RootEntity = Assembly.mate_entities
     ComponentEntity = ReplaceData(
         ComponentEntity,
@@ -3388,7 +3353,7 @@ def TestSLAEOERM() -> None:
     MateInfo = ReplaceData(
         Assembly.mates[0],
         entity_ids=(ComponentEntity.id, RootEntity.id),
-        alignment=MateAlignment.ALIGNED,
+        alignment=MateAlignment.KAligned,
     )
     SourceDoc = ReplaceData(
         SourceDoc,
@@ -3402,7 +3367,7 @@ def TestSLAEOERM() -> None:
     Transfers = {
         ItemValue.capability: ItemValue.mode.value for ItemValue in ResultInfo.transfers
     }
-    assert Transfers[Capability.ASSEMBLY_MATES] == "native"
+    assert Transfers[Capability.KAssemblyMates] == "native"
     assert len(Native.mate_lists) == 1
     assert Native.mate_lists[0].declared_count == 1
     Restored = Native.mate_lists[0].mates[0]
@@ -3421,17 +3386,19 @@ def TestSLAEOERM() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(not KConrod.is_file(), reason="conrod corpus unavailable")
 def TestSLNMPIRWT() -> None:
     SourceDoc = DocumentWithoutSource(ReadSldprt(KConrod))
+    Assembly = GetAssembly(SourceDoc)
     Output = BytesIO()
     ResultInfo = WriteSldprt(SourceDoc, Output)
     Native = DecodeNativeAssembly(SldprtArchive.from_bytes(Output.getvalue()))
     Transfers = {
         ItemValue.capability: ItemValue.mode.value for ItemValue in ResultInfo.transfers
     }
-    assert Transfers[Capability.ASSEMBLY_MATES] == "native"
+    assert Transfers[Capability.KAssemblyMates] == "native"
     assert sum((len(ItemValue.mates) for ItemValue in Native.mate_lists)) == len(
-        SourceDoc.assembly.mates
+        Assembly.mates
     )
     assert tuple(
         (
@@ -3439,11 +3406,11 @@ def TestSLNMPIRWT() -> None:
             for ItemValue in Native.mate_lists
             for MateInfo in ItemValue.mates
         )
-    ) == tuple((MateInfo.name for MateInfo in SourceDoc.assembly.mates))
+    ) == tuple((MateInfo.name for MateInfo in Assembly.mates))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPSRECOI(TmpPath) -> None:
+def TestPSRECOI(TmpPath: FilePath) -> None:
     SourceDoc = Document()
     Direct = TmpPath / "direct.SLDPRT"
     Blocked = TmpPath / "blocked.SLDPRT"
@@ -3468,7 +3435,7 @@ def TestPSRECOI(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestANTSWMR(TmpPath) -> None:
+def TestANTSWMR(TmpPath: FilePath) -> None:
     Original = OpenDocument(KSample)
     Changed = ReplaceData(
         Original, metadata=FrozenMapping({**Original.metadata, "audit_change": True})
@@ -3492,14 +3459,16 @@ def TestANTSWMR(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPSDTPAW(TmpPath) -> None:
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
+def TestPSDTPAW(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
+    Assembly = GetAssembly(SourceDoc)
     Portable = TmpPath / "portable.SLDASM"
     PortableResult = WriteDocument(SourceDoc, Portable)
     assert PortableResult.metadata["compatibility"] == "native-template"
     assert PortableResult.metadata["native_self_contained"] is True
     assert PortableResult.metadata["referenced_files_written"] == len(
-        SourceDoc.assembly.documents
+        Assembly.documents
     )
     assert PortableResult.requirements == ()
     assert PortableResult.near_lossless is True
@@ -3524,7 +3493,8 @@ def TestPSDTPAW(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestIPADTRC(TmpPath) -> None:
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
+def TestIPADTRC(TmpPath: FilePath) -> None:
     Isolated = TmpPath / "isolated" / KAssembly.name
     Isolated.parent.mkdir()
     Isolated.write_bytes(KAssembly.read_bytes())
@@ -3557,8 +3527,9 @@ def TestIPADTRC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestCDTRSRC(TmpPath) -> None:
+def TestCDTRSRC(TmpPath: FilePath) -> None:
     SourceDoc = OpenDocument(KCatproduct)
+    Assembly = GetAssembly(SourceDoc)
     Output = TmpPath / "converted" / "Tilton_Set.SLDASM"
     ResultInfo = Convert(KCatproduct, Output)
     assert ResultInfo.requirements == ()
@@ -3566,7 +3537,7 @@ def TestCDTRSRC(TmpPath) -> None:
     assert ResultInfo.vendor_loadable is False
     assert ResultInfo.output.metadata["native_self_contained"] is False
     assert ResultInfo.output.metadata["referenced_files_written"] == len(
-        SourceDoc.assembly.documents
+        Assembly.documents
     )
     Native = DecodeNativeAssembly(SldprtArchive.open(Output))
     Referenced = tuple(
@@ -3591,17 +3562,18 @@ def TestCDTRSRC(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPAPTMALP(TmpPath) -> None:
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
+def TestPAPTMALP(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
-    Assembly = SourceDoc.assembly
+    Assembly = GetAssembly(SourceDoc)
     Instance = Assembly.instances[0]
     TransformA = list(Instance.transform.values)
     TransformA[3] += 12.5
     MateInfo = Assembly.mates[0]
     Alignment = (
-        MateAlignment.ANTI_ALIGNED
-        if MateInfo.alignment is MateAlignment.ALIGNED
-        else MateAlignment.ALIGNED
+        MateAlignment.KAntiAligned
+        if MateInfo.alignment is MateAlignment.KAligned
+        else MateAlignment.KAligned
     )
     Component = Assembly.documents[0]
     PartDoc = Component.document
@@ -3648,15 +3620,17 @@ def TestPAPTMALP(TmpPath) -> None:
     assert ResultInfo.requirements == ()
     assert ResultInfo.metadata["referenced_files_written"] == len(Assembly.documents)
     Restored = ReadSldprt(Output)
-    assert Restored.assembly.instances[0].transform == MatrixFour(tuple(TransformA))
-    assert Restored.assembly.mates[0].alignment is Alignment
-    assert Restored.assembly.documents[0].document.parameters[
+    RestoredAssembly = GetAssembly(Restored)
+    assert RestoredAssembly.instances[0].transform == MatrixFour(tuple(TransformA))
+    assert RestoredAssembly.mates[0].alignment is Alignment
+    assert RestoredAssembly.documents[0].document.parameters[
         0
     ].value.value == PytestLib.approx(TargetValue)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPACTLCDS(TmpPath) -> None:
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
+def TestPACTLCDS(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Output = TmpPath / "carried.SLDASM"
     ResultInfo = WriteDocument(SourceDoc, Output)
@@ -3675,9 +3649,10 @@ def TestPACTLCDS(TmpPath) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def TestPADWACIR(TmpPath) -> None:
+@PytestLib.mark.skipif(not KAssembly.is_file(), reason="piston corpus unavailable")
+def TestPADWACIR(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
-    Assembly = SourceDoc.assembly
+    Assembly = GetAssembly(SourceDoc)
     Removed = Assembly.instances[-1]
     Entities = tuple(
         (

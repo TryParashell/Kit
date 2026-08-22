@@ -6,6 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from typing import TYPE_CHECKING as TypeChecking
+
 from interchange.features.FeatureStep import FeatureStep
 from interchange.records.RecordParameter import Parameter
 from interchange.geometry.models.Sketch import Sketch
@@ -15,27 +17,54 @@ from interchange.geometry.models.SupportPlane import SupportPlane
 # document lookup methods preserve convenient access without owning collection storage
 class DocumentLookup:
     locals()["__slots__"] = ()
+    if TypeChecking:
+        parameters: tuple[Parameter, ...]
+        sketches: tuple[Sketch, ...]
+        feature_timeline: tuple[FeatureStep, ...]
+        support_planes: tuple[SupportPlane, ...]
 
-    # parameter lookup remains discoverable without coupling storage to callers
-    def GetParameter(SelfValue, EntityId: str) -> Parameter:
-        from interchange.document.behavior.DocumentLookup import GetParameter
+    # parameter lookup uses its public spelling so its return type remains concrete
+    def parameter(self, entity_id: str) -> Parameter:
+        from interchange.document.behavior.DocumentLookup import (
+            GetLookupDoc,
+            GetParameter,
+        )
 
-        return GetParameter(SelfValue, EntityId)
+        return GetParameter(GetLookupDoc(self), entity_id)
 
-    # sketch lookup remains discoverable without coupling storage to callers
-    def GetSketch(SelfValue, EntityId: str) -> Sketch:
-        from interchange.document.behavior.DocumentLookup import GetSketch
+    # sketch lookup uses its public spelling so its return type remains concrete
+    def sketch(self, entity_id: str) -> Sketch:
+        from interchange.document.behavior.DocumentLookup import GetLookupDoc, GetSketch
 
-        return GetSketch(SelfValue, EntityId)
+        return GetSketch(GetLookupDoc(self), entity_id)
 
-    # feature lookup remains discoverable without coupling timeline storage to callers
-    def GetFeature(SelfValue, EntityId: str) -> FeatureStep:
-        from interchange.document.behavior.DocumentLookup import GetFeature
+    # feature lookup uses its public spelling so its return type remains concrete
+    def feature(self, entity_id: str) -> FeatureStep:
+        from interchange.document.behavior.DocumentLookup import (
+            GetFeature,
+            GetLookupDoc,
+        )
 
-        return GetFeature(SelfValue, EntityId)
+        return GetFeature(GetLookupDoc(self), entity_id)
 
-    # plane lookup remains discoverable without coupling support storage to callers
-    def GetPlane(SelfValue, EntityId: str) -> SupportPlane:
-        from interchange.document.behavior.DocumentLookup import GetPlane
+    # plane lookup uses its public spelling so its return type remains concrete
+    def plane(self, entity_id: str) -> SupportPlane:
+        from interchange.document.behavior.DocumentLookup import GetLookupDoc, GetPlane
 
-        return GetPlane(SelfValue, EntityId)
+        return GetPlane(GetLookupDoc(self), entity_id)
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def GetParameter(self, EntityId: str) -> Parameter:
+        return self.parameter(EntityId)
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def GetSketch(self, EntityId: str) -> Sketch:
+        return self.sketch(EntityId)
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def GetFeature(self, EntityId: str) -> FeatureStep:
+        return self.feature(EntityId)
+
+    # pascal compatibility keeps existing adapters typed during lowercase method migration
+    def GetPlane(self, EntityId: str) -> SupportPlane:
+        return self.plane(EntityId)

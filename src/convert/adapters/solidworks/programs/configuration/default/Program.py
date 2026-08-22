@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import struct as StructLib
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    FieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.container.Archive import (
     encode_class_reference as EncodeClassReference,
@@ -20,11 +22,13 @@ from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     EncodeValue,
     KPrimitiveFormats,
+    RequireInt,
 )
 
 from .Registry import (
-    FieldOwners,
-    ConfigOps,
+    ConfigOps as ConfigOps,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
 )
 
 
@@ -66,7 +70,7 @@ KAtomLinkStamp = 42358
 
 
 # each field operation serializes one recovered value through its typed contract
-def EncodeField(KindName: str, FieldValue: AnyValue) -> bytes:
+def EncodeField(KindName: str, FieldValue: FieldType) -> bytes:
     return EncodeValue(KindName, FieldValue, "Config-0")
 
 
@@ -110,34 +114,33 @@ def EncodeAtom(
 
 
 # inserted atom references shift every later archive map target
-def ShiftMapRef(KindName: str, FieldValue: AnyValue, MapShift: int) -> AnyValue:
+def ShiftMapRef(KindName: str, FieldValue: FieldType, MapShift: int) -> FieldType:
     if MapShift <= 0:
         return FieldValue
-    if KindName == "classref" and int(FieldValue) > KAtomClassIndex:
-        return int(FieldValue) + MapShift
-    if KindName == "objectref" and int(FieldValue) > KAtomClassIndex + 1:
-        return int(FieldValue) + MapShift
+    if KindName == "classref":
+        RefValue = RequireInt(FieldValue, "configuration class reference")
+        return RefValue + MapShift if RefValue > KAtomClassIndex else RefValue
+    if KindName == "objectref":
+        RefValue = RequireInt(FieldValue, "configuration object reference")
+        return RefValue + MapShift if RefValue > KAtomClassIndex + 1 else RefValue
     return FieldValue
 
 
 # legacy aliases preserve external configuration callers and recovered diagnostic access
-KLegacyAliases = {
-    "PrimitiveFormats": KPrimitiveFormats,
-    "ReferenceLength": KReferenceLength,
-    "PartRecordLengthOffset": KPartRecordLengthOffset,
-    "PartNameOffset": KPartNameOffset,
-    "ReferencePartName": KReferencePartName,
-    "SecondUnitStart": KSecondUnitStart,
-    "SecondUnitEnd": KSecondUnitEnd,
-    "AtomHeadOffsets": KAtomHeadOffsets,
-    "AtomStart": KAtomStart,
-    "AtomEnd": KAtomEnd,
-    "HighWaterOffsets": KHighWaterOffsets,
-    "AtomClassIndex": KAtomClassIndex,
-    "AtomLinkStamp": KAtomLinkStamp,
-    "ShiftMapReference": ShiftMapRef,
-}
-globals().update(KLegacyAliases)
+PrimitiveFormats = KPrimitiveFormats
+ReferenceLength = KReferenceLength
+PartRecordLengthOffset = KPartRecordLengthOffset
+PartNameOffset = KPartNameOffset
+ReferencePartName = KReferencePartName
+SecondUnitStart = KSecondUnitStart
+SecondUnitEnd = KSecondUnitEnd
+AtomHeadOffsets = KAtomHeadOffsets
+AtomStart = KAtomStart
+AtomEnd = KAtomEnd
+HighWaterOffsets = KHighWaterOffsets
+AtomClassIndex = KAtomClassIndex
+AtomLinkStamp = KAtomLinkStamp
+ShiftMapReference = ShiftMapRef
 
 
 # atom validation protects native identifiers and the recovered generation contract
@@ -160,16 +163,16 @@ def MakeOverrides(
     PartName: str,
     Atoms: tuple[tuple[int, int], ...],
     HighWater: tuple[int, int],
-    Overrides: Mapping[int, AnyValue] | None,
-) -> tuple[dict[int, AnyValue], int]:
+    Overrides: Mapping[int, FieldType] | None,
+) -> tuple[dict[int, FieldType], int]:
     FieldOverrides = dict(Overrides or {})
     FieldOverrides[KPartRecordLengthOffset] = (
-        ConfigOps[1][4]
+        RequireInt(ConfigOps[1][4], "configuration record length")
         + len(EncodeString(PartName))
         - len(EncodeString(KReferencePartName))
     )
     FieldOverrides[KPartNameOffset] = PartName
-    FieldOverrides[KAtomHeadOffsets[0]] = max(AtomId for AtomId, TreeValue in Atoms)
+    FieldOverrides[KAtomHeadOffsets[0]] = max(AtomData[0] for AtomData in Atoms)
     FieldOverrides[KAtomHeadOffsets[1]] = len(Atoms)
     FieldOverrides[KHighWaterOffsets[0]] = HighWater[0]
     FieldOverrides[KHighWaterOffsets[1]] = HighWater[1]
@@ -197,7 +200,7 @@ def EncodeAtoms(
 
 # configuration replay replaces semantic regions while preserving recovered field order
 def ReplayConfig(
-    FieldOverrides: Mapping[int, AnyValue],
+    FieldOverrides: Mapping[int, FieldType],
     AtomData: bytes,
     DualLengthUnits: bool,
     MapShift: int,
@@ -205,7 +208,7 @@ def ReplayConfig(
     OutputData = bytearray()
     SourceCursor = 0
     AtomsWritten = False
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in ConfigOps:
+    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in ConfigOps:
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"Config-0 field program drifted at {StartPos}")
         SourceCursor += FieldWidth
@@ -236,7 +239,7 @@ def EncodeProgram(
     Generation: int = 18000,
     DualLengthUnits: bool = True,
     HighWater: tuple[int, int] = (101, 103),
-    Overrides: Mapping[int, AnyValue] | None = None,
+    Overrides: Mapping[int, FieldType] | None = None,
 ) -> bytes:
     ValidateAtoms(Atoms, Generation)
     FieldOverrides, MapShift = MakeOverrides(PartName, Atoms, HighWater, Overrides)

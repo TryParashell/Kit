@@ -33,9 +33,12 @@ def CheckReadFilter() -> None:
         "shape",
         "1",
         "0" * 64,
-        data=b"brep",
-        role=PayloadRole.BREP,
-        file_extension=".brep",
+        b"brep",
+        "",
+        None,
+        {},
+        PayloadRole.KBrep,
+        ".brep",
     )
     MeshPayload = BrepPayload(
         "payload:tessellation",
@@ -43,9 +46,12 @@ def CheckReadFilter() -> None:
         "tessellation",
         "1",
         "1" * 64,
-        data=b"mesh",
-        role=PayloadRole.TESSELLATION,
-        file_extension=".mesh",
+        b"mesh",
+        "",
+        None,
+        {},
+        PayloadRole.KTessellation,
+        ".mesh",
     )
     MeshData = SurfaceMesh(
         "mesh:json",
@@ -56,25 +62,28 @@ def CheckReadFilter() -> None:
             SpaceVector(0.0, 1.0, 0.0),
         ),
         ((0, 1, 2),),
+        (),
+        None,
+        {},
     )
     SourceData = ReplaceValue(
         BuildSource(),
         configurations=(
-            Configuration("configuration:first", "Shared", True),
-            Configuration("configuration:second", "Second"),
-            Configuration("configuration:third", "Shared"),
+            Configuration("configuration:first", "Shared", True, None, (), (), {}),
+            Configuration("configuration:second", "Second", False, None, (), (), {}),
+            Configuration("configuration:third", "Shared", False, None, (), (), {}),
         ),
         meshes=(MeshData,),
         brep_payloads=(BrepData, MeshPayload),
         capabilities=frozenset(
             {
-                Capability.BREP,
-                Capability.TESSELLATION,
-                Capability.NATIVE_PAYLOADS,
+                Capability.KBrep,
+                Capability.KTessellation,
+                Capability.KNativePayloads,
             }
         ),
     )
-    PayloadData = SourceData.to_json().encode("utf-8")
+    PayloadData = SourceData.ToJson().encode("utf-8")
     RestoredData = JsonAdapter().read(
         PayloadData,
         ReadOptions(
@@ -84,21 +93,23 @@ def CheckReadFilter() -> None:
         ),
     )
     ActiveIds = [
-        ItemData.id for ItemData in RestoredData.configurations if ItemData.active
+        ItemData.EntityId
+        for ItemData in RestoredData.Configurations
+        if ItemData.IsActive
     ]
     assert ActiveIds == ["configuration:first", "configuration:third"]
-    assert not RestoredData.meshes
-    assert not RestoredData.brep_payloads
-    assert not RestoredData.capabilities & {
-        Capability.BREP,
-        Capability.TESSELLATION,
-        Capability.NATIVE_PAYLOADS,
+    assert not RestoredData.Meshes
+    assert not RestoredData.BrepPayloads
+    assert not RestoredData.Capabilities & {
+        Capability.KBrep,
+        Capability.KTessellation,
+        Capability.KNativePayloads,
     }
 
 
 # unknown configuration selection must fail rather than silently activating an arbitrary state
 def CheckMissingCfg() -> None:
-    PayloadData = BuildSource().to_json().encode("utf-8")
+    PayloadData = BuildSource().ToJson().encode("utf-8")
     with Pytest.raises(ValueError, match="configuration"):
         JsonAdapter().read(
             PayloadData,

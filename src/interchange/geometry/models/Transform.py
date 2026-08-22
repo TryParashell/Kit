@@ -6,6 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from typing import ClassVar, TYPE_CHECKING
+
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.geometry.models.VectorSpace import SpaceVector
 
@@ -13,14 +15,19 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 # orthogonal frames preserve placement without assuming one vendor coordinate convention
 @ModelDataMut(
     DefaultMap={
-        "Origin": SpaceVector(0.0, 0.0, 0.0),
-        "XAxis": SpaceVector(1.0, 0.0, 0.0),
-        "YAxis": SpaceVector(0.0, 1.0, 0.0),
-        "ZAxis": SpaceVector(0.0, 0.0, 1.0),
+        "origin": SpaceVector(0.0, 0.0, 0.0),
+        "x_axis": SpaceVector(1.0, 0.0, 0.0),
+        "y_axis": SpaceVector(0.0, 1.0, 0.0),
+        "z_axis": SpaceVector(0.0, 0.0, 1.0),
     }
 )
 class Transform(ModelBase):
-    Origin: SpaceVector
-    XAxis: SpaceVector
-    YAxis: SpaceVector
-    ZAxis: SpaceVector
+    origin: SpaceVector
+    x_axis: SpaceVector
+    y_axis: SpaceVector
+    z_axis: SpaceVector
+    if TYPE_CHECKING:
+        Origin: ClassVar[SpaceVector]
+        XAxis: ClassVar[SpaceVector]
+        YAxis: ClassVar[SpaceVector]
+        ZAxis: ClassVar[SpaceVector]

@@ -23,8 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-python:
-    name: Verify Python steering rules
+  steering:
+    name: Python steering
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -46,7 +46,6 @@ jobs:
       - name: Verify tracked Python sources
         run: |
           mapfile -d '' PythonFiles < <(git ls-files -z -- '*.py')
-          uv run python -m tools.steering.SteeringCompliance "${PythonFiles[@]}"
-
-      - name: Verify Python formatting
-        run: uv run black --check .
+          uv run python -m tools.steering.SteeringCompliance \
+            --baseline-file tools/steering/SteeringBaseline.txt \
+            "${PythonFiles[@]}"

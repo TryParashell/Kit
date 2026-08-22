@@ -12,11 +12,9 @@ import json as JsonData
 from pathlib import Path as FilePath
 import subprocess as Subprocess
 import sys as System
-from typing import Any as AnyValue
 
 from tools.audit.FcstdContext import KRepositoryRoot
-from tools.audit.FcstdResult import MakeFailure
-
+from tools.audit.FcstdResult import AuditRecord, MakeFailure, ParseAuditRecord
 
 # bounded diagnostics keep failed workers useful without flooding recursive audit output
 KErrorLimit = 1000
@@ -28,7 +26,7 @@ KWorkerTimeout = 300
 # worker invocation stays separate so timeout handling and result decoding remain focused
 def RunProcess(
     SourcePath: FilePath, OutputRoot: FilePath, SourceIndex: int
-) -> AnyValue:
+) -> Subprocess.CompletedProcess[str]:
     return Subprocess.run(
         (
             System.executable,
@@ -55,7 +53,7 @@ def AuditIsolated(
     SourcePath: FilePath,
     OutputRoot: FilePath,
     SourceIndex: int,
-) -> dict[str, AnyValue]:
+) -> AuditRecord:
     try:
         ProcessData = RunProcess(SourcePath, OutputRoot, SourceIndex)
     except Subprocess.TimeoutExpired as ErrorInfo:
@@ -68,11 +66,12 @@ def AuditIsolated(
     )
     if ProcessData.returncode == 0 and OutputLines:
         try:
-            ResultData = JsonData.loads(OutputLines[-1])
+            ResultData: object = JsonData.loads(OutputLines[-1])
         except JsonData.JSONDecodeError:
             ResultData = None
-        if isinstance(ResultData, dict):
-            return ResultData
+        ParsedResult = ParseAuditRecord(ResultData)
+        if ParsedResult is not None:
+            return ParsedResult
     ErrorText = ProcessData.stderr.strip() or ProcessData.stdout.strip()
     if len(ErrorText) > KErrorLimit:
         ErrorText = ErrorText[-KErrorLimit:]

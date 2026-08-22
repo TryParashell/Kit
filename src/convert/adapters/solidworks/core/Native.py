@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
+from collections.abc import Callable
 from dataclasses import dataclass as Dataclass, field as Field, replace as Replace
 import hashlib as Hashlib
 import itertools as Itertools
@@ -15,7 +16,7 @@ from pathlib import PureWindowsPath
 import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
-from typing import Any as AnyValue, Mapping, Sequence
+from typing import Mapping, Sequence, TypeGuard
 import xml.etree.ElementTree as XmlTree
 from interchange import (
     BooleanOperation as BoolOperation,
@@ -41,6 +42,8 @@ from interchange import (
     PlaneSurface,
     ShellFeature,
     Sketch,
+    SketchEntity,
+    Selection,
     SupportPlane,
     ValueKind,
     Vector2 as VectorTwo,
@@ -92,6 +95,7 @@ from convert.adapters.solidworks.resolved.Core import (
     DEPTH_COPY_DELTAS as DepthCopyDeltas,
     DEPTH_COPY_SIGNS as DepthCopySigns,
     FeatureEdit,
+    FeatureLayout,
     FROM_END_SPEC_CLASS as FromEndSpecClass,
     FROM_REVERSE_RELATIVE as FromReverseRelative,
     REVOLUTION_AXIS_SKETCH as RevolutionAxisSketch,
@@ -348,13 +352,13 @@ KMarkerLocalIdOffsetBy = MappingProxyType(
 class DecodeState:
     Resolved: bytes
     StreamName: str
-    Classes: AnyValue
-    RecordById: AnyValue
+    Classes: tuple[NativeClass, ...]
+    RecordById: dict[int, NativeName]
     NativeFeatures: list[NativeFeature]
     NativeIndexById: dict[int, int]
-    PlaneById: AnyValue
+    PlaneById: dict[int, NativePlane]
     UnframedPlaneIds: frozenset[int]
-    Revolutions: AnyValue
+    Revolutions: dict[int, FeatureLayout]
     Sketches: list[NativeSketch]
     Operations: list[NativeOperation]
     LatestSketch: NativeSketch | None
@@ -364,7 +368,7 @@ class DecodeState:
 
 
 # plane state handling preserves the latest framed support context
-def ApplyPlaneMut(StateData, Feature):
+def ApplyPlaneMut(StateData: DecodeState, Feature: NativeFeature) -> None:
     if Feature.object_id in StateData.PlaneById:
         StateData.LatestPlaneId = Feature.object_id
         StateData.LatestUnframed = None
@@ -373,7 +377,7 @@ def ApplyPlaneMut(StateData, Feature):
 
 
 # sketch state handling owns support decoding and feature dimension rebinding
-def ApplySketchMut(StateData, Feature):
+def ApplySketchMut(StateData: DecodeState, Feature: NativeFeature) -> None:
     SketchStart = Feature.native_offset or 0
     SketchEnd = Feature.native_end or len(StateData.Resolved)
     RefValue = SketchPlaneRef(
@@ -408,7 +412,9 @@ def ApplySketchMut(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeExtrude(StateData, Feature):
+def DecodeExtrude(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
@@ -469,7 +475,9 @@ def DecodeExtrude(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeLinear(StateData, Feature):
+def DecodeLinear(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Record = StateData.RecordById.get(Feature.object_id)
     CountValue = DimensionValue(Feature.dimensions, "instance_count")
     SpacingValue = DimensionValue(Feature.dimensions, "spacing")
@@ -532,7 +540,9 @@ def DecodeLinear(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeCircular(StateData, Feature):
+def DecodeCircular(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Record = StateData.RecordById.get(Feature.object_id)
     CountValue = DimensionValue(Feature.dimensions, "instance_count")
     AngleValue = DimensionValue(Feature.dimensions, "angle")
@@ -595,7 +605,9 @@ def DecodeCircular(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeRevolve(StateData, Feature):
+def DecodeRevolve(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
@@ -671,7 +683,9 @@ def DecodeRevolve(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeHole(StateData, Feature):
+def DecodeHole(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
@@ -715,7 +729,9 @@ def DecodeHole(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeDome(StateData, Feature):
+def DecodeDome(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Selections = OperationAfter(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -767,7 +783,9 @@ def DecodeDome(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeMoveBody(StateData, Feature):
+def DecodeMoveBody(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Selections = OperationAfter(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -820,7 +838,9 @@ def DecodeMoveBody(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeCombine(StateData, Feature):
+def DecodeCombine(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Selections = OperationAfter(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -872,7 +892,9 @@ def DecodeCombine(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeScale(StateData, Feature):
+def DecodeScale(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Factors = NativeScale(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -904,7 +926,9 @@ def DecodeScale(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeFinish(StateData, Feature):
+def DecodeFinish(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     FeatureType = Feature.kind.casefold()
     Selections = OperationA(
         StateData.Resolved,
@@ -971,7 +995,9 @@ def DecodeFinish(StateData, Feature):
 
 
 # focused operation decoder preserves one native feature family
-def DecodeSurface(StateData, Feature):
+def DecodeSurface(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
@@ -1014,7 +1040,9 @@ def DecodeSurface(StateData, Feature):
 
 
 # operation dispatch keeps native feature family routing explicit
-def DecodeOperation(StateData, Feature):
+def DecodeOperation(
+    StateData: DecodeState, Feature: NativeFeature
+) -> NativeOperation | None:
     FeatureType = Feature.kind.casefold()
     if FeatureType == "extrusion":
         return DecodeExtrude(StateData, Feature)
@@ -1042,7 +1070,7 @@ def DecodeOperation(StateData, Feature):
 
 
 # ordered tree decoding owns evolving plane sketch and operation state
-def DecodeTreeMut(StateData, Author):
+def DecodeTreeMut(StateData: DecodeState, Author: Sequence[NativeFeature]) -> None:
     for Feature in Author:
         if IsPlaneFeature(Feature):
             ApplyPlaneMut(StateData, Feature)
@@ -1062,469 +1090,380 @@ def DecodeTreeMut(StateData, Author):
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeOperand:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["kind_code"] = "int"
-    __annotations__["entity_index"] = "int"
+    offset: int
+    kind_code: int
+    entity_index: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeScalar:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["name_offset"] = "int"
-    __annotations__["value_offset"] = "int"
-    __annotations__["value"] = "float"
-    __annotations__["object_id"] = "int | None"
-    __annotations__["role"] = "str"
-    __annotations__["operands"] = "tuple[NativeOperand, ...]"
+    name: str
+    name_offset: int
+    value_offset: int
+    value: float
+    object_id: int | None
+    role: str
+    operands: tuple[NativeOperand, ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeDimension:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["value_mm"] = "float"
-    __annotations__["kind"] = "str"
-    __annotations__["source_text"] = "str"
-    __annotations__["native_value"] = "float | None"
-    locals()["native_value"] = None
-    __annotations__["native_offset"] = "int | None"
-    locals()["native_offset"] = None
-    __annotations__["native_role"] = "str | None"
-    locals()["native_role"] = None
-    __annotations__["operands"] = "tuple[NativeOperand, ...]"
-    locals()["operands"] = ()
+    name: str
+    value_mm: float
+    kind: str
+    source_text: str
+    native_value: float | None = None
+    native_offset: int | None = None
+    native_role: str | None = None
+    operands: tuple[NativeOperand, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeName:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["text_end"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["object_id"] = "int | None"
-    __annotations__["class_token"] = "int"
+    offset: int
+    text_end: int
+    name: str
+    object_id: int | None
+    class_token: int
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeClass:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["name"] = "str"
+    offset: int
+    name: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMarker:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["length"] = "int"
-    __annotations__["prefix"] = "str"
-    __annotations__["native_kind"] = "int"
-    __annotations__["locus"] = "str"
-    __annotations__["profile_role"] = "int"
-    __annotations__["state"] = "float | None"
-    __annotations__["object_index"] = "int | None"
-    __annotations__["local_id"] = "int | None"
-    __annotations__["coordinates_mm"] = "tuple[float, float] | None"
-    __annotations__["endpoint_indices"] = "tuple[int, int] | None"
-    __annotations__["construction"] = "bool"
-    __annotations__["semantic"] = "str"
-    __annotations__["data"] = "bytes"
-    locals()["data"] = b""
-    __annotations__["coordinates_metres"] = "tuple[float, float] | None"
-    locals()["coordinates_metres"] = None
+    offset: int
+    length: int
+    prefix: str
+    native_kind: int
+    locus: str
+    profile_role: int
+    state: float | None
+    object_index: int | None
+    local_id: int | None
+    coordinates_mm: tuple[float, float] | None
+    endpoint_indices: tuple[int, int] | None
+    construction: bool
+    semantic: str
+    data: bytes = b""
+    coordinates_metres: tuple[float, float] | None = None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeRule:
-    locals().setdefault("__annotations__", {})
-    __annotations__["id"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["references"] = "tuple[str, ...]"
-    __annotations__["parameter"] = "str | None"
-    __annotations__["value"] = "float | None"
-    __annotations__["native_offset"] = "int | None"
-    __annotations__["native_code"] = "int | None"
+    id: str
+    kind: str
+    references: tuple[str, ...]
+    parameter: str | None
+    value: float | None
+    native_offset: int | None
+    native_code: int | None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProfile:
-    locals().setdefault("__annotations__", {})
-    __annotations__["kind"] = "str"
-    __annotations__["coordinates"] = "tuple[float, ...]"
-    __annotations__["marker_offsets"] = "tuple[int, ...]"
-    __annotations__["parameter_name"] = "str | None"
-    locals()["parameter_name"] = None
-    __annotations__["dimension_kind"] = "str | None"
-    locals()["dimension_kind"] = None
-    __annotations__["start_angle_degrees"] = "float | None"
-    locals()["start_angle_degrees"] = None
+    kind: str
+    coordinates: tuple[float, ...]
+    marker_offsets: tuple[int, ...]
+    parameter_name: str | None = None
+    dimension_kind: str | None = None
+    start_angle_degrees: float | None = None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeSketchA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["plane_object_id"] = "int"
-    __annotations__["axis_code"] = "int"
-    __annotations__["u_axis"] = "tuple[float, float, float]"
-    __annotations__["v_axis"] = "tuple[float, float, float]"
-    __annotations__["normal"] = "tuple[float, float, float]"
-    __annotations__["basis_offset"] = "int | None"
+    offset: int
+    plane_object_id: int
+    axis_code: int
+    u_axis: tuple[float, float, float]
+    v_axis: tuple[float, float, float]
+    normal: tuple[float, float, float]
+    basis_offset: int | None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeDepthCopy:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["sign"] = "int"
-    __annotations__["value_mm"] = "float"
+    offset: int
+    sign: int
+    value_mm: float
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeBounding:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["center_mm"] = "tuple[float, float, float]"
-    __annotations__["diameter_mm"] = "float"
+    offset: int
+    center_mm: tuple[float, float, float]
+    diameter_mm: float
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativePlane:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["origin_mm"] = "tuple[float, float, float]"
-    __annotations__["normal"] = "tuple[float, float, float]"
-    __annotations__["u_axis"] = "tuple[float, float, float]"
-    __annotations__["v_axis"] = "tuple[float, float, float]"
-    __annotations__["native_offset"] = "int | None"
-    __annotations__["native_length"] = "int | None"
-    __annotations__["principal"] = "bool"
-    locals()["principal"] = False
-    __annotations__["reference_ids"] = "tuple[int, ...]"
-    locals()["reference_ids"] = ()
-    __annotations__["native_stream"] = "str"
-    locals()["native_stream"] = ResolvedFeaturesStream
+    object_id: int
+    name: str
+    origin_mm: tuple[float, float, float]
+    normal: tuple[float, float, float]
+    u_axis: tuple[float, float, float]
+    v_axis: tuple[float, float, float]
+    native_offset: int | None
+    native_length: int | None
+    principal: bool = False
+    reference_ids: tuple[int, ...] = ()
+    native_stream: str = ResolvedFeaturesStream
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeSketch:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["support_plane_id"] = "int"
-    __annotations__["native_offset"] = "int"
-    __annotations__["native_end"] = "int"
-    __annotations__["markers"] = "tuple[NativeMarker, ...]"
-    __annotations__["profiles"] = "tuple[NativeProfile, ...]"
-    __annotations__["dimensions"] = "tuple[NativeDimension, ...]"
-    __annotations__["constraints"] = "tuple[NativeConstraint, ...]"
-    __annotations__["native_stream"] = "str"
-    locals()["native_stream"] = ResolvedFeaturesStream
-    __annotations__["support_kind"] = "str"
-    locals()["support_kind"] = KPlaneSupportKind
-    __annotations__["support_plane"] = "NativeSketchPlane | None"
-    locals()["support_plane"] = None
-    __annotations__["support_source"] = "str"
-    locals()["support_source"] = KRefSupportSource
-    __annotations__["unframed_support_plane_id"] = "int | None"
-    locals()["unframed_support_plane_id"] = None
+    object_id: int
+    name: str
+    support_plane_id: int
+    native_offset: int
+    native_end: int
+    markers: tuple[NativeMarker, ...]
+    profiles: tuple[NativeProfile, ...]
+    dimensions: tuple[NativeDimension, ...]
+    constraints: tuple[NativeConstraint, ...]
+    native_stream: str = ResolvedFeaturesStream
+    support_kind: str = KPlaneSupportKind
+    support_plane: NativeSketchPlane | None = None
+    support_source: str = KRefSupportSource
+    unframed_support_plane_id: int | None = None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeEndSpec:
-    locals().setdefault("__annotations__", {})
-    __annotations__["offset"] = "int"
-    __annotations__["termination_code"] = "int"
-    __annotations__["direction_code"] = "int"
-    __annotations__["second_direction_code"] = "int"
-    __annotations__["mirrored_direction_offset"] = "int | None"
-    locals()["mirrored_direction_offset"] = None
-    __annotations__["mirrored_direction_code"] = "int | None"
-    locals()["mirrored_direction_code"] = None
+    offset: int
+    termination_code: int
+    direction_code: int
+    second_direction_code: int
+    mirrored_direction_offset: int | None = None
+    mirrored_direction_code: int | None = None
 
 
 # native operation identity fields remain required across every operation variant
 @Dataclass(frozen=True, slots=True)
 class NativeOpCore:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["profile_id"] = "int | None"
-    __annotations__["dependencies"] = "tuple[int, ...]"
-    __annotations__["native_offset"] = "int"
-    __annotations__["native_end"] = "int"
-    __annotations__["length_mm"] = "float | None"
-    __annotations__["radius_mm"] = "float | None"
-    __annotations__["family_code"] = "int | None"
-    __annotations__["operation_code"] = "int | None"
-    __annotations__["schema_code"] = "int | None"
-    __annotations__["direction_code"] = "int | None"
-    __annotations__["termination_code"] = "int | None"
-    __annotations__["selection_offsets"] = "tuple[int, ...]"
-    __annotations__["selected_local_ids"] = "tuple[int, ...]"
+    object_id: int
+    name: str
+    kind: str
+    profile_id: int | None
+    dependencies: tuple[int, ...]
+    native_offset: int
+    native_end: int
+    length_mm: float | None
+    radius_mm: float | None
+    family_code: int | None
+    operation_code: int | None
+    schema_code: int | None
+    direction_code: int | None
+    termination_code: int | None
+    selection_offsets: tuple[int, ...]
+    selected_local_ids: tuple[int, ...]
 
 
 # shape metadata groups optional dimensions and selection behavior
 @Dataclass(frozen=True, slots=True)
 class NativeOpShape(NativeOpCore):
-    locals().setdefault("__annotations__", {})
-    __annotations__["angle_degrees"] = "float | None"
-    locals()["angle_degrees"] = None
-    __annotations__["diameter_mm"] = "float | None"
-    locals()["diameter_mm"] = None
-    __annotations__["second_length_mm"] = "float | None"
-    locals()["second_length_mm"] = None
-    __annotations__["axis_marker_offset"] = "int | None"
-    locals()["axis_marker_offset"] = None
-    __annotations__["selection_kind"] = "str"
-    locals()["selection_kind"] = "edge"
-    __annotations__["mode"] = "str | None"
-    locals()["mode"] = None
-    __annotations__["native_stream"] = "str"
-    locals()["native_stream"] = ResolvedFeaturesStream
+    angle_degrees: float | None = None
+    diameter_mm: float | None = None
+    second_length_mm: float | None = None
+    axis_marker_offset: int | None = None
+    selection_kind: str = "edge"
+    mode: str | None = None
+    native_stream: str = ResolvedFeaturesStream
 
 
 # reference metadata groups optional selection and mirrored direction state
 @Dataclass(frozen=True, slots=True)
 class NativeOpFrame(NativeOpShape):
-    locals().setdefault("__annotations__", {})
-    __annotations__["selection_references"] = "tuple[tuple[int, int], ...]"
-    locals()["selection_references"] = ()
-    __annotations__["translation_mm"] = "tuple[float, float, float] | None"
-    locals()["translation_mm"] = None
-    __annotations__["scale_factors"] = "tuple[float, float, float] | None"
-    locals()["scale_factors"] = None
-    __annotations__["depth_copies"] = "tuple[NativeDepthCopy, ...]"
-    locals()["depth_copies"] = ()
-    __annotations__["mirrored_direction_offset"] = "int | None"
-    locals()["mirrored_direction_offset"] = None
-    __annotations__["mirrored_direction_code"] = "int | None"
-    locals()["mirrored_direction_code"] = None
-    __annotations__["axis_source_kind"] = "str | None"
-    locals()["axis_source_kind"] = None
+    selection_references: tuple[tuple[int, int], ...] = ()
+    translation_mm: tuple[float, float, float] | None = None
+    scale_factors: tuple[float, float, float] | None = None
+    depth_copies: tuple[NativeDepthCopy, ...] = ()
+    mirrored_direction_offset: int | None = None
+    mirrored_direction_code: int | None = None
+    axis_source_kind: str | None = None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeOperation(NativeOpFrame):
-    locals().setdefault("__annotations__", {})
-    __annotations__["axis_source_id"] = "int | None"
-    locals()["axis_source_id"] = None
-    __annotations__["axis_source_offset"] = "int | None"
-    locals()["axis_source_offset"] = None
-    __annotations__["end_spec_offset"] = "int | None"
-    locals()["end_spec_offset"] = None
-    __annotations__["angle_offset"] = "int | None"
-    locals()["angle_offset"] = None
-    __annotations__["angle_copies"] = "tuple[NativeDepthCopy, ...]"
-    locals()["angle_copies"] = ()
-    __annotations__["instance_count"] = "int | None"
-    locals()["instance_count"] = None
-    __annotations__["spacing_mm"] = "float | None"
-    locals()["spacing_mm"] = None
+    axis_source_id: int | None = None
+    axis_source_offset: int | None = None
+    end_spec_offset: int | None = None
+    angle_offset: int | None = None
+    angle_copies: tuple[NativeDepthCopy, ...] = ()
+    instance_count: int | None = None
+    spacing_mm: float | None = None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeFeature:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["xml_tag"] = "str"
-    __annotations__["native_offset"] = "int | None"
-    __annotations__["native_end"] = "int | None"
-    __annotations__["properties"] = "dict[str, str]"
-    __annotations__["dimensions"] = "tuple[NativeDimension, ...]"
-    __annotations__["data"] = "bytes"
-    locals()["data"] = b""
-    __annotations__["class_name"] = "str"
-    locals()["class_name"] = ""
-    __annotations__["native_stream"] = "str"
-    locals()["native_stream"] = ResolvedFeaturesStream
+    object_id: int
+    name: str
+    kind: str
+    xml_tag: str
+    native_offset: int | None
+    native_end: int | None
+    properties: dict[str, str]
+    dimensions: tuple[NativeDimension, ...]
+    data: bytes = b""
+    class_name: str = ""
+    native_stream: str = ResolvedFeaturesStream
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeConfig:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["configuration_id"] = "int"
-    __annotations__["properties"] = "dict[str, str]"
+    object_id: int
+    name: str
+    configuration_id: int
+    properties: dict[str, str]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeEquation:
-    locals().setdefault("__annotations__", {})
-    __annotations__["source"] = "str"
-    __annotations__["lhs"] = "str"
-    __annotations__["rhs"] = "str"
-    __annotations__["references"] = "tuple[str, ...]"
-    __annotations__["native_offset"] = "int"
-    __annotations__["native_length"] = "int"
-    __annotations__["configuration_id"] = "int"
-    __annotations__["native_stream"] = "str"
+    source: str
+    lhs: str
+    rhs: str
+    references: tuple[str, ...]
+    native_offset: int
+    native_length: int
+    configuration_id: int
+    native_stream: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeModel:
-    locals().setdefault("__annotations__", {})
-    __annotations__["configurations"] = "tuple[NativeConfiguration, ...]"
-    __annotations__["features"] = "tuple[NativeFeature, ...]"
-    __annotations__["planes"] = "tuple[NativePlane, ...]"
-    __annotations__["sketches"] = "tuple[NativeSketch, ...]"
-    __annotations__["operations"] = "tuple[NativeOperation, ...]"
-    __annotations__["names"] = "tuple[NativeName, ...]"
-    __annotations__["classes"] = "tuple[NativeClass, ...]"
-    __annotations__["scalars"] = "tuple[NativeScalar, ...]"
-    __annotations__["diagnostics"] = "tuple[str, ...]"
-    locals()["diagnostics"] = Field(default_factory=tuple)
-    __annotations__["equations"] = "tuple[NativeEquation, ...]"
-    locals()["equations"] = Field(default_factory=tuple)
-    __annotations__["active_configuration_id"] = "int | None"
-    locals()["active_configuration_id"] = None
-    __annotations__["bounding_box"] = "NativeBoundingBox | None"
-    locals()["bounding_box"] = None
+    configurations: tuple[NativeConfig, ...]
+    features: tuple[NativeFeature, ...]
+    planes: tuple[NativePlane, ...]
+    sketches: tuple[NativeSketch, ...]
+    operations: tuple[NativeOperation, ...]
+    names: tuple[NativeName, ...]
+    classes: tuple[NativeClass, ...]
+    scalars: tuple[NativeScalar, ...]
+    diagnostics: tuple[str, ...] = Field(default_factory=tuple)
+    equations: tuple[NativeEquation, ...] = Field(default_factory=tuple)
+    active_configuration_id: int | None = None
+    bounding_box: NativeBoundingBox | None = None
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativePart:
-    locals().setdefault("__annotations__", {})
-    __annotations__["keywords"] = "bytes"
-    __annotations__["features"] = "bytes"
-    __annotations__["resolved_features"] = "bytes"
-    __annotations__["kit_resolved_features"] = "bytes | None"
-    __annotations__["configuration_lanes"] = "tuple[tuple[int, bytes], ...]"
-    __annotations__["native_capabilities"] = "frozenset[Capability]"
-    __annotations__["mixed_capabilities"] = "frozenset[Capability]"
-    __annotations__["object_ids"] = "Mapping[str, int]"
-    __annotations__["envelope_streams"] = "Mapping[str, bytes]"
-    __annotations__["partition"] = "bytes | None"
-    __annotations__["application_usable"] = "bool"
-    __annotations__["vendor_loadable"] = "bool"
-    __annotations__["donor_notes"] = "tuple[str, ...]"
-    locals()["donor_notes"] = ()
+    keywords: bytes
+    features: bytes
+    resolved_features: bytes
+    kit_resolved_features: bytes | None
+    configuration_lanes: tuple[tuple[int, bytes], ...]
+    native_capabilities: frozenset[Capability]
+    mixed_capabilities: frozenset[Capability]
+    object_ids: Mapping[str, int]
+    envelope_streams: Mapping[str, bytes]
+    partition: bytes | None
+    application_usable: bool
+    vendor_loadable: bool
+    donor_notes: tuple[str, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeModelA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["user_name"] = "str"
-    __annotations__["reference_name"] = "str"
-    __annotations__["configuration_name"] = "str"
-    __annotations__["document_path"] = "str"
-    __annotations__["objects"] = "tuple[tuple[int, str], ...]"
+    user_name: str
+    reference_name: str
+    configuration_name: str
+    document_path: str
+    objects: tuple[tuple[int, str], ...]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeAsm:
-    locals().setdefault("__annotations__", {})
-    __annotations__["streams"] = "Mapping[str, bytes]"
-    __annotations__["configuration_name"] = "str"
-    __annotations__["reference_name"] = "str"
-    __annotations__["document_path"] = "str"
-    __annotations__["header_objects"] = "tuple[tuple[int, str], ...]"
-    __annotations__["omitted_object_names"] = "tuple[str, ...]"
-    __annotations__["envelope_complete"] = "bool"
+    streams: Mapping[str, bytes]
+    configuration_name: str
+    reference_name: str
+    document_path: str
+    header_objects: tuple[tuple[int, str], ...]
+    omitted_object_names: tuple[str, ...]
+    envelope_complete: bool
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class XmlFeature:
-    locals().setdefault("__annotations__", {})
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["xml_tag"] = "str"
-    __annotations__["properties"] = "dict[str, str]"
-    __annotations__["dimensions"] = "list[NativeDimension]"
+    object_id: int
+    name: str
+    kind: str
+    xml_tag: str
+    properties: dict[str, str]
+    dimensions: list[NativeDimension]
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class WriteDimension:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["value_mm"] = "float"
-    __annotations__["text"] = "str"
-    __annotations__["role"] = "ParameterRole"
+    name: str
+    value_mm: float
+    text: str
+    role: ParamRole
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class WriteObject:
-    locals().setdefault("__annotations__", {})
-    __annotations__["source_id"] = "str"
-    __annotations__["object_id"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["xml_tag"] = "str"
-    __annotations__["kind"] = "str"
-    __annotations__["class_name"] = "str"
-    __annotations__["properties"] = "tuple[tuple[str, str], ...]"
-    locals()["properties"] = ()
-    __annotations__["dimensions"] = "tuple[_WriteDimension, ...]"
-    locals()["dimensions"] = ()
-    __annotations__["payload"] = "bytes"
-    locals()["payload"] = b""
+    source_id: str
+    object_id: int
+    name: str
+    xml_tag: str
+    kind: str
+    class_name: str
+    properties: tuple[tuple[str, str], ...] = ()
+    dimensions: tuple[WriteDimension, ...] = ()
+    payload: bytes = b""
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeIdentity:
-    locals().setdefault("__annotations__", {})
-    __annotations__["creation_stamp"] = "int"
-    __annotations__["last_modified_stamp"] = "int"
-    __annotations__["baseline_stamp"] = "int"
-    __annotations__["header_stamp"] = "int"
-    __annotations__["configuration_flags"] = "int"
-    __annotations__["reference_name"] = "str"
+    creation_stamp: int
+    last_modified_stamp: int
+    baseline_stamp: int
+    header_stamp: int
+    configuration_flags: int
+    reference_name: str
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class VendorResolved:
-    locals().setdefault("__annotations__", {})
-    __annotations__["payload"] = "bytes"
-    __annotations__["header_stamps"] = "tuple[tuple[int, ...], ...]"
-    __annotations__["annotation_view_count"] = "int"
-    locals()["annotation_view_count"] = 1
-    __annotations__["terminal_parent_tree_id"] = "int | None"
-    locals()["terminal_parent_tree_id"] = None
-    __annotations__["HeaderBounds"] = "tuple[float, ...] | None"
-    locals()["HeaderBounds"] = None
-    __annotations__["HeaderCreation"] = "int | None"
-    locals()["HeaderCreation"] = None
-    __annotations__["cmgr_parent_tree_id"] = "int | None"
-    locals()["cmgr_parent_tree_id"] = None
-    __annotations__["annotation_view_variant"] = "str"
-    locals()["annotation_view_variant"] = "default"
-    __annotations__["Config0Payload"] = "bytes | None"
-    locals()["Config0Payload"] = None
-    __annotations__["HeaderPayload"] = "bytes | None"
-    locals()["HeaderPayload"] = None
+    payload: bytes
+    header_stamps: tuple[tuple[int, ...], ...]
+    annotation_view_count: int = 1
+    terminal_parent_tree_id: int | None = None
+    HeaderBounds: tuple[float, ...] | None = None
+    HeaderCreation: int | None = None
+    cmgr_parent_tree_id: int | None = None
+    annotation_view_variant: str = "default"
+    Config0Payload: bytes | None = None
+    HeaderPayload: bytes | None = None
 
 
 # this binding exists because pin recognition and native encoding share one profile
@@ -1556,12 +1495,11 @@ KPinHeaderUser = "odin"
 # this definition exists because cycle free pin builders retain the legacy result shape
 @Dataclass(frozen=True, slots=True)
 class PinEnvelope:
-    locals().setdefault("__annotations__", {})
-    __annotations__["Config0Payload"] = "bytes"
-    __annotations__["HeaderPayload"] = "bytes"
-    __annotations__["HeaderStamps"] = "tuple[tuple[int, ...], ...]"
-    __annotations__["HeaderBounds"] = "tuple[float, ...]"
-    __annotations__["HeaderCreation"] = "int"
+    Config0Payload: bytes
+    HeaderPayload: bytes
+    HeaderStamps: tuple[tuple[int, ...], ...]
+    HeaderBounds: tuple[float, ...]
+    HeaderCreation: int
 
 
 # this binding exists because shared behavior needs one stable value
@@ -1969,7 +1907,7 @@ def BuildEnvelope(
         if VendorPayload is not None
         else ()
     )
-    FeatureStamps = (
+    FeatureStamps: Mapping[int, tuple[int, ...]] = (
         MappingProxyType(
             {
                 ItemData.object_id: StampData
@@ -2019,11 +1957,11 @@ def EncodeNative(DocValue: CadDocument, ModelName: str) -> NativePart:
         )
     Authored = Canonical(SourceAuthored, ObjectIds, DocValue)
     Identity = NativeIdentityA(DocValue, ModelName)
-    SystemFeatures = {
-        int(Feature.attributes["native_object_id"]): Feature
-        for Feature in DocValue.feature_timeline
-        if IsNativeSystem(Feature)
-    }
+    SystemFeatures: dict[int, FeatureStep] = {}
+    for Feature in DocValue.feature_timeline:
+        NativeObjectId = Feature.attributes.get("native_object_id")
+        if IsNativeSystem(Feature) and isinstance(NativeObjectId, int):
+            SystemFeatures[NativeObjectId] = Feature
     BaseValue = tuple(
         (
             WriteObject(
@@ -2237,15 +2175,15 @@ def RouteVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
 
 # box specialization isolates primitive profile serialization behavior
 def BuildBoxTree(
-    SketchObject,
-    PadObject,
-    PlaneObjectId,
-    BoundsValue,
-    DepthValue,
-    DirectionCode,
-    TerminationCode,
-    EndCodes,
-):
+    SketchObject: WriteObject,
+    PadObject: WriteObject,
+    PlaneObjectId: int,
+    BoundsValue: tuple[float, float, float, float],
+    DepthValue: float,
+    DirectionCode: int,
+    TerminationCode: int,
+    EndCodes: tuple[int, int],
+) -> VendorResolved | None:
     IsDimensionedBox = (
         PadObject.properties
         and ("KitPrimitive", "Box") in PadObject.properties
@@ -2296,8 +2234,13 @@ def BuildBoxTree(
 
 # circle specialization isolates radial profile serialization behavior
 def BuildCircleTree(
-    PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes
-):
+    PadObject: WriteObject,
+    PlaneObjectId: int,
+    CircleValue: tuple[float, float, float],
+    DepthValue: float,
+    DirectionCode: int,
+    EndCodes: tuple[int, int],
+) -> VendorResolved | None:
     if (
         EndCodes not in {(0, 0), (1, 0)}
         or PlaneObjectId != 2
@@ -2355,8 +2298,13 @@ def BuildCircleTree(
 
 # polyline specialization isolates polygon profile serialization behavior
 def BuildPolyTree(
-    SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes
-):
+    SketchObject: WriteObject,
+    PadObject: WriteObject,
+    PlaneObjectId: int,
+    PolylineValue: tuple[tuple[float, float], ...] | None,
+    DepthValue: float,
+    EndCodes: tuple[int, int],
+) -> VendorResolved | None:
     if (
         PolylineValue is None
         or EndCodes != (0, 0)
@@ -2688,7 +2636,9 @@ def BuildPadGroove(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | N
 
 
 # cut routing isolates secondary feature program selection behavior
-def ResolveCutData(CutObject, CutCodes):
+def ResolveCutData(
+    CutObject: WriteObject, CutCodes: tuple[int, int]
+) -> tuple[float | None, bytes, tuple[tuple[int, ...], ...]] | None:
     if CutObject.class_name == "moExtrusion_c":
         if CutCodes[1] != 0 or len(CutObject.dimensions) != 1:
             return None
@@ -2698,7 +2648,7 @@ def ResolveCutData(CutObject, CutCodes):
     elif CutCodes[1] == 0:
         if len(CutObject.dimensions) != 1:
             return None
-        CutDepth: float | None = CutObject.dimensions[0].value_mm
+        CutDepth = CutObject.dimensions[0].value_mm
         ProgramData = EncodeBossCutProgram()
         HeaderStamps = KBossCutHeaderStamps
     elif CutCodes == (1, 1):
@@ -3066,15 +3016,15 @@ def BuildBossShell(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | N
 
 # focused continuation isolates the remaining native serialization phase
 def FinishLinear(
-    PadDepth,
-    SpacingValue,
-    MinimumX,
-    MinimumY,
-    MaximumX,
-    MaximumY,
-    ItemCount,
-    BoundsValue,
-):
+    PadDepth: float,
+    SpacingValue: float,
+    MinimumX: float,
+    MinimumY: float,
+    MaximumX: float,
+    MaximumY: float,
+    ItemCount: int,
+    BoundsValue: tuple[float, float, float, float],
+) -> VendorResolved:
     PadDepthMetres = PadDepth / KMillimetres
     SpacingMetres = SpacingValue / KMillimetres
     MinimumXMetres = MinimumX / KMillimetres
@@ -3597,7 +3547,11 @@ def ExtrusionEdit(PayloadData: bytes) -> tuple[int, int] | None:
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishIdsMut(DocValue, Result, Assign):
+def FinishIdsMut(
+    DocValue: CadDoc,
+    Result: dict[str, int],
+    Assign: Callable[[str, object], int],
+) -> dict[str, int]:
 
     # this callback exists because local behavior needs one focused transformation
     for Feature in sorted(
@@ -3643,7 +3597,7 @@ def WriteObjectIds(DocValue: CadDocument) -> dict[str, int]:
     NextId = 26
 
     # this definition exists because focused behavior needs one stable owner
-    def Assign(KeyValue: str, Native: Any = None) -> int:
+    def Assign(KeyValue: str, Native: object = None) -> int:
         nonlocal NextId
         Choice = Native if isinstance(Native, int) and Native > 25 else None
         if Choice is None or Choice in UsedValue or Choice > 4294967294:
@@ -3712,27 +3666,38 @@ def PrincipalPlaneB(Planes: tuple[SupportPlane, ...]) -> dict[str, int]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FreeCadProp(
-    ObjectData: Mapping[str, Any], PropName: str
-) -> Mapping[str, AnyValue] | None:
-    PropertiesData = ObjectData.get("properties")
-    if not isinstance(PropertiesData, Mapping):
-        return None
-    PropData = PropertiesData.get(PropName)
-    if not isinstance(PropData, Mapping):
-        return None
-    ChildrenData = PropData.get("children")
-    if not isinstance(ChildrenData, (list, tuple)) or len(ChildrenData) != 1:
-        return None
-    ChildData = ChildrenData[0]
-    if not isinstance(ChildData, Mapping):
-        return None
-    AttributesData = ChildData.get("attributes")
-    return AttributesData if isinstance(AttributesData, Mapping) else None
+# vendor metadata needs string keys before nested values can cross the parser boundary
+def IsObjectMap(Value: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(Value, Mapping)
+
+
+# nested vendor children need sequence validation before positional access is safe
+def IsObjectSeq(Value: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(Value, (list, tuple))
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsFreeCad(ObjectData: Mapping[str, Any], PropName: str) -> bool:
+def FreeCadProp(
+    ObjectData: Mapping[str, object], PropName: str
+) -> Mapping[object, object] | None:
+    PropertiesData = ObjectData.get("properties")
+    if not IsObjectMap(PropertiesData):
+        return None
+    PropData = PropertiesData.get(PropName)
+    if not IsObjectMap(PropData):
+        return None
+    ChildrenData = PropData.get("children")
+    if not IsObjectSeq(ChildrenData) or len(ChildrenData) != 1:
+        return None
+    ChildData = ChildrenData[0]
+    if not IsObjectMap(ChildData):
+        return None
+    AttributesData = ChildData.get("attributes")
+    return AttributesData if IsObjectMap(AttributesData) else None
+
+
+# this definition exists because focused behavior needs one stable owner
+def IsFreeCad(ObjectData: Mapping[str, object], PropName: str) -> bool:
     AttributesData = FreeCadProp(ObjectData, PropName)
     if AttributesData is None:
         return False
@@ -3746,9 +3711,12 @@ def IsFreeCad(ObjectData: Mapping[str, Any], PropName: str) -> bool:
         "Q3": 1.0,
     }
     try:
-        ActualData = {
-            KeyData: float(AttributesData[KeyData]) for KeyData in ExpectedData
-        }
+        ActualData: dict[str, float] = {}
+        for KeyData in ExpectedData:
+            RawValue = AttributesData[KeyData]
+            if not isinstance(RawValue, (str, int, float)):
+                return False
+            ActualData[KeyData] = float(RawValue)
     except (KeyError, TypeError, ValueError):
         return False
     return all(
@@ -3937,7 +3905,13 @@ def HasCadCylBrep(DocData: CadDocument, RadiusValue: float, HeightValue: float) 
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishBoxMut(PathData, DefinitionData, DocData, FeatureData, ObjectIds):
+def FinishBoxMut(
+    PathData: dict[str, Param],
+    DefinitionData: NativeFeatureDefinition,
+    DocData: CadDoc,
+    FeatureData: FeatureStep,
+    ObjectIds: dict[str, int],
+) -> tuple[WriteObject, WriteObject] | None:
     DimensionsData = tuple(
         (
             ParamDimension(PathData[PathName])
@@ -4098,7 +4072,13 @@ def FreeCadBoxMut(
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishCylMut(PathData, DefinitionData, DocData, FeatureData, ObjectIds):
+def FinishCylMut(
+    PathData: dict[str, Param],
+    DefinitionData: NativeFeatureDefinition,
+    DocData: CadDoc,
+    FeatureData: FeatureStep,
+    ObjectIds: dict[str, int],
+) -> tuple[WriteObject, WriteObject] | None:
     ExpectedData = {
         "Angle": (ValueKind.ANGLE, 360.0),
         "FirstAngle": (ValueKind.ANGLE, 0.0),
@@ -4245,7 +4225,12 @@ def BuildCadCylOMut(
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishItemsMut(DocValue, Result, Parameters, ObjectIds):
+def FinishItemsMut(
+    DocValue: CadDoc,
+    Result: list[WriteObject],
+    Parameters: dict[str, Param],
+    ObjectIds: dict[str, int],
+) -> tuple[WriteObject, ...]:
     Sketches = {Sketch.id: Sketch for Sketch in DocValue.sketches}
     EmittedSketches: set[str] = set()
 
@@ -4334,7 +4319,13 @@ def ExprParams(DocValue: CadDocument) -> tuple[Param, ...]:
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishExprMut(Parameters, IdAction, Values, References, Bindings):
+def FinishExprMut(
+    Parameters: tuple[Param, ...],
+    IdAction: Callable[[str, str], str | None],
+    Values: dict[str, str],
+    References: list[tuple[str, str]],
+    Bindings: list[tuple[str, str]],
+) -> tuple[str, ...] | None:
     for Param in Parameters:
         Expression = Param.expression
         if Expression is None:
@@ -4473,9 +4464,7 @@ def IsonicalSingMut(
     if SourceSketch is None or SourceFeature is None:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = EncodeSketch(
-        NormalizedSketch, SketchObject.object_id, ObjectIds
-    )
+    SketchPayload = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)[0]
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     BoundsValue = WriteRectangle(SketchObject)
     PinPoints = PolySixPoints(SketchObject)
@@ -4679,9 +4668,7 @@ def IsonicalBossMut(
     if SourcePad.id != PadObject.source_id or SourceFillet.id != FilletObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = EncodeSketch(
-        NormalizedSketch, SketchObject.object_id, ObjectIds
-    )
+    SketchPayload = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)[0]
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(
         SourcePad, SourceSketch, DocData.support_planes, ObjectIds
@@ -4769,9 +4756,7 @@ def IsonicalBosAMut(
     ):
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = EncodeSketch(
-        NormalizedSketch, SketchObject.object_id, ObjectIds
-    )
+    SketchPayload = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)[0]
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(
         SourcePad, SourceSketch, DocData.support_planes, ObjectIds
@@ -4856,9 +4841,7 @@ def IsonicalBosBMut(
     if SourcePad.id != PadObject.source_id or SourceShell.id != ShellObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = EncodeSketch(
-        NormalizedSketch, SketchObject.object_id, ObjectIds
-    )
+    SketchPayload = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)[0]
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(
         SourcePad, SourceSketch, DocData.support_planes, ObjectIds
@@ -4946,9 +4929,7 @@ def IsonicalBosCMut(
     ):
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = EncodeSketch(
-        NormalizedSketch, SketchObject.object_id, ObjectIds
-    )
+    SketchPayload = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)[0]
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(
         SourcePad, SourceSketch, DocData.support_planes, ObjectIds
@@ -5037,9 +5018,7 @@ def IsonicalBosDMut(
     ):
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = EncodeSketch(
-        NormalizedSketch, SketchObject.object_id, ObjectIds
-    )
+    SketchPayload = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)[0]
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(
         SourcePad, SourceSketch, DocData.support_planes, ObjectIds
@@ -5093,8 +5072,15 @@ def IsonicalBosDMut(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishSingleMut(
-    DocValue, SourceSketch, SourceFeature, Sketch, Extrusion, Objects, Circle, ObjectIds
-):
+    DocValue: CadDoc,
+    SourceSketch: Sketch,
+    SourceFeature: FeatureStep,
+    Sketch: WriteObject,
+    Extrusion: WriteObject,
+    Objects: tuple[WriteObject, ...],
+    Circle: tuple[float, float, float] | None,
+    ObjectIds: dict[str, int],
+) -> tuple[WriteObject, ...]:
     FreecadDimension = FreecadSingle(DocValue, SourceSketch, SourceFeature)
     if FreecadDimension is None:
         if (
@@ -5168,9 +5154,9 @@ def IsonicalSinAMut(
         NormalizedSketch = CanonicalSketch(
             SourceSketch, DocValue.support_planes, ObjectIds
         )
-        NormalizedPayload, Ignored = EncodeSketch(
-            NormalizedSketch, Sketch.object_id, ObjectIds
-        )
+        NormalizedPayload = EncodeSketch(NormalizedSketch, Sketch.object_id, ObjectIds)[
+            0
+        ]
         Sketch = Replace(Sketch, payload=NormalizedPayload)
     if SourceFeature is not None and SourceSketch is not None:
         NormalizedFeature = CanonicalA(
@@ -5234,8 +5220,14 @@ def IsonicalSinAMut(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishPairMut(
-    SecondIsBoss, SketchOne, FeatureOne, SketchTwo, FeatureTwo, ObjectIds, DimensionData
-):
+    SecondIsBoss: bool,
+    SketchOne: WriteObject,
+    FeatureOne: WriteObject,
+    SketchTwo: WriteObject,
+    FeatureTwo: WriteObject,
+    ObjectIds: dict[str, int],
+    DimensionData: tuple[WriteDimension | None, WriteDimension | None],
+) -> tuple[WriteObject, ...]:
     TargetIds = (26, 32, 33, 40)
     TargetNames = (
         "Sketch1",
@@ -5259,7 +5251,7 @@ def FinishPairMut(
     ):
         if ItemData.kind == "Extrusion":
             DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
+            DimensionValues: tuple[WriteDimension, ...] = (
                 ()
                 if DimensionValue is None
                 else (
@@ -5369,9 +5361,7 @@ def IsonicalTwoMut(
         NormalizedFeatures,
         strict=True,
     ):
-        SketchPayload, Ignored = EncodeSketch(
-            SketchData, SketchObject.object_id, ObjectIds
-        )
+        SketchPayload = EncodeSketch(SketchData, SketchObject.object_id, ObjectIds)[0]
         NormalizedObjects.extend(
             (
                 Replace(SketchObject, payload=SketchPayload),
@@ -5435,14 +5425,14 @@ def IsonicalTwoMut(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishCutMut(
-    NormalizedObjects,
-    FeatureCount,
-    DocData,
-    ResolvedSketches,
-    ResolvedFeatures,
-    ObjectsData,
-    ObjectIds,
-):
+    NormalizedObjects: list[WriteObject],
+    FeatureCount: int,
+    DocData: CadDoc,
+    ResolvedSketches: tuple[Sketch, ...],
+    ResolvedFeatures: tuple[FeatureStep, ...],
+    ObjectsData: tuple[WriteObject, ...],
+    ObjectIds: dict[str, int],
+) -> tuple[WriteObject, ...]:
     SketchObjects = tuple(NormalizedObjects[0::2])
     FeatureObjects = tuple(NormalizedObjects[1::2])
     BoundsData = tuple((WriteRectangle(ItemData) for ItemData in SketchObjects))
@@ -5509,7 +5499,7 @@ def FinishCutMut(
     ):
         if ItemData.kind == "Extrusion":
             DimensionValue = DimensionData[ObjectIndex // 2]
-            DimensionValues = (
+            DimensionValues: tuple[WriteDimension, ...] = (
                 Replace(
                     DimensionValue,
                     name="D1",
@@ -5614,9 +5604,7 @@ def IsonicalCutMut(
         NormalizedFeatures,
         strict=True,
     ):
-        SketchPayload, Ignored = EncodeSketch(
-            SketchData, SketchObject.object_id, ObjectIds
-        )
+        SketchPayload = EncodeSketch(SketchData, SketchObject.object_id, ObjectIds)[0]
         NormalizedObjects.extend(
             (
                 Replace(SketchObject, payload=SketchPayload),
@@ -5713,7 +5701,7 @@ def CanonicalSketch(
     if PlaneValue is None or TargetFrame is None:
         return SketchData
     SourceFrame = PlaneValue.transform
-    TargetU, TargetV, Ignored = TargetFrame
+    TargetU, TargetV = TargetFrame[:2]
 
     # this definition exists because focused behavior needs one stable owner
     def TransformPoint(PointData: Vector2) -> VectorTwo:
@@ -5743,7 +5731,7 @@ def CanonicalSketch(
             ),
         )
 
-    NormalizedEntities = []
+    NormalizedEntities: list[SketchEntity] = []
     for EntityData in SketchData.entities:
         GeomData = EntityData.geometry
         if isinstance(GeomData, LineGeom):
@@ -5940,9 +5928,17 @@ def FreeCadFour(
             )
         )
     )
-    if any((ItemData is None for ItemData in DimensionData)):
+    ResolvedDimensions = tuple(
+        ItemData for ItemData in DimensionData if ItemData is not None
+    )
+    if len(ResolvedDimensions) != 4:
         return None
-    return (DimensionData[0], DimensionData[1], DimensionData[2], DimensionData[3])
+    return (
+        ResolvedDimensions[0],
+        ResolvedDimensions[1],
+        ResolvedDimensions[2],
+        ResolvedDimensions[3],
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -6025,9 +6021,12 @@ def FreeCadThree(
             )
         )
     )
-    if any((ItemData is None for ItemData in DimensionData)):
+    ResolvedDimensions = tuple(
+        ItemData for ItemData in DimensionData if ItemData is not None
+    )
+    if len(ResolvedDimensions) != 3:
         return None
-    return (DimensionData[0], DimensionData[1], DimensionData[2])
+    return (ResolvedDimensions[0], ResolvedDimensions[1], ResolvedDimensions[2])
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -6240,14 +6239,16 @@ def FreeCadPad(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishBossB(
-    SelectionData,
-    FilletFeatureData,
-    PadNativeName,
-    DocData,
-    BoundsValue,
-    PadDimension,
-    RadiusNumber,
-):
+    SelectionData: Selection,
+    FilletFeatureData: FeatureStep,
+    PadNativeName: str,
+    DocData: CadDoc,
+    BoundsValue: tuple[float, float, float, float],
+    PadDimension: WriteDimension,
+    RadiusNumber: float,
+) -> tuple[WriteDimension, WriteDimension] | None:
+    if FilletFeatureData.provenance is None:
+        return None
     if (
         SelectionData.attributes.get("freecad_object")
         != FilletFeatureData.provenance.native_id
@@ -6415,14 +6416,16 @@ def FreeCadBossB(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishBoss(
-    SelectionData,
-    ChamferFeatureData,
-    PadNativeName,
-    DocData,
-    BoundsValue,
-    PadDimension,
-    DistanceNumber,
-):
+    SelectionData: Selection,
+    ChamferFeatureData: FeatureStep,
+    PadNativeName: str,
+    DocData: CadDoc,
+    BoundsValue: tuple[float, float, float, float],
+    PadDimension: WriteDimension,
+    DistanceNumber: float,
+) -> tuple[WriteDimension, WriteDimension] | None:
+    if ChamferFeatureData.provenance is None:
+        return None
     if (
         SelectionData.attributes.get("freecad_object")
         != ChamferFeatureData.provenance.native_id
@@ -6595,13 +6598,15 @@ def FreeCadBoss(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishBossD(
-    SelectionData,
-    ShellFeatureData,
-    PadNativeName,
-    DocData,
-    PadDimension,
-    ThicknessNumber,
-):
+    SelectionData: Selection,
+    ShellFeatureData: FeatureStep,
+    PadNativeName: str,
+    DocData: CadDoc,
+    PadDimension: WriteDimension,
+    ThicknessNumber: float,
+) -> tuple[WriteDimension, WriteDimension] | None:
+    if ShellFeatureData.provenance is None:
+        return None
     if (
         SelectionData.attributes.get("freecad_object")
         != ShellFeatureData.provenance.native_id
@@ -6770,15 +6775,17 @@ def FreeCadBossD(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishBossC(
-    SelectionData,
-    PatternFeatureData,
-    SketchNativeName,
-    DocData,
-    SpacingDimension,
-    ItemCount,
-    PadDimension,
-    BoundsValue,
-):
+    SelectionData: Selection,
+    PatternFeatureData: FeatureStep,
+    SketchNativeName: str,
+    DocData: CadDoc,
+    SpacingDimension: WriteDimension,
+    ItemCount: int,
+    PadDimension: WriteDimension,
+    BoundsValue: tuple[float, float, float, float],
+) -> tuple[WriteDimension, WriteDimension, WriteDimension] | None:
+    if PatternFeatureData.provenance is None:
+        return None
     if (
         SelectionData.attributes.get("freecad_object")
         != PatternFeatureData.provenance.native_id
@@ -6930,7 +6937,6 @@ def FreeCadBossC(
         PadDimension is None
         or SpacingDimension is None
         or isinstance(ItemCount, bool)
-        or (not isinstance(ItemCount, int))
         or (not 2 <= ItemCount <= 1000)
         or (not MathValue.isfinite(SpacingDimension.value_mm))
         or (SpacingDimension.value_mm <= 0.0)
@@ -7006,15 +7012,17 @@ def HasFreeCadGeomA(
 
 # focused continuation isolates the remaining native serialization phase
 def FinishBossA(
-    SelectionData,
-    PatternFeatureData,
-    SketchNativeName,
-    DocData,
-    AngleNumber,
-    ItemCount,
-    BoundsValue,
-    PadDimension,
-):
+    SelectionData: Selection,
+    PatternFeatureData: FeatureStep,
+    SketchNativeName: str,
+    DocData: CadDoc,
+    AngleNumber: float,
+    ItemCount: int,
+    BoundsValue: tuple[float, float, float, float],
+    PadDimension: WriteDimension,
+) -> tuple[WriteDimension, WriteDimension, WriteDimension] | None:
+    if PatternFeatureData.provenance is None:
+        return None
     if (
         SelectionData.attributes.get("freecad_object")
         != PatternFeatureData.provenance.native_id
@@ -7169,7 +7177,6 @@ def FreeCadBossA(
         or (not MathValue.isfinite(float(AngleNumber)))
         or (not 0.0 < float(AngleNumber) <= 360.0)
         or isinstance(ItemCount, bool)
-        or (not isinstance(ItemCount, int))
         or (not 2 <= ItemCount <= 1000)
         or any(
             (
@@ -7296,9 +7303,10 @@ def HasFreeCadTop(
         None,
     )
     ToleranceValue = 1e-08
+    if SurfaceData is None or not isinstance(SurfaceData, PlaneSurface):
+        return False
     return (
-        isinstance(SurfaceData, PlaneSurface)
-        and SelectedFace.same_sense
+        SelectedFace.same_sense
         and MathValue.isclose(
             SurfaceData.origin.z, PadDepth, rel_tol=0.0, abs_tol=ToleranceValue
         )
@@ -7741,9 +7749,9 @@ def FreecadSingle(
 
 
 # this definition exists because focused behavior needs one stable owner
-def FreecadTypeId(Attributes: Mapping[str, Any]) -> str:
+def FreecadTypeId(Attributes: Mapping[str, object]) -> str:
     Value = Attributes.get("freecad")
-    return str(Value.get("type_id", "")) if isinstance(Value, Mapping) else ""
+    return str(Value.get("type_id", "")) if IsObjectMap(Value) else ""
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -7859,7 +7867,13 @@ def FreeCadSingle(
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsFreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> bool:
+def IsFreecadParam(
+    Param: Parameter,
+    KindValue: ValueKind,
+    Expected: object,
+) -> bool:
+    if Expected is not None and not isinstance(Expected, (str, int, float, bool)):
+        return False
     Value = Param.value
     if Value.kind is not KindValue:
         return False
@@ -7883,7 +7897,9 @@ def IsFreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> boo
 
 
 # this definition exists because focused behavior needs one stable owner
-def IsParamValueA(Value: Any, Expected: float, KindValue: ValueKind) -> bool:
+def IsParamValueA(
+    Value: ParamValue | None, Expected: float, KindValue: ValueKind
+) -> bool:
     if Value is None or Value.kind is not KindValue:
         return False
     Dimension = ParamDimension(Param("", "D1", Value))
@@ -7904,7 +7920,7 @@ def WriteRectangle(Sketch: _WriteObject) -> tuple[float, float, float, float] | 
     if Sketch.kind != "Sketch" or not Sketch.payload:
         return None
     Markers = list(ParseMarkers(Sketch.payload, 0, len(Sketch.payload)))
-    Profiles, Ignored, Ignored = DecodeProfiles(Markers, ())
+    Profiles = DecodeProfiles(Markers, ())[0]
     if len(Profiles) != 1 or Profiles[0].kind != "rectangle":
         return None
     Coordinates = Profiles[0].coordinates
@@ -7950,7 +7966,7 @@ def PolySixPoints(SketchObject: _WriteObject) -> tuple[tuple[float, float], ...]
     if SketchObject.kind != "Sketch" or not SketchObject.payload:
         return None
     MarkersData = list(ParseMarkers(SketchObject.payload, 0, len(SketchObject.payload)))
-    ProfilesData, Ignored, Ignored = DecodeProfiles(MarkersData, ())
+    ProfilesData = DecodeProfiles(MarkersData, ())[0]
     PolylineData = tuple(
         (ItemData for ItemData in ProfilesData if ItemData.kind == "polyline")
     )
@@ -8014,7 +8030,7 @@ def NativeSystem(Feature: FeatureStep | None, Fallback: str) -> str:
     if Feature is None:
         return Fallback
     Properties = Feature.attributes.get("native_properties")
-    if isinstance(Properties, Mapping):
+    if IsObjectMap(Properties):
         NameValue = Properties.get("Name")
         if isinstance(NameValue, str):
             return NameValue
@@ -8099,9 +8115,11 @@ def WriteFeature(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeKeyword(Attributes: Mapping[str, Any]) -> tuple[tuple[str, str], ...] | None:
+def NativeKeyword(
+    Attributes: Mapping[str, object],
+) -> tuple[tuple[str, str], ...] | None:
     Properties = Attributes.get("native_properties")
-    if not isinstance(Properties, Mapping):
+    if not IsObjectMap(Properties):
         return None
     return tuple(
         (
@@ -8314,15 +8332,24 @@ def LineLoopPoints(
 
 
 # rectangle encoding owns the ordered corner and edge marker emission
-def EncodeRectMut(Selected, Profile, Payload, Consumed, LocalId):
+def EncodeRectMut(
+    Selected: Sequence[SketchEntity | None],
+    Profile: tuple[str, ...],
+    Payload: bytearray,
+    Consumed: set[str],
+    LocalId: int,
+) -> int | None:
     if len(Selected) != 4 or not all(
         Entity is not None and isinstance(Entity.geometry, LineGeom)
         for Entity in Selected
     ):
         return None
-    BoundsValue = Rectangle(
-        tuple(Entity.geometry for Entity in Selected if Entity is not None)
-    )
+    LineValues: list[LineGeom] = []
+    for Entity in Selected:
+        if Entity is None or not isinstance(Entity.geometry, LineGeom):
+            return None
+        LineValues.append(Entity.geometry)
+    BoundsValue = Rectangle(tuple(LineValues))
     if BoundsValue is None:
         return None
     Points = (
@@ -8342,13 +8369,24 @@ def EncodeRectMut(Selected, Profile, Payload, Consumed, LocalId):
 
 
 # polyline encoding owns the ordered vertex and edge marker emission
-def EncodePolyMut(Selected, Profile, Payload, Consumed, LocalId):
+def EncodePolyMut(
+    Selected: Sequence[SketchEntity | None],
+    Profile: tuple[str, ...],
+    Payload: bytearray,
+    Consumed: set[str],
+    LocalId: int,
+) -> int | None:
     if len(Selected) != 6 or not all(
         Entity is not None and isinstance(Entity.geometry, LineGeom)
         for Entity in Selected
     ):
         return None
-    LineData = tuple(Entity.geometry for Entity in Selected if Entity is not None)
+    LineValues: list[LineGeom] = []
+    for Entity in Selected:
+        if Entity is None or not isinstance(Entity.geometry, LineGeom):
+            return None
+        LineValues.append(Entity.geometry)
+    LineData = tuple(LineValues)
     PointData = LineLoopPoints(LineData)
     if PointData is None:
         return None
@@ -8365,7 +8403,13 @@ def EncodePolyMut(Selected, Profile, Payload, Consumed, LocalId):
 
 
 # circle encoding owns radial markers and their generated driving dimension
-def EncodeCircleMut(Selected, Payload, Generated, Consumed, LocalId):
+def EncodeCircleMut(
+    Selected: Sequence[SketchEntity | None],
+    Payload: bytearray,
+    Generated: list[WriteDimension],
+    Consumed: set[str],
+    LocalId: int,
+) -> int | None:
     if not (
         len(Selected) == 1
         and Selected[0] is not None
@@ -8390,7 +8434,12 @@ def EncodeCircleMut(Selected, Payload, Generated, Consumed, LocalId):
 
 
 # entity encoding owns unconsumed line and circle marker emission
-def EncodeEntityMut(Entity, Payload, Generated, LocalId):
+def EncodeEntityMut(
+    Entity: SketchEntity,
+    Payload: bytearray,
+    Generated: list[WriteDimension],
+    LocalId: int,
+) -> int:
     if isinstance(Entity.geometry, LineGeom):
         Payload.extend(
             Coordinate(
@@ -8525,7 +8574,7 @@ def EncodeExtrude(Feature: FeatureStep) -> bytes:
         if isinstance(Definition, ExtrusionFeature)
         else None
     )
-    Termination = {
+    TerminationCodes = {
         ExtrusionEndCondition.BLIND: 0,
         ExtrusionEndCondition.THROUGH_ALL: 1,
         ExtrusionEndCondition.UP_TO_FIRST: 2,
@@ -8534,7 +8583,12 @@ def EncodeExtrude(Feature: FeatureStep) -> bytes:
         ExtrusionEndCondition.UP_TO_SHAPE: 4,
         ExtrusionEndCondition.OFFSET_FROM_SURFACE: 5,
         ExtrusionEndCondition.MID_PLANE: 6,
-    }.get(Condition, 0)
+    }
+    Termination = (
+        TerminationCodes.get(Condition, 0)
+        if isinstance(Condition, ExtrusionEndCondition)
+        else 0
+    )
     DeclValue = ClassDecl("moEndSpec_c")
     return b"".join(
         (
@@ -8589,7 +8643,7 @@ def KeywordsPayload(
     ModelName: str,
     Objects: tuple[_WriteObject, ...],
     ObjectIds: Mapping[str, int],
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
 ) -> bytes:
     Children: list[str] = []
     Configurations = DocValue.configurations or ()
@@ -8603,7 +8657,7 @@ def KeywordsPayload(
         NativeProperties = Config.attributes.get("native_properties")
         Material = (
             NativeProperties.get("Material")
-            if isinstance(NativeProperties, Mapping)
+            if IsObjectMap(NativeProperties)
             else Config.attributes.get("Material")
         )
         if isinstance(Material, str):
@@ -8658,7 +8712,7 @@ def FeaturesPayload(
     DocValue: CadDocument,
     ModelName: str,
     ObjectIds: Mapping[str, int],
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
 ) -> bytes:
     Header = XmlElem(
         "swHeader",
@@ -8917,7 +8971,7 @@ def ConfigAtomTree(SolidFeatureTreeIds: tuple[int, ...]) -> tuple[int, ...]:
 def NativeEnvelope(
     DocValue: CadDocument,
     ModelName: str,
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     SolidFeatureTreeIds: tuple[int, ...] = (),
     HeaderFeatureObjects: tuple[tuple[int, str, bool], ...] = (),
     HeaderFeatureStamps: Mapping[int, tuple[int, ...]] | None = None,
@@ -9061,9 +9115,7 @@ def EncodeNativeAsm(
         KAsmConfigPropertiesStreA: KConfigPropertiesPayload,
         KAsmOpenTimeStream: KOpenTimePayload,
     }
-    HeaderObjects = tuple(
-        ((ObjectId, NameValue) for ObjectId, NameValue, Ignored in Listed)
-    )
+    HeaderObjects = tuple((ItemData[0], ItemData[1]) for ItemData in Listed)
     Decoded = DecodeNativeA(ModelHeader)
     return NativeAsm(
         MappingProxyType(Streams),
@@ -9082,7 +9134,7 @@ def EncodeNativeAsm(
 
 
 # root parsing isolates native header identity and log count validation
-def ReadHeaderRoot(DataValue: bytes):
+def ReadHeaderRoot(DataValue: bytes) -> tuple[str, int, int]:
     ClassName, Offset = ReadClass(DataValue, 0)
     if ClassName != "moHeader_c":
         raise SldprtFormatError("native SOLIDWORKS header class is not moHeader_c")
@@ -9095,7 +9147,9 @@ def ReadHeaderRoot(DataValue: bytes):
     )
     UserName, Offset = ReadSerialized(DataValue, Offset)
     Offset = ExpectBytes(DataValue, Offset, bytes.fromhex("03800100"))
-    Ignored, Offset = ReadSerialized(DataValue, Offset)
+    EmptyValue, Offset = ReadSerialized(DataValue, Offset)
+    if EmptyValue:
+        raise SldprtFormatError("native SOLIDWORKS header root string is not empty")
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "suObList":
         raise SldprtFormatError("native SOLIDWORKS header log list is missing")
@@ -9105,7 +9159,9 @@ def ReadHeaderRoot(DataValue: bytes):
 
 
 # object parsing isolates native header action and reference extraction
-def ReadHeaderObjs(DataValue: bytes, Offset: int, LogCount: int):
+def ReadHeaderObjs(
+    DataValue: bytes, Offset: int, LogCount: int
+) -> tuple[str, tuple[tuple[int, str], ...], int]:
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "moLogs_c":
         raise SldprtFormatError("native SOLIDWORKS header log record is missing")
@@ -9114,27 +9170,42 @@ def ReadHeaderObjs(DataValue: bytes, Offset: int, LogCount: int):
     if ClassName != "moStamp_c":
         raise SldprtFormatError("native SOLIDWORKS header stamp record is missing")
     Offset += 10
-    Ignored, Offset = ReadSerialized(DataValue, Offset)
+    CreatedValue, Offset = ReadSerialized(DataValue, Offset)
+    if CreatedValue != "Created":
+        raise SldprtFormatError("native SOLIDWORKS header creation action is invalid")
     Offset += 4
     RefName, Offset = ReadSerialized(DataValue, Offset)
     Objects: list[tuple[int, str]] = []
-    for Ignored in range(LogCount - 1):
+    RemainingLogs = LogCount - 1
+    while RemainingLogs:
         Offset = ExpectBytes(DataValue, Offset, bytes.fromhex("0880"))
         (ActionCount,) = Struct.unpack_from("<H", DataValue, Offset)
         Offset += 2
-        for Ignored in range(ActionCount):
+        ActionIndex = 0
+        while ActionIndex < ActionCount:
             Offset = ExpectBytes(DataValue, Offset, bytes.fromhex("0a80"))
+            StoredIndex = Struct.unpack_from("<I", DataValue, Offset)[0]
+            if StoredIndex != ActionIndex:
+                raise SldprtFormatError(
+                    "native SOLIDWORKS header action index is invalid"
+                )
             Offset += 10
-            Ignored, Offset = ReadSerialized(DataValue, Offset)
+            ActionName, Offset = ReadSerialized(DataValue, Offset)
+            if ActionName not in {"Created", "Modified"}:
+                raise SldprtFormatError(
+                    "native SOLIDWORKS header action name is invalid"
+                )
+            ActionIndex += 1
         (ObjectId,) = Struct.unpack_from("<I", DataValue, Offset)
         Offset += 4
         ObjectName, Offset = ReadSerialized(DataValue, Offset)
         Objects.append((ObjectId, ObjectName))
+        RemainingLogs -= 1
     return (RefName, tuple(Objects), Offset)
 
 
 # tail parsing isolates native document path and configuration extraction
-def ReadHeaderTail(DataValue: bytes, Offset: int):
+def ReadHeaderTail(DataValue: bytes, Offset: int) -> tuple[str, str]:
     Offset += 14
     ClassName, Offset = ReadClass(DataValue, Offset)
     if ClassName != "moExtObject_c":
@@ -9143,12 +9214,22 @@ def ReadHeaderTail(DataValue: bytes, Offset: int):
     if ClassName != "moCStringHandle_c":
         raise SldprtFormatError("native SOLIDWORKS header path handle is missing")
     DocPath, Offset = ReadSerialized(DataValue, Offset)
-    Ignored, Offset = ReadClassRef(DataValue, Offset)
-    Ignored, Offset = ReadSerialized(DataValue, Offset)
+    ClassIndex, Offset = ReadClassRef(DataValue, Offset)
+    if ClassIndex <= 0:
+        raise SldprtFormatError("native SOLIDWORKS header path class is invalid")
+    RefName, Offset = ReadSerialized(DataValue, Offset)
+    if not RefName:
+        raise SldprtFormatError("native SOLIDWORKS header reference name is missing")
     Offset = ExpectBytes(DataValue, Offset, bytes.fromhex("020000"))
     Offset += 4
-    for Ignored in range(3):
-        Ignored, Offset = ReadSerialized(DataValue, Offset)
+    EmptyCount = 0
+    while EmptyCount < 3:
+        EmptyValue, Offset = ReadSerialized(DataValue, Offset)
+        if EmptyValue:
+            raise SldprtFormatError(
+                "native SOLIDWORKS header reserved string is not empty"
+            )
+        EmptyCount += 1
     Offset = ExpectBytes(DataValue, Offset, bytes.fromhex("0008"))
     Offset += 16
     ConfigName, Offset = ReadSerialized(DataValue, Offset)
@@ -9231,7 +9312,7 @@ def NativeAsmA(
 
 # this definition exists because focused behavior needs one stable owner
 def ModelHeader(
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     ConfigName: str,
     UserName: str = "Kit",
     SolidFeatureTreeIds: tuple[int, ...] = (),
@@ -9252,7 +9333,12 @@ def ModelHeader(
 
 
 # header prefix assembly owns fixed native identity records
-def StartHeader(Identity, Objects, UserName, LegacyStamp):
+def StartHeader(
+    Identity: NativeIdentity,
+    Objects: Sequence[tuple[int, str, bool]],
+    UserName: str,
+    LegacyStamp: bytes,
+) -> bytearray:
     Output = bytearray(ClassDecl("moHeader_c"))
     Output.extend(
         bytes.fromhex("01000000ffff00000f00")
@@ -9275,7 +9361,13 @@ def StartHeader(Identity, Objects, UserName, LegacyStamp):
 
 
 # header object assembly owns action stamp sequencing and object records
-def HeaderObjsMut(Output, Identity, Objects, ObjectStampsA, LegacyStamp):
+def HeaderObjsMut(
+    Output: bytearray,
+    Identity: NativeIdentity,
+    Objects: Sequence[tuple[int, str, bool]],
+    ObjectStampsA: Mapping[int, tuple[int, ...]] | None,
+    LegacyStamp: bytes,
+) -> None:
     LogicalStamp = Identity.creation_stamp
     ObjectStamps = ObjectStampsA or {}
     for ObjectId, NameValue, Modified in Objects:
@@ -9309,14 +9401,14 @@ def HeaderObjsMut(Output, Identity, Objects, ObjectStampsA, LegacyStamp):
 
 # header reference assembly owns document and configuration identity records
 def HeaderRefMut(
-    Output,
-    Identity,
-    ConfigName,
-    DocPath,
-    CStringHandleClassIndex,
-    Watermark,
-    LegacyStamp,
-):
+    Output: bytearray,
+    Identity: NativeIdentity,
+    ConfigName: str,
+    DocPath: str,
+    CStringHandleClassIndex: int,
+    Watermark: int,
+    LegacyStamp: bytes,
+) -> None:
     Output.extend(
         LegacyStamp
         + Struct.pack("<IH", Watermark, 0)
@@ -9337,7 +9429,11 @@ def HeaderRefMut(
 
 
 # header bounds assembly owns native spatial metadata and trailer records
-def HeaderBoundsMut(Output, Identity, HeaderBounds):
+def HeaderBoundsMut(
+    Output: bytearray,
+    Identity: NativeIdentity,
+    HeaderBounds: tuple[float, ...] | None,
+) -> None:
     Output.extend(b"\x00" * 16)
     Output.extend(Struct.pack("<I", Identity.baseline_stamp))
     Output.extend(b"\x00" * 8)
@@ -9359,7 +9455,7 @@ def HeaderBoundsMut(Output, Identity, HeaderBounds):
 
 # this definition exists because focused behavior needs one stable owner
 def HeaderPayload(
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     ConfigName: str,
     Objects: Sequence[tuple[int, str, bool]],
     DocPath: str,
@@ -9376,9 +9472,7 @@ def HeaderPayload(
             "native SOLIDWORKS header bounds require ten finite values"
         )
     LegacyStamp = bytes.fromhex("f65a1a69")
-    CStringHandleClassIndex = 14 + sum(
-        2 + int(Modified) for ObjectId, NameValue, Modified in Objects
-    )
+    CStringHandleClassIndex = 14 + sum(2 + int(ItemData[2]) for ItemData in Objects)
     Output = StartHeader(Identity, Objects, UserName, LegacyStamp)
     HeaderObjsMut(Output, Identity, Objects, ObjectStampsA, LegacyStamp)
     MinimumWatermark = max(ItemValue[0] for ItemValue in Objects) + 1
@@ -9401,7 +9495,7 @@ def HeaderPayload(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ConfigHeader(ConfigName: str, Identity: _NativeIdentity) -> bytes:
+def ConfigHeader(ConfigName: str, Identity: NativeIdentity) -> bytes:
     return b"".join(
         (
             ClassDecl("dmConfigMgrHeader_c"),
@@ -9463,7 +9557,7 @@ def VersionHistory() -> bytes:
 # this definition exists because focused behavior needs one stable owner
 def Biography(
     ModelName: str,
-    Identity: _NativeIdentity,
+    Identity: NativeIdentity,
     TemplatePath: str = "C:\\Kit\\Part.PRTDOT",
     DocSuffix: str = PartSuffix,
 ) -> bytes:
@@ -9488,9 +9582,11 @@ def Biography(
         ClassDecl("moBiography_c")
         + Struct.pack("<10I", 2, 18000, 2025268, 1, 9, 12, 2, 10, 0, 26100)
     )
-    for Ignored in range(7):
+    EmptyRecordCount = 0
+    while EmptyRecordCount < 7:
         Output.extend(Serialized(""))
         Output.extend(b"\x00" * (14 if len(Output) == 63 else 12))
+        EmptyRecordCount += 1
     Output.extend(Struct.pack("<QI", Filetime, 691077120))
     for PathValue in FirstPaths:
         Output.extend(Serialized(PathValue))
@@ -9542,7 +9638,14 @@ def StableCreation(DocValue: CadDocument, ModelName: str, Domain: bytes = b"") -
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishProofMut(Parsed, ExpectedPlanes, DocValue, Result, ObjectIds, Authored):
+def FinishProofMut(
+    Parsed: NativeModel,
+    ExpectedPlanes: Mapping[int, tuple[tuple[float, float, float], ...]],
+    DocValue: CadDoc,
+    Result: set[Capability],
+    ObjectIds: Mapping[str, int],
+    Authored: tuple[WriteObject, ...],
+) -> frozenset[Capability]:
     ActualPlanes = {
         Plane.object_id: (
             FrameVector(Plane.origin_mm),
@@ -9785,7 +9888,7 @@ def HasPadProof(
             if ProfileData.kind == ExpectedKind
         )
     )
-    HasProfile = ExpectedProfile is not None and (
+    HasProfile = (
         len(ProfilesValue) == 1
         and len(ProfilesValue[0].coordinates) == len(ExpectedProfile)
         and all(
@@ -11291,12 +11394,23 @@ def DocAxisBindings(
 
 
 # record ordering exists because native feature spans follow stream offsets
-def RecordOffset(Record):
+def RecordOffset(Record: NativeName) -> int:
     return Record.offset
 
 
 # native feature construction owns scalar binding and stream span recovery
-def BuildNativeList(XmlFeatures, Names, Resolved, Classes, Scalars, ResolvedStream):
+def BuildNativeList(
+    XmlFeatures: list[XmlFeature],
+    Names: tuple[NativeName, ...],
+    Resolved: bytes,
+    Classes: tuple[NativeClass, ...],
+    Scalars: tuple[NativeScalar, ...],
+    ResolvedStream: str,
+) -> tuple[
+    dict[int, NativeName],
+    dict[int, tuple[NativeScalar, ...]],
+    list[NativeFeature],
+]:
     RecordById = FeatureRecords(XmlFeatures, Names)
     OrderedRecords = sorted(
         {Record.offset: Record for Record in RecordById.values()}.values(),
@@ -11352,7 +11466,10 @@ def BuildNativeList(XmlFeatures, Names, Resolved, Classes, Scalars, ResolvedStre
 
 
 # dimension rebinding owns child scalar recovery for native features
-def RebindDimsMut(NativeFeatures, ScalarOwner):
+def RebindDimsMut(
+    NativeFeatures: list[NativeFeature],
+    ScalarOwner: dict[int, tuple[NativeScalar, ...]],
+) -> dict[int, int]:
     FeatureIndexes = {
         Feature.object_id: Index for Index, Feature in enumerate(NativeFeatures)
     }
@@ -11376,14 +11493,24 @@ def RebindDimsMut(NativeFeatures, ScalarOwner):
 
 
 # feature ordering exists because author history follows resolved stream offsets
-def FeatureOffset(Feature):
+def FeatureOffset(Feature: NativeFeature) -> int:
     return Feature.native_offset or 0
 
 
 # state creation owns decoded plane context and authored feature ordering
 def CreateState(
-    Resolved, ResolvedStream, Classes, RecordById, NativeFeatures, FeatureIndexes
-):
+    Resolved: bytes,
+    ResolvedStream: str,
+    Classes: tuple[NativeClass, ...],
+    RecordById: dict[int, NativeName],
+    NativeFeatures: list[NativeFeature],
+    FeatureIndexes: dict[int, int],
+) -> tuple[
+    DecodeState,
+    list[NativeFeature],
+    list[NativePlane],
+    tuple[NativeFeature, ...],
+]:
     Planes = DecodePlanes(Resolved, NativeFeatures, NativeStream=ResolvedStream)
     PlaneById = {Plane.object_id: Plane for Plane in Planes}
     PrincipalPlaneFrames = PrincipalPlaneA(NativeFeatures)
@@ -11433,8 +11560,12 @@ def CreateState(
 
 
 # diagnostic construction owns unresolved native identity and support reporting
-def DecodeNotices(NativeFeatures, UnframedPlanes, Sketches):
-    Diagnostics = []
+def DecodeNotices(
+    NativeFeatures: Sequence[NativeFeature],
+    UnframedPlanes: Sequence[NativeFeature],
+    Sketches: Sequence[NativeSketch],
+) -> tuple[str, ...]:
+    Diagnostics: list[str] = []
     Unresolved = [
         Feature
         for Feature in NativeFeatures
@@ -11479,10 +11610,6 @@ def DecodeNative(
     ConfigStream: str = "",
     **LegacyValues: object,
 ) -> NativeModel:
-    ConfigData = LegacyValues.get("configuration_data", ConfigData)
-    ConfigId = LegacyValues.get("configuration_id", ConfigId)
-    ResolvedStream = LegacyValues.get("resolved_stream", ResolvedStream)
-    ConfigStream = LegacyValues.get("configuration_stream", ConfigStream)
     UnknownValues = set(LegacyValues) - {
         "configuration_data",
         "configuration_id",
@@ -11494,6 +11621,24 @@ def DecodeNative(
         raise TypeError(
             f"DecodeNative() got an unexpected keyword argument {Unexpected!r}"
         )
+    LegacyConfig = LegacyValues.get("configuration_data", ConfigData)
+    LegacyConfigId = LegacyValues.get("configuration_id", ConfigId)
+    LegacyResolved = LegacyValues.get("resolved_stream", ResolvedStream)
+    LegacyStream = LegacyValues.get("configuration_stream", ConfigStream)
+    if not isinstance(LegacyConfig, bytes):
+        raise TypeError("configuration_data must be bytes")
+    if LegacyConfigId is not None and (
+        not isinstance(LegacyConfigId, int) or isinstance(LegacyConfigId, bool)
+    ):
+        raise TypeError("configuration_id must be an integer or None")
+    if not isinstance(LegacyResolved, str):
+        raise TypeError("resolved_stream must be a string")
+    if not isinstance(LegacyStream, str):
+        raise TypeError("configuration_stream must be a string")
+    ConfigData = LegacyConfig
+    ConfigId = LegacyConfigId
+    ResolvedStream = LegacyResolved
+    ConfigStream = LegacyStream
     Configurations, XmlFeatures = ParseKeywords(Keywords)
     Names = ParseNames(Resolved)
     if ResolvedStream == ResolvedFeaturesStream:
@@ -12160,7 +12305,7 @@ def PrincipalPlaneA(
     Ordered = tuple(
         (
             Feature
-            for Ignored, Feature in sorted(
+            for ItemData in sorted(
                 enumerate(Features),
                 key=lambda ItemValue: (
                     ItemValue[1].native_offset is None,
@@ -12172,6 +12317,7 @@ def PrincipalPlaneA(
                     ItemValue[0],
                 ),
             )
+            for Feature in (ItemData[1],)
         )
     )
     OriginIndex = next(
@@ -12223,9 +12369,9 @@ def MatrixFrame(DataValue: bytes, Start: int, EndValue: int) -> (
             Struct.unpack_from("<3d", DataValue, Offset + 73),
             Struct.unpack_from("<3d", DataValue, Offset + 97),
         )
-        UAxis = tuple((RowValue[0] for RowValue in RowsValue))
-        VAxis = tuple((RowValue[1] for RowValue in RowsValue))
-        MatrixNormal = tuple((RowValue[2] for RowValue in RowsValue))
+        UAxis = (RowsValue[0][0], RowsValue[1][0], RowsValue[2][0])
+        VAxis = (RowsValue[0][1], RowsValue[1][1], RowsValue[2][1])
+        MatrixNormal = (RowsValue[0][2], RowsValue[1][2], RowsValue[2][2])
         Values = Origin + Normal + UAxis + VAxis + MatrixNormal
         if not all(
             (MathValue.isfinite(Value) and abs(Value) <= 10.0 for Value in Values)
@@ -12254,10 +12400,14 @@ def MatrixFrame(DataValue: bytes, Start: int, EndValue: int) -> (
         return (
             Offset,
             121,
-            tuple((Clean(Value * 1000.0) for Value in Origin)),
-            tuple((Clean(Value) for Value in Normal)),
-            tuple((Clean(Value) for Value in UAxis)),
-            tuple((Clean(Value) for Value in VAxis)),
+            (
+                Clean(Origin[0] * 1000.0),
+                Clean(Origin[1] * 1000.0),
+                Clean(Origin[2] * 1000.0),
+            ),
+            (Clean(Normal[0]), Clean(Normal[1]), Clean(Normal[2])),
+            (Clean(UAxis[0]), Clean(UAxis[1]), Clean(UAxis[2])),
+            (Clean(VAxis[0]), Clean(VAxis[1]), Clean(VAxis[2])),
         )
     return None
 
@@ -12294,7 +12444,11 @@ def MinimalFrame(DataValue: bytes, Start: int, EndValue: int) -> (
         return (
             Offset,
             81,
-            tuple((Clean(Value * 1000.0) for Value in Origin)),
+            (
+                Clean(Origin[0] * 1000.0),
+                Clean(Origin[1] * 1000.0),
+                Clean(Origin[2] * 1000.0),
+            ),
             Normal,
             (1.0, 0.0, 0.0),
             (0.0, 1.0, 0.0),
@@ -12390,9 +12544,9 @@ def ReadSketchPlane(
         Offset,
         PlaneObjectId,
         AxisCode,
-        tuple((Clean(Value) for Value in UAxis)),
-        tuple((Clean(Value) for Value in VAxis)),
-        tuple((Clean(Value) for Value in Normal)),
+        (Clean(UAxis[0]), Clean(UAxis[1]), Clean(UAxis[2])),
+        (Clean(VAxis[0]), Clean(VAxis[1]), Clean(VAxis[2])),
+        (Clean(Normal[0]), Clean(Normal[1]), Clean(Normal[2])),
         BasisOffset,
     )
 
@@ -12431,7 +12585,11 @@ def BoundingBox(
             continue
         return NativeBounding(
             Offset,
-            tuple((Clean(Value * KMillimetres) for Value in Values[:3])),
+            (
+                Clean(Values[0] * KMillimetres),
+                Clean(Values[1] * KMillimetres),
+                Clean(Values[2] * KMillimetres),
+            ),
             Clean(Values[3] * KMillimetres),
         )
     return None
@@ -12637,7 +12795,12 @@ def DecodeSketch(
 
 
 # marker geometry parsing owns state coordinates and endpoint extraction
-def MarkerGeometry(DataValue: bytes, Offset: int, EndValue: int):
+def MarkerGeometry(DataValue: bytes, Offset: int, EndValue: int) -> tuple[
+    float | None,
+    tuple[float, float] | None,
+    tuple[float, float] | None,
+    tuple[int, int] | None,
+]:
     StateOffset = Offset + 48
     State = (
         Struct.unpack_from("<d", DataValue, StateOffset)[0]
@@ -12665,7 +12828,9 @@ def MarkerGeometry(DataValue: bytes, Offset: int, EndValue: int):
 
 
 # single marker parsing owns native metadata normalization
-def ParseOneMarker(DataValue: bytes, Offsets, Index: int, EndValue: int):
+def ParseOneMarker(
+    DataValue: bytes, Offsets: Sequence[int], Index: int, EndValue: int
+) -> NativeMarker | None:
     Offset = Offsets[Index]
     PrefixBytes = next(
         Prefix for Prefix in KMarkers if DataValue.startswith(Prefix, Offset)
@@ -12819,7 +12984,17 @@ def MarkerSemantic(
 
 
 # rectangle shape parsing owns marker layout and corner validation
-def RectangleShape(Records, UsedValue):
+def RectangleShape(Records: Sequence[NativeMarker], UsedValue: set[int]) -> (
+    tuple[
+        Sequence[NativeMarker],
+        NativeMarker,
+        Sequence[NativeMarker],
+        tuple[tuple[float, float], ...],
+        list[float],
+        list[float],
+    ]
+    | None
+):
     if len(Records) != 9 or any(Marker.offset in UsedValue for Marker in Records):
         return None
     Points = Records[:4]
@@ -12859,8 +13034,13 @@ def RectangleShape(Records, UsedValue):
         or Lines[-1].length < 92
     ):
         return None
-    Resolved = tuple(Marker.coordinates_mm for Marker in Points)
-    if any(Coordinate is None for Coordinate in Resolved):
+    Resolved = tuple(
+        Coordinate
+        for Marker in Points
+        for Coordinate in (Marker.coordinates_mm,)
+        if Coordinate is not None
+    )
+    if len(Resolved) != len(Points):
         return None
     XsValue = sorted({Coordinate[0] for Coordinate in Resolved})
     YsValue = sorted({Coordinate[1] for Coordinate in Resolved})
@@ -12880,7 +13060,12 @@ def RectangleShape(Records, UsedValue):
 
 
 # rectangle edge parsing owns side classification and uniqueness validation
-def RectangleEdges(Lines, Resolved, XsValue, YsValue):
+def RectangleEdges(
+    Lines: Sequence[NativeMarker],
+    Resolved: Sequence[tuple[float, float]],
+    XsValue: Sequence[float],
+    YsValue: Sequence[float],
+) -> tuple[int, ...] | None:
     EdgeMarkers: dict[str, NativeMarker] = {}
     for Marker in Lines:
         EndpointStart, EndpointEnd = Marker.endpoint_indices or (-1, -1)
@@ -12920,7 +13105,9 @@ def RectangleEdges(Lines, Resolved, XsValue, YsValue):
 
 
 # rectangle window parsing composes validated shape and edge metadata
-def RectangleWindow(Markers, Start, UsedValue):
+def RectangleWindow(
+    Markers: Sequence[NativeMarker], Start: int, UsedValue: set[int]
+) -> tuple[NativeProfile, set[int]] | None:
     Records = Markers[Start : Start + 9]
     ShapeData = RectangleShape(Records, UsedValue)
     if ShapeData is None:
@@ -12958,8 +13145,16 @@ def LinkedRectangle(
 
 
 # rectangle discovery owns cartesian corner candidate enumeration
-def FindRectangles(Points):
-    Coordinates = list(dict.fromkeys((Marker.coordinates_mm for Marker in Points)))
+def FindRectangles(
+    Points: Sequence[NativeMarker],
+) -> list[tuple[float, float, float, float]]:
+    Coordinates = list(
+        dict.fromkeys(
+            Marker.coordinates_mm
+            for Marker in Points
+            if Marker.coordinates_mm is not None
+        )
+    )
     Rectangles: list[tuple[float, float, float, float]] = []
     XsValue = sorted({Point[0] for Point in Coordinates})
     YsValue = sorted({Point[1] for Point in Coordinates})
@@ -12977,7 +13172,11 @@ def FindRectangles(Points):
 
 
 # rectangle selection owns dimension matching and deterministic fallback ordering
-def SelectRects(Points, Rectangles, Dimensions):
+def SelectRects(
+    Points: Sequence[NativeMarker],
+    Rectangles: list[tuple[float, float, float, float]],
+    Dimensions: tuple[NativeDimension, ...],
+) -> list[tuple[float, float, float, float]]:
     Values = [Dimension.value_mm for Dimension in Dimensions]
     MatchValues = [
         Rectangle
@@ -13005,7 +13204,12 @@ def SelectRects(Points, Rectangles, Dimensions):
         Selected = []
         for GroupStart in range(max(0, len(Points) - 3)):
             Group = Points[GroupStart : GroupStart + 4]
-            Products = {Marker.coordinates_mm for Marker in Group}
+            Products = {
+                Coordinate
+                for Marker in Group
+                for Coordinate in (Marker.coordinates_mm,)
+                if Coordinate is not None
+            }
             GxValue = sorted({Point[0] for Point in Products})
             GyValue = sorted({Point[1] for Point in Products})
             if len(GxValue) == 2 and len(GyValue) == 2 and (len(Products) == 4):
@@ -13043,7 +13247,9 @@ def SelectRects(Points, Rectangles, Dimensions):
 
 
 # line run grouping owns contiguous rectangle edge marker selection
-def ProfileLineRuns(RemainingMarkers):
+def ProfileLineRuns(
+    RemainingMarkers: Sequence[NativeMarker],
+) -> list[tuple[NativeMarker, ...]]:
     LineMarkers = [
         Marker
         for Marker in RemainingMarkers
@@ -13068,8 +13274,13 @@ def ProfileLineRuns(RemainingMarkers):
 
 # rectangle attachment owns marker consumption and profile construction
 def AppendRectsMut(
-    Profiles, UsedValue, Selected, ProfileLines, CircleProfileValues, Markers
-):
+    Profiles: list[NativeProfile],
+    UsedValue: set[int],
+    Selected: Sequence[tuple[float, float, float, float]],
+    ProfileLines: Sequence[tuple[NativeMarker, ...]],
+    CircleProfileValues: Sequence[NativeProfile],
+    Markers: Sequence[NativeMarker],
+) -> None:
     for Index, Rectangle in enumerate(Selected):
         if any(
             (
@@ -13166,7 +13377,9 @@ def DecodeProfiles(
 
 
 # graph traversal owns extraction of one connected edge component
-def TakeGraphMut(Edges, Remaining):
+def TakeGraphMut(
+    Edges: Sequence[NativeMarker], Remaining: set[int]
+) -> tuple[set[int], set[int]]:
     Component = {Remaining.pop()}
     Vertices = set(Edges[next(iter(Component))].endpoint_indices or ())
     Changed = True
@@ -13183,7 +13396,13 @@ def TakeGraphMut(Edges, Remaining):
 
 
 # structural side parsing owns rectangle edge orientation and uniqueness
-def StructuralSides(Edges, Component, Resolved, XsValue, YsValue):
+def StructuralSides(
+    Edges: Sequence[NativeMarker],
+    Component: set[int],
+    Resolved: Mapping[int, tuple[float, float]],
+    XsValue: Sequence[float],
+    YsValue: Sequence[float],
+) -> tuple[int, ...] | None:
     Sides: dict[str, NativeMarker] = {}
     for Index in Component:
         Marker = Edges[Index]
@@ -13211,7 +13430,12 @@ def StructuralSides(Edges, Component, Resolved, XsValue, YsValue):
 
 
 # rectangle component parsing owns topology and coordinate validation
-def RectComponent(Edges, Markers, Component, Vertices):
+def RectComponent(
+    Edges: Sequence[NativeMarker],
+    Markers: Sequence[NativeMarker],
+    Component: set[int],
+    Vertices: set[int],
+) -> NativeProfile | None:
     if len(Component) != 4 or len(Vertices) != 4:
         return None
     Degrees = {Vertex: 0 for Vertex in Vertices}
@@ -13273,7 +13497,11 @@ def StructuralA(
 
 
 # polyline ordering owns cyclic adjacency traversal for one edge component
-def OrderPolyEdges(EdgeData, ComponentIndexes, VertexIndexes):
+def OrderPolyEdges(
+    EdgeData: Sequence[NativeMarker],
+    ComponentIndexes: set[int],
+    VertexIndexes: set[int],
+) -> tuple[list[int], list[int]] | None:
     AdjacencyData: dict[int, list[tuple[int, int]]] = {
         VertexIndex: [] for VertexIndex in VertexIndexes
     }
@@ -13314,7 +13542,12 @@ def OrderPolyEdges(EdgeData, ComponentIndexes, VertexIndexes):
 
 
 # polyline construction owns point validation and marker offset ordering
-def CreatePoly(MarkersData, EdgeData, OrderedVertices, OrderedEdges):
+def CreatePoly(
+    MarkersData: Sequence[NativeMarker],
+    EdgeData: Sequence[NativeMarker],
+    OrderedVertices: Sequence[int],
+    OrderedEdges: Sequence[int],
+) -> tuple[NativeProfile, tuple[int, ...]] | None:
     OrderedPoints = tuple(
         MarkersData[VertexIndex].coordinates_mm for VertexIndex in OrderedVertices
     )
@@ -13378,7 +13611,19 @@ def PolyProfiles(
 
 
 # circle closure parsing owns marker topology and radial geometry validation
-def CircleClosure(Markers, ClosureIndex, ExcludedOffsets):
+def CircleClosure(
+    Markers: Sequence[NativeMarker], ClosureIndex: int, ExcludedOffsets: set[int]
+) -> (
+    tuple[
+        NativeMarker,
+        NativeMarker,
+        NativeMarker,
+        float,
+        float | None,
+        tuple[float, float, float],
+    ]
+    | None
+):
     Closure = Markers[ClosureIndex]
     Endpoints = Closure.endpoint_indices
     if (
@@ -13415,7 +13660,12 @@ def CircleClosure(Markers, ClosureIndex, ExcludedOffsets):
 
 
 # circle dimension matching owns unique radius and diameter normalization
-def MatchCircleMut(Dimensions, Radius, Normalized, GeomValue):
+def MatchCircleMut(
+    Dimensions: tuple[NativeDimension, ...],
+    Radius: float,
+    Normalized: dict[int, str],
+    GeomValue: tuple[float, float, float],
+) -> tuple[tuple[float, float, float], str | None, str | None]:
     Matches: list[tuple[int, str, float]] = []
     for Index, Dimension in enumerate(Dimensions):
         if MathValue.isclose(Dimension.value_mm, Radius, rel_tol=1e-07, abs_tol=1e-07):
@@ -13466,7 +13716,16 @@ def Structural(
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishCircleMut(Dimensions, Candidates):
+def FinishCircleMut(
+    Dimensions: tuple[NativeDimension, ...],
+    Candidates: dict[
+        int,
+        dict[
+            tuple[float, float, float],
+            list[tuple[NativeMarker, NativeMarker, str, float | None]],
+        ],
+    ],
+) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
     Result: list[NativeProfile] = []
     Geometries: set[tuple[float, float, float]] = set()
     Normalized: dict[int, str] = {}
@@ -13477,7 +13736,7 @@ def FinishCircleMut(Dimensions, Candidates):
         GeomValue, Records = next(iter(Matches.items()))
         if GeomValue in Geometries:
             continue
-        Semantics = {Semantic for Ignored, Ignored, Semantic, Ignored in Records}
+        Semantics = {RecordData[2] for RecordData in Records}
         if len(Semantics) != 1:
             continue
         Geometries.add(GeomValue)
@@ -13490,8 +13749,11 @@ def FinishCircleMut(Dimensions, Candidates):
                     sorted(
                         {
                             Offset
-                            for Center, Following, Ignored, Ignored in Records
-                            for Offset in (Center.offset, Following.offset)
+                            for RecordData in Records
+                            for Offset in (
+                                RecordData[0].offset,
+                                RecordData[1].offset,
+                            )
                         }
                     )
                 ),
@@ -13525,15 +13787,16 @@ def CircleSet(
         ],
     ] = {}
     for CircleMarker in Centers:
+        CircleCoordinates = CircleMarker.coordinates_mm
+        if CircleCoordinates is None:
+            continue
         FollowingMarker = next(
             (
                 Marker
                 for Marker in Markers
                 if Marker.offset > CircleMarker.offset
                 and Marker.coordinates_mm is not None
-                and (
-                    not IsSamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm)
-                )
+                and (not IsSamePoint(Marker.coordinates_mm, CircleCoordinates))
             ),
             None,
         )
@@ -13543,9 +13806,7 @@ def CircleSet(
                 for Marker in reversed(Markers)
                 if Marker.offset < CircleMarker.offset
                 and Marker.coordinates_mm is not None
-                and (
-                    not IsSamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm)
-                )
+                and (not IsSamePoint(Marker.coordinates_mm, CircleCoordinates))
             ),
             None,
         )
@@ -13587,9 +13848,12 @@ def CircleSet(
                     NormalizedRadius = Dimension.value_mm / 2.0
                 if Semantic is None:
                     continue
+                CenterCoordinates = CenterMarker.coordinates_mm
+                if CenterCoordinates is None:
+                    continue
                 GeomValue = (
-                    CenterMarker.coordinates_mm[0],
-                    CenterMarker.coordinates_mm[1],
+                    CenterCoordinates[0],
+                    CenterCoordinates[1],
                     NormalizedRadius,
                 )
                 Candidates.setdefault(Index, {}).setdefault(GeomValue, []).append(
@@ -13855,7 +14119,7 @@ def Native(
         (ItemValue.native_offset is None for ItemValue in ByName.values())
     ):
         return None
-    return tuple((ByName[f"d{Index}"].value_mm for Index in range(1, 4)))
+    return (ByName["d1"].value_mm, ByName["d2"].value_mm, ByName["d3"].value_mm)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -14058,1305 +14322,832 @@ def Clean(Value: float) -> float:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["ANGLE_COPY_DELTAS"] = AngleCopyDeltas
+ANGLE_COPY_DELTAS = AngleCopyDeltas
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_SUFFIX"] = AsmSuffix
+ASSEMBLY_SUFFIX = AsmSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["Any"] = AnyValue
+BooleanOperation = BoolOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()["BooleanOperation"] = BoolOperation
+BuildBossChamferVendorTree = BuildBossVendor
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildBossChamferVendorTree"] = BuildBossVendor
+BuildBossCircularPatternVendorTree = BuildBossVendoA
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildBossCircularPatternVendorTree"] = BuildBossVendoA
+BuildBossFilletVendorTree = BuildBossFillet
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildBossFilletVendorTree"] = BuildBossFillet
+BuildBossLinearPatternVendorTree = BuildBossLinear
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildBossLinearPatternVendorTree"] = BuildBossLinear
+BuildBossShellVendorTree = BuildBossShell
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildBossShellVendorTree"] = BuildBossShell
+BuildFourFeatureVendorTree = BuildFourVendor
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildFourFeatureVendorTree"] = BuildFourVendor
+BuildPadGrooveVendorTree = BuildPadGroove
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildPadGrooveVendorTree"] = BuildPadGroove
+BuildPin90Envelope = BuildPinRight
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildPin90Envelope"] = BuildPinRight
+BuildPinEnvelope = BuildPinFull
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildPinEnvelope"] = BuildPinFull
+BuildPinNineZeroEnvelope = BuildPinRight
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildPinNineZeroEnvelope"] = BuildPinRight
+BuildSingleRevolutionVendorTree = BuildSingleTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildSingleRevolutionVendorTree"] = BuildSingleTree
+BuildThreeFeatureVendorTree = BuildThreeTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildThreeFeatureVendorTree"] = BuildThreeTree
+BuildTwoFeatureVendorTree = BuildTwoFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildTwoFeatureVendorTree"] = BuildTwoFeature
+CANONICAL_PLANE_FEATURE_TYPE = CanonicalPlaneFeatureType
 
 # this binding exists because shared behavior needs one stable value
-globals()["CANONICAL_PLANE_FEATURE_TYPE"] = CanonicalPlaneFeatureType
+CLASS_MARKER = ClassMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_MARKER"] = ClassMarker
+CONFIGURATION_MANAGER_STREAM = ConfigManagerStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIGURATION_MANAGER_STREAM"] = ConfigManagerStream
+CONFIGURATION_STREAM = ConfigStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIGURATION_STREAM"] = ConfigStream
+CadDocument = CadDoc
 
 # this binding exists because shared behavior needs one stable value
-globals()["CadDocument"] = CadDoc
+CircleGeometry = CircleGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["CircleGeometry"] = CircleGeom
+DEPTH_COPY_DELTAS = DepthCopyDeltas
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEPTH_COPY_DELTAS"] = DepthCopyDeltas
+DEPTH_COPY_SIGNS = DepthCopySigns
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEPTH_COPY_SIGNS"] = DepthCopySigns
+DERIVED_SUPPORT_KIND = KDerivedSupportKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["DERIVED_SUPPORT_KIND"] = KDerivedSupportKind
+DIMENSION_SCALAR_HEADERS = DimensionScalarHeaders
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIMENSION_SCALAR_HEADERS"] = DimensionScalarHeaders
+DIRECTION_AXIS_ROLE = KDirectionAxisRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIRECTION_AXIS_ROLE"] = KDirectionAxisRole
+ET = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()["ET"] = XmlTree
+EncodeBossCircularPatternProgram = EncodeBossCircularPattern
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeBossCircularPatternProgram"] = EncodeBossCircularPattern
+EncodeBossCutCircleProgram = EncodeBossCutCircle
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeBossCutCircleProgram"] = EncodeBossCutCircle
+EncodeBossCutCutCutProgram = EncodeBossCutCutCut
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeBossCutCutCutProgram"] = EncodeBossCutCutCut
+EncodeBossCutThroughProgram = EncodeBossCutThrough
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeBossCutThroughProgram"] = EncodeBossCutThrough
+EncodeBossLinearPatternProgram = EncodeBossLinearPattern
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeBossLinearPatternProgram"] = EncodeBossLinearPattern
+EncodePin90RevolveProgram = EncodePinNineZeroRevolve
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodePin90RevolveProgram"] = EncodePinNineZeroRevolve
+EncodeReverseCircCfg = EncodeReverse
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeReverseCircCfg"] = EncodeReverse
+EncodeReverseCircleConfigProgram = EncodeReverseCircleConfig
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeReverseCircleConfigProgram"] = EncodeReverseCircleConfig
+EncodeReverseCircleProgram = EncodeReverseCircle
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeReverseCircleProgram"] = EncodeReverseCircle
+EncodeReverseCircleResolved = EncodeReverseA
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeReverseCircleResolved"] = EncodeReverseA
+ExtrusionEditCodes = ExtrusionEdit
 
 # this binding exists because shared behavior needs one stable value
-globals()["ExtrusionEditCodes"] = ExtrusionEdit
+FACE_SUPPORT_KIND = KFaceSupportKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["FACE_SUPPORT_KIND"] = KFaceSupportKind
+FIRST_ATOM_ID = FirstAtomId
 
 # this binding exists because shared behavior needs one stable value
-globals()["FIRST_ATOM_ID"] = FirstAtomId
+FROM_END_SPEC_CLASS = FromEndSpecClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["FROM_END_SPEC_CLASS"] = FromEndSpecClass
+FROM_REVERSE_RELATIVE = FromReverseRelative
 
 # this binding exists because shared behavior needs one stable value
-globals()["FROM_REVERSE_RELATIVE"] = FromReverseRelative
+HORIZONTAL_AXIS_SUBELEMENT = KHorizontalAxisSubElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["HORIZONTAL_AXIS_SUBELEMENT"] = KHorizontalAxisSubElem
+HasBossChamferProof = HasBossChamfer
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasBossChamferProof"] = HasBossChamfer
+HasBossCircularPatternProof = HasBossCircular
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasBossCircularPatternProof"] = HasBossCircular
+HasBossFilletProof = HasBossFillet
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasBossFilletProof"] = HasBossFillet
+HasBossLinearPatternProof = HasBossLinear
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasBossLinearPatternProof"] = HasBossLinear
+HasBossShellProof = HasBossShell
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasBossShellProof"] = HasBossShell
+HasCanonicalSketchGeometry = HasCanonical
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasCanonicalSketchGeometry"] = HasCanonical
+HasCutChainProof = HasCutChain
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasCutChainProof"] = HasCutChain
+HasFreeCadThroughAllFeature = HasFreeCadAll
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasFreeCadThroughAllFeature"] = HasFreeCadAll
+HasPadGrooveProof = HasPadGroove
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasPadGrooveProof"] = HasPadGroove
+HasSingleRevolutionProof = HasSingleProof
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasSingleRevolutionProof"] = HasSingleProof
+HasTwoFeatureProof = HasTwoFeature
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasTwoFeatureProof"] = HasTwoFeature
+HasVendorPartEncoding = HasVendorPart
 
 # this binding exists because shared behavior needs one stable value
-globals()["HasVendorPartEncoding"] = HasVendorPart
+KIT_RESOLVED_STREAM = KitResolvedStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["KIT_RESOLVED_STREAM"] = KitResolvedStream
+LineGeometry = LineGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["LineGeometry"] = LineGeom
+MARKER_LOCAL_ID_OFFSET_BY_LENGTH = KMarkerLocalIdOffsetBy
 
 # this binding exists because shared behavior needs one stable value
-globals()["MARKER_LOCAL_ID_OFFSET_BY_LENGTH"] = KMarkerLocalIdOffsetBy
+NORMAL_AXIS_SUBELEMENT = KNormalAxisSubElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["NORMAL_AXIS_SUBELEMENT"] = KNormalAxisSubElem
+NativeAssemblyEnvelope = NativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeAssemblyEnvelope"] = NativeAsm
+NativeBoundingBox = NativeBounding
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeBoundingBox"] = NativeBounding
+NativeConfiguration = NativeConfig
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeConfiguration"] = NativeConfig
+NativeConstraint = NativeRule
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeConstraint"] = NativeRule
+NativeModelHeader = NativeModelA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeModelHeader"] = NativeModelA
+NativePartStreams = NativePart
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativePartStreams"] = NativePart
+NativeSketchPlane = NativeSketchA
 
 # this binding exists because shared behavior needs one stable value
-globals()["NativeSketchPlane"] = NativeSketchA
+PART_SUFFIX = PartSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_SUFFIX"] = PartSuffix
+PLANE_FEATURE_TYPES = PlaneFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["PLANE_FEATURE_TYPES"] = PlaneFeatureTypes
+PLANE_SUPPORT_KIND = KPlaneSupportKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["PLANE_SUPPORT_KIND"] = KPlaneSupportKind
+Parameter = Param
 
 # this binding exists because shared behavior needs one stable value
-globals()["Parameter"] = Param
+ParameterRole = ParamRole
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterRole"] = ParamRole
+ParameterValue = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["ParameterValue"] = ParamValue
+REFERENCE_SUPPORT_SOURCE = KRefSupportSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["REFERENCE_SUPPORT_SOURCE"] = KRefSupportSource
+RESOLVED_FEATURES_STREAM = ResolvedFeaturesStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["RESOLVED_FEATURES_STREAM"] = ResolvedFeaturesStream
+REVOLUTION_AXIS_SKETCH = RevolutionAxisSketch
 
 # this binding exists because shared behavior needs one stable value
-globals()["REVOLUTION_AXIS_SKETCH"] = RevolutionAxisSketch
+SERIALIZED_STRING_MARKER = SerializedStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()["SERIALIZED_STRING_MARKER"] = SerializedStringMarker
+SKETCH_CHAIN_CLASS = SketchChainClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_CHAIN_CLASS"] = SketchChainClass
+STREAM_ORDER_SUPPORT_SOURCE = KStreamOrderSupportSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["STREAM_ORDER_SUPPORT_SOURCE"] = KStreamOrderSupportSource
+UNRESOLVED_SUPPORT_SOURCE = KUnresolvedSupportSource
 
 # this binding exists because shared behavior needs one stable value
-globals()["UNRESOLVED_SUPPORT_SOURCE"] = KUnresolvedSupportSource
+VENDOR_UNLOADABLE_NOTES = KVendorUnloadableNotes
 
 # this binding exists because shared behavior needs one stable value
-globals()["VENDOR_UNLOADABLE_NOTES"] = KVendorUnloadableNotes
+VERTICAL_AXIS_SUBELEMENT = KVerticalAxisSubElem
 
 # this binding exists because shared behavior needs one stable value
-globals()["VERTICAL_AXIS_SUBELEMENT"] = KVerticalAxisSubElem
+Vector2 = VectorTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["Vector2"] = VectorTwo
+_SKETCH_PLANE_ID_RELATIVE = KSketchPlaneIdRelative  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_ATTACHMENT_STREAM"] = KAsmAttachmentStream
+_SKETCH_PLANE_REFERENCE_PREFIX = KSketchPlaneRefPrefix  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_CONFIGURATION_FLAGS"] = KAsmConfigFlags
+_SKETCH_PLANE_REFERENCE_TAG = KSketchPlaneRefTag  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_CONFIG_PROPERTIES_STREAM"] = KAsmConfigPropertiesStreA
+_SKETCH_PLANE_SCAN_BYTES = KSketchPlaneScanBytes  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_CUTLIST_STREAM"] = KAsmCutlistStream
+_SOLIDWORKS_CONFIGURATION_FLAGS = KSolidworksConfigFlags  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_HEADER_OBJECTS"] = KAsmHeaderObjects
+_SOLIDWORKS_XML_NAMESPACE = KSolidworksXmlNamespace  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_OPEN_TIME_STREAM"] = KAsmOpenTimeStream
+_SURFACE_EXTRUSION_FEATURE_TYPES = KSurfaceExtrusionFeature  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_PROPERTY_CONTAINER_CLASS"] = KAsmPropContainerClass
+_SYSTEM_OBJECT_IDS = KSystemObjectIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_REFERENCE_NAME"] = KAsmRefName
+_ShellSelectionRecord = ShellSelection  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_TABLES_STREAM"] = KAsmTablesStream
+_TOP_BOSS_HEADER_STAMPS = KTopBossHeaderStamps  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_VERSION_PREFIX"] = KAsmVersionPrefix
+_VIEW_ORIENTATION_PAYLOAD = KViewOrientationPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_VIEW_ORIENTATION_STREAM"] = KAsmViewOrientationStream
+_VendorResolved = VendorResolved  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ASSEMBLY_VISUAL_DATA_STREAM"] = KAsmVisualDataStream
+_WriteDimension = WriteDimension  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BASE_OBJECTS"] = KBaseObjects
+_WriteObject = WriteObject  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_BOSS_HEADER_STAMPS"] = KBossBossHeaderStamps
+_XmlFeature = XmlFeature  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CHAMFER_DISTANCE_OFFSETS"] = KBossChamferDistance
+_angle_copies = AngleCopies  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CHAMFER_HEADER_STAMPS"] = KBossChamferHeaderStamps
+_bind_dimension = BindDimension  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CHAMFER_MAX_Y_OFFSETS"] = KBossChamferMaxYOffsets
+_biography_payload = Biography  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CHAMFER_NEGATIVE_DISTANCE_OFFSET"] = KBossChamferNegativeOffsA
+_bounding_box = BoundingBox  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CHAMFER_NEGATIVE_Y_OFFSETS"] = KBossChamferNegativeY
+_circle_profiles = CircleSet  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CIRCULAR_PATTERN_ANGLE_OFFSETS"] = KBossCircularPatternAngle
+_class_declaration = ClassDecl  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CIRCULAR_PATTERN_COUNT_DOUBLE_OFFSETS"] = KBossCircularPatternCount
+_class_record_end = ClassRecordEnd  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CIRCULAR_PATTERN_COUNT_OFFSET"] = KBossCircularPatternCounA
+_clean = Clean  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CIRCULAR_PATTERN_DIRECTION_FLAG_OFFSET"] = KBossCircularPatternFlag
+_component_plane_sources = ComponentPlane  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CIRCULAR_PATTERN_HEADER_STAMPS"] = KBossCircularPatternHeadA
+_configuration_atom_tree_ids = ConfigAtomTree  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CUT_CUT_CUT_HEADER_STAMPS"] = KBossCutCutCutHeaderStamA
+_configuration_header_payload = ConfigHeader  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CUT_CUT_HEADER_STAMPS"] = KBossCutCutHeaderStamps
+_constraints = Constraints  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CUT_HEADER_STAMPS"] = KBossCutHeaderStamps
+_coordinate_marker = Coordinate  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_CUT_THROUGH_HEADER_STAMPS"] = KBossCutThroughHeader
+_cross = Cross  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_EXTRUDE_FLAGS"] = KBossExtrudeFlags
+_custom_properties_payload = CustomPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_FILLET_HEADER_STAMPS"] = KBossFilletHeaderStamps
+_decode_planes = DecodePlanes  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_FILLET_MAX_X_OFFSETS"] = KBossFilletMaxXOffsets
+_decode_sketch = DecodeSketch  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_FILLET_MAX_Y_OFFSETS"] = KBossFilletMaxYOffsets
+_definition_dimension = Definition  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_FILLET_NEGATIVE_Y_OFFSET"] = KBossFilletNegativeYOffsA
+_depth_copies = DepthCopies  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_FILLET_RADIUS_OFFSETS"] = KBossFilletRadiusOffsets
+_document_axis_bindings = DocAxisBindings  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_CENTER_DISPLAY_OFFSETS"] = KBossLinearPatternCenter
+_dot = DotAction  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_COUNT_DISPLAY_OFFSET"] = KBossLinearPatternCount
+_edge_selections = EdgeSelections  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_COUNT_DOUBLE_OFFSETS"] = KBossLinearPatternCountA
+_end_spec = EndSpec  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_COUNT_OFFSET"] = KBossLinearPatternCountB
+_equation_identifier = EquationId  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_DIRECTION_DISTANCE_OFFSETS"] = KBossLinearPatternDistanA
+_equation_literal = EquationLiteral  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_DIRECTION_FLAG_OFFSET"] = KBossLinearPatternFlag
+_expect_bytes = ExpectBytes  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_HEADER_STAMPS"] = KBossLinearPatternHeader
+_expression_parameters = ExprParams  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_NEGATIVE_DIAGONAL_OFFSET"] = KBossLinearPatternNegatiA
+_extrusion_payload = EncodeExtrude  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_NEGATIVE_DISPLAY_OFFSETS"] = KBossLinearPatternNegatiB
+_feature_records = FeatureRecords  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_NEGATIVE_EXTENT_OFFSET"] = KBossLinearPatternNegatiC
+_features_payload = FeaturesPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_NEGATIVE_ZERO_OFFSETS"] = KBossLinearPatternNegatiD
+_fillet_payload = FilletPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_PAD_DISPLAY_OFFSET"] = KBossLinearPatternPad
+_find_all = FindAll  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_POSITIVE_AXIS_OFFSETS"] = KBossLinearPatternPositiA
+_frame_vector = FrameVector  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_POSITIVE_DIAGONAL_OFFSET"] = KBossLinearPatternPositiB
+_freecad_parameter_matches = IsFreecadParam  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_POSITIVE_DISPLAY_OFFSETS"] = KBossLinearPatternPositiC
+_freecad_single_boss_dimension = FreecadSingle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_POSITIVE_SPACING_OFFSETS"] = KBossLinearPatternPositiD
+_freecad_type_id = FreecadTypeId  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_LINEAR_PATTERN_TERMINAL_DEPTH_OFFSET"] = KBossLinearPatternTerminA
+_header_payload = HeaderPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_REV_CUT_HEADER_STAMPS"] = KBossRevCutHeaderStamps
+_integer_property = IntegerProp  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_SHELL_DEPTH_OFFSET"] = KBossShellDepthOffset
+_is_native_system_feature = IsNativeSystem  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_SHELL_HEADER_STAMPS"] = KBossShellHeaderStamps
+_is_origin_feature = IsOriginFeature  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_SHELL_INNER_MIN_X_OFFSET"] = KBossShellInnerMinXOffset
+_is_plane_feature = IsPlaneFeature  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_SHELL_MAX_X_OFFSET"] = KBossShellMaxXOffset
+_keywords_payload = KeywordsPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_SHELL_MIN_X_OFFSET"] = KBossShellMinXOffset
+_line_marker = LineMarker  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOSS_SHELL_THICKNESS_OFFSETS"] = KBossShellThicknessOffseA
+_linked_rectangle_profiles = LinkedRectangle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOUNDING_BOX_CLASS"] = KBoundingBoxClass
+_marker_coordinates = Marker  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOUNDING_BOX_RELATIVE"] = KBoundingBoxRelative
+_marker_coordinates_metres = MarkerMetres  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_BOX_HEADER_STAMPS"] = KBoxHeaderStamps
+_marker_local_id = MarkerLocalId  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CIRCLE_BOSS_HEADER_STAMPS"] = KCircleBossHeaderStamps
+_marker_radius_mm = MarkerRadiusMm  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CIRCLE_LOCUS"] = KCircleLocus
+_marker_semantic = MarkerSemantic  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()[
-    "_CIRCULAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET"
-] = KCircularPatternDirection
+_marker_start_angle_degrees = MarkerStart  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_COMBINE_FEATURE_TYPES"] = KCombineFeatureTypes
+_matches = IsMatches  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CONFIG0_FIRST_FEATURE_COUNTER"] = KConfigZeroFirstFeature
+_matrix_frame = MatrixFrame  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CONFIGURATION_ROOT_TREE_ID"] = KConfigRootTreeId
+_minimal_frame = MinimalFrame  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CONFIG_PROPERTIES_PAYLOAD"] = KConfigPropertiesPayload
+_mirrored_direction = Mirrored  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_COORDINATE_TAG"] = KCoordinateTag
+_model_header_payload = ModelHeader  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CREATION_STAMP_HIGH"] = KCreationStampHigh
+_name_marker = NameMarker  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CREATION_STAMP_LOW"] = KCreationStampLow
+_name_record = NameRecord  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CURRENT_MARKER"] = KCurrentMarker
+_native_assembly_identity = NativeAsmA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CUT_EXTRUDE_FLAGS"] = KCutExtrudeFlags
+_native_envelope_streams = NativeEnvelope  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalBossChamferObjects"] = IsonicalBosAMut
+_native_feature_sort_key = NativeFeatureA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalBossCircularPatternObjects"] = IsonicalBosDMut
+_native_identity = NativeIdentityA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalBossFilletObjects"] = IsonicalBossMut
+_native_keyword_properties = NativeKeyword  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalBossLinearPatternObjects"] = IsonicalBosCMut
+_native_scale_factors = NativeScale  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalBossShellObjects"] = IsonicalBosBMut
+_native_system_name = NativeSystem  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalCutChainObjects"] = IsonicalCutMut
+_native_translation = Native  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalExtrusionObjects"] = Canonical
+_norm = NormAction  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalPadGrooveObjects"] = IsonicalPadMut
+_operation_dimension = DimensionValue  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalPrincipalExtrusion"] = CanonicalA
+_operation_dimension_offset = OperationOffset  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalPrincipalSketch"] = CanonicalSketch
+_operation_fields = OperationFields  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalSingleBossObjects"] = IsonicalSinAMut
+_operation_selections = OperationA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalSingleRevolutionObjects"] = IsonicalSingMut
+_operation_selections_after_class = OperationAfter  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CanonicalTwoFeatureObjects"] = IsonicalTwoMut
+_orthonormal = IsOrthonormal  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_CircularPatternBounds"] = CircularPattern
+_parameter_dimension = ParamDimension  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_DERIVED_PLANE_CLASSES"] = KDerivedPlaneClasses
+_parameter_value_matches = IsParamValueA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EDGE_SELECTION_IDENTITY"] = KEdgeSelectionIdentity
+_parse_classes = ParseClasses  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EQUATION"] = KEquation
+_parse_dimension = ParseDimension  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EQUATION_IDENTIFIER"] = KEquationId
+_parse_keywords = ParseKeywords  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EQUATION_REFERENCE"] = KEquationRef
+_parse_markers = ParseMarkers  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EQUATION_REFERENCE_SOURCE"] = KEquationRefSource
+_parse_names = ParseNames  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EQUATION_RESERVED_PREFIX"] = KEquationReservedPrefix
+_parse_native_equations = ParseNative  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EXTENDED_MARKER"] = KExtendedMarker
+_parse_scalars = ParseScalars  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EXTRUSION_CLASS"] = KExtrusionClass
+_parse_xml = ParseXml  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_EXTRUSION_OPERATION_KINDS"] = KExtrusionOperationKinds
+_plane_frame_block = PlaneFrameBlock  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ExpectedPlaneFrame"] = ExpectedPlane
+_plane_payload = PlanePayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FACE_SUPPORT_CLASS"] = KFaceSupportClass
+_plane_reference = PlaneRef  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FOLDER_FLAGS"] = KFolderFlags
+_primary_dimension = Primary  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FRONT_BOSS_HEADER_STAMPS"] = KFrontBossHeaderStamps
+_principal_plane_frames = PrincipalPlaneA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FilletSelectionRecord"] = FilletSelection
+_principal_plane_ids = PrincipalPlaneB  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadBossChamferDimensions"] = FreeCadBoss
+_profiles = DecodeProfiles  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadBossCircularPatternDimensions"] = FreeCadBossA
+_proved_write_capabilities = ProvedWrite  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadBossFilletDimensions"] = FreeCadBossB
+_read_class = ReadClass  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadBossLinearPatternDimensions"] = FreeCadBossC
+_read_serialized_string = ReadSerialized  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadBossShellDimensions"] = FreeCadBossD
+_read_sketch_plane_reference = ReadSketchPlane  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadBoxObjects"] = FreeCadBoxMut
+_record_class = RecordClass  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadFeatureDimension"] = FreeCadFeature
+_record_class_name = RecordClassName  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadFourFeatureDimensions"] = FreeCadFour
+_rectangle_coordinates = Rectangle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadPadGrooveDimensions"] = FreeCadPad
+_reference_plane_ids = RefPlaneIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadPropertyAttributes"] = FreeCadProp
+_repair_plane_object_ids = RepairPlaneIMut  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadSingleRevolutionDimension"] = FreeCadSingle
+_resolve_profile_operation = ResolveProfile  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadThreeFeatureDimensions"] = FreeCadThree
+_resolved_base_map_index = ResolvedBaseMap  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_FreeCadTwoFeatureDimensions"] = FreeCadTwo
+_resolved_payload = ResolvedPayload  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HEADER_OBJECTS"] = KHeaderObjects
+_revolution_axis_marker = RevolutionAxis  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HOLE_CLASS_NAMES"] = KHoleClassNames
+_same_point = IsSamePoint  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HasFreeCadBoxBrep"] = HasFreeCadBox
+_scalar_owners = ScalarOwners  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HasFreeCadCircularPatternGeometry"] = HasFreeCadGeom
+_scalar_record = ScalarRecord  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HasFreeCadLinearPatternGeometry"] = HasFreeCadGeomA
+_scalar_trailer = ScalarTrailer  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HasFreeCadMaxCornerEdge"] = HasFreeCadMax
+_semantic_dimensions = Semantic  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_HasFreeCadTopFace"] = HasFreeCadTop
+_serializable_name = IsSerializable  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_IDENTITY_BASIS"] = KIdentityBasis
+_serialized_string = Serialized  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_IDENTITY_ORIGIN"] = KIdentityOrigin
+_sketch_payload = EncodeSketch  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_IsFreeCadIdentityPlacement"] = IsFreeCad
+_sketch_plane_reference = SketchPlaneRef  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_KEYWORD_ONLY_OBJECTS"] = KeywordOnlyObjects
+_sketch_support_kind = SketchSupport  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_KEYWORD_ONLY_OBJECT_IDS"] = KeywordOnlyObjectIds
+_solid_feature_tree_ids = SolidFeatureIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_LEGACY_MARKER"] = KLegacyMarker
+_stable_creation_stamp = StableCreation  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_LINEAR_PATTERN_DIRECTION_FLAG_RELATIVE_OFFSET"] = KLinearPatternDirection
+_stable_u32 = StableUThreeTwo  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MARKERS"] = KMarkers
+_structural_circle_profiles = Structural  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MILLIMETRES"] = KMillimetres
+_structural_rectangle_profiles = StructuralA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_MOVE_BODY_FEATURE_TYPES"] = KMoveBodyFeatureTypes
+_support_plane_reference = SupportPlaneRef  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NAME_PREFIX"] = KNamePrefix
+_tree_node_flags = TreeNodeFlags  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NAME_TOKEN"] = KNameToken
+_version_history_payload = VersionHistory  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NON_SOLID_FEATURE_CLASSES"] = KNonSolidFeatureClasses
+_write_circle_profile = WriteCircle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NUMBER"] = KNumber
+_write_dimensions = WriteDimensions  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_NativeIdentity"] = NativeIdentity
+_write_feature = WriteFeature  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_OPEN_TIME_PAYLOAD"] = KOpenTimePayload
+_write_feature_type = WriteFeatureA  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PLANE_FRAME_BYTES"] = KPlaneFrameBytes
+_write_object_ids = WriteObjectIds  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_POINT_LOCUS"] = KPointLocus
+_write_objects = WriteObjects  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PRINCIPAL_PLANE_OBJECT_IDS"] = KPrincipalPlaneObjectIds
+_write_rectangle_bounds = WriteRectangle  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_PrincipalPlaneFrame"] = PrincipalPlane
+_write_sketch = WriteSketch  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RADIANS_TO_DEGREES"] = KRadiansToDegrees
+_xml_attribute = XmlAttr  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REFERENCE_GEOMETRY_CLASSES"] = KRefGeomClasses
+_xml_document = XmlDoc  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REFERENCE_GEOMETRY_FLAGS"] = KRefGeomFlags
+_xml_element = XmlElem  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REVOLUTION_FEATURE_TYPES"] = KRevolutionFeatureTypes
+_xml_text = XmlText  # lgtm[py/unused-global-variable]
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REVOLUTION_HEADER_STAMPS"] = KRevolutionHeaderStamps
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_REVOLUTION_OPERATION_KINDS"] = KRevolutionOperationKinds
+atom_ids_for = AtomIdsFor
 
 # this binding exists because shared behavior needs one stable value
-globals()["_RIGHT_BOSS_HEADER_STAMPS"] = KRightBossHeaderStamps
+circle_radius_mm = CircleRadiusMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ReadClassReference"] = ReadClassRef
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SCALAR_HEADER"] = KScalarHeader
+decode_ascii_brep = DecodeAsciiBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_AXIS_COMPLEMENT"] = KSketchPlaneAxisComplemeA
+decode_native_model = DecodeNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_AXIS_DELTA"] = KSketchPlaneAxisDelta
+decode_native_model_header = DecodeNativeA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_BASIS_BYTES"] = KSketchPlaneBasisBytes
+dimension_scalar_value_offset = DimensionScalarValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_BASIS_DELTA"] = KSketchPlaneBasisDelta
+encode_class_reference = EncodeClassRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_BASIS_FLAG_DELTA"] = KSketchPlaneBasisFlagDelA
+encode_cmgr_stream = EncodeCmgrStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_ID_RELATIVE"] = KSketchPlaneIdRelative
+encode_config0_stream = EncodeConfigZeroStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_REFERENCE_PREFIX"] = KSketchPlaneRefPrefix
+encode_definition_stream = EncodeDefinitionStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_REFERENCE_TAG"] = KSketchPlaneRefTag
+encode_native_assembly_envelope = EncodeNativeAsm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SKETCH_PLANE_SCAN_BYTES"] = KSketchPlaneScanBytes
+encode_native_part = EncodeNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOLIDWORKS_CONFIGURATION_FLAGS"] = KSolidworksConfigFlags
+expression_equation_texts = ExpressionTexts
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SOLIDWORKS_XML_NAMESPACE"] = KSolidworksXmlNamespace
+field = Field
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SURFACE_EXTRUSION_FEATURE_TYPES"] = KSurfaceExtrusionFeature
+hashlib = Hashlib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_SYSTEM_OBJECT_IDS"] = KSystemObjectIds
+itertools = Itertools
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ShellSelectionRecord"] = ShellSelection
+locate_features = LocateFeatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["_TOP_BOSS_HEADER_STAMPS"] = KTopBossHeaderStamps
+math = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["_VIEW_ORIENTATION_PAYLOAD"] = KViewOrientationPayload
+native_axis_bindings = NativeAxis
 
 # this binding exists because shared behavior needs one stable value
-globals()["_VendorResolved"] = VendorResolved
+operation_axis_subelement = OperationAxis
 
 # this binding exists because shared behavior needs one stable value
-globals()["_WriteDimension"] = WriteDimension
+patch_features = PatchFeatures
 
 # this binding exists because shared behavior needs one stable value
-globals()["_WriteObject"] = WriteObject
+re = RegexLib
 
 # this binding exists because shared behavior needs one stable value
-globals()["_XmlFeature"] = XmlFeature
+rectangle_corners_mm = RectangleCornersMm
 
 # this binding exists because shared behavior needs one stable value
-globals()["_angle_copies"] = AngleCopies
+replace = Replace
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bind_dimension"] = BindDimension
+revolution_axis_direction = RevolutionAxisA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_biography_payload"] = Biography
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bounding_box"] = BoundingBox
+BuildCadCylObjs = BuildCadCylOMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_circle_profiles"] = CircleSet
+CanonicalBoss = IsonicalBosAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_class_declaration"] = ClassDecl
+CanonicalBossA = IsonicalBosDMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_class_record_end"] = ClassRecordEnd
+CanonicalBossB = IsonicalBossMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_clean"] = Clean
+CanonicalBossC = IsonicalBosCMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_component_plane_sources"] = ComponentPlane
+CanonicalBossD = IsonicalBosBMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_atom_tree_ids"] = ConfigAtomTree
+CanonicalCut = IsonicalCutMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_configuration_header_payload"] = ConfigHeader
+CanonicalPad = IsonicalPadMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_constraints"] = Constraints
+CanonicalSinglA = IsonicalSingMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_coordinate_marker"] = Coordinate
+CanonicalSingle = IsonicalSinAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_cross"] = Cross
+CanonicalTwo = IsonicalTwoMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_custom_properties_payload"] = CustomPayload
+FreeCadBox = FreeCadBoxMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decode_planes"] = DecodePlanes
+FreecadParam = IsFreecadParam
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decode_sketch"] = DecodeSketch
+Matches = IsMatches
 
 # this binding exists because shared behavior needs one stable value
-globals()["_definition_dimension"] = Definition
+Orthonormal = IsOrthonormal
 
 # this binding exists because shared behavior needs one stable value
-globals()["_depth_copies"] = DepthCopies
+ParamValueA = IsParamValueA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_document_axis_bindings"] = DocAxisBindings
+RepairPlaneIds = RepairPlaneIMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_dot"] = DotAction
+SamePoint = IsSamePoint
 
 # this binding exists because shared behavior needs one stable value
-globals()["_edge_selections"] = EdgeSelections
-
-# this binding exists because shared behavior needs one stable value
-globals()["_end_spec"] = EndSpec
-
-# this binding exists because shared behavior needs one stable value
-globals()["_equation_identifier"] = EquationId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_equation_literal"] = EquationLiteral
-
-# this binding exists because shared behavior needs one stable value
-globals()["_expect_bytes"] = ExpectBytes
-
-# this binding exists because shared behavior needs one stable value
-globals()["_expression_parameters"] = ExprParams
-
-# this binding exists because shared behavior needs one stable value
-globals()["_extrusion_payload"] = EncodeExtrude
-
-# this binding exists because shared behavior needs one stable value
-globals()["_feature_records"] = FeatureRecords
-
-# this binding exists because shared behavior needs one stable value
-globals()["_features_payload"] = FeaturesPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_fillet_payload"] = FilletPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_find_all"] = FindAll
-
-# this binding exists because shared behavior needs one stable value
-globals()["_frame_vector"] = FrameVector
-
-# this binding exists because shared behavior needs one stable value
-globals()["_freecad_parameter_matches"] = IsFreecadParam
-
-# this binding exists because shared behavior needs one stable value
-globals()["_freecad_single_boss_dimension"] = FreecadSingle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_freecad_type_id"] = FreecadTypeId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_header_payload"] = HeaderPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_integer_property"] = IntegerProp
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_native_system_feature"] = IsNativeSystem
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_origin_feature"] = IsOriginFeature
-
-# this binding exists because shared behavior needs one stable value
-globals()["_is_plane_feature"] = IsPlaneFeature
-
-# this binding exists because shared behavior needs one stable value
-globals()["_keywords_payload"] = KeywordsPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_line_marker"] = LineMarker
-
-# this binding exists because shared behavior needs one stable value
-globals()["_linked_rectangle_profiles"] = LinkedRectangle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_coordinates"] = Marker
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_coordinates_metres"] = MarkerMetres
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_local_id"] = MarkerLocalId
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_radius_mm"] = MarkerRadiusMm
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_semantic"] = MarkerSemantic
-
-# this binding exists because shared behavior needs one stable value
-globals()["_marker_start_angle_degrees"] = MarkerStart
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matches"] = IsMatches
-
-# this binding exists because shared behavior needs one stable value
-globals()["_matrix_frame"] = MatrixFrame
-
-# this binding exists because shared behavior needs one stable value
-globals()["_minimal_frame"] = MinimalFrame
-
-# this binding exists because shared behavior needs one stable value
-globals()["_mirrored_direction"] = Mirrored
-
-# this binding exists because shared behavior needs one stable value
-globals()["_model_header_payload"] = ModelHeader
-
-# this binding exists because shared behavior needs one stable value
-globals()["_name_marker"] = NameMarker
-
-# this binding exists because shared behavior needs one stable value
-globals()["_name_record"] = NameRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_assembly_identity"] = NativeAsmA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_envelope_streams"] = NativeEnvelope
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_feature_sort_key"] = NativeFeatureA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_identity"] = NativeIdentityA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_keyword_properties"] = NativeKeyword
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_scale_factors"] = NativeScale
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_system_name"] = NativeSystem
-
-# this binding exists because shared behavior needs one stable value
-globals()["_native_translation"] = Native
-
-# this binding exists because shared behavior needs one stable value
-globals()["_norm"] = NormAction
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_dimension"] = DimensionValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_dimension_offset"] = OperationOffset
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_fields"] = OperationFields
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_selections"] = OperationA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_operation_selections_after_class"] = OperationAfter
-
-# this binding exists because shared behavior needs one stable value
-globals()["_orthonormal"] = IsOrthonormal
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameter_dimension"] = ParamDimension
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parameter_value_matches"] = IsParamValueA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_classes"] = ParseClasses
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_dimension"] = ParseDimension
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_keywords"] = ParseKeywords
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_markers"] = ParseMarkers
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_names"] = ParseNames
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_native_equations"] = ParseNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_scalars"] = ParseScalars
-
-# this binding exists because shared behavior needs one stable value
-globals()["_parse_xml"] = ParseXml
-
-# this binding exists because shared behavior needs one stable value
-globals()["_plane_frame_block"] = PlaneFrameBlock
-
-# this binding exists because shared behavior needs one stable value
-globals()["_plane_payload"] = PlanePayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_plane_reference"] = PlaneRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_primary_dimension"] = Primary
-
-# this binding exists because shared behavior needs one stable value
-globals()["_principal_plane_frames"] = PrincipalPlaneA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_principal_plane_ids"] = PrincipalPlaneB
-
-# this binding exists because shared behavior needs one stable value
-globals()["_profiles"] = DecodeProfiles
-
-# this binding exists because shared behavior needs one stable value
-globals()["_proved_write_capabilities"] = ProvedWrite
-
-# this binding exists because shared behavior needs one stable value
-globals()["_read_class"] = ReadClass
-
-# this binding exists because shared behavior needs one stable value
-globals()["_read_serialized_string"] = ReadSerialized
-
-# this binding exists because shared behavior needs one stable value
-globals()["_read_sketch_plane_reference"] = ReadSketchPlane
-
-# this binding exists because shared behavior needs one stable value
-globals()["_record_class"] = RecordClass
-
-# this binding exists because shared behavior needs one stable value
-globals()["_record_class_name"] = RecordClassName
-
-# this binding exists because shared behavior needs one stable value
-globals()["_rectangle_coordinates"] = Rectangle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_reference_plane_ids"] = RefPlaneIds
-
-# this binding exists because shared behavior needs one stable value
-globals()["_repair_plane_object_ids"] = RepairPlaneIMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["_resolve_profile_operation"] = ResolveProfile
-
-# this binding exists because shared behavior needs one stable value
-globals()["_resolved_base_map_index"] = ResolvedBaseMap
-
-# this binding exists because shared behavior needs one stable value
-globals()["_resolved_payload"] = ResolvedPayload
-
-# this binding exists because shared behavior needs one stable value
-globals()["_revolution_axis_marker"] = RevolutionAxis
-
-# this binding exists because shared behavior needs one stable value
-globals()["_same_point"] = IsSamePoint
-
-# this binding exists because shared behavior needs one stable value
-globals()["_scalar_owners"] = ScalarOwners
-
-# this binding exists because shared behavior needs one stable value
-globals()["_scalar_record"] = ScalarRecord
-
-# this binding exists because shared behavior needs one stable value
-globals()["_scalar_trailer"] = ScalarTrailer
-
-# this binding exists because shared behavior needs one stable value
-globals()["_semantic_dimensions"] = Semantic
-
-# this binding exists because shared behavior needs one stable value
-globals()["_serializable_name"] = IsSerializable
-
-# this binding exists because shared behavior needs one stable value
-globals()["_serialized_string"] = Serialized
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch_payload"] = EncodeSketch
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch_plane_reference"] = SketchPlaneRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_sketch_support_kind"] = SketchSupport
-
-# this binding exists because shared behavior needs one stable value
-globals()["_solid_feature_tree_ids"] = SolidFeatureIds
-
-# this binding exists because shared behavior needs one stable value
-globals()["_stable_creation_stamp"] = StableCreation
-
-# this binding exists because shared behavior needs one stable value
-globals()["_stable_u32"] = StableUThreeTwo
-
-# this binding exists because shared behavior needs one stable value
-globals()["_structural_circle_profiles"] = Structural
-
-# this binding exists because shared behavior needs one stable value
-globals()["_structural_rectangle_profiles"] = StructuralA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_support_plane_reference"] = SupportPlaneRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["_tree_node_flags"] = TreeNodeFlags
-
-# this binding exists because shared behavior needs one stable value
-globals()["_version_history_payload"] = VersionHistory
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_circle_profile"] = WriteCircle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_dimensions"] = WriteDimensions
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_feature"] = WriteFeature
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_feature_type"] = WriteFeatureA
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_object_ids"] = WriteObjectIds
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_objects"] = WriteObjects
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_rectangle_bounds"] = WriteRectangle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_write_sketch"] = WriteSketch
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_attribute"] = XmlAttr
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_document"] = XmlDoc
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_element"] = XmlElem
-
-# this binding exists because shared behavior needs one stable value
-globals()["_xml_text"] = XmlText
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["atom_ids_for"] = AtomIdsFor
-
-# this binding exists because shared behavior needs one stable value
-globals()["circle_radius_mm"] = CircleRadiusMm
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_ascii_brep"] = DecodeAsciiBrep
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_native_model"] = DecodeNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["decode_native_model_header"] = DecodeNativeA
-
-# this binding exists because shared behavior needs one stable value
-globals()["dimension_scalar_value_offset"] = DimensionScalarValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_class_reference"] = EncodeClassRef
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_cmgr_stream"] = EncodeCmgrStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_config0_stream"] = EncodeConfigZeroStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_definition_stream"] = EncodeDefinitionStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_native_assembly_envelope"] = EncodeNativeAsm
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_native_part"] = EncodeNative
-
-# this binding exists because shared behavior needs one stable value
-globals()["expression_equation_texts"] = ExpressionTexts
-
-# this binding exists because shared behavior needs one stable value
-globals()["field"] = Field
-
-# this binding exists because shared behavior needs one stable value
-globals()["hashlib"] = Hashlib
-
-# this binding exists because shared behavior needs one stable value
-globals()["itertools"] = Itertools
-
-# this binding exists because shared behavior needs one stable value
-globals()["locate_features"] = LocateFeatures
-
-# this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
-
-# this binding exists because shared behavior needs one stable value
-globals()["native_axis_bindings"] = NativeAxis
-
-# this binding exists because shared behavior needs one stable value
-globals()["operation_axis_subelement"] = OperationAxis
-
-# this binding exists because shared behavior needs one stable value
-globals()["patch_features"] = PatchFeatures
-
-# this binding exists because shared behavior needs one stable value
-globals()["re"] = RegexLib
-
-# this binding exists because shared behavior needs one stable value
-globals()["rectangle_corners_mm"] = RectangleCornersMm
-
-# this binding exists because shared behavior needs one stable value
-globals()["replace"] = Replace
-
-# this binding exists because shared behavior needs one stable value
-globals()["revolution_axis_direction"] = RevolutionAxisA
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["BuildCadCylObjs"] = BuildCadCylOMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalBoss"] = IsonicalBosAMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalBossA"] = IsonicalBosDMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalBossB"] = IsonicalBossMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalBossC"] = IsonicalBosCMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalBossD"] = IsonicalBosBMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalCut"] = IsonicalCutMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalPad"] = IsonicalPadMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalSinglA"] = IsonicalSingMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalSingle"] = IsonicalSinAMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["CanonicalTwo"] = IsonicalTwoMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["FreeCadBox"] = FreeCadBoxMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["FreecadParam"] = IsFreecadParam
-
-# this binding exists because shared behavior needs one stable value
-globals()["Matches"] = IsMatches
-
-# this binding exists because shared behavior needs one stable value
-globals()["Orthonormal"] = IsOrthonormal
-
-# this binding exists because shared behavior needs one stable value
-globals()["ParamValueA"] = IsParamValueA
-
-# this binding exists because shared behavior needs one stable value
-globals()["RepairPlaneIds"] = RepairPlaneIMut
-
-# this binding exists because shared behavior needs one stable value
-globals()["SamePoint"] = IsSamePoint
-
-# this binding exists because shared behavior needs one stable value
-globals()["Serializable"] = IsSerializable
+Serializable = IsSerializable

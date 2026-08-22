@@ -11,7 +11,7 @@ from dataclasses import dataclass as DataClass
 from pathlib import PureWindowsPath
 import struct as Struct
 from types import MappingProxyType
-from typing import Callable as CallableType, Mapping
+from typing import Mapping, Protocol
 from convert.adapters.solidworks.programs.assembly.default.Program import (
     EncodeProgram,
     FieldOwners,
@@ -59,6 +59,19 @@ KCoreFieldCount = sum(
 KCoreOpaqueBytes = 0
 
 
+# repeated core programs need one exact callback boundary across recovered encoder families
+class CoreEncoder(Protocol):
+
+    # callback typing prevents generated encoder signatures from degrading into variadic values
+    def __call__(
+        self,
+        ModelName: str,
+        ConfigName: str,
+        CoreItems: tuple[RepeatItem, ...],
+    ) -> Mapping[str, bytes]:
+        raise TypeError("core encoder protocol requires a concrete callback")
+
+
 # this definition exists because focused behavior needs one stable owner
 @DataClass(frozen=True, slots=True)
 class AsmCoreItem:
@@ -84,7 +97,7 @@ def BuildRepeatCore(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[AsmCoreItem, ...],
-    Encoder: CallableType[[str, str, tuple[RepeatItem, ...]], Mapping[str, bytes]],
+    Encoder: CoreEncoder,
 ) -> Mapping[str, bytes]:
     RepeatItems = tuple(
         (
@@ -445,25 +458,25 @@ def CoreCoverage() -> Mapping[str, int]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["CoreFieldCount"] = KCoreFieldCount
+CoreFieldCount = KCoreFieldCount
 
 # this binding exists because shared behavior needs one stable value
-globals()["CoreOpaqueBytes"] = KCoreOpaqueBytes
+CoreOpaqueBytes = KCoreOpaqueBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["CoreStreamNames"] = KCoreStreamNames
+CoreStreamNames = KCoreStreamNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeProgram2"] = EncodeProgramTwo
+EncodeProgram2 = EncodeProgramTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["EncodeProgram3"] = EncodeProgramThree
+EncodeProgram3 = EncodeProgramThree
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = DataClass
+dataclass = DataClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct

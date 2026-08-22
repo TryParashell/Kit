@@ -6,7 +6,7 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-name: Folder density
+name: Path policies
 
 on:
   pull_request:
@@ -23,8 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-folder-density:
-    name: Verify direct file limits
+  verify-path-policies:
+    name: Verify path policies
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -44,7 +44,7 @@ jobs:
       - name: Synchronize the locked environment
         run: uv sync --frozen --python 3.11
 
-      - name: Verify folder density policy
+      - name: Verify path policies
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
           HEAD_REF: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || '' }}
@@ -53,21 +53,4 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             Arguments=(--base "$BASE_REF" --head "$HEAD_REF")
           fi
-          set +e
-          OutputText="$(uv run python -m tools.Policy.CheckPaths "${Arguments[@]}" 2>&1)"
-          StatusCode=$?
-          set -e
-          if [ "$StatusCode" -gt 1 ]; then
-            printf '%s\n' "$OutputText"
-            exit "$StatusCode"
-          fi
-          if [ "$StatusCode" -eq 1 ] && ! printf '%s\n' "$OutputText" | grep -Eq '^path policy failed with [0-9]+ violations$'; then
-            printf '%s\n' "$OutputText"
-            exit 1
-          fi
-          FindingText="$(printf '%s\n' "$OutputText" | grep ': PTH002:' || true)"
-          if [ -n "$FindingText" ]; then
-            printf '%s\n' "$FindingText"
-            exit 1
-          fi
-          echo "folder density policy passed"
+          uv run python -m tools.Policy.CheckPaths "${Arguments[@]}"

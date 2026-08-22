@@ -24,18 +24,17 @@ def GetBrepErrors(
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     if (
-        not isinstance(ModelValue.SchemaVersion, str)
-        or not ModelValue.SchemaVersion.strip()
-        or ModelValue.SchemaVersion != ModelValue.SchemaVersion.strip()
+        not ModelValue.schema_version.strip()
+        or ModelValue.schema_version != ModelValue.schema_version.strip()
     ):
         ErrorValues.append("B-rep schema version must be a non-empty string")
     IdentitySets, IdentityErrors = GetBrepIds(ModelValue)
     ErrorValues.extend(IdentityErrors)
-    for CurveValue in ModelValue.Curves:
+    for CurveValue in ModelValue.curves:
         ErrorValues.extend(GetCurveErrors(CurveValue, IdentitySets["Surfaces"]))
-    for PcurveValue in ModelValue.Pcurves:
+    for PcurveValue in ModelValue.pcurves:
         ErrorValues.extend(GetPcurveErrors(PcurveValue))
-    for SurfaceValue in ModelValue.Surfaces:
+    for SurfaceValue in ModelValue.surfaces:
         ErrorValues.extend(GetSurfErrors(SurfaceValue, IdentitySets["Surfaces"]))
     ErrorValues.extend(GetEdgeErrors(ModelValue, IdentitySets))
     ErrorValues.extend(GetLoopErrors(ModelValue, IdentitySets))

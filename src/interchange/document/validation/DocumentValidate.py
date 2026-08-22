@@ -6,54 +6,75 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import Any as AnyValue
+from collections.abc import Iterable as IterableBase
+from typing import cast as CastValue
+from typing import TypeGuard
 
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.document.models.DocumentError import DocumentError
 from interchange.document.models.DocumentIdentity import GetIdGroups
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
+    CadDocument,
+)
 from interchange.enums.EnumDocument import Capability
 
 
+# decoded capability collections need runtime checks before validation trusts their members
+def HasValidCaps(SourceValue: object) -> bool:
+    if not isinstance(SourceValue, frozenset):
+        return False
+    ItemValues = CastValue(IterableBase[object], SourceValue)
+    return all(isinstance(ItemValue, Capability) for ItemValue in ItemValues)
+
+
+# malformed decoded roots must narrow brep values before topology methods are called
+def IsBrepModel(SourceValue: object) -> TypeGuard[BrepModel]:
+    return isinstance(SourceValue, BrepModel)
+
+
 # validation orchestration preserves diagnostic order while focused checks evolve independently
-def GetDocErrors(DocumentValue: AnyValue) -> tuple[str, ...]:
-    from interchange.document.validation.DocumentAssemblyValidate import GetAssemblyErrs
-    from interchange.document.validation.DocumentFeatureValidate import GetFeatureErrs
-    from interchange.document.validation.DocumentReferenceValidate import GetRefErrors
+def GetDocErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
+    from interchange.document.validation.DocumentAssemblyValidate import (  # lgtm[py/cyclic-import]
+        GetAssemblyErrs,
+    )
+    from interchange.document.validation.DocumentFeatureValidate import (  # lgtm[py/cyclic-import]
+        GetFeatureErrs,
+    )
+    from interchange.document.validation.DocumentReferenceValidate import (  # lgtm[py/cyclic-import]
+        GetRefErrors,
+    )
 
     ErrorValues: list[str] = []
-    if not isinstance(DocumentValue.Capabilities, frozenset) or any(
-        not isinstance(CapabilityValue, Capability)
-        for CapabilityValue in DocumentValue.Capabilities
-    ):
+    if not HasValidCaps(DocumentValue.capabilities):
         ErrorValues.append("document capabilities must be Capability values")
     IdentitySets: dict[str, set[str]] = {}
     for NameValue, LabelText, ItemValues in GetIdGroups(DocumentValue):
-        IdValues = [ItemValue.EntityId for ItemValue in ItemValues]
+        IdValues = [ItemValue.id for ItemValue in ItemValues]
         if len(IdValues) != len(set(IdValues)):
             ErrorValues.append(f"duplicate {LabelText} id")
-        CanonicalName = NameValue.title().replace("_", "")
-        IdentitySets[CanonicalName] = set(IdValues)
+        IdentitySets[NameValue] = set(IdValues)
     ErrorValues.extend(GetRefErrors(DocumentValue, IdentitySets))
     ErrorValues.extend(GetFeatureErrs(DocumentValue, IdentitySets))
-    if DocumentValue.BrepModel is not None:
-        if not isinstance(DocumentValue.BrepModel, BrepModel):
+    BrepValue: object = DocumentValue.brep
+    if BrepValue is not None:
+        if not IsBrepModel(BrepValue):
             ErrorValues.append("document B-rep must be a BrepModel")
         else:
             ErrorValues.extend(
-                DocumentValue.BrepModel.GetErrors(
-                    frozenset(BodyValue.EntityId for BodyValue in DocumentValue.Bodies)
+                BrepValue.GetErrors(
+                    frozenset(BodyValue.id for BodyValue in DocumentValue.bodies)
                 )
             )
-    if DocumentValue.Assembly is not None:
+    if DocumentValue.assembly is not None:
         ErrorValues.extend(GetAssemblyErrs(DocumentValue, IdentitySets))
-    if not DocumentValue.Configurations:
+    if not DocumentValue.configurations:
         ErrorValues.append("document has no configuration")
     if (
-        not DocumentValue.FeatureTimeline
-        and DocumentValue.BrepModel is None
-        and not DocumentValue.BrepPayloads
-        and not DocumentValue.Meshes
-        and DocumentValue.Assembly is None
+        not DocumentValue.feature_timeline
+        and DocumentValue.brep is None
+        and not DocumentValue.brep_payloads
+        and not DocumentValue.meshes
+        and DocumentValue.assembly is None
     ):
         ErrorValues.append(
             "document has neither feature history, B-rep, mesh, nor assembly data"
@@ -62,7 +83,7 @@ def GetDocErrors(DocumentValue: AnyValue) -> tuple[str, ...]:
 
 
 # explicit assertion gives callers one exception containing every validation failure
-def AssertValid(DocumentValue: AnyValue) -> None:
+def AssertValid(DocumentValue: CadDocument) -> None:
     ErrorValues = GetDocErrors(DocumentValue)
     if ErrorValues:
         raise DocumentError("; ".join(ErrorValues))

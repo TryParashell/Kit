@@ -17,12 +17,12 @@ def GetEdgeErrors(
     ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for VertexValue in ModelValue.Vertices:
+    for VertexValue in ModelValue.vertices:
         if not IsFiniteSpace(VertexValue.Point) or not IsValidTol(
             VertexValue.Tolerance
         ):
             ErrorValues.append(f"B-rep vertex {VertexValue.EntityId} is invalid")
-    for EdgeValue in ModelValue.Edges:
+    for EdgeValue in ModelValue.edges:
         if EdgeValue.StartVertexId not in IdentitySets["Vertices"]:
             ErrorValues.append(
                 f"B-rep edge {EdgeValue.EntityId} references a missing start vertex"
@@ -43,7 +43,7 @@ def GetEdgeErrors(
             ErrorValues.append(
                 f"B-rep edge {EdgeValue.EntityId} has an invalid range or tolerance"
             )
-    for CoedgeValue in ModelValue.Coedges:
+    for CoedgeValue in ModelValue.coedges:
         if CoedgeValue.EdgeId not in IdentitySets["Edges"]:
             ErrorValues.append(
                 f"B-rep coedge {CoedgeValue.EntityId} references a missing edge"

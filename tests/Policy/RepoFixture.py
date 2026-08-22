@@ -16,16 +16,16 @@ from pathlib import Path as FilePath
 class RepoFixture:
 
     # every fixture needs deterministic authorship before it can create comparable revisions
-    def __init__(CaseSelf, RootPath: FilePath) -> None:
-        CaseSelf.RootPath = RootPath
-        CaseSelf.RunGit("init", "--quiet")
-        CaseSelf.RunGit("config", "user.name", "Policy Tests")
-        CaseSelf.RunGit("config", "user.email", "policy@example.invalid")
+    def __init__(self, RootPath: FilePath) -> None:
+        self.RootPath = RootPath
+        self.RunGit("init", "--quiet")
+        self.RunGit("config", "user.name", "Policy Tests")
+        self.RunGit("config", "user.email", "policy@example.invalid")
 
     # one checked process helper turns setup failures into immediately useful test failures
-    def RunGit(CaseSelf, *ArgItems: str) -> str:
+    def RunGit(self, *ArgItems: str) -> str:
         RunResult = Subprocess.run(
-            ["git", "-C", str(CaseSelf.RootPath), *ArgItems],
+            ["git", "-C", str(self.RootPath), *ArgItems],
             capture_output=True,
             text=True,
             check=False,
@@ -35,17 +35,17 @@ class RepoFixture:
         return RunResult.stdout.strip()
 
     # controlled fixture writes make index contents independent from the surrounding worktree
-    def WriteFile(CaseSelf, RepoPath: str, ContentText: str = "sample\n") -> None:
-        TargetPath = CaseSelf.RootPath / RepoPath
+    def WriteFile(self, RepoPath: str, ContentText: str = "sample\n") -> None:
+        TargetPath = self.RootPath / RepoPath
         TargetPath.parent.mkdir(parents=True, exist_ok=True)
         TargetPath.write_text(ContentText, encoding="utf-8")
 
     # git performs fixture moves so rename detection observes the same index metadata as production
-    def MoveFile(CaseSelf, OldPath: str, NewPath: str) -> None:
-        CaseSelf.RunGit("mv", OldPath, NewPath)
+    def MoveFile(self, OldPath: str, NewPath: str) -> None:
+        self.RunGit("mv", OldPath, NewPath)
 
     # focused commits expose stable refs for changed destination and head tree assertions
-    def CommitAll(CaseSelf, MsgText: str) -> str:
-        CaseSelf.RunGit("add", "--all")
-        CaseSelf.RunGit("commit", "--quiet", "-m", MsgText)
-        return CaseSelf.RunGit("rev-parse", "HEAD")
+    def CommitAll(self, MsgText: str) -> str:
+        self.RunGit("add", "--all")
+        self.RunGit("commit", "--quiet", "-m", MsgText)
+        return self.RunGit("rev-parse", "HEAD")

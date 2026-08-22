@@ -150,7 +150,7 @@ def TestPPSRTSSP(
     AxisCode: int,
     Basis: tuple[tuple[float, float, float], ...],
 ) -> None:
-    ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    ModelDoc, _ = Decode(KParts, NameText)
     SketchA = Sketch(ModelDoc, "Sketch1")
     assert SketchA.support_plane_id == PlaneId
     assert SketchA.support_kind == KindInfoB
@@ -165,9 +165,9 @@ def TestPPSRTSSP(
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
 def NamedTTARPSNLCO() -> None:
-    Reported = {}
-    for NameText, PlaneId, IgnoredValue, IgnoredValue in KSupports:
-        ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    Reported: dict[str, int] = {}
+    for NameText, PlaneId, _, _ in KSupports:
+        ModelDoc, _ = Decode(KParts, NameText)
         Reported[NameText] = Sketch(ModelDoc, "Sketch1").support_plane_id
         assert Reported[NameText] == PlaneId
     assert len(set(Reported.values())) == len(KSupports)
@@ -189,7 +189,7 @@ def TestTSPRIRFTSCR() -> None:
 @KCorpusParts
 @PytestLib.mark.parametrize(("NameText", "RadiusMm"), KRadiiA)
 def TestCRARFTSCP(NameText: str, RadiusMm: float) -> None:
-    ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    ModelDoc, _ = Decode(KParts, NameText)
     CirclesA = Circles(Sketch(ModelDoc, "Sketch1"))
     assert len(CirclesA) == 1
     CenterX, CenterY, Decoded = CirclesA[0].coordinates
@@ -203,7 +203,7 @@ def TestCRARFTSCP(NameText: str, RadiusMm: float) -> None:
 @KCorpusTwoPartsA
 @PytestLib.mark.parametrize(("NameText", "RadiusMm"), KRadii)
 def TestSFCRAE(NameText: str, RadiusMm: float) -> None:
-    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, NameText)
+    ModelDoc, _ = Decode(KCorpusTwoParts, NameText)
     CirclesA = Circles(Sketch(ModelDoc, "Sketch2"))
     assert len(CirclesA) == 1
     assert abs(CirclesA[0].coordinates[2] - RadiusMm) <= 1.8e-15
@@ -213,7 +213,7 @@ def TestSFCRAE(NameText: str, RadiusMm: float) -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
 def TestRPCNASA() -> None:
-    ModelDoc, IgnoredValue = Decode(KParts, "BASELINE_40x20x10")
+    ModelDoc, _ = Decode(KParts, "BASELINE_40x20x10")
     Profiles = Sketch(ModelDoc, "Sketch1").profiles
     assert [Profile.kind for Profile in Profiles] == ["rectangle"]
     assert Profiles[0].start_angle_degrees is None
@@ -223,7 +223,7 @@ def TestRPCNASA() -> None:
 @KCorpusParts
 @PytestLib.mark.parametrize(("NameText", "DepthMm"), KPartsA)
 def TestASDCAM(NameText: str, DepthMm: float) -> None:
-    ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    ModelDoc, _ = Decode(KParts, NameText)
     Operation = ModelDoc.operations[0]
     assert Operation.length_mm == PytestLib.approx(DepthMm)
     Copies = Operation.depth_copies
@@ -238,7 +238,7 @@ def TestASDCAM(NameText: str, DepthMm: float) -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusTwoPartsA
 def TestTSFDCUTSL() -> None:
-    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, "CUTBASE_cd7")
+    ModelDoc, _ = Decode(KCorpusTwoParts, "CUTBASE_cd7")
     Second = ModelDoc.operations[1]
     assert Second.length_mm == PytestLib.approx(7.0)
     Copies = Second.depth_copies
@@ -252,7 +252,7 @@ def TestTSFDCUTSL() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusTwoPartsA
 def TestAFSSFSTAEPC() -> None:
-    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, "TWOPAD_d8")
+    ModelDoc, _ = Decode(KCorpusTwoParts, "TWOPAD_d8")
     Second = ModelDoc.operations[1]
     Anchor = Second.depth_copies[0].offset
     ByDelta = {CopyInfo.offset - Anchor: CopyInfo for CopyInfo in Second.depth_copies}
@@ -280,7 +280,7 @@ def TestTBBCID(
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
 def TestTBSDMTBHE() -> None:
-    ModelDoc, IgnoredValue = Decode(KParts, "WIDTH_w100")
+    ModelDoc, _ = Decode(KParts, "WIDTH_w100")
     BoxInfo = ModelDoc.bounding_box
     assert BoxInfo is not None
     assert BoxInfo.diameter_mm == PytestLib.approx(
@@ -347,7 +347,7 @@ def TestTEREITNCM() -> None:
 @KCorpusTwoPartsA
 @PytestLib.mark.parametrize(("NameText", "SketchName"), KSketchesA)
 def TestPSSSRAPS(NameText: str, SketchName: str) -> None:
-    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, NameText)
+    ModelDoc, _ = Decode(KCorpusTwoParts, NameText)
     SketchA = Sketch(ModelDoc, SketchName)
     assert SketchA.support_kind == KindInfoB
     assert SketchA.support_plane_id == KIdInfo
@@ -364,7 +364,7 @@ def TestPSSSRAPS(NameText: str, SketchName: str) -> None:
 def TestFSSANRAPS(NameText: str, SketchName: str, Directory: FilePath) -> None:
     if not Directory.is_dir():
         PytestLib.skip("the SOLIDWORKS corpus is not present in this checkout")
-    ModelDoc, IgnoredValue = Decode(Directory, NameText)
+    ModelDoc, _ = Decode(Directory, NameText)
     SketchA = Sketch(ModelDoc, SketchName)
     assert SketchA.support_kind == KindInfoA
     assert SketchA.support_plane is None

@@ -11,8 +11,9 @@ from __future__ import annotations
 from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed
 
 from .Registry import (
-    FieldOwners,
-    AnnotationOps,
+    AnnotationOps as AnnotationOps,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
 )
 
 
@@ -23,10 +24,10 @@ KSourceRange = (24240, 24822)
 KReferenceLength = 582
 
 # legacy source range access remains available for recovered stream diagnostics
-globals()["SourceRange"] = KSourceRange
+SourceRange = KSourceRange
 
 # legacy length access remains available while the invariant uses constant naming
-globals()["ReferenceLength"] = KReferenceLength
+ReferenceLength = KReferenceLength
 
 
 # typed field replay emits the two view manager without retaining vendor byte spans
@@ -35,5 +36,4 @@ def EncodeViews() -> bytes:
 
 
 # legacy annotation entry preserves existing configuration writer callers
-KLegacyAliases = {"EncodeTwoViewAnnotationManager": EncodeViews}
-globals().update(KLegacyAliases)
+EncodeTwoViewAnnotationManager = EncodeViews

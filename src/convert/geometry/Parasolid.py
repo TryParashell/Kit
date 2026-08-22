@@ -14,38 +14,56 @@ import math as MathValue
 import re as RegexLib
 import struct as Struct
 from sys import float_info as FloatInfo
-from typing import Iterable, Mapping, Sequence
+from typing import (
+    Callable,
+    Iterable,
+    Mapping,
+    Sequence,
+    TypeAlias,
+    TypeVar,
+    cast as CastValue,
+)
 import zlib as ZlibLib
-from interchange import (
+from interchange.brep.curves.BrepCurves import (
+    CircleCurve,
+    EllipseCurve,
+    IntersectCurve as IntersectionCurve,
+    LineCurve,
+    NativeCurve,
+    NurbsCurve,
+    BrepEntity,
+)
+from interchange.brep.surfaces.BrepSurfaces import (
+    ConeSurface,
+    CylinderSurface,
+    NativeSurface,
+    NurbsSurface,
+    OffsetSurface,
+    PlaneSurface,
+    SphereSurface,
+    TorusSurface,
+)
+from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.topology.BrepTopology import (
     BrepBody,
     BrepCoedge,
     BrepEdge,
     BrepFace,
     BrepFaceUse,
     BrepLoop,
-    BrepModel,
     BrepRegion,
     BrepShell,
     BrepShellUse,
     BrepVertex,
-    CircleCurve,
-    ConeSurface,
-    CylinderSurface,
-    EllipseCurve,
-    IntersectionCurve,
-    LineCurve,
-    NativeCurve,
-    NativeSurface,
-    NurbsCurve,
-    NurbsSurface,
-    OffsetSurface,
-    PlaneSurface,
-    SphereSurface,
-    TorusSurface,
-    Transform,
-    Vector3 as VectorThree,
-    frozen_mapping as FrozenMapping,
 )
+from interchange.core.Common import FreezeMapping as FrozenMapping
+from interchange.geometry.models.Transform import Transform
+from interchange.geometry.models.VectorSpace import (
+    SpaceVector as VectorThree,
+)
+
+# parser helpers accept immutable mutable and zero copy binary views
+KReadBuffer: TypeAlias = bytes | bytearray | memoryview
 
 # this constant exists because binary encoding requires stable protocol data
 KWrapperMagic = bytes.fromhex("231dd571da8148a2a85898b21b89ef99")
@@ -92,6 +110,134 @@ KBlankPartBody = bytes.fromhex(
 KBlankDeltaBody = bytes.fromhex(
     "00e7000000000003ff00030004000000030004ff000400050001000100010000000000000000000000000000000e0000000003000100010001000000010065134343434343434349046d65736803ee00014908706f6c796c696e6503f0000149076c61747469636500de00014343490b6174746465665f6c697374004a000143434110696e6465785f6d61705f6f66667365740000000101644109696e6465785f6d6170005200014114736368656d615f656d62656464696e675f6d61700052000141106d6573685f6f66667365745f6461746100ce00015a0002000101000101000101000101000101000101000101000101000101000101000001010001010000000000000000000000000001010001010001010001000100040005000100040001000100000000000000000000000000000000000000000100010001"
 )
+
+# concrete carrier unions prevent record tables from erasing decoded geometry contracts
+ParaSurface: TypeAlias = (
+    PlaneSurface
+    | CylinderSurface
+    | ConeSurface
+    | SphereSurface
+    | TorusSurface
+    | NurbsSurface
+    | OffsetSurface
+    | NativeSurface
+)
+
+# concrete carrier unions preserve curve members required by encoder validation
+ParaCurve: TypeAlias = (
+    LineCurve
+    | CircleCurve
+    | EllipseCurve
+    | IntersectionCurve
+    | NurbsCurve
+    | NativeCurve
+)
+
+# parser construction uses these aliases to retain concrete topology evidence
+ParaGeometry: TypeAlias = ParaCurve | ParaSurface
+
+# face rings preserve their native loop identifier and ordered coedge identifiers
+FaceLoop: TypeAlias = tuple[int, tuple[int, ...]]
+
+# tree construction always returns complete interchange topology collections
+TreeModel: TypeAlias = tuple[
+    tuple[BrepFaceUse, ...],
+    tuple[BrepShell, ...],
+    tuple[BrepShellUse, ...],
+    tuple[BrepRegion, ...],
+    tuple[BrepBody, ...],
+]
+
+# parser topology aggregation keeps every native relation strongly typed
+PartTopology: TypeAlias = tuple[
+    dict[int, tuple[FaceLoop, ...]],
+    dict[int, tuple[int, int]],
+    dict[int, int],
+    dict[int, int],
+    set[int],
+    set[int],
+    set[int],
+    set[int],
+    set[int],
+    dict[int, VectorThree],
+    dict[int, NativeCurve],
+    dict[int, int],
+]
+
+# encoder allocation uses a fixed record family sequence to preserve index slots
+BaseIndices: TypeAlias = tuple[
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+]
+
+# solidworks attribute chains require exact index collections for each record family
+SolidIndices: TypeAlias = tuple[
+    dict[str, tuple[int, int, int]],
+    dict[str, tuple[int, int, int]],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+]
+
+# face attribute records keep native identifiers and validated metadata together
+FaceAttribute: TypeAlias = tuple[
+    str,
+    int,
+    tuple[int, int, int],
+    tuple[int, int, int],
+    int | None,
+    Mapping[str, object],
+]
+
+# face serialization needs ordered shell and surface chains with concrete members
+FaceChain: TypeAlias = tuple[
+    BrepShell,
+    list[str],
+    int,
+    list[str],
+    int,
+    list[str],
+    int,
+    BrepRegion,
+    int | None,
+    str | None,
+]
+
+# triangle record sizing needs explicit count transforms instead of untyped lambdas
+TriRecordSizer: TypeAlias = Callable[[int], int]
+
+# spline reconstruction must retain fixed bidirectional descriptor dimensions
+NurbsSurfShapeData: TypeAlias = tuple[
+    int,
+    int,
+    int,
+    int,
+    int,
+    tuple[bool, bool],
+    tuple[bool, bool],
+    bool,
+    tuple[int, int],
+    tuple[int, int],
+    int,
+]
+
+# record insertion shares duplicate detection across concrete decoded record families
+RecordValue = TypeVar("RecordValue")
 
 
 # this declaration exists because focused behavior needs one stable owner
@@ -156,9 +302,9 @@ def EncodeBrepModel(
             raise ParaWriteError("SOLIDWORKS feature ids must be positive i32 values")
     ValidateSupport(Model)
     Topology = BrepTopology(Model)
-    BodyData, Ignored = EncodeBrepBody(
+    BodyData = EncodeBrepBody(
         Model, Topology, PartValue=PartValue, SolidFeatureIds=FeatureIds
-    )
+    )[0]
     PayloadData = ParaStream(
         BodyData,
         KParaSchema,
@@ -222,7 +368,7 @@ def ValidateSupport(Model: BrepModel) -> None:
     Loops = {LoopDataData.id: LoopDataData for LoopDataData in Model.loops}
     for FaceDataData in Model.faces:
         Outer = tuple((Loops[LoopId].outer for LoopId in FaceDataData.loop_ids))
-        if Outer != (True, *(False for Ignored in FaceDataData.loop_ids[1:])):
+        if Outer != (True,) + (False,) * (len(FaceDataData.loop_ids) - 1):
             raise ParaWriteError(
                 f"Parasolid B-rep face {FaceDataData.id} requires its first loop to be the only outer loop"
             )
@@ -266,13 +412,11 @@ def VerifyBrepData(Model: BrepModel, PayloadData: bytes) -> None:
         )
     ):
         raise ParaWriteError("generated Parasolid B-rep changes topology counts")
-    if any(
-        (
-            tuple((type(ItemData) for ItemData in getattr(Model, NameValue)))
-            != tuple((type(ItemData) for ItemData in getattr(Decoded, NameValue)))
-            for NameValue in ("curves", "surfaces")
-        )
-    ):
+    CurveTypes = tuple(ItemData.__class__ for ItemData in Model.curves)
+    DecodedCurveTypes = tuple(ItemData.__class__ for ItemData in Decoded.curves)
+    SurfaceTypes = tuple(ItemData.__class__ for ItemData in Model.surfaces)
+    DecodedSurfaceTypes = tuple(ItemData.__class__ for ItemData in Decoded.surfaces)
+    if CurveTypes != DecodedCurveTypes or SurfaceTypes != DecodedSurfaceTypes:
         raise ParaWriteError("generated Parasolid B-rep changes geometry classes")
     if tuple((Region.solid for Region in Model.regions)) != tuple(
         (Region.solid for Region in Decoded.regions)
@@ -305,28 +449,34 @@ def VerifyBrepData(Model: BrepModel, PayloadData: bytes) -> None:
 
 # this declaration exists because focused behavior needs one stable owner
 class BrepTopology:
-    locals()["__slots__"] = (
-        "bodies",
-        "coedge_loop",
-        "coedges",
-        "edge_coedges",
-        "edges",
-        "face_face_use",
-        "face_uses",
-        "faces",
-        "loop_face",
-        "loops",
-        "region_body",
-        "regions",
-        "shell_face_use",
-        "shell_shell_use",
-        "shell_use_region",
-        "shell_uses",
-        "shells",
-        "surface_by_id",
-        "curve_by_id",
-        "vertex_by_id",
-    )
+    bodies: dict[str, BrepBody]
+    coedge_loop: dict[str, str]
+    coedges: dict[str, BrepCoedge]
+    edge_coedges: dict[str, list[str]]
+    edges: dict[str, BrepEdge]
+    face_face_use: dict[str, str]
+    face_uses: dict[str, BrepFaceUse]
+    faces: dict[str, BrepFace]
+    loop_face: dict[str, str]
+    loops: dict[str, BrepLoop]
+    region_body: dict[str, str]
+    regions: dict[str, BrepRegion]
+    shell_face_use: dict[str, str]
+    shell_shell_use: dict[str, str]
+    shell_use_region: dict[str, str]
+    shell_uses: dict[str, BrepShellUse]
+    shells: dict[str, BrepShell]
+    surface_by_id: dict[str, ParaSurface]
+    curve_by_id: dict[str, ParaCurve]
+    vertex_by_id: dict[str, BrepVertex]
+
+    # topology maps must exist before ownership validation can traverse them
+    def __init__(self, Model: BrepModel) -> None:
+        InitTopologyMut(self, Model)
+
+    # face orientation is retained here as topology state owns this traversal
+    def IsFaceForward(self, FaceId: str) -> bool:
+        return IsFaceForward(self, FaceId)
 
 
 # topology initialization delegates each ownership phase to a focused helper
@@ -440,10 +590,6 @@ def IsFaceForward(SelfData: BrepTopology, FaceId: str) -> bool:
     return FaceData.same_sense ^ FaceUse.reversed ^ ShellUse.reversed
 
 
-setattr(BrepTopology, "__init__", InitTopologyMut)
-setattr(BrepTopology, "IsFaceForward", IsFaceForward)
-
-
 # this declaration exists because focused behavior needs one stable owner
 def BindOwnerMut(
     Owners: dict[str, str], ItemId: str, OwnerId: str, ItemName: str, OwnerName: str
@@ -469,7 +615,7 @@ def RequireComplete(
 
 # this declaration exists because focused behavior needs one stable owner
 def OrderIds(
-    Values: Sequence[str], Entities: Mapping[str, object], AttrName: str
+    Values: Sequence[str], Entities: Mapping[str, BrepEntity], AttrName: str
 ) -> list[str]:
     Ranks = [
         getattr(Entities[ValueData], "attributes", {}).get(AttrName)
@@ -478,28 +624,64 @@ def OrderIds(
     if all((type(RankValue) is int and RankValue >= 0 for RankValue in Ranks)) and len(
         set(Ranks)
     ) == len(Ranks):
+        RankById = {
+            ValueData: RankValue
+            for ValueData, RankValue in zip(Values, Ranks)
+            if type(RankValue) is int
+        }
 
         # this callback exists because local behavior needs one focused transformation
         return [
             ValueData
-            for Ignored, ValueData in sorted(
-                zip(Ranks, Values), key=lambda ItemData: ItemData[0]
-            )
+            for ValueData in sorted(Values, key=lambda ItemData: RankById[ItemData])
         ]
     return list(Values)
+
+
+# metadata sequences need one typed boundary before geometry logic inspects members
+def ObjectTuple(ValueData: object) -> tuple[object, ...] | None:
+    if not isinstance(ValueData, (tuple, list)):
+        return None
+    Values = CastValue(Sequence[object], ValueData)
+    return tuple(Values)
+
+
+# floating metadata needs finite concrete values before parameter algorithms consume it
+def FloatTuple(ValueData: object) -> tuple[float, ...] | None:
+    Values = ObjectTuple(ValueData)
+    if Values is None:
+        return None
+    Result: list[float] = []
+    for ItemValue in Values:
+        if type(ItemValue) is not float or not MathValue.isfinite(ItemValue):
+            return None
+        Result.append(ItemValue)
+    return tuple(Result)
+
+
+# integer metadata needs exact values before native identifiers consume it
+def IntTuple(ValueData: object) -> tuple[int, ...] | None:
+    Values = ObjectTuple(ValueData)
+    if Values is None:
+        return None
+    Result: list[int] = []
+    for ItemValue in Values:
+        if type(ItemValue) is not int:
+            return None
+        Result.append(ItemValue)
+    return tuple(Result)
 
 
 # this declaration exists because focused behavior needs one stable owner
 def FinIndex(
     Descriptor: object, Coedges: Mapping[str, int], DummyFins: Mapping[str, int]
 ) -> int | None:
-    if (
-        not isinstance(Descriptor, (tuple, list))
-        or len(Descriptor) != 2
-        or (not all((isinstance(ValueData, str) for ValueData in Descriptor)))
-    ):
+    Values = ObjectTuple(Descriptor)
+    if Values is None or len(Values) != 2:
         return None
-    KindValueData, IdValue = Descriptor
+    KindValueData, IdValue = Values
+    if not isinstance(KindValueData, str) or not isinstance(IdValue, str):
+        return None
     if KindValueData == "coedge":
         return Coedges.get(IdValue)
     if KindValueData == "dummy":
@@ -683,7 +865,7 @@ def MakeAllocator(Config: EncodeConfig, PartValue: bool) -> IndexAllocator:
         for BaseValue in Config.KAttrBases.values()
         for OffsetData in (*range(2, 5), *range(12, 16), *range(32, 60))
     }
-    ReservedTopology = set(range(5, 12)) if Config.KFeatureIds else set()
+    ReservedTopology: set[int] = set(range(5, 12)) if Config.KFeatureIds else set()
     return IndexAllocator(Reserved, ReservedTopology, set(), 2 if PartValue else 1)
 
 
@@ -710,12 +892,13 @@ def AllocIndexMut(Allocator: IndexAllocator, Preferred: int = 0) -> int:
 
 # collection allocation maps interchange identifiers to deterministic native record indices
 def AllocItemsMut(
-    Allocator: IndexAllocator, Values: Iterable[object], Preferred: Sequence[int] = ()
+    Allocator: IndexAllocator,
+    Values: Iterable[BrepEntity],
+    Preferred: Sequence[int] = (),
 ) -> dict[str, int]:
     Result: dict[str, int] = {}
     for Position, ValueData in enumerate(Values):
-        ItemId = getattr(ValueData, "id")
-        Result[ItemId] = AllocIndexMut(
+        Result[ValueData.id] = AllocIndexMut(
             Allocator, Preferred[Position] if Position < len(Preferred) else 0
         )
     return Result
@@ -724,7 +907,7 @@ def AllocItemsMut(
 # standard index allocation covers all direct topology and geometry record families
 def BaseIndexesMut(
     Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator
-) -> tuple[dict[str, int], ...]:
+) -> BaseIndices:
     Bodies = (
         {BodyData.id: Config.KAttrBases[BodyData.id] + 1 for BodyData in Model.bodies}
         if Config.KAttrBases
@@ -791,7 +974,8 @@ def ExteriorIndexes(
     Config: EncodeConfig,
     Allocator: IndexAllocator,
 ) -> tuple[dict[str, int], dict[str, int], bool]:
-    ExteriorRegions, ExteriorShells = {}, {}
+    ExteriorRegions: dict[str, int] = {}
+    ExteriorShells: dict[str, int] = {}
     Sheet = False
     for BodyData in Model.bodies:
         Kinds = {Topology.regions[RegionId].solid for RegionId in BodyData.region_ids}
@@ -815,9 +999,17 @@ def ExteriorIndexes(
 # vendor attribute allocation creates solidworks face and body record chains
 def SolidIndexes(
     Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator
-) -> tuple[dict[str, object], ...]:
-    FaceAttrs, FaceValues, FaceDefinitions, FaceDefNext, FaceIds = {}, {}, {}, {}, {}
-    BodyAttrs, BodyValues, BodyDefinitions, BodyDefNext, BodyIds = {}, {}, {}, {}, {}
+) -> SolidIndices:
+    FaceAttrs: dict[str, tuple[int, int, int]] = {}
+    FaceValues: dict[str, tuple[int, int, int]] = {}
+    FaceDefinitions: dict[str, int] = {}
+    FaceDefNext: dict[str, int] = {}
+    FaceIds: dict[str, int] = {}
+    BodyAttrs: dict[str, int] = {}
+    BodyValues: dict[str, int] = {}
+    BodyDefinitions: dict[str, int] = {}
+    BodyDefNext: dict[str, int] = {}
+    BodyIds: dict[str, int] = {}
     if Config.KSolidSolid:
         for NameValue in ("unchanged", "downstream", "colour"):
             FaceDefinitions[NameValue] = AllocIndexMut(Allocator)
@@ -826,11 +1018,15 @@ def SolidIndexes(
             )
             FaceIds[NameValue] = AllocIndexMut(Allocator)
         for FaceData in Model.faces:
-            FaceAttrs[FaceData.id] = tuple(
-                (AllocIndexMut(Allocator) for Ignored in range(3))
+            FaceAttrs[FaceData.id] = (
+                AllocIndexMut(Allocator),
+                AllocIndexMut(Allocator),
+                AllocIndexMut(Allocator),
             )
-            FaceValues[FaceData.id] = tuple(
-                (AllocIndexMut(Allocator) for Ignored in range(3))
+            FaceValues[FaceData.id] = (
+                AllocIndexMut(Allocator),
+                AllocIndexMut(Allocator),
+                AllocIndexMut(Allocator),
             )
         BodyAttrs = {
             "timestamp": AllocIndexMut(Allocator),
@@ -896,8 +1092,14 @@ def MakeEncodeIndex(
 # face ownership mapping links faces shells regions and bodies without duplication
 def MakeFaceOwners(
     Model: BrepModel, Topology: BrepTopology
-) -> tuple[dict[str, str], ...]:
-    FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody = {}, {}, {}, {}, {}
+) -> tuple[
+    dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str]
+]:
+    FaceShell: dict[str, str] = {}
+    FaceRegion: dict[str, str] = {}
+    FaceBody: dict[str, str] = {}
+    ShellRegion: dict[str, str] = {}
+    ShellBody: dict[str, str] = {}
     for RegionData in Model.regions:
         BodyId = Topology.region_body[RegionData.id]
         for ShellUseId in RegionData.shell_use_ids:
@@ -917,7 +1119,8 @@ def MakeFaceOwners(
 def MakeEdgeOwners(
     Model: BrepModel, Topology: BrepTopology, FaceBody: Mapping[str, str]
 ) -> tuple[dict[str, str], dict[str, str]]:
-    EdgeBody, VertexBody = {}, {}
+    EdgeBody: dict[str, str] = {}
+    VertexBody: dict[str, str] = {}
     for EdgeData in Model.edges:
         UsesValue = Topology.edge_coedges[EdgeData.id]
         BodyIdsData = {
@@ -941,8 +1144,8 @@ def MakeEdgeOwners(
 def MakeGeomLinks(
     Model: BrepModel, Topology: BrepTopology
 ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    SurfFaces = {SurfValue.id: [] for SurfValue in Model.surfaces}
-    CurveEdges = {Curve.id: [] for Curve in Model.curves}
+    SurfFaces: dict[str, list[str]] = {SurfValue.id: [] for SurfValue in Model.surfaces}
+    CurveEdges: dict[str, list[str]] = {Curve.id: [] for Curve in Model.curves}
     for FaceData in Model.faces:
         SurfFaces[FaceData.surface_id].append(FaceData.id)
     for EdgeData in Model.edges:
@@ -1031,12 +1234,18 @@ def MakeBodyGroups(
     VertexBody: Mapping[str, str],
     SurfFaces: Mapping[str, Sequence[str]],
     CurveEdges: Mapping[str, Sequence[str]],
-) -> tuple[dict[str, list[str]], ...]:
-    BodySurfaces = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyCurves = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyPoints = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyVertices = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyEdges = {BodyData.id: [] for BodyData in Model.bodies}
+) -> tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+]:
+    BodySurfaces: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyCurves: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyPoints: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyVertices: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyEdges: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
     FillBodyMut(
         Model,
         FaceBody,
@@ -1212,7 +1421,8 @@ def MakeNodeState(
 def MakeLoopOrder(
     Model: BrepModel, Topology: BrepTopology
 ) -> tuple[dict[str, tuple[str, ...]], dict[str, bool]]:
-    EncodedLoops, EncodedReversed = {}, {}
+    EncodedLoops: dict[str, tuple[str, ...]] = {}
+    EncodedReversed: dict[str, bool] = {}
     for LoopData in Model.loops:
         FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
         FaceForward = Topology.IsFaceForward(FaceData.id)
@@ -1277,8 +1487,8 @@ def SetFinOrderMut(
     Model: BrepModel, Indices: EncodeIndices, VertexFins: dict[str, list[int]]
 ) -> None:
     for Vertex in Model.vertices:
-        Requested = Vertex.attributes.get("parasolid.vertex_fins")
-        if not isinstance(Requested, (tuple, list)):
+        Requested = ObjectTuple(Vertex.attributes.get("parasolid.vertex_fins"))
+        if Requested is None:
             continue
         OrderData = [
             FinIndex(Descriptor, Indices.KCoedges, Indices.KDummyFins)
@@ -1299,8 +1509,9 @@ def MakeFinState(
     Owners: EncodeOwners,
 ) -> EncodeFinState:
     EncodedLoops, EncodedReversed = MakeLoopOrder(Model, Topology)
-    VertexFins = {Vertex.id: [] for Vertex in Model.vertices}
-    FinVertex, FinOther = {}, {}
+    VertexFins: dict[str, list[int]] = {Vertex.id: [] for Vertex in Model.vertices}
+    FinVertex: dict[int, str] = {}
+    FinOther: dict[int, int] = {}
     for EdgeData in Model.edges:
         AddEdgeFinsMut(
             EdgeData,
@@ -1312,7 +1523,7 @@ def MakeFinState(
             FinOther,
         )
     SetFinOrderMut(Model, Indices, VertexFins)
-    FirstFaceByBody = {}
+    FirstFaceByBody: dict[str, str] = {}
     for FaceData in Model.faces:
         FirstFaceByBody.setdefault(Owners.KFaceBody[FaceData.id], FaceData.id)
     return EncodeFinState(
@@ -1661,6 +1872,19 @@ def EmitSurfacesMut(
             raise ParaWriteError(
                 f"Parasolid V12 writer does not support NURBS surface {SurfValue.id}"
             )
+        if not isinstance(
+            SurfValue,
+            (
+                PlaneSurface,
+                CylinderSurface,
+                ConeSurface,
+                SphereSurface,
+                TorusSurface,
+                OffsetSurface,
+                NativeSurface,
+            ),
+        ):
+            raise ParaWriteError("Parasolid B-rep contains an unsupported surface")
         KindValueData, Values = SurfValues(SurfValue)
         FaceIds = Owners.KSurfFaces[SurfValue.id]
         BodyId = Owners.KFaceBody[FaceIds[0]]
@@ -1692,6 +1916,17 @@ def EmitCurvesMut(
             raise ParaWriteError(
                 f"Parasolid V12 writer does not support NURBS curve {Curve.id}"
             )
+        if not isinstance(
+            Curve,
+            (
+                LineCurve,
+                CircleCurve,
+                EllipseCurve,
+                IntersectionCurve,
+                NativeCurve,
+            ),
+        ):
+            raise ParaWriteError("Parasolid B-rep contains an unsupported curve")
         KindValueData, Values = CurveValues(Curve)
         EdgeIds = Owners.KCurveEdges[Curve.id]
         BodyId = Owners.KEdgeBody[EdgeIds[0]]
@@ -1929,7 +2164,7 @@ def FaceChainData(
     Config: EncodeConfig,
     Owners: EncodeOwners,
     FinState: EncodeFinState,
-) -> tuple[object, ...]:
+) -> FaceChain:
     ShellData = Topology.shells[Owners.KFaceShell[FaceData.id]]
     FaceIds = OrderIds(
         [Topology.face_uses[FaceUseId].face_id for FaceUseId in ShellData.face_use_ids],
@@ -1983,7 +2218,7 @@ def EmitFaceMut(
     ) = FaceChainData(FaceData, Topology, Config, Owners, FinState)
     VTwelveNode(Output, 14, Indices.KFaces[FaceData.id])
     WriteSignedMut(Output, Nodes.KNodeIds[Indices.KFaces[FaceData.id]])
-    FaceAttr = (
+    FaceAttr: int = (
         Indices.KSolidFaceAttrs[FaceData.id][0]
         if FaceData.id in Indices.KSolidFaceAttrs
         else AttrBase + 32 if AttrBase is not None and FaceData.id == FirstFaceId else 0
@@ -2062,19 +2297,21 @@ def EmitVendorMut(
         if AttrBase is None or FirstFaceId is None:
             continue
         if Config.KSolidSolid:
-            Faces = tuple(
-                (
+            FaceValues: list[FaceAttribute] = []
+            for FaceData in Model.faces:
+                UnchangedValue = FaceData.attributes.get("solidworks.unchanged_id")
+                UnchangedId = UnchangedValue if type(UnchangedValue) is int else None
+                FaceValues.append(
                     (
                         FaceData.id,
                         Indices.KFaces[FaceData.id],
                         Indices.KSolidFaceAttrs[FaceData.id],
                         Indices.KSolidFaceValues[FaceData.id],
-                        FaceData.attributes.get("solidworks.unchanged_id"),
+                        UnchangedId,
                         FaceData.attributes,
                     )
-                    for FaceData in Model.faces
                 )
-            )
+            Faces = tuple(FaceValues)
             WriteSolidAttrs(
                 Output,
                 AttrBase,
@@ -2135,16 +2372,7 @@ def WriteSolidAttrs(
     Output: bytearray,
     BaseValue: int,
     BodyData: int,
-    Faces: Sequence[
-        tuple[
-            str,
-            int,
-            tuple[int, int, int],
-            tuple[int, int, int],
-            object,
-            Mapping[str, object],
-        ]
-    ],
+    Faces: Sequence[FaceAttribute],
     FaceDefinitions: Mapping[str, int],
     FaceDefNext: Mapping[str, int],
     FaceIds: Mapping[str, int],
@@ -2196,11 +2424,9 @@ def WriteSolidAttrs(
 
 # face attribute ordering preserves optional vendor ranks and linked list neighbors
 def FaceAttrOrder(
-    Faces: Sequence[tuple[object, ...]],
-) -> tuple[
-    dict[str, Sequence[tuple[object, ...]]], dict[tuple[str, str], tuple[int, int]]
-]:
-    OrderFaces: dict[str, Sequence[tuple[object, ...]]] = {}
+    Faces: Sequence[FaceAttribute],
+) -> tuple[dict[str, Sequence[FaceAttribute]], dict[tuple[str, str], tuple[int, int]]]:
+    OrderFaces: dict[str, Sequence[FaceAttribute]] = {}
     Neighbors: dict[tuple[str, str], tuple[int, int]] = {}
     for KindValueData, AttrPosition in (
         ("unchanged", 0),
@@ -2215,11 +2441,14 @@ def FaceAttrOrder(
         if all(
             (type(RankValue) is int and RankValue >= 0 for RankValue in Ranks)
         ) and len(set(Ranks)) == len(Ranks):
+            RankByFace = {
+                ValueData[0]: RankValue
+                for ValueData, RankValue in zip(Values, Ranks)
+                if type(RankValue) is int
+            }
 
             # this callback exists because local behavior needs one focused transformation
-            Values.sort(
-                key=lambda ValueData: ValueData[5][f"solidworks.{KindValueData}_order"]
-            )
+            Values.sort(key=lambda ValueData: RankByFace[ValueData[0]])
         OrderFaces[KindValueData] = Values
         for Position, ValueData in enumerate(Values):
             PreviousAttr = Values[Position - 1][2][AttrPosition] if Position else 0
@@ -2235,12 +2464,12 @@ def FaceAttrOrder(
 # face attribute writing emits linked values without owning ordering policy
 def WriteFaceAttMut(
     Output: bytearray,
-    Faces: Sequence[tuple[object, ...]],
+    Faces: Sequence[FaceAttribute],
     FaceDefinitions: Mapping[str, int],
     NodeIds: Mapping[int, int],
     Neighbors: Mapping[tuple[str, str], tuple[int, int]],
 ) -> None:
-    for FaceId, Owner, Attrs, Values, UnchangedId, Ignored in Faces:
+    for FaceId, Owner, Attrs, Values, UnchangedId, _ in Faces:
         Unchanged, Downstream, Colour = Attrs
         UnchangedValue, DownstreamValue, ColourValue = Values
         VTwelveAttr(
@@ -2296,7 +2525,7 @@ def WriteFaceAttMut(
 # face definition writing emits schemas and returns each linked list head
 def WriteFaceDefMut(
     Output: bytearray,
-    OrderFaces: Mapping[str, Sequence[tuple[object, ...]]],
+    OrderFaces: Mapping[str, Sequence[FaceAttribute]],
     FaceDefinitions: Mapping[str, int],
     FaceDefNext: Mapping[str, int],
     FaceIds: Mapping[str, int],
@@ -2766,7 +2995,7 @@ def OrderTriRecords(DataValue: bytes) -> bytes:
         (14, 16),
     )
     Ranks = {KeyValue: Position for Position, KeyValue in enumerate(Order)}
-    if not set(Order).issubset((KeyValue for KeyValue, Ignored in Records)):
+    if not set(Order).issubset(dict(Records)):
         raise ParaWriteError("SOLIDWORKS Parasolid triangle layout is incomplete")
 
     # this callback exists because local behavior needs one focused transformation
@@ -2774,7 +3003,7 @@ def OrderTriRecords(DataValue: bytes) -> bytes:
         enumerate(Records),
         key=lambda ItemData: Ranks.get(ItemData[1][0], len(Ranks) + ItemData[0]),
     )
-    return b"".join((Record for Ignored, (Ignored, Record) in OrderData))
+    return b"".join(ItemData[1][1] for ItemData in OrderData)
 
 
 # triangle record splitting validates framing while retaining every original byte
@@ -2819,7 +3048,7 @@ def TriRecordSize(
     GeomValues = {30: 6, 31: 10, 32: 11, 50: 9, 51: 10, 52: 12, 53: 10, 54: 11}
 
     # this callback exists because local behavior needs one focused transformation
-    VarSizes = {
+    VarSizes: dict[int, TriRecordSizer] = {
         74: lambda Count: 14 + 2 * Count,
         79: lambda Count: 8 + Count,
         80: lambda Count: 38 + Count,
@@ -2997,7 +3226,7 @@ def WriteOneBodyMut(
     if len(NativeRegions) > 5:
         raise ParaWriteError(f"B-rep body {BodyData.id} has more than five regions")
     RootRefs = [0, *NativeRegions]
-    RootRefs.extend((0 for Ignored in range(6 - len(RootRefs))))
+    RootRefs.extend([0] * (6 - len(RootRefs)))
     EntityFiftyOne(Output, 2, RootValue, 23, tuple(RootRefs))
     return NextAttr
 
@@ -3092,7 +3321,7 @@ def WriteFaceList(
     for Index, AttrValue in enumerate(Attrs):
         RefsValueData = [Attrs[Index + 1] if Index + 1 < len(Attrs) else 0]
         RefsValueData.extend(Chunks[Index])
-        RefsValueData.extend((0 for Ignored in range(6 - len(RefsValueData))))
+        RefsValueData.extend([0] * (6 - len(RefsValueData)))
         EntityFiftyOne(Output, 2, AttrValue, KindValue, tuple(RefsValueData))
     return (Attrs[0], NextAttr)
 
@@ -3101,11 +3330,11 @@ def WriteFaceList(
 def FixedRefs(Values: Sequence[int], Message: str) -> tuple[int, ...]:
     if len(Values) > 6:
         raise ParaWriteError(Message)
-    return tuple((*Values, *(0 for Ignored in range(6 - len(Values)))))
+    return tuple(Values) + (0,) * (6 - len(Values))
 
 
 # this declaration exists because focused behavior needs one stable owner
-def SurfValues(SurfValue: object) -> tuple[int, tuple[float, ...]]:
+def SurfValues(SurfValue: ParaSurface) -> tuple[int, tuple[float, ...]]:
     if isinstance(SurfValue, PlaneSurface):
         Normal, RefValue = Frame(
             SurfValue.normal,
@@ -3203,7 +3432,7 @@ def SurfValues(SurfValue: object) -> tuple[int, tuple[float, ...]]:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def CurveValues(Curve: object) -> tuple[int, tuple[float, ...]]:
+def CurveValues(Curve: ParaCurve) -> tuple[int, tuple[float, ...]]:
     if isinstance(Curve, LineCurve):
         DirectData = UnitVector(Curve.direction, f"line curve {Curve.id}")
         return (30, (*ScaledVector(Curve.origin), *VectorValues(DirectData)))
@@ -3648,17 +3877,17 @@ def WriteFloatMut(Output: bytearray, ValueData: float) -> None:
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ParaPayload:
-    locals().setdefault("__annotations__", {}).__setitem__("stream", str)
-    locals().setdefault("__annotations__", {}).__setitem__("kind", str)
-    locals().setdefault("__annotations__", {}).__setitem__("schema", str)
-    locals().setdefault("__annotations__", {}).__setitem__("description", str)
-    locals().setdefault("__annotations__", {}).__setitem__("data", bytes)
-    locals().setdefault("__annotations__", {}).__setitem__("sha256", str)
-    locals().setdefault("__annotations__", {}).__setitem__("wrapper_offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("magic_offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("compressed_offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("compressed_size", int)
-    locals().setdefault("__annotations__", {}).__setitem__("uncompressed_size", int)
+    stream: str
+    kind: str
+    schema: str
+    description: str
+    data: bytes
+    sha256: str
+    wrapper_offset: int
+    magic_offset: int
+    compressed_offset: int
+    compressed_size: int
+    uncompressed_size: int
 
 
 # this declaration exists because focused behavior needs one stable owner
@@ -3739,292 +3968,226 @@ def Payload(
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ParaHeader:
-    locals().setdefault("__annotations__", {}).__setitem__("description", str)
-    locals().setdefault("__annotations__", {}).__setitem__("schema", str)
-    locals().setdefault("__annotations__", {}).__setitem__("body_offset", int)
+    description: str
+    schema: str
+    body_offset: int
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TopologyRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("reversed", bool)
-    locals().__setitem__("reversed", False)
-    locals().setdefault("__annotations__", {}).__setitem__("owner", int)
-    locals().__setitem__("owner", 0)
-    locals().setdefault("__annotations__", {}).__setitem__("point", VectorThree | None)
-    locals().__setitem__("point", None)
-    locals().setdefault("__annotations__", {}).__setitem__("isolated", bool)
-    locals().__setitem__("isolated", False)
-    locals().setdefault("__annotations__", {}).__setitem__("tolerance", float)
-    locals().__setitem__("tolerance", 0.0)
+    attribute: int
+    references: tuple[int, ...]
+    offset: int
+    reversed: bool = False
+    owner: int = 0
+    point: VectorThree | None = None
+    isolated: bool = False
+    tolerance: float = 0.0
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class EntityRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("flags", int)
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("discriminator", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
+    flags: int
+    attribute: int
+    discriminator: int
+    references: tuple[int, ...]
+    offset: int
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class IntersectRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "header_references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("sense", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    header_references: tuple[int, ...]
+    references: tuple[int, ...]
+    sense: bool
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ChartRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("base_parameter", float)
-    locals().setdefault("__annotations__", {}).__setitem__("base_scale", float)
-    locals().setdefault("__annotations__", {}).__setitem__("chordal_error", float)
-    locals().setdefault("__annotations__", {}).__setitem__("angular_error", float)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "parameter_errors", tuple[float, float]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "points", tuple[VectorThree, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "parameters", tuple[float, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "tangents", tuple[VectorThree, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "support_uv", tuple[tuple[tuple[float, float], ...], ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("layout", str)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    base_parameter: float
+    base_scale: float
+    chordal_error: float
+    angular_error: float
+    parameter_errors: tuple[float, float]
+    points: tuple[VectorThree, ...]
+    parameters: tuple[float, ...]
+    tangents: tuple[VectorThree, ...]
+    support_uv: tuple[tuple[tuple[float, float], ...], ...]
+    layout: str
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TermRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("count", int)
-    locals().setdefault("__annotations__", {}).__setitem__("form", str)
-    locals().setdefault("__annotations__", {}).__setitem__("point", VectorThree)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    count: int
+    form: str
+    point: VectorThree
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SupportUvRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("marker", int)
-    locals().setdefault("__annotations__", {}).__setitem__("values", tuple[float, ...])
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    marker: int
+    values: tuple[float, ...]
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CompactUvRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("marker", int)
-    locals().setdefault("__annotations__", {}).__setitem__("values", tuple[float, ...])
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    marker: int
+    values: tuple[float, ...]
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class BSurfaceRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("state", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "header_references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("descriptor_reference", int)
-    locals().setdefault("__annotations__", {}).__setitem__("data_reference", int)
-    locals().setdefault("__annotations__", {}).__setitem__("sense", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    state: int
+    header_references: tuple[int, ...]
+    descriptor_reference: int
+    data_reference: int
+    sense: bool
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NurbsSurfRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "periodic", tuple[bool, bool]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("degrees", tuple[int, int])
-    locals().setdefault("__annotations__", {}).__setitem__("counts", tuple[int, int])
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "knot_types", tuple[int, int]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "knot_counts", tuple[int, int]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("rational", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("closed", tuple[bool, bool])
-    locals().setdefault("__annotations__", {}).__setitem__("surface_form", int)
-    locals().setdefault("__annotations__", {}).__setitem__("vertex_dimension", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("layout", str)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    periodic: tuple[bool, bool]
+    degrees: tuple[int, int]
+    counts: tuple[int, int]
+    knot_types: tuple[int, int]
+    knot_counts: tuple[int, int]
+    rational: bool
+    closed: tuple[bool, bool]
+    surface_form: int
+    vertex_dimension: int
+    references: tuple[int, ...]
+    layout: str
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SurfaceRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "intervals", tuple[tuple[float, float], ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("self_intersection", int)
-    locals().setdefault("__annotations__", {}).__setitem__("flags", bytes)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    intervals: tuple[tuple[float, float], ...]
+    self_intersection: int
+    flags: bytes
+    references: tuple[int, ...]
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class BCurveRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("state", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "header_references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("descriptor_reference", int)
-    locals().setdefault("__annotations__", {}).__setitem__("data_reference", int)
-    locals().setdefault("__annotations__", {}).__setitem__("sense", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("layout", str)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    state: int
+    header_references: tuple[int, ...]
+    descriptor_reference: int
+    data_reference: int
+    sense: bool
+    layout: str
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NurbsCurveRec:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("degree", int)
-    locals().setdefault("__annotations__", {}).__setitem__("control_count", int)
-    locals().setdefault("__annotations__", {}).__setitem__("vertex_dimension", int)
-    locals().setdefault("__annotations__", {}).__setitem__("knot_count", int)
-    locals().setdefault("__annotations__", {}).__setitem__("knot_type", int)
-    locals().setdefault("__annotations__", {}).__setitem__("periodic", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("closed", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("rational", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("curve_form", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    degree: int
+    control_count: int
+    vertex_dimension: int
+    knot_count: int
+    knot_type: int
+    periodic: bool
+    closed: bool
+    rational: bool
+    curve_form: int
+    references: tuple[int, ...]
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CurveRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("self_intersection", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "analytic_form_reference", int
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    self_intersection: int
+    analytic_form_reference: int
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TrimCurveRecord:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("state", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "header_references", tuple[int, ...]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("basis_reference", int)
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "points", tuple[VectorThree, VectorThree]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "parameters", tuple[float, float]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("sense", bool)
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    state: int
+    header_references: tuple[int, ...]
+    basis_reference: int
+    points: tuple[VectorThree, VectorThree]
+    parameters: tuple[float, float]
+    sense: bool
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class FloatArray:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("kind", int)
-    locals().setdefault("__annotations__", {}).__setitem__("values", tuple[float, ...])
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    kind: int
+    values: tuple[float, ...]
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ShortArray:
-    locals().setdefault("__annotations__", {}).__setitem__("attribute", int)
-    locals().setdefault("__annotations__", {}).__setitem__("values", tuple[int, ...])
-    locals().setdefault("__annotations__", {}).__setitem__("offset", int)
-    locals().setdefault("__annotations__", {}).__setitem__("raw", bytes)
+    attribute: int
+    values: tuple[int, ...]
+    offset: int
+    raw: bytes
 
 
 # this declaration exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class RecordTables:
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "bridges", dict[int, TopologyRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "loops", dict[int, TopologyRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "edge_uses", dict[int, TopologyRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "coedges", dict[int, TopologyRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "vertex_uses", dict[int, TopologyRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "points", dict[int, TopologyRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("curves", dict[int, object])
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "surfaces", dict[int, object]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__(
-        "entities", dict[int, EntityRecord]
-    )
-    locals().setdefault("__annotations__", {}).__setitem__("v12_partition", bool)
-    locals().__setitem__("v12_partition", False)
+    bridges: dict[int, TopologyRecord]
+    loops: dict[int, TopologyRecord]
+    edge_uses: dict[int, TopologyRecord]
+    coedges: dict[int, TopologyRecord]
+    vertex_uses: dict[int, TopologyRecord]
+    points: dict[int, TopologyRecord]
+    curves: dict[int, ParaCurve]
+    surfaces: dict[int, ParaSurface]
+    entities: dict[int, EntityRecord]
+    v12_partition: bool = False
 
 
 # this declaration exists because focused behavior needs one stable owner
@@ -4138,8 +4301,9 @@ def ScanFaceDefs(BodyData: bytes, IdKinds: Mapping[int, str]) -> dict[int, str]:
             Count is None
             or Count > 64
             or OffsetData + 38 + Count > len(BodyData)
-            or (Index is None)
-            or (IdValue not in IdKinds)
+            or Index is None
+            or IdValue is None
+            or IdValue not in IdKinds
         ):
             continue
         DefKinds[Index] = IdKinds[IdValue]
@@ -4185,7 +4349,8 @@ def ScanFaceAttrs(
             or Count > 64
             or (OffsetData + 24 + Count * 2 > len(BodyData))
             or (Index is None)
-            or (AttrDef not in DefKinds)
+            or AttrDef is None
+            or AttrDef not in DefKinds
             or (Owner is None)
             or (NextOfType is None)
             or (PreviousOfType is None)
@@ -4221,7 +4386,7 @@ def FaceUnchanged(
 ) -> dict[int, int]:
     Unchanged: dict[int, int] = {}
     Ambiguous: set[int] = set()
-    for Owner, Ignored, Ignored, ValueIndex in Records.values():
+    for Owner, _, _, ValueIndex in Records.values():
         if ValueIndex not in ValueRecords:
             continue
         if Owner in Unchanged:
@@ -4236,40 +4401,56 @@ def FaceUnchanged(
 # scan record storage separates discovered records from topology destination tables
 @Dataclass(slots=True)
 class ScanRecords:
-    KLoopCandidates: list[TopologyRecord] = Field(default_factory=list)
-    KIntersections: dict[int, IntersectRecord] = Field(default_factory=dict)
-    KCharts: dict[int, ChartRecord] = Field(default_factory=dict)
-    KTerms: dict[int, TermRecord] = Field(default_factory=dict)
-    KSupportUv: dict[int, SupportUvRecord] = Field(default_factory=dict)
-    KCompactSupportUv: dict[int, CompactUvRecord] = Field(default_factory=dict)
-    KBSurfaces: dict[int, BSurfaceRecord] = Field(default_factory=dict)
-    KNurbsSurfaces: dict[int, NurbsSurfRecord] = Field(default_factory=dict)
-    KSurfData: dict[int, SurfaceRecord] = Field(default_factory=dict)
-    KBCurves: dict[int, BCurveRecord] = Field(default_factory=dict)
-    KNurbsCurves: dict[int, NurbsCurveRec] = Field(default_factory=dict)
-    KCurveData: dict[int, CurveRecord] = Field(default_factory=dict)
-    KTrimmedCurves: dict[int, TrimCurveRecord] = Field(default_factory=dict)
-    KFloatArrays: dict[int, FloatArray] = Field(default_factory=dict)
-    KShortArrays: dict[int, ShortArray] = Field(default_factory=dict)
+    KLoopCandidates: list[TopologyRecord] = Field(default_factory=list[TopologyRecord])
+    KIntersections: dict[int, IntersectRecord] = Field(
+        default_factory=dict[int, IntersectRecord]
+    )
+    KCharts: dict[int, ChartRecord] = Field(default_factory=dict[int, ChartRecord])
+    KTerms: dict[int, TermRecord] = Field(default_factory=dict[int, TermRecord])
+    KSupportUv: dict[int, SupportUvRecord] = Field(
+        default_factory=dict[int, SupportUvRecord]
+    )
+    KCompactSupportUv: dict[int, CompactUvRecord] = Field(
+        default_factory=dict[int, CompactUvRecord]
+    )
+    KBSurfaces: dict[int, BSurfaceRecord] = Field(
+        default_factory=dict[int, BSurfaceRecord]
+    )
+    KNurbsSurfaces: dict[int, NurbsSurfRecord] = Field(
+        default_factory=dict[int, NurbsSurfRecord]
+    )
+    KSurfData: dict[int, SurfaceRecord] = Field(
+        default_factory=dict[int, SurfaceRecord]
+    )
+    KBCurves: dict[int, BCurveRecord] = Field(default_factory=dict[int, BCurveRecord])
+    KNurbsCurves: dict[int, NurbsCurveRec] = Field(
+        default_factory=dict[int, NurbsCurveRec]
+    )
+    KCurveData: dict[int, CurveRecord] = Field(default_factory=dict[int, CurveRecord])
+    KTrimmedCurves: dict[int, TrimCurveRecord] = Field(
+        default_factory=dict[int, TrimCurveRecord]
+    )
+    KFloatArrays: dict[int, FloatArray] = Field(default_factory=dict[int, FloatArray])
+    KShortArrays: dict[int, ShortArray] = Field(default_factory=dict[int, ShortArray])
 
 
 # ambiguity storage tracks duplicate identifiers without polluting parsed record ownership
 @Dataclass(slots=True)
 class ScanAmbiguous:
-    KIntersections: set[int] = Field(default_factory=set)
-    KCharts: set[int] = Field(default_factory=set)
-    KTerms: set[int] = Field(default_factory=set)
-    KSupportUv: set[int] = Field(default_factory=set)
-    KCompactSupportUv: set[int] = Field(default_factory=set)
-    KBSurfaces: set[int] = Field(default_factory=set)
-    KNurbsSurfaces: set[int] = Field(default_factory=set)
-    KSurfData: set[int] = Field(default_factory=set)
-    KBCurves: set[int] = Field(default_factory=set)
-    KNurbsCurves: set[int] = Field(default_factory=set)
-    KCurveData: set[int] = Field(default_factory=set)
-    KTrimmedCurves: set[int] = Field(default_factory=set)
-    KFloatArrays: set[int] = Field(default_factory=set)
-    KShortArrays: set[int] = Field(default_factory=set)
+    KIntersections: set[int] = Field(default_factory=set[int])
+    KCharts: set[int] = Field(default_factory=set[int])
+    KTerms: set[int] = Field(default_factory=set[int])
+    KSupportUv: set[int] = Field(default_factory=set[int])
+    KCompactSupportUv: set[int] = Field(default_factory=set[int])
+    KBSurfaces: set[int] = Field(default_factory=set[int])
+    KNurbsSurfaces: set[int] = Field(default_factory=set[int])
+    KSurfData: set[int] = Field(default_factory=set[int])
+    KBCurves: set[int] = Field(default_factory=set[int])
+    KNurbsCurves: set[int] = Field(default_factory=set[int])
+    KCurveData: set[int] = Field(default_factory=set[int])
+    KTrimmedCurves: set[int] = Field(default_factory=set[int])
+    KFloatArrays: set[int] = Field(default_factory=set[int])
+    KShortArrays: set[int] = Field(default_factory=set[int])
 
 
 # scan budget storage enforces bounded work across sampled and spline records
@@ -4380,35 +4561,39 @@ def ScanChartMut(
     Ambiguous: ScanAmbiguous,
     Budget: ScanBudget,
 ) -> None:
-    Record = ParseCompactUv(BodyData, OffsetData)
-    if Record is not None:
+    CompactRecord = ParseCompactUv(BodyData, OffsetData)
+    if CompactRecord is not None:
         StoreUniqueMut(
             Records.KCompactSupportUv,
             Ambiguous.KCompactSupportUv,
-            Record.attribute,
-            Record,
+            CompactRecord.attribute,
+            CompactRecord,
         )
     if KindValueData == 38:
-        Record = ParseInterRec(BodyData, OffsetData)
-        if Record is not None:
+        InterRecord = ParseInterRec(BodyData, OffsetData)
+        if InterRecord is not None:
             StoreUniqueMut(
                 Records.KIntersections,
                 Ambiguous.KIntersections,
-                Record.attribute,
-                Record,
+                InterRecord.attribute,
+                InterRecord,
             )
     if KindValueData == 40:
-        Record = ParseChart(BodyData, OffsetData)
-        if Record is not None:
-            Budget.KChartPointCount += len(Record.points)
+        ChartValue = ParseChart(BodyData, OffsetData)
+        if ChartValue is not None:
+            Budget.KChartPointCount += len(ChartValue.points)
             if Budget.KChartPointCount > 4000000:
                 Budget.KIsValid = False
                 return
-            StoreUniqueMut(Records.KCharts, Ambiguous.KCharts, Record.attribute, Record)
+            StoreUniqueMut(
+                Records.KCharts, Ambiguous.KCharts, ChartValue.attribute, ChartValue
+            )
     if KindValueData == 41:
-        Record = ParseTermRecord(BodyData, OffsetData)
-        if Record is not None:
-            StoreUniqueMut(Records.KTerms, Ambiguous.KTerms, Record.attribute, Record)
+        TermValue = ParseTermRecord(BodyData, OffsetData)
+        if TermValue is not None:
+            StoreUniqueMut(
+                Records.KTerms, Ambiguous.KTerms, TermValue.attribute, TermValue
+            )
 
 
 # analytic carrier scanning restores direct curves surfaces and entity hierarchy records
@@ -4418,8 +4603,33 @@ def ScanCarrierMut(
     if KindValueData in {30, 31, 32, 50, 51, 52, 53, 54}:
         Carrier = ParseCarrier(BodyData, OffsetData)
         if Carrier is not None:
-            Target = Tables.curves if KindValueData < 50 else Tables.surfaces
-            Target[Carrier[0]] = Carrier[1]
+            CarrierId, CarrierValue = Carrier
+            if KindValueData < 50 and isinstance(
+                CarrierValue,
+                (
+                    LineCurve,
+                    CircleCurve,
+                    EllipseCurve,
+                    IntersectionCurve,
+                    NurbsCurve,
+                    NativeCurve,
+                ),
+            ):
+                Tables.curves[CarrierId] = CarrierValue
+            elif isinstance(
+                CarrierValue,
+                (
+                    PlaneSurface,
+                    CylinderSurface,
+                    ConeSurface,
+                    SphereSurface,
+                    TorusSurface,
+                    NurbsSurface,
+                    OffsetSurface,
+                    NativeSurface,
+                ),
+            ):
+                Tables.surfaces[CarrierId] = CarrierValue
     if KindValueData == 81:
         Entity = ParseEntity(BodyData, OffsetData)
         if Entity is not None:
@@ -4435,31 +4645,40 @@ def ScanSurfMut(
     Ambiguous: ScanAmbiguous,
 ) -> None:
     if KindValueData == 204:
-        Record = ParseSupportRec(BodyData, OffsetData)
-        if Record is not None:
+        SupportRecord = ParseSupportRec(BodyData, OffsetData)
+        if SupportRecord is not None:
             StoreUniqueMut(
-                Records.KSupportUv, Ambiguous.KSupportUv, Record.attribute, Record
+                Records.KSupportUv,
+                Ambiguous.KSupportUv,
+                SupportRecord.attribute,
+                SupportRecord,
             )
     if KindValueData == 124:
-        Record = ParseBSurface(BodyData, OffsetData)
-        if Record is not None:
+        BaseSurface = ParseBSurface(BodyData, OffsetData)
+        if BaseSurface is not None:
             StoreUniqueMut(
-                Records.KBSurfaces, Ambiguous.KBSurfaces, Record.attribute, Record
+                Records.KBSurfaces,
+                Ambiguous.KBSurfaces,
+                BaseSurface.attribute,
+                BaseSurface,
             )
     if KindValueData == 126:
-        Record = ParseNurbsSurf(BodyData, OffsetData)
-        if Record is not None:
+        NurbsSurfaceData = ParseNurbsSurf(BodyData, OffsetData)
+        if NurbsSurfaceData is not None:
             StoreUniqueMut(
                 Records.KNurbsSurfaces,
                 Ambiguous.KNurbsSurfaces,
-                Record.attribute,
-                Record,
+                NurbsSurfaceData.attribute,
+                NurbsSurfaceData,
             )
     if KindValueData == 125:
-        Record = ParseSurfaceDat(BodyData, OffsetData)
-        if Record is not None:
+        SurfaceData = ParseSurfaceDat(BodyData, OffsetData)
+        if SurfaceData is not None:
             StoreUniqueMut(
-                Records.KSurfData, Ambiguous.KSurfData, Record.attribute, Record
+                Records.KSurfData,
+                Ambiguous.KSurfData,
+                SurfaceData.attribute,
+                SurfaceData,
             )
 
 
@@ -4472,31 +4691,40 @@ def ScanCurveMut(
     Ambiguous: ScanAmbiguous,
 ) -> None:
     if KindValueData == 134:
-        Record = ParseBCurve(BodyData, OffsetData)
-        if Record is not None:
+        BaseCurve = ParseBCurve(BodyData, OffsetData)
+        if BaseCurve is not None:
             StoreUniqueMut(
-                Records.KBCurves, Ambiguous.KBCurves, Record.attribute, Record
+                Records.KBCurves,
+                Ambiguous.KBCurves,
+                BaseCurve.attribute,
+                BaseCurve,
             )
     if KindValueData == 136:
-        Record = ParseNurbsCurve(BodyData, OffsetData)
-        if Record is not None:
+        NurbsCurveData = ParseNurbsCurve(BodyData, OffsetData)
+        if NurbsCurveData is not None:
             StoreUniqueMut(
-                Records.KNurbsCurves, Ambiguous.KNurbsCurves, Record.attribute, Record
+                Records.KNurbsCurves,
+                Ambiguous.KNurbsCurves,
+                NurbsCurveData.attribute,
+                NurbsCurveData,
             )
     if KindValueData == 135:
-        Record = ParseCurveData(BodyData, OffsetData)
-        if Record is not None:
+        CurveData = ParseCurveData(BodyData, OffsetData)
+        if CurveData is not None:
             StoreUniqueMut(
-                Records.KCurveData, Ambiguous.KCurveData, Record.attribute, Record
+                Records.KCurveData,
+                Ambiguous.KCurveData,
+                CurveData.attribute,
+                CurveData,
             )
     if KindValueData == 133:
-        Record = ParseTrimCurve(BodyData, OffsetData)
-        if Record is not None:
+        TrimRecord = ParseTrimCurve(BodyData, OffsetData)
+        if TrimRecord is not None:
             StoreUniqueMut(
                 Records.KTrimmedCurves,
                 Ambiguous.KTrimmedCurves,
-                Record.attribute,
-                Record,
+                TrimRecord.attribute,
+                TrimRecord,
             )
 
 
@@ -4510,24 +4738,30 @@ def ScanArrayMut(
     Budget: ScanBudget,
 ) -> None:
     if KindValueData in {45, 128}:
-        Record = ParseFloatArray(BodyData, OffsetData, KindValueData)
-        if Record is not None:
-            Budget.KSplineScalarCount += len(Record.values)
+        FloatValues = ParseFloatArray(BodyData, OffsetData, KindValueData)
+        if FloatValues is not None:
+            Budget.KSplineScalarCount += len(FloatValues.values)
             if Budget.KSplineScalarCount > 8000000:
                 Budget.KIsValid = False
                 return
             StoreUniqueMut(
-                Records.KFloatArrays, Ambiguous.KFloatArrays, Record.attribute, Record
+                Records.KFloatArrays,
+                Ambiguous.KFloatArrays,
+                FloatValues.attribute,
+                FloatValues,
             )
     if KindValueData == 127:
-        Record = ParseShortArray(BodyData, OffsetData)
-        if Record is not None:
-            Budget.KSplineScalarCount += len(Record.values)
+        ShortValues = ParseShortArray(BodyData, OffsetData)
+        if ShortValues is not None:
+            Budget.KSplineScalarCount += len(ShortValues.values)
             if Budget.KSplineScalarCount > 8000000:
                 Budget.KIsValid = False
                 return
             StoreUniqueMut(
-                Records.KShortArrays, Ambiguous.KShortArrays, Record.attribute, Record
+                Records.KShortArrays,
+                Ambiguous.KShortArrays,
+                ShortValues.attribute,
+                ShortValues,
             )
 
 
@@ -4569,29 +4803,34 @@ def ScanInlineMut(
     TermDescriptor = b"term_use" + KInlineTermTail
     while (Position := BodyData.find(TermDescriptor, Cursor)) >= 0:
         BaseValue = Position + len(TermDescriptor)
-        Record = ParseTermPayloa(BodyData, BaseValue, BaseValue)
-        if Record is not None:
-            StoreUniqueMut(Records.KTerms, Ambiguous.KTerms, Record.attribute, Record)
+        TermValue = ParseTermPayloa(BodyData, BaseValue, BaseValue)
+        if TermValue is not None:
+            StoreUniqueMut(
+                Records.KTerms, Ambiguous.KTerms, TermValue.attribute, TermValue
+            )
         Cursor = Position + 1
     Cursor = 0
     UvDescriptor = b"values" + KInlineUvTail
     while (Position := BodyData.find(UvDescriptor, Cursor)) >= 0:
         BaseValue = Position + len(UvDescriptor)
-        Record = ParseSupportUv(BodyData, BaseValue, BaseValue)
-        if Record is not None:
+        SupportValue = ParseSupportUv(BodyData, BaseValue, BaseValue)
+        if SupportValue is not None:
             StoreUniqueMut(
-                Records.KSupportUv, Ambiguous.KSupportUv, Record.attribute, Record
+                Records.KSupportUv,
+                Ambiguous.KSupportUv,
+                SupportValue.attribute,
+                SupportValue,
             )
         Cursor = Position + 1
     Cursor = 0
     while (Position := BodyData.find(b"Z", Cursor)) >= 0:
-        Record = ParseInterData(BodyData, Position)
-        if Record is not None:
+        InterValue = ParseInterData(BodyData, Position)
+        if InterValue is not None:
             StoreUniqueMut(
                 Records.KIntersections,
                 Ambiguous.KIntersections,
-                Record.attribute,
-                Record,
+                InterValue.attribute,
+                InterValue,
             )
         Cursor = Position + 1
 
@@ -4600,11 +4839,11 @@ def ScanInlineMut(
 def ResolveScansMut(
     BodyData: bytes, Tables: RecordTables, Records: ScanRecords
 ) -> None:
-    for AttrValue, Record in Records.KBSurfaces.items():
+    for AttrValue, SurfaceRecordData in Records.KBSurfaces.items():
         if AttrValue in Tables.surfaces:
             continue
         SurfValue = ResolveNurbSurf(
-            Record,
+            SurfaceRecordData,
             Records.KNurbsSurfaces,
             Records.KSurfData,
             Records.KFloatArrays,
@@ -4612,43 +4851,46 @@ def ResolveScansMut(
         )
         if SurfValue is not None:
             Tables.surfaces[AttrValue] = SurfValue
-    for AttrValue, Record in Records.KBCurves.items():
+    for AttrValue, CurveRecordData in Records.KBCurves.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveNurbCurv(
-            Record,
+        CurveValue = ResolveNurbCurv(
+            CurveRecordData,
             Records.KNurbsCurves,
             Records.KCurveData,
             Records.KFloatArrays,
             Records.KShortArrays,
         )
-        if Curve is not None:
-            Tables.curves[AttrValue] = Curve
-    for AttrValue, Record in Records.KIntersections.items():
+        if CurveValue is not None:
+            Tables.curves[AttrValue] = CurveValue
+    for AttrValue, InterRecordData in Records.KIntersections.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveInter(
+        InterCurveValue = ResolveInter(
             BodyData,
-            Record,
+            InterRecordData,
             Records.KCharts,
             Records.KTerms,
             Records.KSupportUv,
             Records.KCompactSupportUv,
             Tables.surfaces,
         )
-        if Curve is not None:
-            Tables.curves[AttrValue] = Curve
-    for AttrValue, Record in Records.KTrimmedCurves.items():
+        if InterCurveValue is not None:
+            Tables.curves[AttrValue] = InterCurveValue
+    for AttrValue, TrimRecordData in Records.KTrimmedCurves.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveTrimCurv(Record, Tables.curves)
-        if Curve is not None:
-            Tables.curves[AttrValue] = Curve
+        TrimCurveValue = ResolveTrimCurv(TrimRecordData, Tables.curves)
+        if TrimCurveValue is not None:
+            Tables.curves[AttrValue] = TrimCurveValue
 
 
 # this declaration exists because focused behavior needs one stable owner
 def StoreUniqueMut(
-    Target: dict[int, object], Ambiguous: set[int], AttrValue: int, Record: object
+    Target: dict[int, RecordValue],
+    Ambiguous: set[int],
+    AttrValue: int,
+    Record: RecordValue,
 ) -> None:
     if AttrValue in Ambiguous:
         return
@@ -4660,7 +4902,9 @@ def StoreUniqueMut(
 
 
 # this declaration exists because focused behavior needs one stable owner
-def RecordStart(DataValue: bytes, OffsetData: int, KindValueData: int) -> int | None:
+def RecordStart(
+    DataValue: KReadBuffer, OffsetData: int, KindValueData: int
+) -> int | None:
     if DataValue[OffsetData : OffsetData + 2] != bytes((0, KindValueData)):
         return None
     Start = OffsetData + 2
@@ -4670,21 +4914,23 @@ def RecordStart(DataValue: bytes, OffsetData: int, KindValueData: int) -> int | 
 
 
 # this declaration exists because focused behavior needs one stable owner
-def ReadShort(DataValue: bytes, OffsetData: int) -> int | None:
+def ReadShort(DataValue: KReadBuffer, OffsetData: int) -> int | None:
     if OffsetData < 0 or OffsetData + 2 > len(DataValue):
         return None
-    return Struct.unpack_from(">H", DataValue, OffsetData)[0]
+    ValueData = Struct.unpack_from(">H", DataValue, OffsetData)[0]
+    return ValueData if isinstance(ValueData, int) else None
 
 
 # this declaration exists because focused behavior needs one stable owner
-def ReadUnsigned(DataValue: bytes, OffsetData: int) -> int | None:
+def ReadUnsigned(DataValue: KReadBuffer, OffsetData: int) -> int | None:
     if OffsetData < 0 or OffsetData + 4 > len(DataValue):
         return None
-    return Struct.unpack_from(">I", DataValue, OffsetData)[0]
+    ValueData = Struct.unpack_from(">I", DataValue, OffsetData)[0]
+    return ValueData if isinstance(ValueData, int) else None
 
 
 # this declaration exists because focused behavior needs one stable owner
-def XmtData(DataValue: bytes, OffsetData: int) -> tuple[int, int] | None:
+def XmtData(DataValue: KReadBuffer, OffsetData: int) -> tuple[int, int] | None:
     if OffsetData < 0 or OffsetData + 2 > len(DataValue):
         return None
     First = Struct.unpack_from(">h", DataValue, OffsetData)[0]
@@ -4702,9 +4948,9 @@ def XmtData(DataValue: bytes, OffsetData: int) -> tuple[int, int] | None:
 def XmtSeq(
     DataValue: bytes, OffsetData: int, Count: int
 ) -> tuple[tuple[int, ...], int] | None:
-    Values = []
+    Values: list[int] = []
     Cursor = OffsetData
-    for Ignored in range(Count):
+    for _ in range(Count):
         Decoded = XmtData(DataValue, Cursor)
         if Decoded is None:
             return None
@@ -4861,13 +5107,13 @@ def ParseExtSurf(
     Values, EndValue = RefsValueData
     return NurbsSurfRecord(
         AttrValue,
-        tuple((bool(ValueData) for ValueData in PeriodicValues)),
+        (bool(PeriodicValues[0]), bool(PeriodicValues[1])),
         (DegreeU, DegreeV),
         (CountU, CountV),
         KnotTypes,
         (KnotCountU, KnotCountV),
         bool(RationalValue),
-        tuple((bool(ValueData) for ValueData in ClosedValues)),
+        (bool(ClosedValues[0]), bool(ClosedValues[1])),
         SurfForm,
         VertexDimension,
         Values,
@@ -5134,7 +5380,7 @@ def ParseTrimHead(
 
 # this declaration exists because focused behavior needs one stable owner
 def ArrayFields(
-    DataValue: bytes, OffsetData: int, KindValueData: int
+    DataValue: KReadBuffer, OffsetData: int, KindValueData: int
 ) -> tuple[int, int, int] | None:
     if DataValue[OffsetData : OffsetData + 2] != bytes((0, KindValueData)):
         return None
@@ -5191,7 +5437,7 @@ def ParseShortArray(DataValue: bytes, OffsetData: int) -> ShortArray | None:
 def CompactNurbSurf(
     ControlCount: int, UMultiplicities: Sequence[int], VMultiplicities: Sequence[int]
 ) -> tuple[int, int, int, int, int] | None:
-    Candidates = []
+    Candidates: list[tuple[int, int, int, int, int]] = []
     USumValue = sum(UMultiplicities)
     VSumValue = sum(VMultiplicities)
     for Dimension in (3, 4):
@@ -5352,7 +5598,7 @@ def NurbsSurfShape(
     VMultiplicities: ShortArray,
     UKnots: FloatArray,
     VKnots: FloatArray,
-) -> tuple[object, ...] | None:
+) -> NurbsSurfShapeData | None:
     if Descriptor.layout == "compact":
         Inferred = CompactNurbSurf(
             len(Control.values), UMultiplicities.values, VMultiplicities.values
@@ -5404,7 +5650,8 @@ def NurbsSurfShape(
 def NurbsSurfPoints(
     Values: Sequence[float], Dimension: int, Rational: bool
 ) -> tuple[tuple[VectorThree, ...], tuple[float, ...]] | None:
-    Points, Weights = [], []
+    Points: list[VectorThree] = []
+    Weights: list[float] = []
     for PoleValue in (
         Values[Index : Index + Dimension] for Index in range(0, len(Values), Dimension)
     ):
@@ -5467,8 +5714,8 @@ def ResolveNurbCurv(
         )
     ):
         return None
-    Points = []
-    Weights = []
+    Points: list[VectorThree] = []
+    Weights: list[float] = []
     Dimension = Descriptor.vertex_dimension
     for PoleValue in (
         Control.values[Index : Index + Dimension]
@@ -5529,18 +5776,16 @@ def ResolveNurbCurv(
 
 # this declaration exists because focused behavior needs one stable owner
 def ResolveTrimCurv(
-    Record: TrimCurveRecord, Curves: Mapping[int, object]
-) -> object | None:
+    Record: TrimCurveRecord, Curves: Mapping[int, ParaCurve]
+) -> ParaCurve | None:
     Basis = Curves.get(Record.basis_reference)
-    if (
-        not Record.sense
-        or Record.attribute == Record.basis_reference
-        or (
-            not isinstance(
-                Basis,
-                (LineCurve, CircleCurve, EllipseCurve, NurbsCurve, IntersectionCurve),
-            )
-        )
+    if not Record.sense or Record.attribute == Record.basis_reference:
+        return None
+    if Basis is None:
+        return None
+    if not isinstance(
+        Basis,
+        (LineCurve, CircleCurve, EllipseCurve, NurbsCurve, IntersectionCurve),
     ):
         return None
     ParamOne, ParamTwo = Record.parameters
@@ -5595,7 +5840,7 @@ def ResolveTrimCurv(
 
 # trimmed curve domain validation isolates periodic and bounded parameter rules
 def TrimCurveDomain(
-    Basis: object, ParamOne: float, ParamTwo: float
+    Basis: ParaCurve, ParamOne: float, ParamTwo: float
 ) -> tuple[bool, bool] | None:
     if isinstance(Basis, LineCurve):
         return False, False
@@ -5798,11 +6043,11 @@ def ParseExtPoints(DataValue: bytes, OffsetData: int, Count: int) -> (
     EndValue = OffsetData + Count * 88
     if EndValue > len(DataValue):
         return None
-    Points = []
-    Params = []
-    Tangents = []
-    FirstUv = []
-    SecondUv = []
+    Points: list[VectorThree] = []
+    Params: list[float] = []
+    Tangents: list[VectorThree] = []
+    FirstUv: list[tuple[float, float]] = []
+    SecondUv: list[tuple[float, float]] = []
     for Index in range(Count):
         Cursor = OffsetData + Index * 88
         Point = PointVector(DataValue, Cursor)
@@ -6009,7 +6254,9 @@ def ResolvedSuppUv(
 ) -> tuple[tuple[tuple[tuple[float, float], ...], ...], int, bytes] | None:
     if AttrValue <= 1:
         return (((), ()), 0, b"")
-    Candidates = []
+    Candidates: list[tuple[tuple[tuple[tuple[float, float], ...], ...], int, bytes]] = (
+        []
+    )
     Record = Records.get(AttrValue)
     if Record is not None:
         Lanes = SupportUvLanes(Record.marker, Record.values)
@@ -6036,7 +6283,7 @@ def ResolveInter(
     Terms: Mapping[int, TermRecord],
     SupportUv: Mapping[int, SupportUvRecord],
     CompactSupportUv: Mapping[int, CompactUvRecord],
-    Surfaces: Mapping[int, object],
+    Surfaces: Mapping[int, ParaSurface],
 ) -> IntersectionCurve | None:
     FirstSurf, SecondSurf, ChartId, StartId, EndId, UvIdValue = Record.references
     Chart = Charts.get(ChartId)
@@ -6110,7 +6357,7 @@ def InterLimits(
 
 # intersection surface validation confirms every chart sample lies on both carriers
 def IsInterSurfFit(
-    Surfaces: Sequence[object],
+    Surfaces: Sequence[ParaSurface],
     Chart: ChartRecord,
     UvLanes: Sequence[Sequence[tuple[float, float]]],
     TolValue: float,
@@ -6178,9 +6425,9 @@ def NurbsSpanData(
         return None
     Expanded = tuple(
         (
-            KnotValue
+            ExpandedKnot
             for KnotValue, Multiplicity in zip(Knots, Multiplicities)
-            for Ignored in range(Multiplicity)
+            for ExpandedKnot in (KnotValue,) * Multiplicity
         )
     )
     if len(Expanded) != Count + Degree + 1:
@@ -6267,15 +6514,15 @@ def NurbsCurvePoint(Curve: NurbsCurve, Param: float) -> VectorThree | None:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def CurveParamRange(Curve: object) -> tuple[float, float, bool, bool] | None:
+def CurveParamRange(Curve: ParaCurve) -> tuple[float, float, bool, bool] | None:
     if isinstance(Curve, (CircleCurve, EllipseCurve)):
         return (0.0, MathValue.tau, True, True)
     if isinstance(Curve, NurbsCurve):
         Expanded = tuple(
             (
-                KnotValue
+                ExpandedKnot
                 for KnotValue, Multiplicity in zip(Curve.knots, Curve.multiplicities)
-                for Ignored in range(Multiplicity)
+                for ExpandedKnot in (KnotValue,) * Multiplicity
             )
         )
         Count = len(Curve.control_points)
@@ -6286,22 +6533,12 @@ def CurveParamRange(Curve: object) -> tuple[float, float, bool, bool] | None:
             return None
         return (Expanded[Curve.degree], Expanded[Count], Curve.periodic, Closed)
     if isinstance(Curve, IntersectionCurve):
-        Params = Curve.attributes.get("chart_parameters")
+        Params = FloatTuple(Curve.attributes.get("chart_parameters"))
         if (
-            not isinstance(Params, tuple)
+            Params is None
             or len(Params) < 2
-            or (
-                not all(
-                    (
-                        type(ValueData) is float and MathValue.isfinite(ValueData)
-                        for ValueData in Params
-                    )
-                )
-            )
-            or (
-                not all(
-                    (LeftValue < Right for LeftValue, Right in zip(Params, Params[1:]))
-                )
+            or not all(
+                LeftValue < Right for LeftValue, Right in zip(Params, Params[1:])
             )
         ):
             return None
@@ -6310,7 +6547,7 @@ def CurveParamRange(Curve: object) -> tuple[float, float, bool, bool] | None:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def CurvePoint(Curve: object, Param: float) -> VectorThree | None:
+def CurvePoint(Curve: ParaCurve, Param: float) -> VectorThree | None:
     if isinstance(Curve, LineCurve):
         return LinePoint(Curve, Param)
     if isinstance(Curve, (CircleCurve, EllipseCurve)):
@@ -6318,8 +6555,8 @@ def CurvePoint(Curve: object, Param: float) -> VectorThree | None:
     if isinstance(Curve, NurbsCurve):
         return NurbsCurvePoint(Curve, Param)
     if isinstance(Curve, IntersectionCurve):
-        Params = Curve.attributes.get("chart_parameters")
-        if not isinstance(Params, tuple) or len(Params) != len(Curve.samples):
+        Params = FloatTuple(Curve.attributes.get("chart_parameters"))
+        if Params is None or len(Params) != len(Curve.samples):
             return None
         TolValue = max(abs(Param), 1.0) * 1e-12
         Matches = tuple(
@@ -6383,21 +6620,26 @@ def NurbsSurfPoint(
 
 # this declaration exists because focused behavior needs one stable owner
 def SurfResidual(
-    SurfValue: object, Point: VectorThree, Params: tuple[float, float] | None = None
+    SurfValue: ParaSurface,
+    Point: VectorThree,
+    Params: tuple[float, float] | None = None,
 ) -> float | None:
     if isinstance(SurfValue, PlaneSurface):
         return abs(DotProduct(Subtract(Point, SurfValue.origin), SurfValue.normal))
     if isinstance(SurfValue, NurbsSurface):
         Evaluated = NurbsSurfPoint(SurfValue, Params) if Params is not None else None
         return Distance(Evaluated, Point) if Evaluated is not None else None
-    Center = SurfValue.center if hasattr(SurfValue, "center") else SurfValue.origin
-    Difference = Subtract(Point, Center)
     if isinstance(SurfValue, SphereSurface):
+        Difference = Subtract(Point, SurfValue.center)
         return abs(
             MathValue.sqrt(DotProduct(Difference, Difference)) - SurfValue.radius
         )
     if not isinstance(SurfValue, (CylinderSurface, ConeSurface, TorusSurface)):
         return None
+    Center = (
+        SurfValue.center if isinstance(SurfValue, TorusSurface) else SurfValue.origin
+    )
+    Difference = Subtract(Point, Center)
     Axial = DotProduct(Difference, SurfValue.axis)
     RadialVector = VectorThree(
         Difference.x - Axial * SurfValue.axis.x,
@@ -6427,7 +6669,7 @@ def RefsValue(DataValue: bytes, OffsetData: int, Count: int) -> tuple[int, ...] 
 def TripledRefs(
     DataValue: bytes, OffsetData: int, Count: int, Prefix: bool = False
 ) -> tuple[int, ...] | None:
-    Values = []
+    Values: list[int] = []
     for Index in range(Count):
         Position = OffsetData + Index * 3
         if Prefix:
@@ -6458,18 +6700,22 @@ def ParseBridge(
     Owner = ReadShort(DataValue, Start + 6)
     Tolerance = 0.0
     DirectTolerance = False
+    ParsedTolerance = ReadTolerance(DataValue, Start + 8)
+    HasDirectTolerance = (
+        AllowTolerance and ParsedTolerance is not None and ParsedTolerance > 0.0
+    )
     if (
         DataValue[Start + 8 : Start + 9] == b"\x01"
         and DataValue[Start + 9 : Start + 17] == KEntityMagic
     ):
         RefsValueData = TripledRefs(DataValue, Start + 17, 5)
         MarkerOffset = Start + 32
-    elif DataValue[Start + 8 : Start + 16] == KEntityMagic or (
-        AllowTolerance
-        and (Tolerance := ReadTolerance(DataValue, Start + 8)) is not None
-        and (Tolerance > 0.0)
-    ):
+    elif DataValue[Start + 8 : Start + 16] == KEntityMagic or HasDirectTolerance:
         DirectTolerance = DataValue[Start + 8 : Start + 16] != KEntityMagic
+        if DirectTolerance:
+            if ParsedTolerance is None:
+                return None
+            Tolerance = ParsedTolerance
         Tripled = all(
             (
                 DataValue[Start + 18 + Index * 3 : Start + 19 + Index * 3] == b"\x01"
@@ -6572,7 +6818,7 @@ def EdgeMagicRefs(DataValue: bytes, Start: int) -> tuple[int, ...] | None:
     if Magic is None:
         return None
     Cursor = Magic + len(KEntityMagic)
-    Decoded = []
+    Decoded: list[int] = []
     if Cursor < len(DataValue) and DataValue[Cursor] == 1:
         while (
             Cursor + 3 <= len(DataValue) and DataValue[Cursor] == 1 and len(Decoded) < 8
@@ -6650,6 +6896,8 @@ def ReadTolerance(DataValueData: bytes, Offset: int) -> float | None:
     if Offset < 0 or Offset + 8 > len(DataValueData):
         return None
     Value = Struct.unpack_from(">d", DataValueData, Offset)[0]
+    if not isinstance(Value, float):
+        return None
     if (
         not MathValue.isfinite(Value)
         or Value < 0.0
@@ -6711,8 +6959,9 @@ def PointRecoFiel(
     if Start is None or Start + 38 > len(DataValue):
         return None
     AttrValue = ReadShort(DataValue, Start)
+    RefsValueData: tuple[int, ...] | None
     if Prefixed:
-        Values = []
+        Values: list[int] = []
         Cursor = Start + 6
         while (
             Cursor + 3 <= len(DataValue)
@@ -6806,7 +7055,7 @@ def AnalyticFields(
 
 
 # this declaration exists because focused behavior needs one stable owner
-def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, object] | None:
+def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, ParaGeometry] | None:
     KindValueData = DataValue[OffsetData + 1]
     ValueCount = KAnalyticValueCounts[KindValueData]
     Fields = AnalyticFields(DataValue, OffsetData)
@@ -6839,7 +7088,7 @@ def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, object] | None
 # this declaration exists because focused behavior needs one stable owner
 def AnalyticGeom(
     KindValueData: int, IdValue: str, Values: tuple[float, ...]
-) -> object | None:
+) -> ParaGeometry | None:
     if KindValueData == 30:
         Tangent = AnalyticDirect(Values, 3)
         return (
@@ -6878,7 +7127,7 @@ def AnalyticDirect(Values: Sequence[float], Index: int) -> VectorThree | None:
 # round analytic construction shares axis validation across circles ellipses and planes
 def RoundAnalytic(
     KindValueData: int, IdValue: str, Values: tuple[float, ...]
-) -> object | None:
+) -> CircleCurve | EllipseCurve | PlaneSurface | None:
     AxisValue = AnalyticDirect(Values, 3)
     RefValue = AnalyticDirect(Values, 6)
     if AxisValue is None or RefValue is None or not IsOrthogonal(AxisValue, RefValue):
@@ -7038,8 +7287,8 @@ def LinkedOrder(
     Heads = sorted(
         (
             AttrValue
-            for AttrValue, (Ignored, Previous) in Links.items()
-            if Previous <= 1 or Previous not in Links
+            for AttrValue, LinkValue in Links.items()
+            if LinkValue[1] <= 1 or LinkValue[1] not in Links
         )
     )
     for HeadValue in Heads:
@@ -7064,16 +7313,12 @@ def LinkedOrder(
 
 
 # this declaration exists because focused behavior needs one stable owner
-def GeomChainLinks(Values: Mapping[int, object]) -> dict[int, tuple[int, int]]:
+def GeomChainLinks(Values: Mapping[int, ParaGeometry]) -> dict[int, tuple[int, int]]:
     Result: dict[int, tuple[int, int]] = {}
     for AttrValue, GeomValue in Values.items():
         Attrs = getattr(GeomValue, "attributes", {})
-        Header = Attrs.get("header_references")
-        if (
-            isinstance(Header, tuple)
-            and len(Header) >= 4
-            and all((type(ValueData) is int for ValueData in Header[:4]))
-        ):
+        Header = IntTuple(Attrs.get("header_references"))
+        if Header is not None and len(Header) >= 4:
             Result[AttrValue] = (Header[3], Header[2])
             continue
         RawData = Attrs.get("carrier_record")
@@ -7149,15 +7394,10 @@ def BuildPartModel(
     OrderData, RankData = MakePartRanks(
         Tables, FaceLoops, UsedEdges, UsedVertices, UsedCurves
     )
-    (
-        FaceOrder,
-        FaceSurfOrder,
-        FaceFrontOrder,
-        EdgeOrder,
-        CurveEdgeOrder,
-        VertexOrder,
-        CurveOrder,
-    ) = OrderData
+    FaceOrder = OrderData[0]
+    EdgeOrder = OrderData[3]
+    VertexOrder = OrderData[5]
+    CurveOrder = OrderData[6]
     (
         FaceRanks,
         FaceSurfRanks,
@@ -7241,16 +7481,19 @@ def BuildPartModel(
 
 
 # topology collection gathers every reachable face edge vertex and carrier identifier
-def CollectPartTopo(Tables: RecordTables) -> tuple[object, ...]:
-    FaceLoops, EdgeEndpoints, EdgeCurves, CoedgeEdges = {}, {}, {}, {}
-    UsedCoedges, UsedEdges, UsedVertices, UsedCurves, UsedSurfaces = (
-        set(),
-        set(),
-        set(),
-        set(),
-        set(),
-    )
-    SyntheticVertices, SyntheticCurves, OwnerFaces = {}, {}, {}
+def CollectPartTopo(Tables: RecordTables) -> PartTopology:
+    FaceLoops: dict[int, tuple[FaceLoop, ...]] = {}
+    EdgeEndpoints: dict[int, tuple[int, int]] = {}
+    EdgeCurves: dict[int, int] = {}
+    CoedgeEdges: dict[int, int] = {}
+    UsedCoedges: set[int] = set()
+    UsedEdges: set[int] = set()
+    UsedVertices: set[int] = set()
+    UsedCurves: set[int] = set()
+    UsedSurfaces: set[int] = set()
+    SyntheticVertices: dict[int, VectorThree] = {}
+    SyntheticCurves: dict[int, NativeCurve] = {}
+    OwnerFaces: dict[int, int] = {}
     for BridgeAttr, Bridge in sorted(Tables.bridges.items()):
         AddBridgeMut(
             BridgeAttr,
@@ -7292,7 +7535,7 @@ def AddBridgeMut(
     BridgeAttr: int,
     Bridge: TopologyRecord,
     Tables: RecordTables,
-    FaceLoops: dict[int, object],
+    FaceLoops: dict[int, tuple[FaceLoop, ...]],
     EdgeEndpoints: dict[int, tuple[int, int]],
     EdgeCurves: dict[int, int],
     CoedgeEdges: dict[int, int],
@@ -7315,7 +7558,7 @@ def AddBridgeMut(
     UsedSurfaces.add(SurfAttr)
     Loops = GetFaceLoops(Tables, BridgeAttr, Bridge)
     FaceLoops[BridgeAttr] = tuple(Loops)
-    for Ignored, RingValue in Loops:
+    for _, RingValue in Loops:
         for CoedgeAttr in RingValue:
             AddCoedgeMut(
                 CoedgeAttr,
@@ -7498,7 +7741,7 @@ def GetEdgeUseMut(
 # ranking reconstruction preserves every native linked list ordering dimension
 def MakePartRanks(
     Tables: RecordTables,
-    FaceLoops: Mapping[int, object],
+    FaceLoops: Mapping[int, Sequence[FaceLoop]],
     UsedEdges: set[int],
     UsedVertices: set[int],
     UsedCurves: set[int],
@@ -7572,7 +7815,10 @@ def VertexPointData(
     VertexOrder: Sequence[int],
     SyntheticVertices: Mapping[int, VectorThree],
 ) -> tuple[dict[int, VectorThree], dict[int, int], dict[int, float], dict[int, int]]:
-    PointsByVertex, PointAttrs, VertexTolerances, UsedPoints = {}, {}, {}, set()
+    PointsByVertex: dict[int, VectorThree] = {}
+    PointAttrs: dict[int, int] = {}
+    VertexTolerances: dict[int, float] = {}
+    UsedPoints: set[int] = set()
     for VertexAttr in VertexOrder:
         if VertexAttr in SyntheticVertices:
             PointsByVertex[VertexAttr] = SyntheticVertices[VertexAttr]
@@ -7619,18 +7865,20 @@ def MakeVertices(
     Vertices: list[BrepVertex] = []
     for VertexAttr in VertexOrder:
         if VertexAttr in SyntheticVertices:
-            Attrs = FrozenMapping({"parasolid.vertex_order": VertexRanks[VertexAttr]})
+            SyntheticAttrs: dict[str, object] = {
+                "parasolid.vertex_order": VertexRanks[VertexAttr]
+            }
             Vertices.append(
                 BrepVertex(
                     NativeId("vertex", VertexAttr),
                     PointsByVertex[VertexAttr],
-                    attributes=Attrs,
+                    attributes=SyntheticAttrs,
                 )
             )
             continue
         VertexUse = Tables.vertex_uses[VertexAttr]
         PointAttr = PointAttrs[VertexAttr]
-        Attrs: dict[str, object] = {
+        VertexAttrs: dict[str, object] = {
             "parasolid.vertex_order": VertexRanks[VertexAttr],
             "parasolid.point_order": PointRanks[PointAttr],
         }
@@ -7638,13 +7886,13 @@ def MakeVertices(
             VertexAttr, VertexUse.references[1], UsedCoedges, UsedEdges, Tables
         )
         if FinOrder:
-            Attrs["parasolid.vertex_fins"] = FinOrder
+            VertexAttrs["parasolid.vertex_fins"] = FinOrder
         Vertices.append(
             BrepVertex(
                 NativeId("vertex", VertexAttr),
                 PointsByVertex[VertexAttr],
                 tolerance=VertexUse.tolerance,
-                attributes=FrozenMapping(Attrs),
+                attributes=FrozenMapping(VertexAttrs),
             )
         )
     return tuple(Vertices)
@@ -7656,8 +7904,8 @@ def MakePartCurves(
     CurveOrder: Sequence[int],
     SyntheticCurves: Mapping[int, NativeCurve],
     CurveRanks: Mapping[int, int],
-) -> tuple[object, ...]:
-    Curves = []
+) -> tuple[ParaCurve, ...]:
+    Curves: list[ParaCurve] = []
     for AttrValue in CurveOrder:
         Curve = (
             Tables.curves[AttrValue]
@@ -7666,7 +7914,7 @@ def MakePartCurves(
         )
         Attrs = FrozenMapping(
             {
-                **dict(getattr(Curve, "attributes", {})),
+                **dict(Curve.attributes),
                 "parasolid.curve_order": CurveRanks[AttrValue],
             }
         )
@@ -7676,20 +7924,15 @@ def MakePartCurves(
 
 # intersection support collection retains surfaces referenced only by resolved curves
 def AddCurveSurfMut(
-    Curves: Sequence[object], Tables: RecordTables, UsedSurfaces: set[int]
+    Curves: Sequence[ParaCurve], Tables: RecordTables, UsedSurfaces: set[int]
 ) -> None:
     for Curve in Curves:
         if not isinstance(Curve, IntersectionCurve):
             continue
-        RefsValueData = Curve.attributes.get("references")
-        if not isinstance(RefsValueData, tuple) or len(RefsValueData) < 2:
+        RefsValueData = IntTuple(Curve.attributes.get("references"))
+        if RefsValueData is None or len(RefsValueData) < 2:
             raise ValueError("intersection support surfaces are unresolved")
-        if any(
-            (
-                type(AttrValue) is not int or AttrValue not in Tables.surfaces
-                for AttrValue in RefsValueData[:2]
-            )
-        ):
+        if any(AttrValue not in Tables.surfaces for AttrValue in RefsValueData[:2]):
             raise ValueError("intersection support surfaces are unresolved")
         UsedSurfaces.update(RefsValueData[:2])
 
@@ -7798,14 +8041,14 @@ def MakePartLoops(
 # surface construction restores native linked list ordering metadata
 def MakePartSurfs(
     Tables: RecordTables, SurfOrder: Sequence[int], SurfRanks: Mapping[int, int]
-) -> tuple[object, ...]:
+) -> tuple[ParaSurface, ...]:
     return tuple(
         (
             Replace(
                 Tables.surfaces[AttrValue],
                 attributes=FrozenMapping(
                     {
-                        **dict(getattr(Tables.surfaces[AttrValue], "attributes", {})),
+                        **dict(Tables.surfaces[AttrValue].attributes),
                         "parasolid.surface_order": SurfRanks[AttrValue],
                     }
                 ),
@@ -7818,7 +8061,7 @@ def MakePartSurfs(
 # face construction restores topology tolerance orientation and vendor ordering metadata
 def MakePartFaces(
     Tables: RecordTables,
-    FaceLoops: Mapping[int, Sequence[tuple[int, object]]],
+    FaceLoops: Mapping[int, Sequence[FaceLoop]],
     FaceOrder: Sequence[int],
     FaceRanks: Mapping[int, int],
     FaceSurfRanks: Mapping[int, int],
@@ -7834,7 +8077,7 @@ def MakePartFaces(
                 tuple(
                     (
                         NativeId("loop", LoopAttr)
-                        for LoopAttr, Ignored in FaceLoops[BridgeAttr]
+                        for LoopAttr, _ in FaceLoops[BridgeAttr]
                     )
                 ),
                 not Tables.bridges[BridgeAttr].reversed,
@@ -7866,9 +8109,9 @@ def MakePartFaces(
 def BuildTreeModel(
     Tables: RecordTables,
     OwnerFaces: Mapping[int, int],
-    FaceLoops: Mapping[int, object],
+    FaceLoops: Mapping[int, tuple[FaceLoop, ...]],
     FaceRanks: Mapping[int, int],
-) -> tuple[object, ...]:
+) -> TreeModel:
     try:
         TreeValue = BuildBodyTree(Tables.entities, OwnerFaces, set(FaceLoops))
     except ValueError:
@@ -7959,14 +8202,14 @@ def IsConnectedRing(Tables: RecordTables, Candidate: Sequence[int]) -> bool:
 
 # this declaration exists because focused behavior needs one stable owner
 def ProveCurveRange(
-    Curve: object,
+    Curve: ParaCurve,
     Start: VectorThree,
     EndValue: VectorThree,
     StartTol: float = 0.0,
     EndTol: float = 0.0,
 ) -> tuple[float, float]:
-    TrimParams = getattr(Curve, "attributes", {}).get("trim_parameters")
-    TrimPoints = getattr(Curve, "attributes", {}).get("trim_points")
+    TrimParams = Curve.attributes.get("trim_parameters")
+    TrimPoints = Curve.attributes.get("trim_points")
     if TrimParams is not None or TrimPoints is not None:
         return TrimmedRange(TrimParams, TrimPoints, Start, EndValue, StartTol, EndTol)
     if isinstance(Curve, LineCurve):
@@ -7989,32 +8232,42 @@ def TrimmedRange(
     StartTol: float,
     EndTol: float,
 ) -> tuple[float, float]:
-    if (
-        not isinstance(TrimParams, tuple)
-        or len(TrimParams) != 2
-        or not all(
-            (
-                type(ValueData) is float and MathValue.isfinite(ValueData)
-                for ValueData in TrimParams
-            )
-        )
-    ):
+    Params = FloatPair(TrimParams)
+    if Params is None:
         raise ValueError("trimmed curve range is invalid")
-    if (
-        not isinstance(TrimPoints, tuple)
-        or len(TrimPoints) != 2
-        or not all((isinstance(ValueData, VectorThree) for ValueData in TrimPoints))
-    ):
+    Points = VectorPair(TrimPoints)
+    if Points is None:
         raise ValueError("trimmed curve range is invalid")
-    Direct = Distance(Start, TrimPoints[0]) <= max(StartTol, 1e-07) and Distance(
-        EndValue, TrimPoints[1]
+    Direct = Distance(Start, Points[0]) <= max(StartTol, 1e-07) and Distance(
+        EndValue, Points[1]
     ) <= max(EndTol, 1e-07)
-    Reverse = Distance(Start, TrimPoints[1]) <= max(StartTol, 1e-07) and Distance(
-        EndValue, TrimPoints[0]
+    Reverse = Distance(Start, Points[1]) <= max(StartTol, 1e-07) and Distance(
+        EndValue, Points[0]
     ) <= max(EndTol, 1e-07)
     if Direct == Reverse:
         raise ValueError("trimmed curve endpoints are not uniquely bound")
-    return TrimParams if Direct else tuple(Builtins.reversed(TrimParams))
+    return Params if Direct else (Params[1], Params[0])
+
+
+# metadata boundaries require exact pairs before parameter recovery can use them
+def FloatPair(ValueData: object) -> tuple[float, float] | None:
+    Values = FloatTuple(ValueData)
+    if Values is None or len(Values) != 2:
+        return None
+    return Values[0], Values[1]
+
+
+# metadata boundaries require exact spatial endpoints before geometric verification
+def VectorPair(ValueData: object) -> tuple[VectorThree, VectorThree] | None:
+    Values = ObjectTuple(ValueData)
+    if (
+        Values is None
+        or len(Values) != 2
+        or not isinstance(Values[0], VectorThree)
+        or not isinstance(Values[1], VectorThree)
+    ):
+        return None
+    return Values[0], Values[1]
 
 
 # line range recovery projects and verifies both endpoints on the carrier
@@ -8051,7 +8304,7 @@ def NurbsCurveRange(
     Domain = CurveParamRange(Curve)
     if Domain is None:
         raise ValueError("NURBS curve domain is not provable")
-    Lower, Upper, Ignored, Ignored = Domain
+    Lower, Upper, _, _ = Domain
     LowerPoint, UpperPoint = NurbsCurvePoint(Curve, Lower), NurbsCurvePoint(
         Curve, Upper
     )
@@ -8072,19 +8325,10 @@ def NurbsCurveRange(
 def InterCurveRange(
     Curve: IntersectionCurve, Start: VectorThree, EndValue: VectorThree
 ) -> tuple[float, float]:
-    Params = Curve.attributes.get("chart_parameters")
-    if (
-        not isinstance(Params, tuple)
-        or len(Params) != len(Curve.samples)
-        or len(Params) < 2
-    ):
+    Params = FloatTuple(Curve.attributes.get("chart_parameters"))
+    if Params is None or len(Params) != len(Curve.samples) or len(Params) < 2:
         raise ValueError("intersection chart parameters are not provable")
-    if not all(
-        (
-            isinstance(ValueData, float) and MathValue.isfinite(ValueData)
-            for ValueData in Params
-        )
-    ) or not all((LeftValue < Right for LeftValue, Right in zip(Params, Params[1:]))):
+    if not all(LeftValue < Right for LeftValue, Right in zip(Params, Params[1:])):
         raise ValueError("intersection chart parameters are not provable")
     TolValue = max(Curve.tolerance, 1e-07)
     StartParam = InterChartParam(Curve.samples, Params, Start, TolValue)
@@ -8103,7 +8347,7 @@ def InterChartParam(
     Point: VectorThree,
     TolValue: float,
 ) -> float | None:
-    Candidates = []
+    Candidates: list[tuple[float, float]] = []
     for Index, (LeftValue, Right) in enumerate(zip(Samples, Samples[1:])):
         Chord = Subtract(Right, LeftValue)
         LengthSquared = DotProduct(Chord, Chord)
@@ -8234,8 +8478,8 @@ def FaceEdgeLinks(
     FacesByEdge: dict[int, set[int]] = {}
     EdgesByFace: dict[int, list[int]] = {}
     for FaceAttr, Loops in FaceLoops.items():
-        FaceEdges = []
-        for Ignored, RingValue in Loops:
+        FaceEdges: list[int] = []
+        for _, RingValue in Loops:
             for CoedgeAttr in RingValue:
                 Coedge = Tables.coedges[CoedgeAttr]
                 if Coedge.isolated:
@@ -8249,18 +8493,18 @@ def FaceEdgeLinks(
 
 # face component discovery groups topology connected through shared edges
 def FaceComponents(
-    FaceLoops: Mapping[int, object], FacesByEdge: Mapping[int, set[int]]
+    FaceLoops: Mapping[int, tuple[FaceLoop, ...]], FacesByEdge: Mapping[int, set[int]]
 ) -> list[tuple[int, ...]]:
-    Neighbors = {FaceAttr: set() for FaceAttr in FaceLoops}
+    Neighbors: dict[int, set[int]] = {FaceAttr: set() for FaceAttr in FaceLoops}
     for FaceAttrs in FacesByEdge.values():
         for FaceAttr in FaceAttrs:
             Neighbors[FaceAttr].update(FaceAttrs - {FaceAttr})
-    Components = []
+    Components: list[tuple[int, ...]] = []
     Remain = set(FaceLoops)
     while Remain:
         SeedValue = min(Remain)
         Pending = [SeedValue]
-        Component = set()
+        Component: set[int] = set()
         while Pending:
             FaceAttr = Pending.pop()
             if FaceAttr in Component:
@@ -8278,13 +8522,13 @@ def MakeDerivedTree(
 ) -> tuple[
     list[BrepFaceUse], list[BrepShell], list[BrepShellUse], list[BrepRegion], list[str]
 ]:
-    FaceUses = []
-    Shells = []
-    ShellUses = []
-    Regions = []
-    RegionIds = []
+    FaceUses: list[BrepFaceUse] = []
+    Shells: list[BrepShell] = []
+    ShellUses: list[BrepShellUse] = []
+    Regions: list[BrepRegion] = []
+    RegionIds: list[str] = []
     for Index, Component in enumerate(Components, start=1):
-        UseIds = []
+        UseIds: list[str] = []
         EdgeCounts: dict[int, int] = {}
         for FaceAttr in Component:
             UseId = f"sldprt:brep:face-use:derived:{FaceAttr}"
@@ -8514,81 +8758,131 @@ def NativeId(KindValueData: str, AttrValue: int) -> str:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def HasPayloadMut(DataValue=None, **LegacyValues):
-    DataValue = LegacyValues.pop("data", DataValue)
+def HasPayloadMut(
+    DataValue: bytes | bytearray | None = None, **LegacyValues: object
+) -> bool:
+    ReceivedData = LegacyValues.pop("data", DataValue)
     if LegacyValues:
         raise TypeError(
             f"contains_parasolid_payload got unexpected keyword {next(iter(LegacyValues))!r}"
         )
-    return HasParaPayload(DataValue)
+    if not isinstance(ReceivedData, (bytes, bytearray)):
+        raise TypeError("contains_parasolid_payload data must be bytes")
+    return HasParaPayload(ReceivedData)
 
 
 # this declaration exists because focused behavior needs one stable owner
-def IsPayloadApiMut(DataValue=None, **LegacyValues):
-    DataValue = LegacyValues.pop("data", DataValue)
+def IsPayloadApiMut(
+    DataValue: bytes | bytearray | None = None, **LegacyValues: object
+) -> bool:
+    ReceivedData = LegacyValues.pop("data", DataValue)
     if LegacyValues:
         raise TypeError(
             f"is_native_parasolid_payload got unexpected keyword {next(iter(LegacyValues))!r}"
         )
-    return IsNativePayload(DataValue)
+    if not isinstance(ReceivedData, (bytes, bytearray)):
+        raise TypeError("is_native_parasolid_payload data must be bytes")
+    return IsNativePayload(ReceivedData)
 
 
 # this declaration exists because focused behavior needs one stable owner
 def EncodeBrepMut(
-    ModelData=None, *, Partition=True, SolidworksFeatureIds=None, **LegacyValues
-):
-    ModelData = LegacyValues.pop("model", ModelData)
-    Partition = LegacyValues.pop("partition", Partition)
-    SolidworksFeatureIds = LegacyValues.pop(
+    ModelData: BrepModel | None = None,
+    *,
+    Partition: bool = True,
+    SolidworksFeatureIds: Mapping[str, int] | None = None,
+    **LegacyValues: object,
+) -> bytes:
+    ReceivedModel = LegacyValues.pop("model", ModelData)
+    ReceivedPartition = LegacyValues.pop("partition", Partition)
+    ReceivedFeatureIds = LegacyValues.pop(
         "solidworks_feature_ids", SolidworksFeatureIds
     )
     if LegacyValues:
         raise TypeError(
             f"encode_brep_model got unexpected keyword {next(iter(LegacyValues))!r}"
         )
+    if not isinstance(ReceivedModel, BrepModel):
+        raise TypeError("encode_brep_model model must be a BrepModel")
+    if not isinstance(ReceivedPartition, bool):
+        raise TypeError("encode_brep_model partition must be a bool")
+    FeatureIds = StringIntMapping(ReceivedFeatureIds)
+    if ReceivedFeatureIds is not None and FeatureIds is None:
+        raise TypeError("encode_brep_model solidworks_feature_ids must map str to int")
     return EncodeBrepModel(
-        ModelData, PartValue=Partition, SolidFeatureIds=SolidworksFeatureIds
+        ReceivedModel, PartValue=ReceivedPartition, SolidFeatureIds=FeatureIds
     )
 
 
+# legacy keyword input needs concrete validation before encoder contracts consume it
+def StringIntMapping(ValueData: object) -> dict[str, int] | None:
+    if ValueData is None:
+        return None
+    if not isinstance(ValueData, Mapping):
+        return None
+    Values = CastValue(Mapping[object, object], ValueData)
+    Result: dict[str, int] = {}
+    for KeyData, ItemValue in Values.items():
+        if not isinstance(KeyData, str) or type(ItemValue) is not int:
+            return None
+        Result[KeyData] = ItemValue
+    return Result
+
+
 # this declaration exists because focused behavior needs one stable owner
-def EncodePartMut(DataValue=None, **LegacyValues):
-    DataValue = LegacyValues.pop("data", DataValue)
+def EncodePartMut(
+    DataValue: bytes | bytearray | None = None, **LegacyValues: object
+) -> bytes:
+    ReceivedData = LegacyValues.pop("data", DataValue)
     if LegacyValues:
         raise TypeError(
             f"encode_partition_stream got unexpected keyword {next(iter(LegacyValues))!r}"
         )
-    return EncodePartData(DataValue)
+    if not isinstance(ReceivedData, (bytes, bytearray)):
+        raise TypeError("encode_partition_stream data must be bytes")
+    return EncodePartData(ReceivedData)
 
 
 # this declaration exists because focused behavior needs one stable owner
-def EncodeBlankApi():
+def EncodeBlankApi() -> bytes:
     return EncodeBlankPart()
 
 
 # this declaration exists because focused behavior needs one stable owner
-def DecodePartMut(DataValue=None, StreamName="", **LegacyValues):
-    DataValue = LegacyValues.pop("data", DataValue)
-    StreamName = LegacyValues.pop("stream", StreamName)
+def DecodePartMut(
+    DataValue: bytes | bytearray | None = None,
+    StreamName: str = "",
+    **LegacyValues: object,
+) -> tuple[ParaPayload, ...]:
+    ReceivedData = LegacyValues.pop("data", DataValue)
+    ReceivedStream = LegacyValues.pop("stream", StreamName)
     if LegacyValues:
         raise TypeError(
             f"decode_partition_stream got unexpected keyword {next(iter(LegacyValues))!r}"
         )
-    return DecodePartData(DataValue, StreamName)
+    if not isinstance(ReceivedData, (bytes, bytearray)) or not isinstance(
+        ReceivedStream, str
+    ):
+        raise TypeError("decode_partition_stream requires bytes data and string stream")
+    return DecodePartData(bytes(ReceivedData), ReceivedStream)
 
 
 # this declaration exists because focused behavior needs one stable owner
-def DecodeBrepMut(DataValue=None, **LegacyValues):
-    DataValue = LegacyValues.pop("data", DataValue)
+def DecodeBrepMut(
+    DataValue: bytes | bytearray | None = None, **LegacyValues: object
+) -> BrepModel | None:
+    ReceivedData = LegacyValues.pop("data", DataValue)
     if LegacyValues:
         raise TypeError(
             f"decode_brep_model got unexpected keyword {next(iter(LegacyValues))!r}"
         )
-    return DecodeBrepModel(DataValue)
+    if not isinstance(ReceivedData, (bytes, bytearray)):
+        raise TypeError("decode_brep_model data must be bytes")
+    return DecodeBrepModel(ReceivedData)
 
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportAlpha = {
+KLegacyExportAlpha: dict[str, object] = {
     "ParasolidFormatError": ParaFormatError,
     "ParasolidPayload": ParaPayload,
     "ParasolidWriteError": ParaWriteError,
@@ -8612,7 +8906,7 @@ KLegacyExportAlpha = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportBravo = {
+KLegacyExportBravo: dict[str, object] = {
     "_NurbsCurveRecord": NurbsCurveRec,
     "_NurbsSurfaceRecord": NurbsSurfRecord,
     "_PARASOLID_V12_PARTITION_DESCRIPTION": KParaPartDesc,
@@ -8636,7 +8930,7 @@ KLegacyExportBravo = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportCharlie = {
+KLegacyExportCharlie: dict[str, object] = {
     "_analytic_record_fields": AnalyticFields,
     "_array_record_fields": ArrayFields,
     "_be16": WriteShortMut,
@@ -8660,7 +8954,7 @@ KLegacyExportCharlie = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportDelta = {
+KLegacyExportDelta: dict[str, object] = {
     "_dot": DotProduct,
     "_encode_brep_body": EncodeBrepBody,
     "_entity51": EntityFiftyOne,
@@ -8684,7 +8978,7 @@ KLegacyExportDelta = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportEcho = {
+KLegacyExportEcho: dict[str, object] = {
     "_nurbs_basis": NurbsBasis,
     "_nurbs_curve_point": NurbsCurvePoint,
     "_nurbs_surface_point": NurbsSurfPoint,
@@ -8708,7 +9002,7 @@ KLegacyExportEcho = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportFoxtrot = {
+KLegacyExportFoxtrot: dict[str, object] = {
     "_parse_extended_chart_points": ParseExtPoints,
     "_parse_float_array_record": ParseFloatArray,
     "_parse_intersection_data_record": ParseInterData,
@@ -8732,7 +9026,7 @@ KLegacyExportFoxtrot = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportGolf = {
+KLegacyExportGolf: dict[str, object] = {
     "_provable_curve_range": ProveCurveRange,
     "_record_start": RecordStart,
     "_refs": RefsValue,
@@ -8756,7 +9050,7 @@ KLegacyExportGolf = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportHotel = {
+KLegacyExportHotel: dict[str, object] = {
     "_tag": WriteTagMut,
     "_tripled_refs": TripledRefs,
     "_u16": ReadShort,
@@ -8780,7 +9074,7 @@ KLegacyExportHotel = {
 }
 
 # this mapping preserves established imports for one focused compatibility group
-KLegacyExportIndia = {
+KLegacyExportIndia: dict[str, object] = {
     "_vector_values": VectorValues,
     "_verify_encoded_brep": VerifyBrepData,
     "_vertex_fin_order": VertexFinOrder,
@@ -8803,8 +9097,16 @@ KLegacyExportIndia = {
     "is_native_parasolid_payload": IsPayloadApiMut,
 }
 
+# this binding provides a statically inspectable decoder at the public geometry boundary
+decode_brep_model = DecodeBrepMut
+
+decode_partition_stream = DecodePartMut
+encode_blank_partition_stream = EncodeBlankApi
+encode_brep_model = EncodeBrepMut
+encode_partition_stream = EncodePartMut
+
 # this tuple groups compatibility mappings for deterministic installation
-KLegacyExportGroups = (
+KLegacyExportGroups: tuple[dict[str, object], ...] = (
     KLegacyExportAlpha,
     KLegacyExportBravo,
     KLegacyExportCharlie,

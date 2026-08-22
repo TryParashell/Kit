@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from inspect import isabstract as IsAbstract
+from typing import cast
 
 import pytest as Pytest
 
@@ -31,12 +32,12 @@ def CheckDiscovery() -> None:
     assert FirstIds == SecondIds == tuple(sorted(FirstIds))
     assert tuple(ValueData.info.format_id for ValueData in ReaderValues) == FirstIds
     assert tuple(ValueData.info.format_id for ValueData in WriterValues) == FirstIds
-    for AdapterData in ReaderValues:
-        for FormatId in (AdapterData.info.format_id, *AdapterData.info.aliases):
-            assert FirstRegistry.reader(FormatId) is AdapterData
-    for AdapterData in WriterValues:
-        for FormatId in (AdapterData.info.format_id, *AdapterData.info.aliases):
-            assert FirstRegistry.writer(FormatId) is AdapterData
+    for ReaderData in ReaderValues:
+        for FormatId in (ReaderData.info.format_id, *ReaderData.info.aliases):
+            assert FirstRegistry.reader(FormatId) is ReaderData
+    for WriterData in WriterValues:
+        for FormatId in (WriterData.info.format_id, *WriterData.info.aliases):
+            assert FirstRegistry.writer(FormatId) is WriterData
     assert FirstRegistry.introspect() == FirstIds
     assert FirstRegistry.readers() == ReaderValues
     assert FirstRegistry.writers() == WriterValues
@@ -46,8 +47,12 @@ def CheckDiscovery() -> None:
         for AdapterData in (*ReaderValues, *WriterValues)
     )
     assert all(
-        AdapterData.info.capabilities == frozenset(Capability)
-        for AdapterData in (*ReaderValues, *WriterValues)
+        ReaderData.info.capabilities == frozenset(Capability)
+        for ReaderData in ReaderValues
+    )
+    assert all(
+        WriterData.info.capabilities == frozenset(Capability)
+        for WriterData in WriterValues
     )
 
 
@@ -64,7 +69,7 @@ def CheckDocExts() -> None:
         assert set(InfoData.extensions_for(assembly=False)) <= set(InfoData.extensions)
         assert set(InfoData.extensions_for(assembly=True)) <= set(InfoData.extensions)
     with Pytest.raises(TypeError):
-        AdapterMap["freecad.fcstd"].extensions_for(assembly=1)
+        AdapterMap["freecad.fcstd"].extensions_for(assembly=cast(bool, 1))
     AssemblyInfo = AdapterInfo(
         "format.assembly-only",
         "Assembly only",

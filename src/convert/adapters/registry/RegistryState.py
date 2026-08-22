@@ -8,12 +8,20 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from convert.adapters.base.AdapterInfo import AdapterInfo
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.registry.RegistryBinding import AdapterBinding
 from convert.adapters.registry.RegistryErrors import RegistryError
 from convert.adapters.base.WritePolicy import GetFormatKey
+
+
+# registry mixins share typed state without depending on the final composition class
+class RegistryHost(Protocol):
+    BindingMap: dict[str, AdapterBinding]
+    AliasMap: dict[str, str]
 
 
 # state snapshots support transactional registration across reader writer and bulk operations
@@ -24,8 +32,8 @@ def CopyState(
     return (
         {
             NameValue: AdapterBinding(
-                BindingData.ReaderData,
-                BindingData.WriterData,
+                BindingData.reader,
+                BindingData.writer,
             )
             for NameValue, BindingData in BindingMap.items()
         },
@@ -87,23 +95,23 @@ def BindReaderMut(
     FormatKey = GetFormatKey(InfoData.FormatId)
     BindingData = BindingMap.get(FormatKey, AdapterBinding())
     if (
-        BindingData.WriterData is not None
-        and BindingData.WriterData.info != InfoData
+        BindingData.writer is not None
+        and BindingData.writer.info != InfoData
         and not Coordinated
     ):
         raise RegistryError(
             f"reader and writer metadata differ for {InfoData.FormatId}"
         )
-    if BindingData.ReaderData is not None and not ReplaceFlag:
+    if BindingData.reader is not None and not ReplaceFlag:
         if (
-            type(BindingData.ReaderData) is type(AdapterData)
-            and BindingData.ReaderData.info == InfoData
+            type(BindingData.reader) is type(AdapterData)
+            and BindingData.reader.info == InfoData
         ):
             return
         raise RegistryError(f"reader already registered for {InfoData.FormatId}")
     BindAliasesMut(InfoData, AliasMap, ReplaceFlag)
     BindingMap.setdefault(FormatKey, BindingData)
-    BindingData.ReaderData = AdapterData
+    BindingData.reader = AdapterData
 
 
 # writer registration enforces metadata agreement with an independently registered reader
@@ -119,20 +127,20 @@ def BindWriterMut(
     FormatKey = GetFormatKey(InfoData.FormatId)
     BindingData = BindingMap.get(FormatKey, AdapterBinding())
     if (
-        BindingData.ReaderData is not None
-        and BindingData.ReaderData.info != InfoData
+        BindingData.reader is not None
+        and BindingData.reader.info != InfoData
         and not Coordinated
     ):
         raise RegistryError(
             f"reader and writer metadata differ for {InfoData.FormatId}"
         )
-    if BindingData.WriterData is not None and not ReplaceFlag:
+    if BindingData.writer is not None and not ReplaceFlag:
         if (
-            type(BindingData.WriterData) is type(AdapterData)
-            and BindingData.WriterData.info == InfoData
+            type(BindingData.writer) is type(AdapterData)
+            and BindingData.writer.info == InfoData
         ):
             return
         raise RegistryError(f"writer already registered for {InfoData.FormatId}")
     BindAliasesMut(InfoData, AliasMap, ReplaceFlag)
     BindingMap.setdefault(FormatKey, BindingData)
-    BindingData.WriterData = AdapterData
+    BindingData.writer = AdapterData

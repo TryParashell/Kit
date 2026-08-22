@@ -35,31 +35,41 @@ from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
 )
 from convert.adapters.solidworks.programs.configuration.default.Program import (
-    ConfigOps,
-    FieldOwners,
     ReferenceLength,
     ShiftMapReference,
 )
+from convert.adapters.solidworks.programs.configuration.default.Registry import (
+    ConfigOps,
+    FieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.box.Program import (
-    ConfigOps as BoxConfigOps,
     EncodeProgram as EncodeBoxConfigProgram,
-    FieldOwners as BoxFieldOwners,
     ReferenceLength as BoxReferenceLength,
 )
+from convert.adapters.solidworks.programs.configuration.box.Registry import (
+    ConfigOps as BoxConfigOps,
+    FieldOwners as BoxFieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.views.pair.Program import (
-    AnnotationOps,
-    FieldOwners as AnnotationFieldOwners,
     ReferenceLength as AnnotationReferenceLength,
 )
+from convert.adapters.solidworks.programs.configuration.views.pair.Registry import (
+    AnnotationOps,
+    FieldOwners as AnnotationFieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.fillet.views.Program import (
-    AnnotationOps as FilletAnnotationOps,
-    FieldOwners as FilletFieldOwners,
     ReferenceLength as FilletReferenceLength,
 )
+from convert.adapters.solidworks.programs.configuration.fillet.views.Registry import (
+    AnnotationOps as FilletAnnotationOps,
+    FieldOwners as FilletFieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.pattern.views.Program import (
+    ReferenceLength as PatternReferenceLength,
+)
+from convert.adapters.solidworks.programs.configuration.pattern.views.Registry import (
     AnnotationOps as PatternAnnotationOps,
     FieldOwners as PatternFieldOwners,
-    ReferenceLength as PatternReferenceLength,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
@@ -87,7 +97,7 @@ def TestRFRTSBI() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestERBHEOTO() -> None:
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in ConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in ConfigOps:
         assert StartPos == SourceCursor
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(FieldOwners)
@@ -123,7 +133,7 @@ def TestRPCNEVB() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestDBCIET() -> None:
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in BoxConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in BoxConfigOps:
         assert StartPos == SourceCursor
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(BoxFieldOwners)

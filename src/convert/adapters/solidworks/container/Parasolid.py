@@ -7,27 +7,76 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
+from interchange import BrepModel
 from convert.geometry.Parasolid import (
-    ParasolidFormatError,
-    ParasolidPayload,
-    ParasolidWriteError,
-    contains_parasolid_payload as ContainsParasolidPayload,
-    decode_brep_model as DecodeBrepModel,
-    decode_partition_stream as DecodePartitionStream,
-    encode_blank_partition_stream as EncodeBlankPartition,
-    encode_brep_model as EncodeBrepModel,
-    encode_partition_stream as EncodePartitionStream,
-    is_native_parasolid_payload as IsNativeParasolidPayload,
+    DecodeBrepMut,
+    DecodePartMut,
+    EncodeBlankApi,
+    ParaPayload,
+    ParaFormatError,
+    ParaWriteError,
+    EncodeBrepMut,
+    EncodePartMut,
+    HasPayloadMut,
+    IsPayloadApiMut,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
+# this alias preserves the established solidworks payload import with a concrete type
+ParasolidPayload = ParaPayload
+
+# this alias preserves the established solidworks error import with a concrete type
+ParasolidFormatError = ParaFormatError
+
+# this alias preserves the established solidworks error import with a concrete type
+ParasolidWriteError = ParaWriteError
+
 
 # this definition exists because focused behavior needs one stable owner
-def DecodePartition(DataValue: bytes, Stream: str = "") -> tuple[ParasolidPayload, ...]:
+def DecodePartition(DataValue: bytes, Stream: str = "") -> tuple[ParaPayload, ...]:
     try:
-        return DecodePartitionStream(DataValue, Stream)
+        return DecodePartMut(DataValue, Stream)
     except ParasolidFormatError as ErrorInfo:
         raise SldprtFormatError(str(ErrorInfo)) from ErrorInfo
+
+
+# this wrapper preserves the typed public decoding contract for solidworks callers
+def DecodeBrep(DataValue: bytes | bytearray) -> BrepModel | None:
+    return DecodeBrepMut(DataValue)
+
+
+# this wrapper preserves the typed public encoding contract for solidworks callers
+def EncodeBrep(
+    ModelData: BrepModel,
+    *,
+    partition: bool = True,
+    solidworks_feature_ids: dict[str, int] | None = None,
+) -> bytes:
+    return EncodeBrepMut(
+        ModelData,
+        Partition=partition,
+        SolidworksFeatureIds=solidworks_feature_ids,
+    )
+
+
+# this wrapper preserves the typed blank partition contract for solidworks callers
+def EncodeBlank() -> bytes:
+    return EncodeBlankApi()
+
+
+# this wrapper preserves the typed partition encoding contract for solidworks callers
+def EncodePartition(DataValue: bytes | bytearray) -> bytes:
+    return EncodePartMut(DataValue)
+
+
+# this wrapper preserves the typed payload recognition contract for solidworks callers
+def ContainsPayload(DataValue: bytes | bytearray) -> bool:
+    return HasPayloadMut(DataValue)
+
+
+# this wrapper preserves the typed native payload contract for solidworks callers
+def IsNativePayload(DataValue: bytes | bytearray) -> bool:
+    return IsPayloadApiMut(DataValue)
 
 
 # this binding exists because shared behavior needs one stable value
@@ -44,28 +93,25 @@ KAllValue = (
 )
 
 # this binding exists because shared behavior needs one stable value
-globals()["_decode_partition_stream"] = DecodePartitionStream
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+contains_parasolid_payload = ContainsPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["contains_parasolid_payload"] = ContainsParasolidPayload
+decode_brep_model = DecodeBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_brep_model"] = DecodeBrepModel
+decode_partition_stream = DecodePartition
 
 # this binding exists because shared behavior needs one stable value
-globals()["decode_partition_stream"] = DecodePartition
+encode_blank_partition_stream = EncodeBlank
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_blank_partition_stream"] = EncodeBlankPartition
+encode_brep_model = EncodeBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_brep_model"] = EncodeBrepModel
+encode_partition_stream = EncodePartition
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_partition_stream"] = EncodePartitionStream
-
-# this binding exists because shared behavior needs one stable value
-globals()["is_native_parasolid_payload"] = IsNativeParasolidPayload
+is_native_parasolid_payload = IsNativePayload

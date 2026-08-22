@@ -21,7 +21,7 @@ class JsonWriter:
 
     # this writer validates and emits deterministic utf eight json
     def Write(
-        Instance,
+        self,
         DocValue: CadDocument,
         Target: Destination,
         Options: WriteOptions | None = None,
@@ -52,4 +52,4 @@ class JsonWriter:
             vendor_loadable=True,
         )
 
-    locals()["write"] = Write
+    write = Write

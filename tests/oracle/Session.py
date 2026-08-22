@@ -10,7 +10,7 @@ from __future__ import annotations
 from contextlib import contextmanager as Contextmanager
 from dataclasses import dataclass as DataClass, field as MakeField
 from pathlib import Path as FilePath
-from typing import Iterator
+from typing import Callable, Iterator, Protocol, Sequence, cast as CastValue
 import warnings as WarningApi
 
 # centralizes shared evidence so every related assertion uses one value
@@ -68,6 +68,82 @@ class OracleMissing(RuntimeError):
     __slots__ = ()
 
 
+# com variants expose one mutable value used for status and error outputs
+class VariantRef(Protocol):
+    value: object
+
+
+# com runtime access stays structural so oracle typing does not require vendor stubs
+class ComRuntime(Protocol):
+    VT_BYREF: int
+    VT_I4: int
+
+    # session cleanup must release the apartment initialized by this module
+    def CoUninitialize(self) -> None:
+        raise TypeError("COM runtime must provide apartment cleanup")
+
+
+# document extensions group persistence and mass property operations in the vendor api
+class ComExtension(Protocol):
+
+    # oracle saves need native error outputs for trustworthy loadability evidence
+    def SaveAs2(self, *Arguments: object) -> object:
+        raise TypeError("COM extension must provide native saving")
+
+    # mass properties provide the application measured geometry acceptance values
+    def GetMassProperties(self, Accuracy: int, Status: object) -> object:
+        raise TypeError("COM extension must provide mass properties")
+
+
+# one structural dispatch contract captures only operations exercised by oracle tests
+class ComDispatch(Protocol):
+    Visible: bool
+    UserControl: bool
+    FrameState: int
+    SystemValue: float
+    Extension: ComExtension
+
+    # application cleanup must close every oracle document before process shutdown
+    def CloseAllDocuments(self, SaveChanges: bool) -> object:
+        raise TypeError("COM application must provide document cleanup")
+
+    # application cleanup must terminate the isolated oracle process deterministically
+    def ExitApp(self) -> object:
+        raise TypeError("COM application must provide process shutdown")
+
+    # oracle document access needs native load error and warning outputs
+    def OpenDoc6(self, *Arguments: object) -> ComDispatch | None:
+        raise TypeError("COM application must provide document opening")
+
+    # oracle document access closes documents by their vendor title
+    def CloseDoc(self, Title: str) -> object:
+        raise TypeError("COM application must provide document closing")
+
+    # authored oracle controls require a fresh vendor part document
+    def NewDocument(self, *Arguments: object) -> ComDispatch | None:
+        raise TypeError("COM application must provide document creation")
+
+    # authored oracle controls use the configured native part template
+    def GetUserPreferenceStringValue(self, Preference: int) -> str:
+        raise TypeError("COM application must provide string preferences")
+
+    # rebuild evidence must come from the vendor document operation
+    def ForceRebuild3(self, TopOnly: bool) -> object:
+        raise TypeError("COM document must provide native rebuild")
+
+    # parameter driving requires the vendor dimension handle by qualified name
+    def Parameter(self, NameText: str) -> ComDispatch | None:
+        raise TypeError("COM document must provide parameter lookup")
+
+    # display dimension traversal advances through vendor feature dimensions
+    def GetNextDisplayDimension(self, Display: object) -> object:
+        raise TypeError("COM feature must provide dimension traversal")
+
+    # body counts provide application usability evidence after rebuild
+    def GetBodies2(self, BodyType: int, VisibleOnly: bool) -> Sequence[object] | None:
+        raise TypeError("COM part must provide body access")
+
+
 # keeps this focused behavior isolated so regressions remain immediately visible
 @DataClass(frozen=True, slots=True)
 class FeatureRecord:
@@ -77,7 +153,7 @@ class FeatureRecord:
     Dimensions: tuple[tuple[str, float], ...]
 
     # keeps this focused behavior isolated so regressions remain immediately visible
-    def __getattr__(SelfRef, NameText: str):
+    def __getattr__(SelfRef, NameText: str) -> object:
         AliasName = KFeatureAliases.get(NameText)
         if AliasName is None:
             raise AttributeError(NameText)
@@ -92,7 +168,7 @@ class SolidProps:
     CenterOfMassMm: tuple[float, float, float]
 
     # keeps this focused behavior isolated so regressions remain immediately visible
-    def __getattr__(SelfRef, NameText: str):
+    def __getattr__(SelfRef, NameText: str) -> object:
         AliasName = KSolidAliases.get(NameText)
         if AliasName is None:
             raise AttributeError(NameText)
@@ -115,15 +191,15 @@ class PartInspection:
     # keeps this focused behavior isolated so regressions remain immediately visible
     @property
     def FeatureNames(SelfRef) -> tuple[str, ...]:
-        return tuple((ItemValue.name for ItemValue in SelfRef.features))
+        return tuple((ItemValue.NameText for ItemValue in SelfRef.Features))
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     @property
     def FeatureTN(SelfRef) -> tuple[str, ...]:
-        return tuple((ItemValue.type_name for ItemValue in SelfRef.features))
+        return tuple((ItemValue.TypeName for ItemValue in SelfRef.Features))
 
     # keeps this focused behavior isolated so regressions remain immediately visible
-    def __getattr__(SelfRef, NameText: str):
+    def __getattr__(SelfRef, NameText: str) -> object:
         AliasName = KPartAliases.get(NameText)
         if AliasName is None:
             raise AttributeError(NameText)
@@ -160,6 +236,60 @@ def ComValue(Owner: object, NameText: str) -> object:
     return Attribute()
 
 
+# numeric com values require runtime proof before geometry measurements consume them
+def NumericValue(Value: object) -> float:
+    if isinstance(Value, bool) or not isinstance(Value, (int, float)):
+        raise TypeError("COM value must be numeric")
+    return float(Value)
+
+
+# integer com values require runtime proof before flag decoding consumes them
+def IntegerValue(Value: object) -> int:
+    if Value is None:
+        return 0
+    if isinstance(Value, bool) or not isinstance(Value, (int, float)):
+        raise TypeError("COM value must be numeric")
+    return int(Value)
+
+
+# shared session state lets mixins retain concrete cross method contracts
+class SessionState:
+    AppInfo: ComDispatch
+    Pythoncom: ComRuntime
+    Variant: Callable[[int, int], VariantRef]
+    Initialized: bool
+    __slots__ = ("AppInfo", "Pythoncom", "Variant", "Initialized")
+
+    # status variants belong to shared state because document and save mixins consume them
+    def ByrefLong(self) -> VariantRef:
+        return self.Variant(self.Pythoncom.VT_BYREF | self.Pythoncom.VT_I4, 0)
+
+    # document access belongs to shared state because inspection and driving mixins consume it
+    @Contextmanager
+    def Document(
+        self, TargetPath: FilePath, DocType: int
+    ) -> Iterator[tuple[ComDispatch | None, tuple[str, ...], tuple[str, ...]]]:
+        ErrorList = self.ByrefLong()
+        WarningList = self.ByrefLong()
+        ModelDoc = self.AppInfo.OpenDoc6(
+            str(TargetPath), DocType, KSilent, "", ErrorList, WarningList
+        )
+        ErrorFlags = DecodeFlags(IntegerValue(ErrorList.value), KErrors)
+        WarningFlags = DecodeFlags(IntegerValue(WarningList.value), KWarnings)
+        try:
+            yield (ModelDoc, ErrorFlags, WarningFlags)
+        finally:
+            if ModelDoc is not None:
+                try:
+                    self.AppInfo.CloseDoc(str(ComValue(ModelDoc, "GetTitle")))
+                except Exception as ErrorInfo:
+                    WarningApi.warn(
+                        f"SOLIDWORKS document close failed: {ErrorInfo}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+
+
 # keeps this focused behavior isolated so regressions remain immediately visible
 def IsOracleReady() -> bool:
     try:
@@ -171,10 +301,13 @@ def IsOracleReady() -> bool:
     except ImportError:
         return False
     del WinThreeTwocom
-    for RootValue in (Winreg.HKEY_CLASSES_ROOT,):
+    RegistryRoot = getattr(Winreg, "HKEY_CLASSES_ROOT")
+    OpenRegistryKey = getattr(Winreg, "OpenKey")
+    QueryRegistryValue = getattr(Winreg, "QueryValueEx")
+    for RootValue in (RegistryRoot,):
         try:
-            with Winreg.OpenKey(RootValue, "SldWorks.Application\\CLSID") as LookupKey:
-                ItemValueA = Winreg.QueryValueEx(LookupKey, "")[0]
+            with OpenRegistryKey(RootValue, "SldWorks.Application\\CLSID") as LookupKey:
+                ItemValueA = QueryRegistryValue(LookupKey, "")[0]
         except OSError:
             continue
         if isinstance(ItemValueA, str) and ItemValueA.startswith("{"):
@@ -183,7 +316,7 @@ def IsOracleReady() -> bool:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def InitSessionMut(SelfRef) -> None:
+def InitSessionMut(SelfRef: OracleSession) -> None:
     try:
         import pythoncom as PythoncomA
         from win32com.client import VARIANT, Dispatch
@@ -193,10 +326,10 @@ def InitSessionMut(SelfRef) -> None:
         ) from ErrorInfo
     PythoncomA.CoInitialize()
     SelfRef.Initialized = True
-    SelfRef.Pythoncom = PythoncomA
-    SelfRef.Variant = VARIANT
+    SelfRef.Pythoncom = CastValue(ComRuntime, PythoncomA)
+    SelfRef.Variant = CastValue(Callable[[int, int], VariantRef], VARIANT)
     try:
-        SelfRef.AppInfo = Dispatch("SldWorks.Application")
+        SelfRef.AppInfo = CastValue(ComDispatch, Dispatch("SldWorks.Application"))
     except Exception as ErrorInfo:
         PythoncomA.CoUninitialize()
         SelfRef.Initialized = False
@@ -209,7 +342,7 @@ def InitSessionMut(SelfRef) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-class SessionLife:
+class SessionLife(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
@@ -237,33 +370,32 @@ class SessionLife:
                 RuntimeWarning,
                 stacklevel=2,
             )
-        SelfRef.AppInfo = None
         try:
             SelfRef.Pythoncom.CoUninitialize()
         finally:
             SelfRef.Initialized = False
 
     # keeps this focused behavior isolated so regressions remain immediately visible
-    def ByrefLong(SelfRef) -> object:
+    def ByrefLong(SelfRef) -> VariantRef:
         return SelfRef.Variant(SelfRef.Pythoncom.VT_BYREF | SelfRef.Pythoncom.VT_I4, 0)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-class DocAccess:
+class DocAccess(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     @Contextmanager
     def Document(
         SelfRef, TargetPath: FilePath, DocType: int
-    ) -> Iterator[tuple[object, tuple[str, ...], tuple[str, ...]]]:
+    ) -> Iterator[tuple[ComDispatch | None, tuple[str, ...], tuple[str, ...]]]:
         ErrorList = SelfRef.ByrefLong()
         WarningList = SelfRef.ByrefLong()
         ModelDoc = SelfRef.AppInfo.OpenDoc6(
             str(TargetPath), DocType, KSilent, "", ErrorList, WarningList
         )
-        ErrorFlags = DecodeFlags(int(ErrorList.value or 0), KErrors)
-        WarningFlags = DecodeFlags(int(WarningList.value or 0), KWarnings)
+        ErrorFlags = DecodeFlags(IntegerValue(ErrorList.value), KErrors)
+        WarningFlags = DecodeFlags(IntegerValue(WarningList.value), KWarnings)
         try:
             yield (ModelDoc, ErrorFlags, WarningFlags)
         finally:
@@ -279,7 +411,7 @@ class DocAccess:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-class PartInspector:
+class PartInspector(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
@@ -325,7 +457,7 @@ class PartInspector:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-class ParamDriver:
+class ParamDriver(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
@@ -376,7 +508,7 @@ class ParamDriver:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-class PartResaver:
+class PartResaver(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
@@ -389,15 +521,19 @@ class PartResaver:
             ModelDoc.Extension.SaveAs2(
                 str(TargetDoc), 0, KSilentA, None, "", False, SaveErrors, SaveWarnings
             )
-            return f"errors={DecodeFlags(int(SaveErrors.value or 0), KErrors)} exists={TargetDoc.is_file()}"
+            return f"errors={DecodeFlags(IntegerValue(SaveErrors.value), KErrors)} exists={TargetDoc.is_file()}"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-class PartAuthor:
+class PartAuthor(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
-    def AuthorPart(SelfRef, Script: object, TargetPath: FilePath) -> PartInspection:
+    def AuthorPart(
+        SelfRef,
+        Script: Callable[[ComDispatch, ComDispatch], None],
+        TargetPath: FilePath,
+    ) -> PartInspection:
         ModelDoc = SelfRef.AppInfo.NewDocument(
             PartTemplate(SelfRef.AppInfo), 0, 0.0, 0.0
         )
@@ -410,12 +546,12 @@ class PartAuthor:
             ModelDoc.Extension.SaveAs2(
                 str(TargetPath), 0, KSilentA, None, "", False, ErrorList, WarningList
             )
-            SavedErrors = DecodeFlags(int(ErrorList.value or 0), KErrors)
+            SavedErrors = DecodeFlags(IntegerValue(ErrorList.value), KErrors)
             return PartInspection(
                 TargetPath=TargetPath,
                 Opened=True,
                 LoadErrors=SavedErrors,
-                LoadWarnings=DecodeFlags(int(WarningList.value or 0), KWarnings),
+                LoadWarnings=DecodeFlags(IntegerValue(WarningList.value), KWarnings),
                 Rebuilt=bool(ModelDoc.ForceRebuild3(False)),
                 Features=ReadFeatures(ModelDoc),
                 BodyCount=ReadBodyCount(ModelDoc),
@@ -432,7 +568,7 @@ class PartAuthor:
 class OracleSession(
     SessionLife, DocAccess, PartInspector, ParamDriver, PartResaver, PartAuthor
 ):
-    __slots__ = ("AppInfo", "Pythoncom", "Variant", "Initialized")
+    __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     def __init__(SelfRef) -> None:
@@ -447,7 +583,7 @@ class OracleSession(
         SelfRef.Close()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
-    def __getattr__(SelfRef, NameText: str):
+    def __getattr__(SelfRef, NameText: str) -> object:
         AliasName = KSessionAliases.get(NameText)
         if AliasName is None:
             raise AttributeError(NameText)
@@ -456,7 +592,7 @@ class OracleSession(
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def PartTemplate(CadApp: object) -> str:
-    Template = CadApp.GetUserPreferenceStringValue(8)
+    Template = CastValue(ComDispatch, CadApp).GetUserPreferenceStringValue(8)
     if isinstance(Template, str) and Template:
         return Template
     raise OracleMissing("no default SOLIDWORKS part template is configured")
@@ -495,6 +631,7 @@ def ReadFeatures(ModelDoc: object) -> tuple[FeatureRecord, ...]:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def ReadFD(Feature: object) -> tuple[tuple[str, float], ...]:
+    FeatureApi = CastValue(ComDispatch, Feature)
     ValueList: list[tuple[str, float]] = []
     try:
         Display = ComValue(Feature, "GetFirstDisplayDimension")
@@ -508,13 +645,13 @@ def ReadFD(Feature: object) -> tuple[tuple[str, float], ...]:
             ValueList.append(
                 (
                     str(ComValue(Dimension, "FullName")),
-                    float(ComValue(Dimension, "SystemValue")) * 1000.0,
+                    NumericValue(ComValue(Dimension, "SystemValue")) * 1000.0,
                 )
             )
         except Exception:
             break
         try:
-            Display = Feature.GetNextDisplayDimension(Display)
+            Display = FeatureApi.GetNextDisplayDimension(Display)
         except Exception:
             break
     return tuple(ValueList)
@@ -523,7 +660,7 @@ def ReadFD(Feature: object) -> tuple[tuple[str, float], ...]:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def ReadBodyCount(ModelDoc: object) -> int:
     try:
-        PartDoc = ModelDoc
+        PartDoc = CastValue(ComDispatch, ModelDoc)
         Bodies = PartDoc.GetBodies2(0, True)
     except Exception:
         return 0
@@ -542,10 +679,13 @@ def ReadSP(ModelDoc: object) -> SolidProps | None:
 
     Status = VARIANT(PythoncomA.VT_BYREF | PythoncomA.VT_I4, 0)
     try:
-        ValueList = ModelDoc.Extension.GetMassProperties(1, Status)
+        ModelApi = CastValue(ComDispatch, ModelDoc)
+        ValueList = ModelApi.Extension.GetMassProperties(1, Status)
     except Exception:
         return None
     if ValueList is None:
+        return None
+    if not isinstance(ValueList, Sequence):
         return None
     try:
         Numbers = tuple((float(ItemValueA) for ItemValueA in ValueList))
@@ -567,14 +707,14 @@ def ReadParameters(
     ValueList: list[tuple[str, float]] = []
     for NameText in NameList:
         try:
-            Handle = ModelDoc.Parameter(NameText)
+            Handle = CastValue(ComDispatch, ModelDoc).Parameter(NameText)
         except Exception:
             continue
         if Handle is None:
             continue
         try:
             ValueList.append(
-                (NameText, float(ComValue(Handle, "SystemValue")) * 1000.0)
+                (NameText, NumericValue(ComValue(Handle, "SystemValue")) * 1000.0)
             )
         except Exception:
             continue
@@ -630,7 +770,7 @@ KModuleAliases = {
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def __getattr__(NameText: str):
+def __getattr__(NameText: str) -> object:
     AliasValue = KModuleAliases.get(NameText)
     if AliasValue is None:
         raise AttributeError(NameText)

@@ -8,15 +8,28 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass as MakeDataClass
+from typing import ClassVar, TYPE_CHECKING
+
 from interchange.enums.EnumBase import WireEnum
 from interchange.features.FeatureContract import FeatureDef
-from interchange.core.ModelBase import ModelDataMut
 from interchange.records.RecordParameter import ParameterValue
 from interchange.geometry.models.VectorSpace import SpaceVector
 
 
 # extrusion bounds preserve editable termination intent instead of only distance
 class ExtrudeEnd(WireEnum):
+    BLIND = "blind"
+    THROUGH_ALL = "through_all"
+    UP_TO_FIRST = "up_to_first"
+    UP_TO_LAST = "up_to_last"
+    UP_TO_FACE = "up_to_face"
+    UP_TO_SHAPE = "up_to_shape"
+    UP_TO_VERTEX = "up_to_vertex"
+    TWO_LENGTHS = "two_lengths"
+    MID_PLANE = "mid_plane"
+    OFFSET_FROM_SURFACE = "offset_from_surface"
+    NATIVE = "native"
     KBlind = "blind"
     KThroughAll = "through_all"
     KUpToFirst = "up_to_first"
@@ -31,33 +44,32 @@ class ExtrudeEnd(WireEnum):
 
 
 # extrusions retain directional and termination choices needed for reconstruction
-@ModelDataMut(
-    DefaultMap={
-        "EndCondition": ExtrudeEnd.KBlind,
-        "IsReversed": False,
-        "IsSymmetric": False,
-        "Direction": None,
-        "SecondLength": None,
-        "SecondEndCondition": None,
-        "Offset": None,
-        "SecondOffset": None,
-        "DraftAngle": None,
-        "SecondDraftAngle": None,
-        "UpToReference": "",
-        "SecondUpToRef": "",
-    }
-)
+@MakeDataClass(frozen=True, slots=True)
 class ExtrudeFeature(FeatureDef):
-    Length: ParameterValue
-    EndCondition: ExtrudeEnd | str
-    IsReversed: bool
-    IsSymmetric: bool
-    Direction: SpaceVector | None
-    SecondLength: ParameterValue | None
-    SecondEndCondition: ExtrudeEnd | str | None
-    Offset: ParameterValue | None
-    SecondOffset: ParameterValue | None
-    DraftAngle: ParameterValue | None
-    SecondDraftAngle: ParameterValue | None
-    UpToReference: str
-    SecondUpToRef: str
+    length: ParameterValue
+    end_condition: ExtrudeEnd | str = ExtrudeEnd.KBlind
+    reversed: bool = False
+    symmetric: bool = False
+    direction: SpaceVector | None = None
+    second_length: ParameterValue | None = None
+    second_end_condition: ExtrudeEnd | str | None = None
+    offset: ParameterValue | None = None
+    second_offset: ParameterValue | None = None
+    draft_angle: ParameterValue | None = None
+    second_draft_angle: ParameterValue | None = None
+    up_to_reference: str = ""
+    second_up_to_reference: str = ""
+    if TYPE_CHECKING:
+        Length: ClassVar[ParameterValue]
+        EndCondition: ClassVar[ExtrudeEnd | str]
+        IsReversed: ClassVar[bool]
+        IsSymmetric: ClassVar[bool]
+        Direction: ClassVar[SpaceVector | None]
+        SecondLength: ClassVar[ParameterValue | None]
+        SecondEndCondition: ClassVar[ExtrudeEnd | str | None]
+        Offset: ClassVar[ParameterValue | None]
+        SecondOffset: ClassVar[ParameterValue | None]
+        DraftAngle: ClassVar[ParameterValue | None]
+        SecondDraftAngle: ClassVar[ParameterValue | None]
+        UpToReference: ClassVar[str]
+        SecondUpToRef: ClassVar[str]

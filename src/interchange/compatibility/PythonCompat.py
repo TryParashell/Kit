@@ -9,17 +9,25 @@
 from __future__ import annotations
 
 from copy import copy as CopyValue
-from dataclasses import fields as GetFields
+from inspect import Parameter as FuncParam
+from inspect import Signature as FuncSig
 from inspect import signature as GetSignature
-from typing import Any as AnyValue
+from types import ModuleType
+import typing as TypingTypes
 from typing import Mapping as TypeMap
 
 from interchange.compatibility.PythonCompatData import KLegacyAnnots, KLegacyModels
-from interchange.serialization.Wire import GetSlotNames, GetWireField
+from interchange.core.Reflection import (
+    DataField,
+    GetCanonicalName,
+    GetDataFields,
+    GetFieldMap,
+)
+from interchange.serialization.Wire import GetModelField, GetSlotNames, GetWireField
 
 
 # annotation rendering keeps historical source names independent from compliant implementation hints
-def GetLegacyAnnot(FieldValue: AnyValue) -> AnyValue:
+def GetLegacyAnnot(FieldValue: DataField) -> str:
     FieldType = FieldValue.type
     if isinstance(FieldType, type):
         FieldType = FieldType.__name__
@@ -59,9 +67,9 @@ def GetLegacyAnnot(FieldValue: AnyValue) -> AnyValue:
 
 
 # copied field metadata lets standard dataclass reflection expose historical names safely
-def GetLegacyFields(ClassType: type) -> dict[str, AnyValue]:
-    FieldMap: dict[str, AnyValue] = {}
-    for FieldValue in GetFields(ClassType):
+def GetLegacyFields(ClassType: type[object]) -> dict[str, DataField]:
+    FieldMap: dict[str, DataField] = {}
+    for FieldValue in GetDataFields(ClassType):
         LegacyName = GetWireField(FieldValue.name, ClassType)
         LegacyField = CopyValue(FieldValue)
         setattr(LegacyField, "name", LegacyName)
@@ -78,8 +86,8 @@ def GetLegacyFields(ClassType: type) -> dict[str, AnyValue]:
 
 
 # reflected and canonical field maps both need one storage name lookup path
-def GetStoredField(ClassType: type, FieldName: str) -> AnyValue:
-    FieldMap = ClassType.__dataclass_fields__
+def GetStoredField(ClassType: type[object], FieldName: str) -> DataField:
+    FieldMap = GetFieldMap(ClassType)
     FieldValue = FieldMap.get(FieldName)
     if FieldValue is not None:
         return FieldValue
@@ -94,9 +102,9 @@ def GetStoredField(ClassType: type, FieldName: str) -> AnyValue:
 
 
 # historical signatures preserve normal inspect behavior despite keyword translation metaclasses
-def GetLegacySig(ClassType: type) -> AnyValue:
+def GetLegacySig(ClassType: type[object]) -> FuncSig:
     InitSig = GetSignature(ClassType.__init__)
-    ParamValues = []
+    ParamValues: list[FuncParam] = []
     for ParamValue in tuple(InitSig.parameters.values())[1:]:
         LegacyName = GetWireField(ParamValue.name, ClassType)
         FieldValue = GetStoredField(ClassType, ParamValue.name)
@@ -110,7 +118,7 @@ def GetLegacySig(ClassType: type) -> AnyValue:
 
 
 # canonical pickle state must remain independent from reflected historical dataclass fields
-def GetModelState(SelfValue: AnyValue) -> list[AnyValue]:
+def GetModelState(SelfValue: object) -> list[object]:
     ClassType = type(SelfValue)
     return [
         object.__getattribute__(SelfValue, FieldName)
@@ -119,14 +127,14 @@ def GetModelState(SelfValue: AnyValue) -> list[AnyValue]:
 
 
 # canonical slots need direct assignment when historical pickles restore positional state
-def SetModelState(SelfValue: AnyValue, StateValues: list[AnyValue]) -> None:
+def SetModelState(SelfValue: object, StateValues: list[object]) -> None:
     ClassType = type(SelfValue)
     for FieldName, FieldValue in zip(GetSlotNames(ClassType), StateValues):
         object.__setattr__(SelfValue, FieldName, FieldValue)
 
 
 # historical repr keeps default bearing signatures and diagnostics source compatible
-def GetModelRepr(SelfValue: AnyValue) -> str:
+def GetModelRepr(SelfValue: object) -> str:
     ClassType = type(SelfValue)
     FieldTexts = (
         f"{GetWireField(FieldName, ClassType)}={getattr(SelfValue, FieldName)!r}"
@@ -135,52 +143,81 @@ def GetModelRepr(SelfValue: AnyValue) -> str:
     return f"{ClassType.__qualname__}({', '.join(FieldTexts)})"
 
 
+# installed properties preserve historical fields without making every unknown attribute valid
+def BindFieldMut(ClassType: type[object], ModelName: str, LegacyName: str) -> None:
+    if ModelName == LegacyName:
+        return
+
+    # direct slot access avoids recursion while each alias keeps its canonical storage owner
+    def GetLegacyValue(SelfValue: object) -> object:
+        return object.__getattribute__(SelfValue, ModelName)
+
+    setattr(ClassType, LegacyName, property(GetLegacyValue))
+
+
+# declared compatibility members need concrete runtime properties before annotations are normalized
+def BindTypedFields(ClassType: type[object]) -> None:
+    FieldMap = GetFieldMap(ClassType)
+    for StoredField in FieldMap.values():
+        WireName = GetWireField(StoredField.name, ClassType)
+        CompatName = GetModelField(WireName, ClassType)
+        BindFieldMut(ClassType, StoredField.name, CompatName)
+
+
 # one installer synchronizes historical identity signatures annotations and module globals
 def BindCompatMut(
-    ClassTypes: tuple[type, ...],
-    ModuleScopes: TypeMap[str, dict[str, AnyValue]],
+    ClassTypes: tuple[type[object], ...],
+    ModuleScopes: TypeMap[str, dict[str, object]],
 ) -> None:
     for ClassType in ClassTypes:
-        CanonicalValue = ClassType.__dict__.get("__canonical_name__")
-        ModelName = (
-            CanonicalValue if isinstance(CanonicalValue, str) else ClassType.__name__
-        )
+        ModelName = GetCanonicalName(ClassType)
         LegacyName, ModuleName = KLegacyModels[ModelName]
-        ClassType.__canonical_name__ = ModelName
-        LocalFields = tuple(ClassType.__slots__)
+        setattr(ClassType, "__canonical_name__", ModelName)
+        BindTypedFields(ClassType)
+        LocalFields = GetSlotNames(ClassType)
         LegacyFieldsList = KLegacyAnnots.get(
             ModelName,
             tuple(GetWireField(FieldName, ClassType) for FieldName in LocalFields),
         )
-        ClassType.__annotations__ = {
+        LegacyAnnots = {
             LegacyField: GetLegacyAnnot(GetStoredField(ClassType, ModelField))
             for ModelField, LegacyField in zip(LocalFields, LegacyFieldsList)
         }
-        ClassType.__match_args__ = tuple(
+        for ModelField, LegacyField in zip(LocalFields, LegacyFieldsList):
+            BindFieldMut(ClassType, ModelField, LegacyField)
+            BindFieldMut(
+                ClassType,
+                ModelField,
+                GetModelField(LegacyField, ClassType),
+            )
+        setattr(ClassType, "__annotations__", LegacyAnnots)
+        MatchArgs = tuple(
             GetWireField(FieldValue.name, ClassType)
-            for FieldValue in GetFields(ClassType)
+            for FieldValue in GetDataFields(ClassType)
             if not FieldValue.kw_only
         )
-        ClassType.__signature__ = GetLegacySig(ClassType)
-        ClassType.__getstate__ = GetModelState
-        ClassType.__setstate__ = SetModelState
-        ClassType.__repr__ = GetModelRepr
-        ClassType.__dataclass_fields__ = GetLegacyFields(ClassType)
-        ClassType.__name__ = LegacyName
-        ClassType.__qualname__ = LegacyName
-        ClassType.__module__ = ModuleName
+        setattr(ClassType, "__match_args__", MatchArgs)
+        setattr(ClassType, "__signature__", GetLegacySig(ClassType))
+        setattr(ClassType, "__getstate__", GetModelState)
+        setattr(ClassType, "__setstate__", SetModelState)
+        setattr(ClassType, "__repr__", GetModelRepr)
+        setattr(ClassType, "__dataclass_fields__", GetLegacyFields(ClassType))
+        setattr(ClassType, "__name__", LegacyName)
+        setattr(ClassType, "__qualname__", LegacyName)
+        setattr(ClassType, "__module__", ModuleName)
         ModuleScopes[ModuleName][LegacyName] = ClassType
 
 
 # historical annotations need their public type names available in every defining facade
 def BindTypeGlobals(
-    ModuleScopes: tuple[dict[str, AnyValue], ...],
-    ClassTypes: tuple[type, ...],
+    ModuleScopes: tuple[ModuleType, ...],
+    ClassTypes: tuple[type[object], ...],
 ) -> None:
-    SharedValues: dict[str, AnyValue] = {
-        "Any": AnyValue,
+    SharedValues: dict[str, object] = {
+        "Any": TypingTypes.Any,
         "Mapping": TypeMap,
     }
     SharedValues.update({ClassType.__name__: ClassType for ClassType in ClassTypes})
     for ModuleScope in ModuleScopes:
-        ModuleScope.update(SharedValues)
+        for ValueName, ValueType in SharedValues.items():
+            setattr(ModuleScope, ValueName, ValueType)

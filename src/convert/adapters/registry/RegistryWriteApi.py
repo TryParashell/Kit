@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import replace as ReplaceValue
 from pathlib import Path as FilePath
+from typing import Protocol
 
 from interchange import CadDocument
 
@@ -26,14 +27,45 @@ from convert.adapters.base.WritePolicy import GetWriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 
 # historical destination annotations need local resolution after public methods move to the registry facade
-globals()["Destination"] = KTargetType
+Destination = KTargetType
+
+
+# selection mixins need a concrete writer catalog boundary without depending on registry composition
+class WriteCatalog(Protocol):
+
+    # selection requires deterministic access to every registered writer
+    def GetWriters(
+        self,
+    ) -> tuple[CadWriterAdapter, ...]: ...  # lgtm[py/ineffectual-statement]
+
+
+# write orchestration needs only lookup and destination selection from its composed host
+class WriteLookup(Protocol):
+
+    # explicit format requests need canonical writer lookup from the composed registry
+    def GetWriter(
+        self, FormatId: str
+    ) -> CadWriterAdapter: ...  # lgtm[py/ineffectual-statement]
+
+    # implicit format requests need destination selection from the composed registry
+    def PickWriter(
+        self,
+        DocumentData: CadDocument,
+        TargetData: KTargetType,
+    ) -> CadWriterAdapter: ...  # lgtm[py/ineffectual-statement]
 
 
 # historical write keywords stay centralized because callers pass explicit target format and options
 def GetWriteArgs(
     NamedValues: dict[str, object],
 ) -> tuple[str | None, WriteOptions | None]:
-    AllowedNames = {"format_id", "FormatId", "options", "OptionsData"}
+    AllowedNames = {
+        "format_id",
+        "FormatId",
+        "options",
+        "OptionsData",
+        "WriteOpts",
+    }
     UnknownNames = tuple(
         NameText for NameText in NamedValues if NameText not in AllowedNames
     )
@@ -43,10 +75,14 @@ def GetWriteArgs(
         )
     if "format_id" in NamedValues and "FormatId" in NamedValues:
         raise TypeError("write() got multiple values for 'format_id'")
-    if "options" in NamedValues and "OptionsData" in NamedValues:
+    OptionNames = {"options", "OptionsData", "WriteOpts"} & NamedValues.keys()
+    if len(OptionNames) > 1:
         raise TypeError("write() got multiple values for 'options'")
     FormatId = NamedValues.get("format_id", NamedValues.get("FormatId"))
-    OptionsData = NamedValues.get("options", NamedValues.get("OptionsData"))
+    OptionsData = NamedValues.get(
+        "options",
+        NamedValues.get("OptionsData", NamedValues.get("WriteOpts")),
+    )
     if FormatId is not None and not isinstance(FormatId, str):
         raise TypeError("format id must be a string")
     if OptionsData is not None and not isinstance(OptionsData, WriteOptions):
@@ -55,32 +91,32 @@ def GetWriteArgs(
 
 
 # writer selection remains separate because destination matching changes independently from staging
-class WriteSelectApi:
+class WriteSelectApi(WriteCatalog):
 
     # destination matching delegates to a focused selector while retaining registry ownership
     def PickWriter(
-        SelfValue,
+        self,
         DocumentData: CadDocument,
         TargetData: KTargetType,
     ) -> CadWriterAdapter:
-        return SelectWriter(SelfValue.GetWriters(), DocumentData, TargetData)
+        return SelectWriter(self.GetWriters(), DocumentData, TargetData)
 
 
 # write orchestration owns validation policy before transactional output staging
-class WriteApi:
+class WriteApi(WriteLookup):
 
     # complete orchestration prevents unsupported capabilities from mutating any destination
     def WriteDocument(
-        SelfValue,
+        self,
         DocumentData: CadDocument,
         TargetData: KTargetType,
         **NamedValues: object,
     ) -> WriteResult:
         FormatId, OptionsData = GetWriteArgs(NamedValues)
         AdapterData = (
-            SelfValue.GetWriter(FormatId)
+            self.GetWriter(FormatId)
             if FormatId
-            else SelfValue.PickWriter(DocumentData, TargetData)
+            else self.PickWriter(DocumentData, TargetData)
         )
         SelectedOpts = OptionsData or WriteOptions()
         if FormatId is not None:
@@ -88,13 +124,13 @@ class WriteApi:
         SelectedOpts, AllowCarrier, NeedSelfContained = GetWriteOptions(SelectedOpts)
         if not AdapterData.supports(DocumentData, TargetData):
             raise NotFoundError(
-                f"{AdapterData.info.format_id} does not support the destination"
+                f"{AdapterData.info.FormatId} does not support the destination"
             )
         if SelectedOpts.Validate:
-            DocumentData.assert_valid()
-        UnsupportedCaps = GetDocumentCaps(DocumentData) - AdapterData.info.capabilities
+            DocumentData.AssertValid()
+        UnsupportedCaps = GetDocumentCaps(DocumentData) - AdapterData.info.Capabilities
         if UnsupportedCaps:
-            raise CapLossError(AdapterData.info.format_id, UnsupportedCaps)
+            raise CapLossError(AdapterData.info.FormatId, UnsupportedCaps)
         if isinstance(TargetData, (str, FilePath)):
             return WritePathStaged(
                 DocumentData,

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -19,14 +19,22 @@ from interchange.records.RecordProvenance import Provenance
 
 # surface meshes retain triangulation normals and source evidence for preview and exchange
 @ModelDataMut(
-    DefaultMap={"Normals": (), "Provenance": None},
-    FactoryMap={"Attributes": FreezeMapping},
+    DefaultMap={"normals": (), "provenance": None},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class SurfaceMesh(ModelBase):
-    EntityId: str
-    EntityName: str
-    Vertices: tuple[SpaceVector, ...]
-    Triangles: tuple[tuple[int, int, int], ...]
-    Normals: tuple[SpaceVector, ...]
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    vertices: tuple[SpaceVector, ...]
+    triangles: tuple[tuple[int, int, int], ...]
+    normals: tuple[SpaceVector, ...]
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        Vertices: ClassVar[tuple[SpaceVector, ...]]
+        Triangles: ClassVar[tuple[tuple[int, int, int], ...]]
+        Normals: ClassVar[tuple[SpaceVector, ...]]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

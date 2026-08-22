@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # renamed fields retain historical keys so serialized documents remain byte compatible
 KWireFields: TypeMap[str, str] = {
     "AxisVector": "axis",
@@ -66,9 +65,13 @@ KWireFields: TypeMap[str, str] = {
 
 # record specific names resolve collisions without weakening the historical wire contract
 KTypeWireFields: TypeMap[str, TypeMap[str, str]] = {
+    "BrepVertex": {"Point": "point"},
+    "CadSource": {"FilePath": "path"},
     "ComponentDef": {"SourceDigest": "source_sha256"},
     "ConstraintRef": {"EntityId": "entity_id"},
     "Diagnostic": {"EntityId": "entity_id"},
+    "PointGeometry": {"Point": "point"},
+    "Selection": {"Point": "point", "SelectionPath": "path"},
     "SelectPathElem": {
         "EntityId": "entity_id",
         "EntityKind": "entity_kind",

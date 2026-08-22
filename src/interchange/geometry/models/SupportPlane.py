@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -20,17 +20,25 @@ from interchange.geometry.models.Transform import Transform
 # support planes retain sketch attachment and offset relationships across systems
 @ModelDataMut(
     DefaultMap={
-        "SupportSelectionId": None,
-        "OffsetParameterId": None,
-        "Provenance": None,
+        "support_selection_id": None,
+        "offset_parameter_id": None,
+        "provenance": None,
     },
-    FactoryMap={"Attributes": FreezeMapping},
+    FactoryMap={"attributes": FreezeMapping},
 )
 class SupportPlane(ModelBase):
-    EntityId: str
-    EntityName: str
-    Transform: Transform
-    SupportSelectionId: str | None
-    OffsetParameterId: str | None
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    transform: Transform
+    support_selection_id: str | None
+    offset_parameter_id: str | None
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
+    if TYPE_CHECKING:
+        EntityId: ClassVar[str]
+        EntityName: ClassVar[str]
+        Transform: ClassVar[Transform]
+        SupportSelectionId: ClassVar[str | None]
+        OffsetParameterId: ClassVar[str | None]
+        Provenance: ClassVar[Provenance | None]
+        Attributes: ClassVar[TypeMap[str, object]]

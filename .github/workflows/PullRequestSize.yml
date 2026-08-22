@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Pull request size label
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] Labels API metadata without executing PR code.
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label-size:
+    name: Label changed LOC ratio
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # Downloads only the trusted base revision for the LOC denominator.
+      issues: write # Creates missing size labels.
+      pull-requests: write # Applies and removes size labels.
+    steps:
+      - name: Download trusted base revision
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/base"
+          gh api \
+            --method GET \
+            --header "Accept: application/vnd.github+json" \
+            "/repos/$REPOSITORY/tarball/$BASE_SHA" \
+            > "$RUNNER_TEMP/base.tar.gz"
+          tar -xzf "$RUNNER_TEMP/base.tar.gz" \
+            -C "$RUNNER_TEMP/base" \
+            --strip-components=1
+
+      - name: Classify changed LOC ratio
+        id: classification
+        env:
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          BASE_PATH: ${{ runner.temp }}/base
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+        shell: bash
+        run: |
+          python - <<'PYTHON'
+          import os as OsTools
+          from pathlib import Path as FilePath
+
+          BasePath = FilePath(OsTools.environ["BASE_PATH"])
+          LineCount = 0
+          for SourcePath in BasePath.rglob("*"):
+              RelativePath = SourcePath.relative_to(BasePath)
+              if (
+                  not SourcePath.is_file()
+                  or SourcePath.is_symlink()
+                  or RelativePath.parts[0] == "re"
+              ):
+                  continue
+              FileData = SourcePath.read_bytes()
+              if b"\0" in FileData:
+                  continue
+              LineCount += len(FileData.splitlines())
+
+          ChangedLines = int(OsTools.environ["ADDITIONS"]) + int(
+              OsTools.environ["DELETIONS"]
+          )
+          ChangedPercent = (
+              ChangedLines * 100 / LineCount
+              if LineCount
+              else (100.0 if ChangedLines else 0.0)
+          )
+          if ChangedPercent < 1:
+              SelectedLabel = "LOW"
+          elif ChangedPercent < 5:
+              SelectedLabel = "MEDIUM"
+          elif ChangedPercent < 15:
+              SelectedLabel = "HIGH"
+          else:
+              SelectedLabel = "EXTREME"
+
+          with open(OsTools.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as OutputFile:
+              OutputFile.write(f"label={SelectedLabel}\n")
+              OutputFile.write(f"percentage={ChangedPercent:.4f}\n")
+          print(
+              f"{ChangedLines} changed lines / {LineCount} base lines "
+              f"= {ChangedPercent:.4f}% ({SelectedLabel})"
+          )
+          PYTHON
+
+      - name: Apply size label
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SELECTED_LABEL: ${{ steps.classification.outputs.label }}
+        with:
+          script: |
+            const LabelColors = {
+              LOW: "2da44e",
+              MEDIUM: "bf8700",
+              HIGH: "bc4c00",
+              EXTREME: "cf222e",
+            };
+            const SelectedLabel = process.env.SELECTED_LABEL;
+            const PullNumber = context.payload.pull_request.number;
+            const ExistingLabels = new Set(
+              context.payload.pull_request.labels.map((LabelInfo) => LabelInfo.name),
+            );
+
+            for (const [LabelName, LabelColor] of Object.entries(LabelColors)) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: LabelName,
+                });
+              } catch (ErrorInfo) {
+                if (ErrorInfo.status !== 404) throw ErrorInfo;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: LabelName,
+                  color: LabelColor,
+                });
+              }
+            }
+
+            if (!ExistingLabels.has(SelectedLabel)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: PullNumber,
+                labels: [SelectedLabel],
+              });
+            }
+
+            for (const LabelName of Object.keys(LabelColors)) {
+              if (LabelName === SelectedLabel || !ExistingLabels.has(LabelName)) continue;
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: PullNumber,
+                name: LabelName,
+              });
+            }

@@ -9,6 +9,7 @@
 from __future__ import annotations as Annotations
 from dataclasses import dataclass as Dataclass
 import struct as Struct
+from typing import TypeGuard, cast as Cast
 from convert.adapters.solidworks.container.Archive import (
     CLASS_REFERENCE_KIND as ClassRefKind,
     DEFINITION_KIND as DefinitionKind,
@@ -286,15 +287,14 @@ KObjectListTail = (
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class Stamp:
-    locals().setdefault("__annotations__", {})
-    __annotations__["high"] = "int"
-    __annotations__["low"] = "int"
+    high: int
+    low: int
 
     # this definition exists because focused behavior needs one stable owner
-    def PackAction(Instance) -> bytes:
-        return Struct.pack("<II", Instance.high, Instance.low)
+    def PackAction(self) -> bytes:
+        return Struct.pack("<II", self.high, self.low)
 
-    locals()["pack"] = PackAction
+    pack = PackAction
 
 
 # this binding exists because shared behavior needs one stable value
@@ -310,44 +310,41 @@ KDefaultFeatureTreeIds = (KFirstTreeId,)
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class FeatureStamp:
-    locals().setdefault("__annotations__", {})
-    __annotations__["tree_id"] = "int"
-    __annotations__["stamp"] = "Stamp"
-    locals()["stamp"] = KZeroStamp
+    tree_id: int
+    stamp: Stamp = KZeroStamp
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CMgrParameters:
-    locals().setdefault("__annotations__", {})
-    __annotations__["configuration_name"] = "str"
-    __annotations__["part_name"] = "str"
-    __annotations__["name_stamp"] = "int"
-    __annotations__["atom_ids"] = "tuple[int, ...]"
-    __annotations__["link_atom_ids"] = "tuple[int, ...]"
-    __annotations__["link_tree_ids"] = "tuple[int, ...]"
-    __annotations__["reverse_atom_ids"] = "tuple[int, ...]"
-    __annotations__["feature_stamps"] = "tuple[FeatureStamp, ...]"
-    __annotations__["display_stamp"] = "Stamp"
-    __annotations__["view_stamp"] = "Stamp"
-    __annotations__["max_tree_id"] = "int"
-    __annotations__["next_id_a"] = "int"
-    __annotations__["next_id_b"] = "int"
-    __annotations__["render_style"] = "int"
-    __annotations__["atom_head_count"] = "int"
-    __annotations__["chord_ratio"] = "float"
-    __annotations__["generation"] = "int"
-    __annotations__["build"] = "int"
-    __annotations__["session_counter"] = "int"
-    __annotations__["display_geometry_cache"] = "bytes"
-    __annotations__["connected_history"] = "bool"
-    __annotations__["terminal_parent_tree_id"] = "int | None"
+    configuration_name: str
+    part_name: str
+    name_stamp: int
+    atom_ids: tuple[int, ...]
+    link_atom_ids: tuple[int, ...]
+    link_tree_ids: tuple[int, ...]
+    reverse_atom_ids: tuple[int, ...]
+    feature_stamps: tuple[FeatureStamp, ...]
+    display_stamp: Stamp
+    view_stamp: Stamp
+    max_tree_id: int
+    next_id_a: int
+    next_id_b: int
+    render_style: int
+    atom_head_count: int
+    chord_ratio: float
+    generation: int
+    build: int
+    session_counter: int
+    display_geometry_cache: bytes
+    connected_history: bool
+    terminal_parent_tree_id: int | None
 
     # this definition exists because focused behavior needs one stable owner
-    def Validate(Instance) -> None:
-        ValidateCmgr(Instance)
+    def Validate(self) -> None:
+        ValidateCmgr(self)
 
-    locals()["validate"] = Validate
+    validate = Validate
 
 
 # this definition exists because configuration validation is independent from parameter storage
@@ -388,19 +385,26 @@ def ValidateCmgr(Params: CMgrParameters) -> None:
 # this definition exists because focused behavior needs one stable owner
 def PackAction(KindValue: str, Value: object) -> bytes:
     if KindValue == "u8":
-        return Struct.pack("<B", int(Value))
+        if isinstance(Value, int):
+            return Struct.pack("<B", Value)
     if KindValue == "u16":
-        return Struct.pack("<H", int(Value))
+        if isinstance(Value, int):
+            return Struct.pack("<H", Value)
     if KindValue == "u32":
-        return Struct.pack("<I", int(Value))
+        if isinstance(Value, int):
+            return Struct.pack("<I", Value)
     if KindValue == "f32":
-        return Struct.pack("<f", float(Value))
+        if isinstance(Value, (int, float)):
+            return Struct.pack("<f", Value)
     if KindValue == "f64":
-        return Struct.pack("<d", float(Value))
+        if isinstance(Value, (int, float)):
+            return Struct.pack("<d", Value)
     if KindValue == "str":
-        return EncodeString(str(Value))
+        if isinstance(Value, str):
+            return EncodeString(Value)
     if KindValue == "zeros":
-        return bytes(int(Value))
+        if isinstance(Value, int):
+            return bytes(Value)
     raise SldprtFormatError(f"unsupported Contents/CMgr field kind {KindValue!r}")
 
 
@@ -1131,23 +1135,136 @@ KLegacyNames = (
 # legacy keyword translation keeps one explicit compatibility boundary
 def LegacyArgs(KwargValues: dict[str, object]) -> dict[str, object]:
     NameMap = dict(KLegacyNames)
+    CanonicalNames = set(NameMap.values())
     Canonical: dict[str, object] = {}
     for NameValue, ItemValue in KwargValues.items():
         TargetName = NameMap.get(NameValue, NameValue)
+        if TargetName not in CanonicalNames:
+            raise TypeError(f"unexpected Contents CMgr keyword {NameValue}")
         if TargetName in Canonical:
             raise TypeError(f"duplicate Contents CMgr keyword {TargetName}")
         Canonical[TargetName] = ItemValue
     return Canonical
 
 
+# atom and tree sequences need integer members before recovered identifiers are packed
+def IsIntegerTuple(Value: object) -> TypeGuard[tuple[int, ...]]:
+    if not isinstance(Value, tuple):
+        return False
+    ObjectValues = Cast(tuple[object, ...], Value)
+    return all(isinstance(Item, int) for Item in ObjectValues)
+
+
+# optional identifier sequences preserve absence while rejecting malformed caller input
+def IsOptionalIntegers(Value: object) -> TypeGuard[tuple[int, ...] | None]:
+    return Value is None or IsIntegerTuple(Value)
+
+
+# feature stamps must remain concrete records before their stream ordering is resolved
+def IsOptionalStamps(Value: object) -> TypeGuard[tuple[FeatureStamp, ...] | None]:
+    if Value is None:
+        return True
+    if not isinstance(Value, tuple):
+        return False
+    ObjectValues = Cast(tuple[object, ...], Value)
+    return all(isinstance(Item, FeatureStamp) for Item in ObjectValues)
+
+
+# optional document stamps must be concrete to preserve their paired stream words
+def IsOptionalStamp(Value: object) -> TypeGuard[Stamp | None]:
+    return Value is None or isinstance(Value, Stamp)
+
+
+# scalar history fields accept numeric callers while retaining the floating point contract
+def IsDecimal(Value: object) -> TypeGuard[float]:
+    return isinstance(Value, (int, float))
+
+
 # the lowercase public encoder accepts both historical and canonical keywords
 def EncodeLegacy(**KwargValues: object) -> bytes:
-    return EncodeCmgr(**LegacyArgs(KwargValues))
+    Values = LegacyArgs(KwargValues)
+    FeatureTreeIds = Values.get("FeatureTreeIds", KDefaultFeatureTreeIds)
+    ConfigName = Values.get("ConfigName", KDefaultConfigName)
+    PartName = Values.get("PartName", KDefaultPartName)
+    NameStamp = Values.get("NameStamp", 0)
+    AtomIds = Values.get("AtomIds")
+    LinkAtomIds = Values.get("LinkAtomIds")
+    LinkTreeIds = Values.get("LinkTreeIds")
+    ReverseAtomIds = Values.get("ReverseAtomIds")
+    FeatureStamps = Values.get("FeatureStamps")
+    DocStamp = Values.get("DocStamp", KDocStamp)
+    DisplayStamp = Values.get("DisplayStamp")
+    ViewStamp = Values.get("ViewStamp")
+    MaxTreeId = Values.get("MaxTreeId")
+    NextIdA = Values.get("NextIdA", 0)
+    NextIdB = Values.get("NextIdB", 0)
+    RenderStyle = Values.get("RenderStyle", KDefaultRenderStyle)
+    AtomHeadCount = Values.get("AtomHeadCount")
+    ChordRatio = Values.get("ChordRatio", KDisplayChordRatio)
+    SessionCounter = Values.get("SessionCounter", KSessionCounter)
+    Generation = Values.get("Generation", KDocGeneration)
+    Build = Values.get("Build", KDocBuild)
+    DisplayGeomCache = Values.get("DisplayGeomCache", KDisplayGeomCacheDefault)
+    ConnectedHistory = Values.get("ConnectedHistory", False)
+    TerminalParentTreeId = Values.get("TerminalParentTreeId")
+    if (
+        not IsIntegerTuple(FeatureTreeIds)
+        or not isinstance(ConfigName, str)
+        or not isinstance(PartName, str)
+        or not isinstance(NameStamp, int)
+        or not IsOptionalIntegers(AtomIds)
+        or not IsOptionalIntegers(LinkAtomIds)
+        or not IsOptionalIntegers(LinkTreeIds)
+        or not IsOptionalIntegers(ReverseAtomIds)
+        or not IsOptionalStamps(FeatureStamps)
+        or not isinstance(DocStamp, Stamp)
+        or not IsOptionalStamp(DisplayStamp)
+        or not IsOptionalStamp(ViewStamp)
+        or not (MaxTreeId is None or isinstance(MaxTreeId, int))
+        or not isinstance(NextIdA, int)
+        or not isinstance(NextIdB, int)
+        or not isinstance(RenderStyle, int)
+        or not (AtomHeadCount is None or isinstance(AtomHeadCount, int))
+        or not IsDecimal(ChordRatio)
+        or not isinstance(SessionCounter, int)
+        or not isinstance(Generation, int)
+        or not isinstance(Build, int)
+        or not isinstance(DisplayGeomCache, bytes)
+        or not isinstance(ConnectedHistory, bool)
+        or not (TerminalParentTreeId is None or isinstance(TerminalParentTreeId, int))
+    ):
+        raise TypeError("EncodeCmgr() received an invalid keyword value")
+    return EncodeCmgr(
+        FeatureTreeIds=FeatureTreeIds,
+        ConfigName=ConfigName,
+        PartName=PartName,
+        NameStamp=NameStamp,
+        AtomIds=AtomIds,
+        LinkAtomIds=LinkAtomIds,
+        LinkTreeIds=LinkTreeIds,
+        ReverseAtomIds=ReverseAtomIds,
+        FeatureStamps=FeatureStamps,
+        DocStamp=DocStamp,
+        DisplayStamp=DisplayStamp,
+        ViewStamp=ViewStamp,
+        MaxTreeId=MaxTreeId,
+        NextIdA=NextIdA,
+        NextIdB=NextIdB,
+        RenderStyle=RenderStyle,
+        AtomHeadCount=AtomHeadCount,
+        ChordRatio=ChordRatio,
+        SessionCounter=SessionCounter,
+        Generation=Generation,
+        Build=Build,
+        DisplayGeomCache=DisplayGeomCache,
+        ConnectedHistory=ConnectedHistory,
+        TerminalParentTreeId=TerminalParentTreeId,
+    )
 
 
 # opaque accounting remains shared by both public keyword conventions
 def OpaqueSplit(StreamData: bytes) -> dict[str, int]:
-    Opaque = sum((Length for Ignored, Ignored, Length in KResidualSpans))
+    Opaque = sum((SpanData[2] for SpanData in KResidualSpans))
     return {
         "stream_bytes": len(StreamData),
         "declared": len(StreamData) - Opaque,
@@ -1159,7 +1276,7 @@ def OpaqueSplit(StreamData: bytes) -> dict[str, int]:
 
 # this definition exists because focused behavior needs one stable owner
 def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
-    return OpaqueSplit(EncodeCmgr(**KwargValues))
+    return OpaqueSplit(EncodeLegacy(**KwargValues))
 
 
 # the lowercase accounting helper retains historical keyword compatibility
@@ -1168,238 +1285,181 @@ def OpaqueLegacy(**KwargValues: object) -> dict[str, int]:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["ATOM_TABLE_HEAD"] = KAtomTableHead
+ATOM_TABLE_HEAD = KAtomTableHead
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_REFERENCE_KIND"] = ClassRefKind
+CLASS_REFERENCE_KIND = ClassRefKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["CLASS_SCHEMA"] = KClassSchema
+CLASS_SCHEMA = KClassSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIGURATION_CLASS"] = KConfigClass
+CONFIGURATION_CLASS = KConfigClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONFIGURATION_MANAGER_STREAM"] = KConfigManagerStream
+CONFIGURATION_MANAGER_STREAM = KConfigManagerStream
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_CONFIGURATION_NAME"] = KDefaultConfigName
+DEFAULT_CONFIGURATION_NAME = KDefaultConfigName
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_FEATURE_TREE_IDS"] = KDefaultFeatureTreeIds
+DEFAULT_FEATURE_TREE_IDS = KDefaultFeatureTreeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_PART_NAME"] = KDefaultPartName
+DEFAULT_PART_NAME = KDefaultPartName
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFAULT_RENDER_STYLE"] = KDefaultRenderStyle
+DEFAULT_RENDER_STYLE = KDefaultRenderStyle
 
 # this binding exists because shared behavior needs one stable value
-globals()["DEFINITION_KIND"] = DefinitionKind
+DEFINITION_KIND = DefinitionKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_CHORD_RATIO"] = KDisplayChordRatio
+DISPLAY_CHORD_RATIO = KDisplayChordRatio
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_GEOMETRY_CACHE_BYTES"] = KDisplayGeomCacheBytes
+DISPLAY_GEOMETRY_CACHE_BYTES = KDisplayGeomCacheBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_GEOMETRY_CACHE_DEFAULT"] = KDisplayGeomCacheDefault
+DISPLAY_GEOMETRY_CACHE_DEFAULT = KDisplayGeomCacheDefault
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_STATE_KIND"] = KDisplayStateKind
+DISPLAY_STATE_KIND = KDisplayStateKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_STATE_MASK"] = KDisplayStateMask
+DISPLAY_STATE_MASK = KDisplayStateMask
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_STATE_REVISION"] = KDisplayStateRevision
+DISPLAY_STATE_REVISION = KDisplayStateRevision
 
 # this binding exists because shared behavior needs one stable value
-globals()["DISPLAY_TAIL"] = KDisplayTail
+DISPLAY_TAIL = KDisplayTail
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_BUILD"] = KDocBuild
+DOCUMENT_BUILD = KDocBuild
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_GENERATION"] = KDocGeneration
+DOCUMENT_GENERATION = KDocGeneration
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_STAMP"] = KDocStamp
+DOCUMENT_STAMP = KDocStamp
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_STAMP_HIGH"] = KDocStampHigh
+DOCUMENT_STAMP_HIGH = KDocStampHigh
 
 # this binding exists because shared behavior needs one stable value
-globals()["DOCUMENT_STAMP_LOW"] = KDocStampLow
+DOCUMENT_STAMP_LOW = KDocStampLow
 
 # this binding exists because shared behavior needs one stable value
-globals()["EXT_OBJECT_CLASS"] = KExtObjectClass
+EXT_OBJECT_CLASS = KExtObjectClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["FIRST_ATOM_ID"] = KFirstAtomId
+FIRST_ATOM_ID = KFirstAtomId
 
 # this binding exists because shared behavior needs one stable value
-globals()["FIRST_TREE_ID"] = KFirstTreeId
+FIRST_TREE_ID = KFirstTreeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["LINK_CLASS"] = KLinkClass
+LINK_CLASS = KLinkClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["LINK_FLAG"] = KLinkFlag
+LINK_FLAG = KLinkFlag
 
 # this binding exists because shared behavior needs one stable value
-globals()["LINK_TERMINATOR"] = KLinkTerminator
+LINK_TERMINATOR = KLinkTerminator
 
 # this binding exists because shared behavior needs one stable value
-globals()["MANAGER_SCALE"] = KManagerScale
+MANAGER_SCALE = KManagerScale
 
 # this binding exists because shared behavior needs one stable value
-globals()["MAP_BASE"] = KMapBase
+MAP_BASE = KMapBase
 
 # this binding exists because shared behavior needs one stable value
-globals()["NODE_NAME_CLASS"] = KNodeNameClass
+NODE_NAME_CLASS = KNodeNameClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["NODE_NAME_FLAGS"] = KNodeNameFlags
+NODE_NAME_FLAGS = KNodeNameFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()["NODE_NAME_SCALE"] = KNodeNameScale
+NODE_NAME_SCALE = KNodeNameScale
 
 # this binding exists because shared behavior needs one stable value
-globals()["NULL_KIND"] = NullKind
+NULL_KIND = NullKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["Node"] = NodeValue
+Node = NodeValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["OBJECT_LIST_CLASS"] = KObjectListClass
+OBJECT_LIST_CLASS = KObjectListClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["OBJECT_LIST_KIND"] = KObjectListKind
+OBJECT_LIST_KIND = KObjectListKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["OBJECT_LIST_TAIL"] = KObjectListTail
+OBJECT_LIST_TAIL = KObjectListTail
 
 # this binding exists because shared behavior needs one stable value
-globals()["OBJECT_REFERENCE_KIND"] = ObjectRefKind
+OBJECT_REFERENCE_KIND = ObjectRefKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["RESIDUAL_SPANS"] = KResidualSpans
+RESIDUAL_SPANS = KResidualSpans
 
 # this binding exists because shared behavior needs one stable value
-globals()["ROOT_CLASS"] = KRootClass
+ROOT_CLASS = KRootClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["SESSION_COUNTER"] = KSessionCounter
+SESSION_COUNTER = KSessionCounter
 
 # this binding exists because shared behavior needs one stable value
-globals()["STRING_HANDLE_CLASS"] = KStringHandleClass
+STRING_HANDLE_CLASS = KStringHandleClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["STRING_HANDLE_KIND"] = KStringHandleKind
+STRING_HANDLE_KIND = KStringHandleKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["TREE_ID_STEP"] = KTreeIdStep
+TREE_ID_STEP = KTreeIdStep
 
 # this binding exists because shared behavior needs one stable value
-globals()["VIEW_STYLE"] = KViewStyle
+VIEW_STYLE = KViewStyle
 
 # this binding exists because shared behavior needs one stable value
-globals()["VIEW_STYLE_MODE"] = KViewStyleMode
+VIEW_STYLE_MODE = KViewStyleMode
 
 # this binding exists because shared behavior needs one stable value
-globals()["VISUAL_CLASS"] = KVisualClass
+VISUAL_CLASS = KVisualClass
 
 # this binding exists because shared behavior needs one stable value
-globals()["VISUAL_PROPERTIES"] = KVisualProperties
+VISUAL_PROPERTIES = KVisualProperties
 
 # this binding exists because shared behavior needs one stable value
-globals()["ZERO_STAMP"] = KZeroStamp
+ZERO_STAMP = KZeroStamp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ConnectedAtomTable"] = ConnectedAtom
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ConnectedFourLinkParts"] = ConnectedFour
+atom_ids_for = AtomIdsFor
 
 # this binding exists because shared behavior needs one stable value
-globals()["_ConnectedLinkParts"] = ConnectedLink
+build_model = BuildModel
 
 # this binding exists because shared behavior needs one stable value
-globals()["_TerminalLinkBody"] = TerminalLink
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["_atom_head"] = AtomHead
+declared_opaque_split = OpaqueLegacy
 
 # this binding exists because shared behavior needs one stable value
-globals()["_atom_table"] = AtomTable
+encode_class_definition = EncodeClassDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["_display_state"] = DisplayState
+encode_cmgr_stream = EncodeLegacy
 
 # this binding exists because shared behavior needs one stable value
-globals()["_display_state_full"] = DisplayStateA
+encode_string = EncodeString
 
 # this binding exists because shared behavior needs one stable value
-globals()["_identity_block"] = IdentityBlock
+struct = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()["_link_body"] = LinkBody
-
-# this binding exists because shared behavior needs one stable value
-globals()["_link_head"] = LinkHead
-
-# this binding exists because shared behavior needs one stable value
-globals()["_manager_head"] = ManagerHead
-
-# this binding exists because shared behavior needs one stable value
-globals()["_node_name"] = NodeName
-
-# this binding exists because shared behavior needs one stable value
-globals()["_pack"] = PackAction
-
-# this binding exists because shared behavior needs one stable value
-globals()["_reverse_table"] = ReverseTable
-
-# this binding exists because shared behavior needs one stable value
-globals()["_stamp_list"] = StampList
-
-# this binding exists because shared behavior needs one stable value
-globals()["_string_handle_body"] = StringHandle
-
-# this binding exists because shared behavior needs one stable value
-globals()["_table"] = Table
-
-# this binding exists because shared behavior needs one stable value
-globals()["_visual_properties"] = Visual
-
-# this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
-
-# this binding exists because shared behavior needs one stable value
-globals()["atom_ids_for"] = AtomIdsFor
-
-# this binding exists because shared behavior needs one stable value
-globals()["build_model"] = BuildModel
-
-# this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
-
-# this binding exists because shared behavior needs one stable value
-globals()["declared_opaque_split"] = OpaqueLegacy
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_class_definition"] = EncodeClassDefinition
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_cmgr_stream"] = EncodeLegacy
-
-# this binding exists because shared behavior needs one stable value
-globals()["encode_string"] = EncodeString
-
-# this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
-
-# this binding exists because shared behavior needs one stable value
-globals()["tree_ids_for"] = TreeIdsFor
+tree_ids_for = TreeIdsFor

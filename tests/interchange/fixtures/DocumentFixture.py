@@ -6,19 +6,18 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from interchange import CadDocument
-from interchange import CadSource
-from interchange import Capability
-from interchange import Configuration
-from interchange import DesignBody
-from interchange import FeatureKind
-from interchange import FeatureStep
-from interchange import LineGeometry
-from interchange import PlaneVector
-from interchange import Sketch
-from interchange import SketchEntity
-from interchange import SupportPlane
-from interchange import Transform
+from interchange.document.models.DocumentModel import CadDocument
+from interchange.enums.EnumDocument import Capability
+from interchange.enums.EnumFeatures import FeatureKind
+from interchange.features.FeatureBody import DesignBody
+from interchange.features.FeatureStep import FeatureStep
+from interchange.geometry.models.GeometryCurves import LineGeometry
+from interchange.geometry.models.Sketch import Sketch, SketchEntity
+from interchange.geometry.models.SupportPlane import SupportPlane
+from interchange.geometry.models.Transform import Transform
+from interchange.geometry.models.VectorPlane import PlaneVector
+from interchange.records.RecordConfig import Configuration
+from interchange.records.RecordSource import CadSource
 
 
 # the canonical document fixture keeps domain tests independent from test modules
@@ -31,19 +30,19 @@ def BuildDocument() -> CadDocument:
     )
     SketchValue = Sketch("sketch:1", "Sketch1", PlaneValue.EntityId, (EntityValue,))
     FeatureValue = FeatureStep(
-        "feature:1", "Boss1", FeatureKind.KExtrusion, 0, SketchId=SketchValue.EntityId
+        "feature:1", "Boss1", FeatureKind.KExtrusion, 0, sketch_id=SketchValue.id
     )
     BodyValue = DesignBody("body:1", "Body", FeatureValue.EntityId)
     return CadDocument(
-        Source=CadSource("test", "memory", "0" * 64),
-        Configurations=(Configuration("config:default", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(PlaneValue,),
-        Sketches=(SketchValue,),
-        Selections=(),
-        FeatureTimeline=(FeatureValue,),
-        Bodies=(BodyValue,),
-        Capabilities=frozenset(
+        source=CadSource("test", "memory", "0" * 64),
+        configurations=(Configuration("config:default", "Default", True),),
+        parameters=(),
+        support_planes=(PlaneValue,),
+        sketches=(SketchValue,),
+        selections=(),
+        feature_timeline=(FeatureValue,),
+        bodies=(BodyValue,),
+        capabilities=frozenset(
             {Capability.KParamHistory, Capability.KEditableSketches}
         ),
     )

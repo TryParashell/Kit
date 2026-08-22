@@ -11,66 +11,63 @@ from __future__ import annotations
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.registry.RegistryErrors import NotFoundError
+from convert.adapters.registry.RegistryState import RegistryHost
 from convert.adapters.base.WritePolicy import GetFormatKey
 
 
 # reader catalog ownership isolates ordering and lookup from registration state transitions
-class ReaderCatalog:
+class ReaderCatalog(RegistryHost):
 
     # deterministic ordering keeps discovery independent from import timing
-    def GetReaders(SelfValue) -> tuple[CadReaderAdapter, ...]:
+    def GetReaders(self) -> tuple[CadReaderAdapter, ...]:
         return tuple(
-            BindingData.ReaderData
-            for FormatKey, BindingData in sorted(SelfValue.BindingMap.items())
-            if BindingData.ReaderData is not None
+            BindingData.reader
+            for BindingData in dict(sorted(self.BindingMap.items())).values()
+            if BindingData.reader is not None
         )
 
     # canonical and aliased lookup share one case insensitive namespace
-    def GetReader(SelfValue, FormatId: str) -> CadReaderAdapter:
+    def GetReader(self, FormatId: str) -> CadReaderAdapter:
         FormatKey = GetFormatKey(FormatId)
-        BindingData = SelfValue.BindingMap.get(
-            SelfValue.AliasMap.get(FormatKey, FormatKey)
-        )
-        if BindingData is None or BindingData.ReaderData is None:
+        BindingData = self.BindingMap.get(self.AliasMap.get(FormatKey, FormatKey))
+        if BindingData is None or BindingData.reader is None:
             raise NotFoundError(f"no reader registered for {FormatId}")
-        return BindingData.ReaderData
+        return BindingData.reader
 
 
 # writer catalog ownership isolates ordering and lookup from registration state transitions
-class WriterCatalog:
+class WriterCatalog(RegistryHost):
 
     # deterministic ordering keeps destination selection independent from import timing
-    def GetWriters(SelfValue) -> tuple[CadWriterAdapter, ...]:
+    def GetWriters(self) -> tuple[CadWriterAdapter, ...]:
         return tuple(
-            BindingData.WriterData
-            for FormatKey, BindingData in sorted(SelfValue.BindingMap.items())
-            if BindingData.WriterData is not None
+            BindingData.writer
+            for BindingData in dict(sorted(self.BindingMap.items())).values()
+            if BindingData.writer is not None
         )
 
     # canonical and aliased lookup share one case insensitive namespace
-    def GetWriter(SelfValue, FormatId: str) -> CadWriterAdapter:
+    def GetWriter(self, FormatId: str) -> CadWriterAdapter:
         FormatKey = GetFormatKey(FormatId)
-        BindingData = SelfValue.BindingMap.get(
-            SelfValue.AliasMap.get(FormatKey, FormatKey)
-        )
-        if BindingData is None or BindingData.WriterData is None:
+        BindingData = self.BindingMap.get(self.AliasMap.get(FormatKey, FormatKey))
+        if BindingData is None or BindingData.writer is None:
             raise NotFoundError(f"no writer registered for {FormatId}")
-        return BindingData.WriterData
+        return BindingData.writer
 
 
 # format listing remains separate because public names differ from normalized lookup keys
-class FormatCatalog:
+class FormatCatalog(RegistryHost):
 
     # canonical ids and aliases remain visible without exposing internal case folded keys
-    def GetFormatIds(SelfValue) -> tuple[str, ...]:
-        FormatNames = {
+    def GetFormatIds(self) -> tuple[str, ...]:
+        FormatNames: set[str] = {
             ValueText
-            for BindingData in SelfValue.BindingMap.values()
-            for AdapterData in (BindingData.ReaderData, BindingData.WriterData)
+            for BindingData in self.BindingMap.values()
+            for AdapterData in (BindingData.reader, BindingData.writer)
             if AdapterData is not None
             for ValueText in (
-                AdapterData.info.format_id,
-                *AdapterData.info.aliases,
+                AdapterData.info.FormatId,
+                *AdapterData.info.AliasNames,
             )
         }
         return tuple(sorted(FormatNames, key=GetNameKey))

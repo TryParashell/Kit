@@ -10,22 +10,17 @@ from __future__ import annotations
 
 from typing import Iterable as TypeIterable
 
-from interchange import CadDocument
+from interchange import CadDocument as KCadDocument
 
-from convert.adapters.base.AdapterProtocols import CadReaderAdapter
-from convert.adapters.base.AdapterProtocols import CadWriterAdapter
+from convert.adapters.base.AdapterProtocols import CadReaderAdapter as KCadReaderAdapter
+from convert.adapters.base.AdapterProtocols import CadWriterAdapter as KCadWriterAdapter
 from convert.adapters.base.ContractTypes import KSourceType
 from convert.adapters.base.ContractTypes import KTargetType
-from convert.adapters.base.ReadOptions import ReadOptions
+from convert.adapters.base.ReadOptions import ReadOptions as KReadOptions
 from convert.adapters.registry.RegistryBinding import AdapterBinding
 from convert.adapters.registry.RegistryCatalogApi import FormatCatalog
 from convert.adapters.registry.RegistryCatalogApi import ReaderCatalog
 from convert.adapters.registry.RegistryCatalogApi import WriterCatalog
-from convert.adapters.registry.RegistryCompat import SetExtendSigMut
-from convert.adapters.registry.RegistryCompat import InstallApiMut
-from convert.adapters.registry.RegistryCompat import SetReadSigsMut
-from convert.adapters.registry.RegistryCompat import SetRegSigsMut
-from convert.adapters.registry.RegistryCompat import SetWriteSigMut
 from convert.adapters.registry.RegistryDiscoveryApi import DiscoveryApi
 from convert.adapters.registry.RegistryDiscoveryApi import ExtendApi
 from convert.adapters.registry.RegistryErrors import AdapterDiscoveryError
@@ -40,43 +35,43 @@ from convert.adapters.registry.RegistryRegisterApi import RegisterApi
 from convert.adapters.registry.RegistryWriteApi import WriteApi
 from convert.adapters.registry.RegistryWriteApi import WriteSelectApi
 from convert.adapters.base.UsabilityError import ApplicationUsabilityError
-from convert.adapters.base.WriteOptions import WriteOptions
-from convert.adapters.base.WriteResult import WriteResult
+from convert.adapters.base.WriteOptions import WriteOptions as KWriteOptions
+from convert.adapters.base.WriteResult import WriteResult as KWriteResult
 
 # historical reader annotations need resolution after bindings move behind this compatibility facade
-globals()["CadReaderAdapter"] = CadReaderAdapter
+CadReaderAdapter = KCadReaderAdapter
 
 # historical writer annotations need resolution after bindings move behind this compatibility facade
-globals()["CadWriterAdapter"] = CadWriterAdapter
+CadWriterAdapter = KCadWriterAdapter
 
 # historical source annotations need resolution after methods move behind this compatibility facade
-globals()["Source"] = KSourceType
+Source = KSourceType
 
 # historical destination annotations need resolution after methods move behind this compatibility facade
-globals()["Destination"] = KTargetType
+Destination = KTargetType
 
 # historical read option annotations need resolution after methods move behind this compatibility facade
-globals()["ReadOptions"] = ReadOptions
+ReadOptions = KReadOptions
 
 # historical write option annotations need resolution after methods move behind this compatibility facade
-globals()["WriteOptions"] = WriteOptions
+WriteOptions = KWriteOptions
 
 # historical result annotations need resolution after methods move behind this compatibility facade
-globals()["WriteResult"] = WriteResult
+WriteResult = KWriteResult
 
 # historical document annotations need resolution after methods move behind this compatibility facade
-globals()["CadDocument"] = CadDocument
+CadDocument = KCadDocument
 
 # historical iterable annotations need resolution after methods move behind this compatibility facade
-globals()["Iterable"] = TypeIterable
+Iterable = TypeIterable
 
 
 # registry composition keeps each independent responsibility in one focused mixin module
 class AdapterRegistry(
     BindingApi,
     RegisterApi,
-    DiscoveryApi,
     ExtendApi,
+    DiscoveryApi,
     ReaderCatalog,
     WriterCatalog,
     FormatCatalog,
@@ -85,18 +80,114 @@ class AdapterRegistry(
     WriteSelectApi,
     WriteApi,
 ):
+    BindingMap: dict[str, AdapterBinding]
+    AliasMap: dict[str, str]
 
     # empty isolated state supports independent applications tests and transactional discovery
-    def __init__(SelfValue) -> None:
-        SelfValue.BindingMap: dict[str, AdapterBinding] = {}
-        SelfValue.AliasMap: dict[str, str] = {}
+    def __init__(self) -> None:
+        self.BindingMap = {}
+        self.AliasMap = {}
 
+    # public registration keeps the historical reader spelling statically visible
+    def register_reader(
+        self,
+        adapter: CadReaderAdapter,
+        *,
+        replace: bool = False,
+    ) -> None:
+        self.RegisterReader(adapter, ReplaceFlag=replace)
 
-InstallApiMut(AdapterRegistry)
-SetRegSigsMut(AdapterRegistry)
-SetReadSigsMut(AdapterRegistry)
-SetWriteSigMut(AdapterRegistry)
-SetExtendSigMut(AdapterRegistry)
+    # public registration keeps the historical writer spelling statically visible
+    def register_writer(
+        self,
+        adapter: CadWriterAdapter,
+        *,
+        replace: bool = False,
+    ) -> None:
+        self.RegisterWriter(adapter, ReplaceFlag=replace)
+
+    # public registration accepts either adapter direction without runtime alias installation
+    def register(
+        self,
+        adapter: object,
+        *,
+        replace: bool = False,
+    ) -> None:
+        self.RegisterOne(adapter, ReplaceFlag=replace)
+
+    # discovery stays public because callers can populate registries from alternate packages
+    def introspect(self, package_name: str = "convert.adapters") -> tuple[str, ...]:
+        return self.Introspect(package_name)
+
+    # reader enumeration exposes the established lower case registry contract
+    def readers(self) -> tuple[CadReaderAdapter, ...]:
+        return self.GetReaders()
+
+    # writer enumeration exposes the established lower case registry contract
+    def writers(self) -> tuple[CadWriterAdapter, ...]:
+        return self.GetWriters()
+
+    # reader lookup retains the lower case contract used by direct integrations
+    def reader(self, format_id: str) -> CadReaderAdapter:
+        return self.GetReader(format_id)
+
+    # writer lookup retains the lower case contract used by direct integrations
+    def writer(self, format_id: str) -> CadWriterAdapter:
+        return self.GetWriter(format_id)
+
+    # reader selection remains callable through its historical lower case surface
+    def select_reader(self, source: Source) -> CadReaderAdapter:
+        return self.PickReader(source)
+
+    # writer selection remains callable through its historical lower case surface
+    def select_writer(
+        self,
+        document: CadDocument,
+        destination: Destination,
+    ) -> CadWriterAdapter:
+        return self.PickWriter(document, destination)
+
+    # document reads expose concrete keyword fields for static api consumers
+    def read(
+        self,
+        source: Source,
+        *,
+        format_id: str | None = None,
+        options: ReadOptions | None = None,
+    ) -> CadDocument:
+        return self.ReadDocument(source, FormatId=format_id, OptionsData=options)
+
+    # adapter aware reads expose both stable document and reader contracts
+    def read_with_adapter(
+        self,
+        source: Source,
+        *,
+        format_id: str | None = None,
+        options: ReadOptions | None = None,
+    ) -> tuple[CadDocument, CadReaderAdapter]:
+        return self.ReadAdapter(source, FormatId=format_id, OptionsData=options)
+
+    # document writes expose concrete keyword fields for static api consumers
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        *,
+        format_id: str | None = None,
+        options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return self.WriteDocument(
+            document, destination, FormatId=format_id, OptionsData=options
+        )
+
+    # format inspection remains public without exposing normalized map implementation details
+    def format_ids(self) -> tuple[str, ...]:
+        return self.GetFormatIds()
+
+    # bulk registration keeps rollback behavior while accepting the historical lower case keywords
+    def extend(self, adapters: Iterable[object], *, replace: bool = False) -> None:
+        self.ExtendAll(adapters, ReplaceFlag=replace)
+
 
 for PublicType, PublicName in (
     (AdapterBinding, "AdapterBinding"),
