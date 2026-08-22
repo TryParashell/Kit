@@ -8,14 +8,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING as IsTypeCheck
+from typing import ClassVar
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
-
-if IsTypeCheck:
-    from interchange.document.models.DocumentModel import (
-        CadDocument,  # lgtm[py/unsafe-cyclic-import]
-    )
 
 
 # component documents embed linked portable documents without weakening graph typing
@@ -31,3 +26,8 @@ class ComponentDoc(ModelBase):
     @property
     def Document(self) -> CadDocument:
         return self.document
+
+
+# the linked document type binds at the bottom so the recursive assembly and
+# document graph resolves completely no matter which module is imported first
+from interchange.document.models.DocumentModel import CadDocument  # noqa: E402

@@ -96,7 +96,6 @@ class ContractMeta(type):
 
     # callers can upgrade independently because old keyword names still reach compliant fields
     @Override
-    @Override
     def __call__(
         self: type[ContractValue],
         *ArgValues: object,
@@ -121,16 +120,9 @@ class ContractMeta(type):
         return ResultValue
 
 
-# historical reflection chooses the public field spelling for each compliant storage name
+# stored field spellings already match the public contract so reflection needs no renaming
 def GetLegacyName(ModelName: str) -> str:
-    return next(
-        (
-            FieldName
-            for FieldName, FieldModel in KFieldAliases.items()
-            if FieldModel == ModelName
-        ),
-        ModelName,
-    )
+    return ModelName
 
 
 # historical annotations remain readable because third party adapters may inspect constructor contracts

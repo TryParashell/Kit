@@ -12,8 +12,6 @@ from dataclasses import dataclass as DataClass
 from dataclasses import field as DataField
 from pathlib import Path as FilePath
 from typing import Mapping as TypeMap
-from typing import TYPE_CHECKING as IsTypeCheck
-from typing import overload as Overload
 
 from interchange import Capability
 from interchange import Diagnostic
@@ -34,149 +32,105 @@ from convert.adapters.base.WriteValidate import GetNativeCaps
 # writer outcomes centralize transactional output and preservation evidence for callers
 @DataClass(frozen=True, slots=True)
 class WriteResult(ContractBase):
-    OutputPath: FilePath | None
-    AdapterName: str
-    ByteCount: int
-    Diagnostics: tuple[Diagnostic, ...] = ()
-    MetadataMap: TypeMap[str, object] = DataField(default_factory=FreezeMapping)
-    Transfers: tuple[CapTransfer, ...] = ()
-    DroppedCaps: frozenset[Capability] = frozenset()
-    Requirements: tuple[str, ...] = ()
-    IsAppUsable: bool = False
-    IsVendorLoadable: bool = False
-
-    if IsTypeCheck:
-
-        # historical keywords remain typed because writer plugins construct this public result directly
-        @Overload
-        def __init__(
-            self,
-            path: FilePath | None,
-            adapter: str,
-            bytes_written: int,
-            diagnostics: tuple[Diagnostic, ...] = (),
-            metadata: TypeMap[str, object] = FreezeMapping(),
-            transfers: tuple[CapTransfer, ...] = (),
-            dropped: frozenset[Capability] = frozenset(),
-            requirements: tuple[str, ...] = (),
-            application_usable: bool = False,
-            vendor_loadable: bool = False,
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # canonical keywords remain typed because dataclass replacement reconstructs results from storage fields
-        @Overload
-        def __init__(
-            self,
-            OutputPath: FilePath | None,
-            AdapterName: str,
-            ByteCount: int,
-            Diagnostics: tuple[Diagnostic, ...] = (),
-            MetadataMap: TypeMap[str, object] = FreezeMapping(),
-            Transfers: tuple[CapTransfer, ...] = (),
-            DroppedCaps: frozenset[Capability] = frozenset(),
-            Requirements: tuple[str, ...] = (),
-            IsAppUsable: bool = False,
-            IsVendorLoadable: bool = False,
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(
-            self, *ArgValues: object, **NamedValues: object
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-    # historical path access remains typed because staging consumers inspect this public field
-    @property
-    def path(self) -> FilePath | None:
-        return self.OutputPath
-
-    # historical byte count access remains typed because conversion reports expose this public field
-    @property
-    def bytes_written(self) -> int:
-        return self.ByteCount
-
-    # historical dropped capability access remains typed because api consumers inspect this public field
-    @property
-    def dropped(self) -> frozenset[Capability]:
-        return self.DroppedCaps
-
-    # historical roundtrip access remains typed because api consumers inspect this preservation claim
-    @property
-    def roundtrip_safe(self) -> bool:
-        return self.IsRoundtripSafe
+    path: FilePath | None
+    adapter: str
+    bytes_written: int
+    diagnostics: tuple[Diagnostic, ...] = ()
+    metadata: TypeMap[str, object] = DataField(default_factory=FreezeMapping)
+    transfers: tuple[CapTransfer, ...] = ()
+    dropped: frozenset[Capability] = frozenset()
+    requirements: tuple[str, ...] = ()
+    application_usable: bool = False
+    vendor_loadable: bool = False
 
     # construction rejects contradictory evidence before registry policy can trust it
     def __post_init__(self) -> None:
-        if self.ByteCount < 0:
+        if self.bytes_written < 0:
             raise ValueError("bytes written cannot be negative")
-        CheckDropped(self.DroppedCaps)
-        CheckTransfers(self.Transfers, self.DroppedCaps)
-        CheckNeeds(self.Requirements)
+        CheckDropped(self.dropped)
+        CheckTransfers(self.transfers, self.dropped)
+        CheckNeeds(self.requirements)
         CheckUsability(
-            self.IsAppUsable,
-            self.IsVendorLoadable,
-            self.MetadataMap,
+            self.application_usable,
+            self.vendor_loadable,
+            self.metadata,
         )
 
     # callers need one complete preservation view independent from representation mode
     @property
     def TransferCaps(self) -> frozenset[Capability]:
-        return frozenset(TransferData.CapabilityData for TransferData in self.Transfers)
+        return frozenset(TransferData.capability for TransferData in self.transfers)
 
     # roundtrip safety means no source capability was discarded regardless of dependencies
     @property
     def IsRoundtripSafe(self) -> bool:
-        return not self.DroppedCaps
+        return not self.dropped
 
     # near losslessness requires usable output and only intrinsic target format limitations
     @property
     def IsNearLossless(self) -> bool:
         return (
-            self.IsAppUsable
-            and self.IsVendorLoadable
-            and not self.Requirements
-            and not self.DroppedCaps
+            self.application_usable
+            and self.vendor_loadable
+            and not self.requirements
+            and not self.dropped
             and all(
-                TransferData.CarrierCause is CarrierReason.KTargetGap
-                for TransferData in self.Transfers
-                if TransferData.TransferModeData
+                TransferData.carrier_reason is CarrierReason.KTargetGap
+                for TransferData in self.transfers
+                if TransferData.mode
                 in {TransferMode.KCarrier, TransferMode.KMixed}
             )
         )
 
+    # legacy callers need the output path without losing its path type
+    @property
+    def OutputPath(self) -> FilePath | None:
+        return self.path
+
     # legacy callers need the adapter identity without losing its string type
     @property
-    def adapter(self) -> str:
-        return self.AdapterName
+    def AdapterName(self) -> str:
+        return self.adapter
+
+    # legacy callers need byte accounting without losing its integer type
+    @property
+    def ByteCount(self) -> int:
+        return self.bytes_written
 
     # legacy callers need diagnostics to retain their public record type
     @property
-    def diagnostics(self) -> tuple[Diagnostic, ...]:
-        return self.Diagnostics
+    def Diagnostics(self) -> tuple[Diagnostic, ...]:
+        return self.diagnostics
 
     # legacy callers need metadata indexing without degrading the mapping to object
     @property
-    def metadata(self) -> TypeMap[str, object]:
-        return self.MetadataMap
+    def MetadataMap(self) -> TypeMap[str, object]:
+        return self.metadata
 
     # legacy callers need transfer iteration to retain capability evidence types
     @property
-    def transfers(self) -> tuple[CapTransfer, ...]:
-        return self.Transfers
+    def Transfers(self) -> tuple[CapTransfer, ...]:
+        return self.transfers
+
+    # legacy callers need dropped capability access as a typed set
+    @property
+    def DroppedCaps(self) -> frozenset[Capability]:
+        return self.dropped
 
     # legacy callers need output requirements to retain their immutable sequence type
     @property
-    def requirements(self) -> tuple[str, ...]:
-        return self.Requirements
+    def Requirements(self) -> tuple[str, ...]:
+        return self.requirements
 
     # legacy callers need application usability as a statically visible predicate
     @property
-    def application_usable(self) -> bool:
-        return self.IsAppUsable
+    def IsAppUsable(self) -> bool:
+        return self.application_usable
 
     # legacy callers need vendor loadability as a statically visible predicate
     @property
-    def vendor_loadable(self) -> bool:
-        return self.IsVendorLoadable
+    def IsVendorLoadable(self) -> bool:
+        return self.vendor_loadable
 
     # legacy callers need losslessness policy exposed as a typed predicate
     @property
@@ -191,12 +145,12 @@ class WriteResult(ContractBase):
     # canonical native capability access supports both modern and historical result consumers
     @property
     def NativeCaps(self) -> frozenset[Capability]:
-        return GetNativeCaps(self.Transfers)
+        return GetNativeCaps(self.transfers)
 
     # canonical carrier capability access keeps reversible preservation evidence directly typed
     @property
     def CarrierCaps(self) -> frozenset[Capability]:
-        return GetCarrierCaps(self.Transfers)
+        return GetCarrierCaps(self.transfers)
 
     # legacy callers need native capability accounting without reflection
     @property

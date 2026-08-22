@@ -12,9 +12,6 @@ from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
-from interchange.assembly.AssemblyData import (
-    AssemblyData,  # lgtm[py/unsafe-cyclic-import]
-)
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.core.Common import FreezeMapping
 from interchange.document.behavior.DocumentBehavior import (  # lgtm[py/cyclic-import]
@@ -142,3 +139,8 @@ class CadDocument(DocumentRoot, DocumentApi, ModelBase):
     @property
     def BrepModel(self) -> BrepModel | None:
         return self.brep
+
+
+# the assembly graph type binds at the bottom so the recursive assembly and
+# document graph resolves completely no matter which module is imported first
+from interchange.assembly.AssemblyData import AssemblyData  # noqa: E402

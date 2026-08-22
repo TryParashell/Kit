@@ -8,14 +8,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING as TypeChecking
 
 from interchange.enums.EnumDocument import Capability
 from interchange.enums.EnumFeatures import FeatureKind
 from interchange.payloads.PayloadRoles import PayloadRole
-
-if TypeChecking:
-    from interchange.document.models.DocumentModel import CadDocument
 
 
 # inferred capability sets prevent stale declarations from overstating document content
@@ -154,3 +150,8 @@ def GetRetainedCaps(
     if not any(ItemValue.brep_payloads for ItemValue in DocumentValues):
         RetainedCaps.discard(Capability.KNativePayloads)
     return frozenset(RetainedCaps)
+
+
+# the document type binds at the bottom so the recursive assembly and
+# document graph resolves completely no matter which module is imported first
+from interchange.document.models.DocumentModel import CadDocument  # noqa: E402

@@ -9,13 +9,9 @@
 from __future__ import annotations
 
 from dataclasses import replace as ReplaceValue
-from typing import TYPE_CHECKING as TypeChecking
 
 from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.payloads.PayloadRoles import PayloadRole
-
-if TypeChecking:
-    from interchange.document.models.DocumentModel import CadDocument
 
 
 # export filtering needs payload records transformed without altering source documents
@@ -105,3 +101,8 @@ def FilterDocument(
             IncludeMesh=IncludeMesh,
         ),
     )
+
+
+# the document type binds at the bottom so the recursive assembly and
+# document graph resolves completely no matter which module is imported first
+from interchange.document.models.DocumentModel import CadDocument  # noqa: E402

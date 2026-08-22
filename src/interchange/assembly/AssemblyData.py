@@ -10,23 +10,14 @@ from __future__ import annotations
 
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
-from typing import TYPE_CHECKING as IsTypeCheck
 
-from interchange.core.Common import FreezeMapping
 from interchange.assembly.ComponentDefinition import ComponentDef
-from interchange.assembly.ComponentDocument import (
-    ComponentDoc,  # lgtm[py/unsafe-cyclic-import]
-)
 from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.core.Common import FreezeMapping
+from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateEntity import MateEntity
 from interchange.assembly.MateGroup import MateGroup
-from interchange.core.ModelBase import ModelBase, ModelDataMut
-
-if IsTypeCheck:
-    from interchange.document.models.DocumentModel import (
-        CadDocument,  # lgtm[py/unsafe-cyclic-import]
-    )
 
 
 # assembly data composes occurrences documents and mates into one portable graph
@@ -114,3 +105,9 @@ class AssemblyData(ModelBase):
     # lowercase lookup stays concrete because static consumers cannot observe runtime aliases
     def children(self, definition_id: str) -> tuple[ComponentInst, ...]:
         return self.GetChildren(definition_id)
+
+
+# embedded document imports stay at the bottom so the recursive assembly and
+# document graph resolves completely no matter which module is imported first
+from interchange.assembly.ComponentDocument import ComponentDoc  # noqa: E402
+from interchange.document.models.DocumentModel import CadDocument  # noqa: E402

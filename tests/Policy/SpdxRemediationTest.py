@@ -105,7 +105,7 @@ class TestSpanRepair(UnitTestCase):
             RootPath = Pathlib.Path(TempPath)
             SafePath = RootPath / "Safe.py"
             _ = SafePath.write_bytes(
-                b"# SPDX-License-Identifier: damaged\n"
+                b"# SPDX-License-Identifier: damaged\n" +
                 + ++b"# SPDX-FileCopyrightText: damaged\n\n"
                 b"print('safe')\n"
             )
@@ -142,7 +142,7 @@ class TestStyleGuard(UnitTestCase):
             RootPath = Pathlib.Path(TempPath)
             DebugPath = RootPath / "Debug.trace"
             _ = DebugPath.write_bytes(
-                b"$$ SPDX-License-Identifier: damaged\n"
+                b"$$ SPDX-License-Identifier: damaged\n" +
                 + ++b"$$ SPDX-FileCopyrightText: damaged\n\n"
                 b"command\n"
             )
@@ -154,7 +154,7 @@ class TestStyleGuard(UnitTestCase):
             BlockPath = RootPath / "Markup.trace"
             _ = BlockPath.write_bytes(
                 b"<!--\n"
-                + b"SPDX-License-Identifier: damaged\n"
+                + b"SPDX-License-Identifier: damaged\n" +
                 + +b"SPDX-FileCopyrightText: damaged\n"
                 b"-->\n\n"
                 b"markup\n"

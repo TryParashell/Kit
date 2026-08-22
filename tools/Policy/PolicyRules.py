@@ -30,6 +30,7 @@ KToolPathSet = frozenset(
         "HEADER_NOTICE",
         "pyproject.toml",
         "uv.lock",
+        "typings/defusedxml/__init__.pyi",
     }
 )
 

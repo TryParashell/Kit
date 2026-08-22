@@ -9,8 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass as DataClass
-from typing import TYPE_CHECKING as IsTypeCheck
-from typing import overload as Overload
 
 from convert.adapters.base.ContractCompat import ContractBase
 
@@ -18,51 +16,26 @@ from convert.adapters.base.ContractCompat import ContractBase
 # probe results keep reader selection evidence deterministic and bounded
 @DataClass(frozen=True, slots=True)
 class ProbeResult(ContractBase):
-    FormatId: str
-    Confidence: float
-    ReasonText: str = ""
-
-    if IsTypeCheck:
-
-        # historical keywords remain typed because reader plugins construct this public evidence record
-        @Overload
-        def __init__(
-            self,
-            format_id: str,
-            confidence: float,
-            reason: str = "",
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # canonical keywords remain typed because dataclass replacement reconstructs evidence from storage fields
-        @Overload
-        def __init__(
-            self,
-            FormatId: str,
-            Confidence: float,
-            ReasonText: str = "",
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(
-            self, *ArgValues: object, **NamedValues: object
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
+    format_id: str
+    confidence: float
+    reason: str = ""
 
     # historical format access remains typed because selector diagnostics consume this public field
     @property
-    def format_id(self) -> str:
-        return self.FormatId
+    def FormatId(self) -> str:
+        return self.format_id
 
     # historical confidence access remains typed because selectors rank this public field
     @property
-    def confidence(self) -> float:
-        return self.Confidence
+    def Confidence(self) -> float:
+        return self.confidence
 
     # historical reason access remains typed because selector diagnostics expose this public field
     @property
-    def reason(self) -> str:
-        return self.ReasonText
+    def ReasonText(self) -> str:
+        return self.reason
 
     # confidence validation prevents malformed adapters from corrupting reader ordering
     def __post_init__(self) -> None:
-        if not 0.0 <= self.Confidence <= 1.0:
+        if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("probe confidence must be between zero and one")

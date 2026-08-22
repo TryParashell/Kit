@@ -20,76 +20,77 @@ from convert.adapters.base.ContractCompat import ContractBase
 # write policy stays immutable so staging and adapters share one transactional intent
 @DataClass(frozen=True, slots=True)
 class WriteOptions(ContractBase):
-    ConfigName: str | None = None
-    Overwrite: bool = False
-    Validate: bool = True
-    TargetFormat: str | None = None
-    OptionValues: TypeMap[str, object] = DataField(default_factory=FreezeMapping)
+    configuration: str | None = None
+    overwrite: bool = False
+    validate: bool = True
+    destination_format: str | None = None
+    values: TypeMap[str, object] = DataField(default_factory=FreezeMapping)
 
     # historical configuration access remains typed because writers consume this public selection field
     @property
-    def configuration(self) -> str | None:
-        return self.ConfigName
+    def ConfigName(self) -> str | None:
+        return self.configuration
 
     # historical overwrite access remains typed because staging consumes this public transaction field
     @property
-    def overwrite(self) -> bool:
-        return self.Overwrite
+    def Overwrite(self) -> bool:
+        return self.overwrite
 
     # historical validation access remains typed because writers consume this public safety field
     @property
-    def validate(self) -> bool:
-        return self.Validate
+    def Validate(self) -> bool:
+        return self.validate
 
     # historical format access remains typed because registries consume this public selection field
     @property
-    def destination_format(self) -> str | None:
-        return self.TargetFormat
+    def TargetFormat(self) -> str | None:
+        return self.destination_format
 
     # historical option access remains typed because adapters consume this public extension field
     @property
-    def values(self) -> TypeMap[str, object]:
-        return self.OptionValues
+    def OptionValues(self) -> TypeMap[str, object]:
+        return self.values
 
     # explicit construction keeps canonical storage and historical keywords visible to static callers
     def __init__(
         self,
-        ConfigName: str | None = None,
-        Overwrite: bool = False,
-        Validate: bool = True,
-        TargetFormat: str | None = None,
-        OptionValues: TypeMap[str, object] | None = None,
-        *,
         configuration: str | None = None,
-        overwrite: bool | None = None,
-        validate: bool | None = None,
+        overwrite: bool = False,
+        validate: bool = True,
         destination_format: str | None = None,
         values: TypeMap[str, object] | None = None,
+        *,
+        ConfigName: str | None = None,
+        Overwrite: bool | None = None,
+        Validate: bool | None = None,
+        TargetFormat: str | None = None,
+        OptionValues: TypeMap[str, object] | None = None,
     ) -> None:
+        super().__init__()
         object.__setattr__(
             self,
-            "ConfigName",
-            ConfigName if configuration is None else configuration,
+            "configuration",
+            configuration if ConfigName is None else ConfigName,
         )
         object.__setattr__(
             self,
-            "Overwrite",
-            Overwrite if overwrite is None else overwrite,
+            "overwrite",
+            overwrite if Overwrite is None else Overwrite,
         )
         object.__setattr__(
             self,
-            "Validate",
-            Validate if validate is None else validate,
+            "validate",
+            validate if Validate is None else Validate,
         )
         object.__setattr__(
             self,
-            "TargetFormat",
-            TargetFormat if destination_format is None else destination_format,
+            "destination_format",
+            destination_format if TargetFormat is None else TargetFormat,
         )
-        SelectedValues = OptionValues if values is None else values
+        SelectedValues = values if OptionValues is None else OptionValues
         object.__setattr__(
             self,
-            "OptionValues",
+            "values",
             (
                 FreezeMapping()
                 if SelectedValues is None

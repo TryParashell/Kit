@@ -9,12 +9,8 @@
 from __future__ import annotations
 
 import hashlib as HashCodec
-from typing import TYPE_CHECKING as TypeChecking
 
 from interchange.payloads.PayloadRoles import PayloadRole
-
-if TypeChecking:
-    from interchange.document.models.DocumentModel import CadDocument
 
 
 # source recovery needs unambiguous document and digest binding payload indexes
@@ -47,3 +43,8 @@ def GetPayloadIds(DocumentValue: CadDocument) -> frozenset[int]:
     if len(DocumentIndexes) != 1 or len(BindingIndexes) != 1:
         return frozenset()
     return frozenset((*DocumentIndexes, *BindingIndexes))
+
+
+# the document type binds at the bottom so the recursive assembly and
+# document graph resolves completely no matter which module is imported first
+from interchange.document.models.DocumentModel import CadDocument  # noqa: E402

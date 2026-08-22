@@ -11,8 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass as DataClass
 from inspect import Parameter as SigParam
 from inspect import Signature as CallSignature
-from typing import TYPE_CHECKING as IsTypeCheck
-from typing import overload as Overload
 
 from interchange import Capability
 
@@ -50,154 +48,100 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
 # adapter metadata gives discovery and selection one immutable format description
 @DataClass(frozen=True, slots=True)
 class AdapterInfo(ContractBase):
-    FormatId: str
-    DisplayName: str
-    VersionText: str
-    Extensions: tuple[str, ...]
-    AliasNames: tuple[str, ...] = ()
-    Capabilities: frozenset[Capability] = frozenset()
-    MediaTypes: tuple[str, ...] = ()
-    NativeCaps: frozenset[Capability] = frozenset()
-    PartExts: tuple[str, ...] = ()
-    AssemblyExts: tuple[str, ...] = ()
+    format_id: str
+    name: str
+    version: str
+    extensions: tuple[str, ...]
+    aliases: tuple[str, ...] = ()
+    capabilities: frozenset[Capability] = frozenset()
+    media_types: tuple[str, ...] = ()
+    native_capabilities: frozenset[Capability] = frozenset()
+    part_extensions: tuple[str, ...] = ()
+    assembly_extensions: tuple[str, ...] = ()
 
-    if IsTypeCheck:
-
-        # historical keywords remain typed because plugin constructors depend on this public contract
-        @Overload
-        def __init__(
-            self,
-            format_id: str,
-            name: str,
-            version: str,
-            extensions: tuple[str, ...],
-            aliases: tuple[str, ...] = (),
-            capabilities: frozenset[Capability] = frozenset(),
-            media_types: tuple[str, ...] = (),
-            native_capabilities: frozenset[Capability] = frozenset(),
-            part_extensions: tuple[str, ...] = (),
-            assembly_extensions: tuple[str, ...] = (),
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # canonical keywords remain typed because dataclass replacement constructs records from storage fields
-        @Overload
-        def __init__(
-            self,
-            FormatId: str,
-            DisplayName: str,
-            VersionText: str,
-            Extensions: tuple[str, ...],
-            AliasNames: tuple[str, ...] = (),
-            Capabilities: frozenset[Capability] = frozenset(),
-            MediaTypes: tuple[str, ...] = (),
-            NativeCaps: frozenset[Capability] = frozenset(),
-            PartExts: tuple[str, ...] = (),
-            AssemblyExts: tuple[str, ...] = (),
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(
-            self, *ArgValues: object, **NamedValues: object
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # both keyword eras remain visible because document routing callers upgraded independently
-        @Overload
-        def extensions_for(
-            self, *, assembly: bool
-        ) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
-
-        # both keyword eras remain visible because document routing callers upgraded independently
-        @Overload
-        def extensions_for(
-            self, *, Assembly: bool
-        ) -> tuple[str, ...]: ...  # lgtm[py/ineffectual-statement]
-
-        # dynamic dispatch still validates collisions while overloads describe every supported spelling
-        def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
-            return self.GetExtensions(**NamedValues)
-
-    # historical format access remains typed because registry callers use the established public field
+    # canonical format access remains typed because registry internals read this storage field
     @property
-    def format_id(self) -> str:
-        return self.FormatId
+    def FormatId(self) -> str:
+        return self.format_id
 
-    # historical display access remains typed because external catalogs render this established public field
+    # canonical display access remains typed because catalogs render this storage field
     @property
-    def name(self) -> str:
-        return self.DisplayName
+    def DisplayName(self) -> str:
+        return self.name
 
-    # historical version access remains typed because plugin diagnostics expose this established public field
+    # canonical version access remains typed because plugin diagnostics expose this storage field
     @property
-    def version(self) -> str:
-        return self.VersionText
+    def VersionText(self) -> str:
+        return self.version
 
-    # historical extension access remains typed because selectors consume this established public field
+    # canonical extension access remains typed because selectors consume this storage field
     @property
-    def extensions(self) -> tuple[str, ...]:
-        return self.Extensions
+    def Extensions(self) -> tuple[str, ...]:
+        return self.extensions
 
-    # historical alias access remains typed because registry namespaces consume this established public field
+    # canonical alias access remains typed because registry namespaces consume this storage field
     @property
-    def aliases(self) -> tuple[str, ...]:
-        return self.AliasNames
+    def AliasNames(self) -> tuple[str, ...]:
+        return self.aliases
 
-    # historical capability access remains typed because policy callers compare this established public field
+    # canonical capability access remains typed because policy callers compare this storage field
     @property
-    def capabilities(self) -> frozenset[Capability]:
-        return self.Capabilities
+    def Capabilities(self) -> frozenset[Capability]:
+        return self.capabilities
 
-    # historical media access remains typed because discovery consumers inspect this established public field
+    # canonical media access remains typed because discovery consumers inspect this storage field
     @property
-    def media_types(self) -> tuple[str, ...]:
-        return self.MediaTypes
+    def MediaTypes(self) -> tuple[str, ...]:
+        return self.media_types
 
-    # historical native capability access remains typed because transfer policy consumes this public field
+    # canonical native capability access remains typed because transfer policy consumes this field
     @property
-    def native_capabilities(self) -> frozenset[Capability]:
-        return self.NativeCaps
+    def NativeCaps(self) -> frozenset[Capability]:
+        return self.native_capabilities
 
-    # historical part extension access remains typed because document routing consumes this public field
+    # canonical part extension access remains typed because document routing consumes this field
     @property
-    def part_extensions(self) -> tuple[str, ...]:
-        return self.PartExts
+    def PartExts(self) -> tuple[str, ...]:
+        return self.part_extensions
 
-    # historical assembly extension access remains typed because document routing consumes this public field
+    # canonical assembly extension access remains typed because document routing consumes this field
     @property
-    def assembly_extensions(self) -> tuple[str, ...]:
-        return self.AssemblyExts
+    def AssemblyExts(self) -> tuple[str, ...]:
+        return self.assembly_extensions
 
     # document kind lookup belongs here so clients need no format specific branching
     def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
-        return self.AssemblyExts if Assembly else self.PartExts
+        return self.assembly_extensions if Assembly else self.part_extensions
+
+    # document kind lookup belongs here so clients need no format specific branching
+    def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
+        Assembly = IsAssemblyFlag(NamedValues)
+        return self.assembly_extensions if Assembly else self.part_extensions
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
     @Override
-    @Override
     def __repr__(self) -> str:
         FieldValues = ", ".join(
-            f"{LegacyName}={getattr(self, ModelName)!r}"
-            for LegacyName, ModelName in KLegacyFields
+            f"{ModelName}={getattr(self, ModelName)!r}"
+            for ModelName in KModelFields
         )
         return f"AdapterInfo({FieldValues})"
 
 
-# historical dataclass reflection remains available because plugin tooling inspects legacy field names
-KLegacyFields: tuple[tuple[str, str], ...] = (
-    ("format_id", "FormatId"),
-    ("name", "DisplayName"),
-    ("version", "VersionText"),
-    ("extensions", "Extensions"),
-    ("aliases", "AliasNames"),
-    ("capabilities", "Capabilities"),
-    ("media_types", "MediaTypes"),
-    ("native_capabilities", "NativeCaps"),
-    ("part_extensions", "PartExts"),
-    ("assembly_extensions", "AssemblyExts"),
-)
-
 # canonical field order remains necessary for immutable slot pickle restoration
-KModelFields = tuple(FieldPair[1] for FieldPair in KLegacyFields)
+KModelFields: tuple[str, ...] = (
+    "format_id",
+    "name",
+    "version",
+    "extensions",
+    "aliases",
+    "capabilities",
+    "media_types",
+    "native_capabilities",
+    "part_extensions",
+    "assembly_extensions",
+)
 
 
 # immutable slot pickles read canonical storage despite historical field reflection
@@ -213,21 +157,6 @@ def SetPickleState(SelfValue: AdapterInfo, FieldValues: tuple[object, ...]) -> N
 
 setattr(AdapterInfo, "__getstate__", GetPickleState)
 setattr(AdapterInfo, "__setstate__", SetPickleState)
-
-for LegacyName, ModelName in KLegacyFields:
-    setattr(AdapterInfo.__dataclass_fields__[ModelName], "name", LegacyName)
-
-# plugin reflection needs legacy mapping keys because direct field lookups are established behavior
-AdapterInfo.__dataclass_fields__ = {
-    LegacyName: AdapterInfo.__dataclass_fields__[ModelName]
-    for LegacyName, ModelName in KLegacyFields
-}
-
-# runtime annotation inspection needs historical keys because third party forms resolve them directly
-AdapterInfo.__annotations__ = {
-    LegacyName: AdapterInfo.__annotations__[ModelName]
-    for LegacyName, ModelName in KLegacyFields
-}
 
 
 setattr(AdapterInfo, "extensions_for", AdapterInfo.GetExtensions)

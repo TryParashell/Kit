@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass as DataClass
 from enum import StrEnum as StringEnum
-from typing import TYPE_CHECKING as IsTypeCheck
-from typing import overload as Overload
 
 from interchange import Capability
 
@@ -62,62 +60,37 @@ class CarrierReason(StringEnum):
 # each preserved capability needs explicit native or carrier attribution
 @DataClass(frozen=True, slots=True)
 class CapTransfer(ContractBase):
-    CapabilityData: Capability
-    TransferModeData: TransferMode
-    CarrierCause: CarrierReason | None = None
-
-    if IsTypeCheck:
-
-        # historical keywords remain typed because writer plugins construct this public evidence record
-        @Overload
-        def __init__(
-            self,
-            capability: Capability,
-            mode: TransferMode,
-            carrier_reason: CarrierReason | None = None,
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # canonical keywords remain typed because dataclass replacement reconstructs evidence from storage fields
-        @Overload
-        def __init__(
-            self,
-            CapabilityData: Capability,
-            TransferModeData: TransferMode,
-            CarrierCause: CarrierReason | None = None,
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
-
-        # broad implementation parameters exist only to connect both statically checked constructor forms
-        def __init__(
-            self, *ArgValues: object, **NamedValues: object
-        ) -> None: ...  # lgtm[py/ineffectual-statement]
+    capability: Capability
+    mode: TransferMode
+    carrier_reason: CarrierReason | None = None
 
     # invalid combinations are rejected here so every writer result stays truthful
     def __post_init__(self) -> None:
-        _ = GetCapability(self.CapabilityData)
-        ModeValue = GetTransferMode(self.TransferModeData)
+        _ = GetCapability(self.capability)
+        ModeValue = GetTransferMode(self.mode)
         if ModeValue is TransferMode.KNative:
-            if self.CarrierCause is not None:
+            if self.carrier_reason is not None:
                 raise ValueError("native transfers cannot have a carrier reason")
             return
-        if self.CarrierCause is None:
-            object.__setattr__(self, "CarrierCause", CarrierReason.KWriterGap)
+        if self.carrier_reason is None:
+            object.__setattr__(self, "carrier_reason", CarrierReason.KWriterGap)
         else:
-            _ = GetCarrierCause(self.CarrierCause)
+            _ = GetCarrierCause(self.carrier_reason)
 
-    # legacy callers need statically typed access to the preserved capability
+    # canonical capability access keeps the preserved evidence directly typed
     @property
-    def capability(self) -> Capability:
-        return self.CapabilityData
+    def CapabilityData(self) -> Capability:
+        return self.capability
 
-    # legacy callers need statically typed access to the representation mode
+    # canonical representation access keeps the transfer mode directly typed
     @property
-    def mode(self) -> TransferMode:
-        return self.TransferModeData
+    def TransferModeData(self) -> TransferMode:
+        return self.mode
 
-    # legacy callers need statically typed access to degradation evidence
+    # canonical degradation access keeps the carrier evidence directly typed
     @property
-    def carrier_reason(self) -> CarrierReason | None:
-        return self.CarrierCause
+    def CarrierCause(self) -> CarrierReason | None:
+        return self.carrier_reason
 
 
 # public transfer name stays stable because external adapters construct this record directly
