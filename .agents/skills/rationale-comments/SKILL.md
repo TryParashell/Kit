@@ -19,6 +19,7 @@ Above every:
 - `def` statement (functions, methods, staticmethods, classmethods — all of them)
 - lambda assignment
 - global / module-level variable or constant
+- decorators (any kind of decorator, including `@property`)
 
 there must be:
 
