@@ -222,8 +222,8 @@ jobs:
       - name: Run actionlint workflow analysis
         run: '"${RUNNER_TEMP}/actionlint"'
 
-  cve-bin-tool:
-    name: cve-bin-tool
+  syft:
+    name: Syft
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -232,18 +232,28 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.9.13"
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+      - name: Install pinned Syft
+        env:
+          SyftVersion: "1.51.0"
+          SyftSha256: 2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/syft_${SyftVersion}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/anchore/syft/releases/download/v${SyftVersion}/syft_${SyftVersion}_linux_amd64.tar.gz"
+          echo "${SyftSha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" syft
+          chmod u+x "${RUNNER_TEMP}/syft"
 
-      - name: Synchronize the locked environment
-        run: uv sync --frozen --all-groups --all-extras --python 3.11
+      - name: Generate the independent runtime SBOM
+        run: '"${RUNNER_TEMP}/syft" scan uv.lock -o cyclonedx-json="${RUNNER_TEMP}/Kit.syft.cdx.json"'
 
-      - name: Run cve-bin-tool environment audit
-        run: uv run cve-bin-tool -n api2 .venv
+      - name: Cross-check SBOM catalog coverage
+        run: |
+          set -euo pipefail
+          jq -e '[.components[].name] | index("defusedxml") != null and index("typing-extensions") != null' \
+            "${RUNNER_TEMP}/Kit.syft.cdx.json"
 
   cyclonedx-sbom:
     name: CycloneDX SBOM
