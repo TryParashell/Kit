@@ -17,25 +17,25 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 
 
 # vertices anchor topological incidence to precise spatial points
-@ModelDataMut(DefaultMap={"tolerance": 0.0})
+@ModelDataMut
 class BrepVertex(BrepEntity):
     point: SpaceVector
-    tolerance: float
+    tolerance: float = 0.0
     if TYPE_CHECKING:
         Point: ClassVar[SpaceVector]
         Tolerance: ClassVar[float]
 
 
 # edges connect vertices through exact curve parameter intervals
-@ModelDataMut(DefaultMap={"tolerance": 0.0, "degenerate": False})
+@ModelDataMut
 class BrepEdge(BrepEntity):
     start_vertex_id: str
     end_vertex_id: str
     curve_id: str
     start_parameter: float
     end_parameter: float
-    tolerance: float
-    degenerate: bool
+    tolerance: float = 0.0
+    degenerate: bool = False
     if TYPE_CHECKING:
         StartVertexId: ClassVar[str]
         EndVertexId: ClassVar[str]
@@ -47,11 +47,11 @@ class BrepEdge(BrepEntity):
 
 
 # coedges preserve oriented edge use and optional parameter curve bindings
-@ModelDataMut(DefaultMap={"pcurve_id": "", "reversed": False})
+@ModelDataMut
 class BrepCoedge(BrepEntity):
     edge_id: str
-    pcurve_id: str
-    reversed: bool
+    pcurve_id: str = ""
+    reversed: bool = False
     if TYPE_CHECKING:
         EdgeId: ClassVar[str]
         PcurveId: ClassVar[str]
@@ -59,32 +59,32 @@ class BrepCoedge(BrepEntity):
 
 
 # loops exist because face trimming boundaries require ordered connected coedges
-@ModelDataMut(DefaultMap={"outer": False})
+@ModelDataMut
 class BrepLoop(BrepEntity):
     coedge_ids: tuple[str, ...]
-    outer: bool
+    outer: bool = False
     if TYPE_CHECKING:
         CoedgeIds: ClassVar[tuple[str, ...]]
         IsOuter: ClassVar[bool]
 
 
 # some boundaries have no owning face so standalone coedge groups preserve them
-@ModelDataMut(DefaultMap={"closed": False})
+@ModelDataMut
 class BrepWire(BrepEntity):
     coedge_ids: tuple[str, ...]
-    closed: bool
+    closed: bool = False
     if TYPE_CHECKING:
         CoedgeIds: ClassVar[tuple[str, ...]]
         IsClosed: ClassVar[bool]
 
 
 # faces bind analytic surfaces to ordered trimming loops
-@ModelDataMut(DefaultMap={"same_sense": True, "tolerance": 0.0})
+@ModelDataMut
 class BrepFace(BrepEntity):
     surface_id: str
     loop_ids: tuple[str, ...]
-    same_sense: bool
-    tolerance: float
+    same_sense: bool = True
+    tolerance: float = 0.0
     if TYPE_CHECKING:
         SurfaceId: ClassVar[str]
         LoopIds: ClassVar[tuple[str, ...]]
@@ -93,40 +93,40 @@ class BrepFace(BrepEntity):
 
 
 # face uses preserve orientation when shells reuse face definitions
-@ModelDataMut(DefaultMap={"reversed": False})
+@ModelDataMut
 class BrepFaceUse(BrepEntity):
     face_id: str
-    reversed: bool
+    reversed: bool = False
     if TYPE_CHECKING:
         FaceId: ClassVar[str]
         IsReversed: ClassVar[bool]
 
 
 # shells collect oriented faces and preserve closure state
-@ModelDataMut(DefaultMap={"closed": False})
+@ModelDataMut
 class BrepShell(BrepEntity):
     face_use_ids: tuple[str, ...]
-    closed: bool
+    closed: bool = False
     if TYPE_CHECKING:
         FaceUseIds: ClassVar[tuple[str, ...]]
         IsClosed: ClassVar[bool]
 
 
 # shell uses preserve orientation when regions reuse shell definitions
-@ModelDataMut(DefaultMap={"reversed": False})
+@ModelDataMut
 class BrepShellUse(BrepEntity):
     shell_id: str
-    reversed: bool
+    reversed: bool = False
     if TYPE_CHECKING:
         ShellId: ClassVar[str]
         IsReversed: ClassVar[bool]
 
 
 # regions collect oriented shells and preserve solid classification
-@ModelDataMut(DefaultMap={"solid": True})
+@ModelDataMut
 class BrepRegion(BrepEntity):
     shell_use_ids: tuple[str, ...]
-    solid: bool
+    solid: bool = True
     if TYPE_CHECKING:
         ShellUseIds: ClassVar[tuple[str, ...]]
         IsSolid: ClassVar[bool]

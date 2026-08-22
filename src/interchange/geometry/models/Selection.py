@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import ClassVar
 from typing import Mapping as TypeMap
 from typing import TYPE_CHECKING
@@ -19,11 +20,11 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 
 
 # path elements preserve hierarchical topology references across assemblies and bodies
-@ModelDataMut(DefaultMap={"subelement": ""})
+@ModelDataMut
 class SelectPathElem(ModelBase):
     entity_kind: str
     entity_id: str
-    subelement: str
+    subelement: str = ""
     if TYPE_CHECKING:
         EntityKind: ClassVar[str]
         EntityId: ClassVar[str]
@@ -31,18 +32,15 @@ class SelectPathElem(ModelBase):
 
 
 # selections retain semantic queries and resolved paths instead of display strings
-@ModelDataMut(
-    DefaultMap={"point": None, "provenance": None},
-    FactoryMap={"query": FreezeMapping, "attributes": FreezeMapping},
-)
+@ModelDataMut
 class Selection(ModelBase):
     id: str
     name: str
     path: tuple[SelectPathElem, ...]
-    query: TypeMap[str, object]
-    point: SpaceVector | None
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
+    query: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    point: SpaceVector | None = None
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         EntityId: ClassVar[str]
         EntityName: ClassVar[str]

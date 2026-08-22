@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
@@ -18,11 +19,11 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # typed values retain dimensional and primitive meaning alongside source text
-@ModelDataMut(DefaultMap={"kind": ValueKind.KNumber, "unit": ""})
+@ModelDataMut
 class ParameterValue(ModelBase):
     value: str | int | float | bool
-    kind: ValueKind
-    unit: str
+    kind: ValueKind = ValueKind.KNumber
+    unit: str = ""
     if TYPE_CHECKING:
         Value: ClassVar[str | int | float | bool]
         EntityKind: ClassVar[ValueKind]
@@ -42,24 +43,16 @@ class Expression(ModelBase):
 
 
 # parameters retain editable values ownership and source evidence across format boundaries
-@ModelDataMut(
-    DefaultMap={
-        "role": ParameterRole.KDriving,
-        "expression": None,
-        "owner_id": "",
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class Parameter(ModelBase):
     id: str
     name: str
     value: ParameterValue
-    role: ParameterRole
-    expression: Expression | None
-    owner_id: str
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
+    role: ParameterRole = ParameterRole.KDriving
+    expression: Expression | None = None
+    owner_id: str = ""
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         EntityId: ClassVar[str]
         EntityName: ClassVar[str]

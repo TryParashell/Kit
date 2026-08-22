@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
@@ -42,34 +43,26 @@ class SketchEntity(ModelBase):
 
 
 # constraint references preserve the participating subelement of each entity
-@ModelDataMut(DefaultMap={"point": ""})
+@ModelDataMut
 class ConstraintRef(ModelBase):
     entity_id: str
-    point: str
+    point: str = ""
     if TYPE_CHECKING:
         EntityId: ClassVar[str]
         PointName: ClassVar[str]
 
 
 # sketch relations retain solver intent and parameter bindings across formats
-@ModelDataMut(
-    DefaultMap={
-        "parameter_id": None,
-        "driving": True,
-        "suppressed": False,
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class SketchRelation(ModelBase):
     id: str
     kind: str
     references: tuple[ConstraintRef, ...]
-    parameter_id: str | None
-    driving: bool
-    suppressed: bool
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
+    parameter_id: str | None = None
+    driving: bool = True
+    suppressed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         EntityId: ClassVar[str]
         EntityKind: ClassVar[str]

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
@@ -89,14 +90,14 @@ class EllipseCurve(BrepCurve):
 
 
 # spline curves retain full basis data needed for exact reconstruction
-@ModelDataMut(DefaultMap={"weights": (), "periodic": False})
+@ModelDataMut
 class NurbsCurve(BrepCurve):
     degree: int
     control_points: tuple[SpaceVector, ...]
     knots: tuple[float, ...]
     multiplicities: tuple[int, ...]
-    weights: tuple[float, ...]
-    periodic: bool
+    weights: tuple[float, ...] = ()
+    periodic: bool = False
     if TYPE_CHECKING:
         Degree: ClassVar[int]
         ControlPoints: ClassVar[tuple[SpaceVector, ...]]
@@ -107,12 +108,12 @@ class NurbsCurve(BrepCurve):
 
 
 # intersection curves preserve supporting surfaces and sampled verification evidence
-@ModelDataMut(DefaultMap={"samples": (), "tolerance": 0.0})
+@ModelDataMut
 class IntersectCurve(BrepCurve):
     first_surface_id: str
     second_surface_id: str
-    samples: tuple[SpaceVector, ...]
-    tolerance: float
+    samples: tuple[SpaceVector, ...] = ()
+    tolerance: float = 0.0
     if TYPE_CHECKING:
         FirstSurfaceId: ClassVar[str]
         SecondSurfaceId: ClassVar[str]
@@ -121,11 +122,11 @@ class IntersectCurve(BrepCurve):
 
 
 # native curves retain unsupported kernel data without claiming portable semantics
-@ModelDataMut(FactoryMap={"data": FreezeMapping})
+@ModelDataMut
 class NativeCurve(BrepCurve):
     format_id: str
     entity_type: str
-    data: TypeMap[str, object]
+    data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         FormatId: ClassVar[str]
         EntityType: ClassVar[str]

@@ -16,7 +16,10 @@ from typing import Callable as ValueFactory
 from typing import cast as CastValue
 from typing import Mapping as TypeMap
 from typing import overload as TypeOverload
+from typing import dataclass_transform as ModelTransform
 from typing import TypeVar
+
+from typing_extensions import override as Override
 
 from interchange.core.Reflection import GetFieldMap
 from interchange.serialization.RecordType import DataRecord
@@ -25,6 +28,9 @@ from interchange.serialization.Wire import ResolveField
 
 # model decorators preserve each concrete class identity through dataclass transformation
 ModelValue = TypeVar("ModelValue")
+
+# shared frozen-set defaults stay one constant so parameter defaults never call constructors
+KEmptyKeywords: frozenset[str] = frozenset()
 
 
 # wire lookup requires validated dataclass metadata before accepting dynamic model classes
@@ -37,6 +43,7 @@ def GetRecordType(ClassType: type[object]) -> type[DataRecord]:
 class ModelMeta(type):
 
     # old constructor keywords remain accepted because adapters may upgrade independently
+    @Override
     def __call__(
         self: type[ModelValue],
         *ArgValues: object,
@@ -67,28 +74,31 @@ class ModelBase(metaclass=ModelMeta):
 
     # undecorated model bases reject construction while transformed subclasses replace this initializer
     def __init__(self, *ArgValues: object, **NamedValues: object) -> None:
+        super().__init__()
         raise TypeError(f"{type(self).__name__} must be transformed into a dataclass")
 
 
 # direct decoration retains concrete model types when no configuration wrapper is needed
 @TypeOverload
+@ModelTransform(frozen_default=True)
 def ModelDataMut(
     ClassType: type[ModelValue],
     *,
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
-    KeywordOnly: frozenset[str] = frozenset(),
+    KeywordOnly: frozenset[str] = KEmptyKeywords,
 ) -> type[ModelValue]: ...  # lgtm[py/ineffectual-statement]
 
 
 # configured decoration retains concrete model types after defaults are installed
 @TypeOverload
+@ModelTransform(frozen_default=True)
 def ModelDataMut(
     ClassType: None = None,
     *,
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
-    KeywordOnly: frozenset[str] = frozenset(),
+    KeywordOnly: frozenset[str] = KEmptyKeywords,
 ) -> ValueFactory[[type[ModelValue]], type[ModelValue]]: ...  # lgtm[py/ineffectual-statement]
 
 
@@ -98,7 +108,7 @@ def ModelDataMut(
     *,
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
-    KeywordOnly: frozenset[str] = frozenset(),
+    KeywordOnly: frozenset[str] = KEmptyKeywords,
 ) -> object:
 
     # class mutation is isolated here because dataclasses require defaults before transformation

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
@@ -47,14 +48,14 @@ class CirclePcurve(BrepPcurve):
 
 
 # planar spline curves retain full basis data required for trimming
-@ModelDataMut(DefaultMap={"weights": (), "periodic": False})
+@ModelDataMut
 class NurbsPcurve(BrepPcurve):
     degree: int
     control_points: tuple[PlaneVector, ...]
     knots: tuple[float, ...]
     multiplicities: tuple[int, ...]
-    weights: tuple[float, ...]
-    periodic: bool
+    weights: tuple[float, ...] = ()
+    periodic: bool = False
     if TYPE_CHECKING:
         Degree: ClassVar[int]
         ControlPoints: ClassVar[tuple[PlaneVector, ...]]
@@ -65,11 +66,11 @@ class NurbsPcurve(BrepPcurve):
 
 
 # native parameter curves preserve unsupported kernel specific trimming data
-@ModelDataMut(FactoryMap={"data": FreezeMapping})
+@ModelDataMut
 class NativePcurve(BrepPcurve):
     format_id: str
     entity_type: str
-    data: TypeMap[str, object]
+    data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         FormatId: ClassVar[str]
         EntityType: ClassVar[str]

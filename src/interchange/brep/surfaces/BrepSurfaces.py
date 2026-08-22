@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
@@ -99,7 +100,7 @@ class TorusSurface(BrepSurface):
 
 
 # spline surfaces retain complete tensor basis data for exact reconstruction
-@ModelDataMut(DefaultMap={"weights": (), "periodic_u": False, "periodic_v": False})
+@ModelDataMut
 class NurbsSurface(BrepSurface):
     degree_u: int
     degree_v: int
@@ -108,9 +109,9 @@ class NurbsSurface(BrepSurface):
     knots_v: tuple[float, ...]
     multiplicities_u: tuple[int, ...]
     multiplicities_v: tuple[int, ...]
-    weights: tuple[tuple[float, ...], ...]
-    periodic_u: bool
-    periodic_v: bool
+    weights: tuple[tuple[float, ...], ...] = ()
+    periodic_u: bool = False
+    periodic_v: bool = False
     if TYPE_CHECKING:
         DegreeU: ClassVar[int]
         DegreeV: ClassVar[int]
@@ -135,11 +136,11 @@ class OffsetSurface(BrepSurface):
 
 
 # native surfaces preserve unsupported kernel data without false portable semantics
-@ModelDataMut(FactoryMap={"data": FreezeMapping})
+@ModelDataMut
 class NativeSurface(BrepSurface):
     format_id: str
     entity_type: str
-    data: TypeMap[str, object]
+    data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         FormatId: ClassVar[str]
         EntityType: ClassVar[str]

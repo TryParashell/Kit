@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
@@ -84,11 +85,11 @@ class SplineGeometry(ModelBase):
 
 
 # native geometry preserves unsupported entities without pretending they are portable
-@ModelDataMut(FactoryMap={"data": FreezeMapping})
+@ModelDataMut
 class NativeGeometry(ModelBase):
     format_id: str
     entity_type: str
-    data: TypeMap[str, object]
+    data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         FormatId: ClassVar[str]
         EntityType: ClassVar[str]

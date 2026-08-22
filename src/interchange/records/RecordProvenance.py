@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
@@ -30,16 +31,13 @@ class ProvenanceSpan(ModelBase):
 
 
 # provenance preserves source identity confidence and evidence through conversion pipelines
-@ModelDataMut(
-    DefaultMap={"native_id": "", "confidence": 1.0, "spans": ()},
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class Provenance(ModelBase):
     adapter: str
-    native_id: str
-    confidence: float
-    spans: tuple[ProvenanceSpan, ...]
-    attributes: TypeMap[str, object]
+    native_id: str = ""
+    confidence: float = 1.0
+    spans: tuple[ProvenanceSpan, ...] = ()
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
     if TYPE_CHECKING:
         Adapter: ClassVar[str]
         NativeId: ClassVar[str]
