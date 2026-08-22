@@ -118,11 +118,6 @@ class AdapterInfo(ContractBase):
     def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
         return self.GetExtensions(**NamedValues)
 
-    # document kind lookup belongs here so clients need no format specific branching
-    def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
-        Assembly = IsAssemblyFlag(NamedValues)
-        return self.assembly_extensions if Assembly else self.part_extensions
-
     # historical representation keeps logs and diagnostics comparable across package upgrades
     @Override
     def __repr__(self) -> str:

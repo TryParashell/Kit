@@ -2553,14 +2553,14 @@ def CloseGroupMut(
     if FrameData.step < len(FrameData.plan):
         return (Cursor, False)
     if StopGroups:
-        Frames.pop()
+        _ = Frames.pop()
         return (Cursor, True)
     Cursor, Opened = GroupOpenMut(
         BlobValue, Cursor, FrameData, Origin, BaseValue, MoVersion
     )
     if Opened:
         return (Cursor, False)
-    Frames.pop()
+    _ = Frames.pop()
     return (Cursor, True)
 
 
@@ -2636,7 +2636,7 @@ def CloseSlotsMut(
             Origin,
             BaseValue,
         )
-    Frames.pop()
+    _ = Frames.pop()
     return (Cursor, True)
 
 

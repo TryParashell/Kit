@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 

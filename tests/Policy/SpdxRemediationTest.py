@@ -106,16 +106,16 @@ class TestSpanRepair(UnitTestCase):
             SafePath = RootPath / "Safe.py"
             _ = SafePath.write_bytes(
                 b"# SPDX-License-Identifier: damaged\n"
-                + +++b"# SPDX-FileCopyrightText: damaged\n\n"
-                b"print('safe')\n"
+                + b"# SPDX-FileCopyrightText: damaged\n\n"
+                + b"print('safe')\n"
             )
             self.assertTrue(RepairModule.CanRepairMut(SafePath, HeaderLines, "#"))
             self.assertTrue(SafePath.read_bytes().endswith(b"print('safe')\n"))
             DocsPath = RootPath / "Docs.py"
             DocsBytes = (
                 b"# SPDX-License-Identifier: damaged\n"
-                b"# unrelated module documentation\n\n"
-                b"print('safe')\n"
+                + b"# unrelated module documentation\n\n"
+                + b"print('safe')\n"
             )
             _ = DocsPath.write_bytes(DocsBytes)
             self.assertFalse(RepairModule.CanRepairMut(DocsPath, HeaderLines, "#"))
@@ -123,8 +123,8 @@ class TestSpanRepair(UnitTestCase):
             EncodingPath = RootPath / "Encoding.py"
             EncodingBytes = (
                 b"# coding: utf-8\n"
-                b"# SPDX-License-Identifier: damaged\n\n"
-                b"print('safe')\n"
+                + b"# SPDX-License-Identifier: damaged\n\n"
+                + b"print('safe')\n"
             )
             _ = EncodingPath.write_bytes(EncodingBytes)
             self.assertFalse(RepairModule.CanRepairMut(EncodingPath, HeaderLines, "#"))
@@ -143,8 +143,8 @@ class TestStyleGuard(UnitTestCase):
             DebugPath = RootPath / "Debug.trace"
             _ = DebugPath.write_bytes(
                 b"$$ SPDX-License-Identifier: damaged\n"
-                + +++b"$$ SPDX-FileCopyrightText: damaged\n\n"
-                b"command\n"
+                + b"$$ SPDX-FileCopyrightText: damaged\n\n"
+                + b"command\n"
             )
             IsFixed, ReasonText = GuardModule.RepairHeadMut(
                 DebugPath, CanonLines, RootPath
@@ -156,8 +156,8 @@ class TestStyleGuard(UnitTestCase):
                 b"<!--\n"
                 + b"SPDX-License-Identifier: damaged\n"
                 + ++b"SPDX-FileCopyrightText: damaged\n"
-                b"-->\n\n"
-                b"markup\n"
+                + b"-->\n\n"
+                + b"markup\n"
             )
             IsFixed, ReasonText = GuardModule.RepairHeadMut(
                 BlockPath, CanonLines, RootPath

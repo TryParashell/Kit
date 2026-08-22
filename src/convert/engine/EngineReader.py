@@ -21,6 +21,7 @@ class EngineRead:
 
     # direct initialization keeps each engine half usable in isolation
     def __init__(self, registry: AdapterRegistry) -> None:
+        super().__init__()
         self.registry = registry
 
     # registry delegation preserves one validation path for every public document read
