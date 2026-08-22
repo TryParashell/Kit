@@ -12,31 +12,31 @@ from typing import ClassVar, TYPE_CHECKING
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
-# homogeneous matrices preserve assembly placement without assuming vendor conventions
-@ModelDataMut(
-    DefaultMap={
-        "values": (
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        )
-    }
+# one identity tuple keeps placement defaults free of repeated constructor calls
+KIdentityValues: tuple[float, ...] = (
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
 )
+
+
+# homogeneous matrices preserve assembly placement without assuming vendor conventions
+@ModelDataMut
 class TransformMatrix(ModelBase):
-    values: tuple[float, ...]
+    values: tuple[float, ...] = KIdentityValues
     if TYPE_CHECKING:
         Values: ClassVar[tuple[float, ...]]
 
