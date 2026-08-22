@@ -58,7 +58,11 @@ def CheckDiscovery() -> None:
 
 # document kind extensions remain introspective so clients need no format specific branches
 def CheckDocExts() -> None:
-    AdapterMap = {InfoData.format_id: InfoData for InfoData in GetAdapters()}
+    AdapterMap = {
+        InfoData.format_id: InfoData
+        for InfoData in GetAdapters()
+        if isinstance(InfoData, AdapterInfo)
+    }
     assert AdapterMap["solidworks.sldprt"].part_extensions == (".sldprt",)
     assert AdapterMap["solidworks.sldprt"].assembly_extensions == (".sldasm",)
     assert AdapterMap["catia.v5"].part_extensions == (".catpart",)

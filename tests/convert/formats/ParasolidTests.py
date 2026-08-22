@@ -491,7 +491,7 @@ def TestLSOFLWRO() -> None:
 
 # metadata integers need validation before binary order assertions consume them
 def AttributeInt(EntityValue: BrepEntity, NameValue: str) -> int:
-    ValueData = EntityValue.attributes.get(NameValue)
+    ValueData = EntityValue.Attributes.get(NameValue)
     if type(ValueData) is not int:
         raise AssertionError(f"{NameValue} must contain an integer")
     return ValueData
@@ -499,7 +499,7 @@ def AttributeInt(EntityValue: BrepEntity, NameValue: str) -> int:
 
 # metadata byte records need validation before parser helpers consume them
 def AttributeBytes(EntityValue: BrepEntity, NameValue: str) -> bytes:
-    ValueData = EntityValue.attributes.get(NameValue)
+    ValueData = EntityValue.Attributes.get(NameValue)
     if not isinstance(ValueData, bytes):
         raise AssertionError(f"{NameValue} must contain bytes")
     return ValueData
@@ -522,7 +522,7 @@ def FinDescriptor(ValueData: object) -> KFinDescriptor:
 def FinDescriptors(
     EntityValue: BrepEntity, NameValue: str
 ) -> tuple[KFinDescriptor, ...]:
-    ValueData = EntityValue.attributes.get(NameValue)
+    ValueData = EntityValue.Attributes.get(NameValue)
     if not isinstance(ValueData, tuple):
         raise AssertionError(f"{NameValue} must contain a tuple")
     Descriptors = CastValue(tuple[object, ...], ValueData)

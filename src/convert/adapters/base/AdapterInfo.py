@@ -114,6 +114,10 @@ class AdapterInfo(ContractBase):
         Assembly = IsAssemblyFlag(NamedValues)
         return self.assembly_extensions if Assembly else self.part_extensions
 
+    # legacy entry point keeps document routing statically callable before alias binding
+    def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
+        return self.GetExtensions(**NamedValues)
+
     # document kind lookup belongs here so clients need no format specific branching
     def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
@@ -123,8 +127,7 @@ class AdapterInfo(ContractBase):
     @Override
     def __repr__(self) -> str:
         FieldValues = ", ".join(
-            f"{ModelName}={getattr(self, ModelName)!r}"
-            for ModelName in KModelFields
+            f"{ModelName}={getattr(self, ModelName)!r}" for ModelName in KModelFields
         )
         return f"AdapterInfo({FieldValues})"
 

@@ -2296,7 +2296,7 @@ def ProbeSource(Instance: FreeCadAdapter, Source: Source) -> ProbeResult:
 
 # this definition reads an embedded or native archive into the interchange model
 def ReadSource(Source: Source, Options: ReadOptions | None = None) -> CadDoc:
-    Settings = Options or ReadOptions(IncludeMesh=True)
+    Settings = Options or ReadOptions(include_tessellation=True)
     DataValue = SourceBytes(Source)
     Native = False
     try:
@@ -2368,12 +2368,12 @@ def ExactResult(
     OuterRequirements = DocValue.assembly is not None or bool(NativeOuters)
     Requirements = ("referenced FreeCAD component files",) if OuterRequirements else ()
     return WriteResult(
-        OutputPath=PathValue,
-        AdapterName=Instance.info.FormatId,
-        ByteCount=len(NativeSource),
-        Diagnostics=DocValue.Diagnostics,
-        Transfers=CapabilityA(DocValue, TargetPath, Portable, True),
-        MetadataMap={
+        path=PathValue,
+        adapter=Instance.info.format_id,
+        bytes_written=len(NativeSource),
+        diagnostics=DocValue.Diagnostics,
+        transfers=CapabilityA(DocValue, TargetPath, Portable, True),
+        metadata={
             "mode": "exact_native_roundtrip",
             "compatibility": "native-exact",
             "vendor_loadable": True,
@@ -2382,9 +2382,9 @@ def ExactResult(
             "referenced_files_written": 0,
             "runtime": "python-stdlib",
         },
-        Requirements=Requirements,
-        IsAppUsable=True,
-        IsVendorLoadable=True,
+        requirements=Requirements,
+        application_usable=True,
+        vendor_loadable=True,
     )
 
 
@@ -2544,14 +2544,14 @@ def RebuildResult(
         AppUsable,
     )
     return WriteResult(
-        OutputPath=PathValue,
-        AdapterName=Instance.info.FormatId,
-        ByteCount=len(DataValue),
-        Diagnostics=RebuildDiags(DocValue, CarrierOnly),
-        MetadataMap=MetaValue,
-        Transfers=Transfers,
-        IsAppUsable=AppUsable,
-        IsVendorLoadable=True,
+        path=PathValue,
+        adapter=Instance.info.format_id,
+        bytes_written=len(DataValue),
+        diagnostics=RebuildDiags(DocValue, CarrierOnly),
+        metadata=MetaValue,
+        transfers=Transfers,
+        application_usable=AppUsable,
+        vendor_loadable=True,
     )
 
 

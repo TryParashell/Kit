@@ -2488,9 +2488,7 @@ def OpenSlotsMut(
     if Total == 0:
         return (Cursor, False)
     Frames.append(
-        _=Frame(
-            node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=Total
-        )
+        Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=Total)
     )
     return (Cursor, True)
 

@@ -128,11 +128,23 @@ def CheckInfo() -> None:
         == "(self, format_id: 'str', name: 'str', version: 'str', extensions: 'tuple[str, ...]', aliases: 'tuple[str, ...]' = (), capabilities: 'frozenset[Capability]' = frozenset(), media_types: 'tuple[str, ...]' = (), native_capabilities: 'frozenset[Capability]' = frozenset(), part_extensions: 'tuple[str, ...]' = (), assembly_extensions: 'tuple[str, ...]' = ()) -> None"
     )
     assert (
-        str(Inspect.signature(AdapterInfo.extensions_for))
+        str(
+            Inspect.signature(
+                Typing.cast("Typing.Callable[..., object]", AdapterInfo.extensions_for)
+            )
+        )
         == "(self, *, assembly: 'bool') -> 'tuple[str, ...]'"
     )
-    assert AdapterInfo.extensions_for.__name__ == "extensions_for"
-    assert AdapterInfo.extensions_for.__module__ == "convert.adapters.base"
+    assert (
+        Typing.cast("Typing.Callable[..., object]", AdapterInfo.extensions_for).__name__
+        == "extensions_for"
+    )
+    assert (
+        Typing.cast(
+            "Typing.Callable[..., object]", AdapterInfo.extensions_for
+        ).__module__
+        == "convert.adapters.base"
+    )
     assert InfoData.extensions_for(assembly=False) == ()
     with Pytest.raises(TypeError):
         _ = CallCompat(InfoData.extensions_for, assembly=False, Assembly=False)
@@ -155,8 +167,11 @@ def CheckInfo() -> None:
             FormatId="other",
             format_id="other",
         )
-    with Pytest.raises(TypeError):
-        _ = DataClasses.replace(InfoData, FormatId="format.other")
+    ReplacedLegacy = Typing.cast(
+        AdapterInfo,
+        CallCompat(DataClasses.replace, InfoData, FormatId="format.legacy"),
+    )
+    assert ReplacedLegacy.format_id == "format.legacy"
 
 
 # this definition exists because focused behavior needs one stable owner

@@ -77,8 +77,7 @@ class WriteResult(ContractBase):
             and all(
                 TransferData.carrier_reason is CarrierReason.KTargetGap
                 for TransferData in self.transfers
-                if TransferData.mode
-                in {TransferMode.KCarrier, TransferMode.KMixed}
+                if TransferData.mode in {TransferMode.KCarrier, TransferMode.KMixed}
             )
         )
 

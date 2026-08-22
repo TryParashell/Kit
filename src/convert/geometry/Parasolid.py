@@ -919,7 +919,7 @@ def AllocItemsMut(
 ) -> dict[str, int]:
     Result: dict[str, int] = {}
     for Position, ValueData in enumerate(Values):
-        Result[ValueData.id] = AllocIndexMut(
+        Result[ValueData.EntityId] = AllocIndexMut(
             Allocator, Preferred[Position] if Position < len(Preferred) else 0
         )
     return Result

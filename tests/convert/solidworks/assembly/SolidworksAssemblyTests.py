@@ -217,7 +217,7 @@ def TestNFIDNIFS() -> None:
 def Document() -> CadDocument:
     if not KAssembly.is_file():
         PytestLib.skip("random assembly corpus is unavailable")
-    return SldprtAdapter().read(KAssembly, ReadOptions(IncludeBrep=False))
+    return SldprtAdapter().read(KAssembly, ReadOptions(include_brep=False))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
