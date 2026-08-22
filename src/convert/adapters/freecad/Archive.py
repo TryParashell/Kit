@@ -66,8 +66,11 @@ from convert.adapters.freecad.Protocol import (
     STRING_HASHER_TAGS as StringHasherTags,
 )
 
-
 # mapping payloads require string keys before archive fields can be inspected safely
+# shared empty set keeps parameter defaults free of repeated constructor calls
+KNoTrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset()
+
+
 def IsPayloadMap(Value: object) -> TypeGuard[Mapping[str, object]]:
     return isinstance(Value, Mapping)
 
@@ -3464,7 +3467,7 @@ def FreecadBrep(
     Payload: Mapping[str, object],
     DataValue: bytes,
     NativeDocShaTwoFiveSix: str,
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = KNoTrustedNativeBreps,
 ) -> bytes | None:
     if TextAction(Payload.get("format_id")).casefold() not in FreecadBrepFormatIds:
         return None
@@ -4030,7 +4033,7 @@ def ImportCompMut(
     DocValue: Mapping[str, object],
     Prefix: str,
     PayloadEntries: dict[str, bytes],
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = KNoTrustedNativeBreps,
 ) -> tuple[str, list[str]]:
     RootValue, ChildPayloads = ImportArchive(DocValue, TrustedNativeBreps)
     ObjectNodes, DataNodes, Dependencies = ImportNodes(RootValue)
@@ -5976,7 +5979,7 @@ def AddAsmMut(
     Manifest: Mapping[str, object],
     PayloadEntries: dict[str, bytes],
     OuterLinks: Mapping[str, Mapping[str, object]],
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = KNoTrustedNativeBreps,
 ) -> tuple[str, int, int]:
     Context = BuildAsmContext(
         Graph, Manifest, PayloadEntries, OuterLinks, TrustedNativeBreps
@@ -8032,7 +8035,7 @@ def BuildDocXml(
     OuterLinks: Mapping[str, Mapping[str, object]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str = "1980-01-01T00:00:00Z",
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = KNoTrustedNativeBreps,
 ) -> tuple[bytes, dict[str, bytes]]:
     Context = BuildDocContext(
         Manifest,
@@ -8074,7 +8077,7 @@ def BuildFcstd(
     OuterLinks: Mapping[str, Mapping[str, object]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str | None = None,
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = KNoTrustedNativeBreps,
 ) -> bytes:
     Canonical = CanonicalJson(Manifest)
     Digest = Hashlib.sha256(Canonical).hexdigest()
@@ -8117,7 +8120,7 @@ def BuildFcstdApi(
     OuterLinks: Mapping[str, Mapping[str, object]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str | None = None,
-    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = KNoTrustedNativeBreps,
     **LegacyValues: object,
 ) -> bytes:
     LegacyCopy = dict(LegacyValues)

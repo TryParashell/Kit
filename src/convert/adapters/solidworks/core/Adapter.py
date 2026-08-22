@@ -267,6 +267,14 @@ KTargetUnsupported = frozenset(
 
 
 # this definition exists because focused behavior needs one stable owner
+# shared empty set keeps parameter defaults free of repeated constructor calls
+KNoMixedCaps: frozenset[Capability] = frozenset()
+
+
+# shared empty set keeps parameter defaults free of repeated constructor calls
+KNoRewritable: frozenset[str] = frozenset()
+
+
 @DataClass(frozen=True, slots=True)
 class Generated:
     streams: dict[str, bytes]
@@ -275,7 +283,7 @@ class Generated:
     compatibility: str
     application_usable: bool
     vendor_loadable: bool
-    mixed_capabilities: frozenset[Capability] = frozenset()
+    mixed_capabilities: frozenset[Capability] = KNoMixedCaps
     unexpressed: tuple[str, ...] = ()
     donor_notes: tuple[str, ...] = ()
     reader_gaps: tuple[str, ...] = ()
@@ -295,7 +303,7 @@ class AsmBundle:
     payloads: Mapping[Path, bytes]
     StampValues: Mapping[str, int]
     complete: bool
-    NativeCaps: frozenset[Capability] = frozenset()
+    NativeCaps: frozenset[Capability] = KNoMixedCaps
 
 
 # this binding exists because shared behavior needs one stable value
@@ -1702,7 +1710,7 @@ def IsBundleSatisfi(DocValue: CadDocument, AvailableNames: set[str]) -> bool:
 def SolidworksA(
     Required: frozenset[Capability],
     Native: frozenset[Capability],
-    Mixed: frozenset[Capability] = frozenset(),
+    Mixed: frozenset[Capability] = KNoMixedCaps,
 ) -> tuple[CapabilityTransfer, ...]:
 
     # this callback exists because local behavior needs one focused transformation
@@ -2025,8 +2033,8 @@ def EmptyObjectIds() -> Mapping[str, int]:
 class GeneratedState:
     Streams: dict[str, bytes]
     Encoding: NativeAsmEncoding | None = None
-    PartCapabilities: frozenset[Capability] = frozenset()
-    MixedCapabilities: frozenset[Capability] = frozenset()
+    PartCapabilities: frozenset[Capability] = KNoMixedCaps
+    MixedCapabilities: frozenset[Capability] = KNoMixedCaps
     PartPartition: bytes | None = None
     PartObjectIds: Mapping[str, int] = Field(default_factory=EmptyObjectIds)
     PartAppUsable: bool = False
@@ -2254,7 +2262,7 @@ def GeneratedB(
     Template: bytes | None = None,
     BundleNames: Mapping[str, str] | None = None,
     BundleComplete: bool | None = None,
-    BundleCapabilities: frozenset[Capability] = frozenset(),
+    BundleCapabilities: frozenset[Capability] = KNoMixedCaps,
     BundleStamps: Mapping[str, int] | None = None,
     ModelName: str = "",
 ) -> Generated:
@@ -2296,7 +2304,7 @@ def GeneratedB(
 def AsmReaderGaps(
     Streams: Mapping[str, bytes],
     Donor: Mapping[str, bytes] | None = None,
-    Rewritable: frozenset[str] = frozenset(),
+    Rewritable: frozenset[str] = KNoRewritable,
 ) -> tuple[str, ...]:
     GapsValue = [
         f"absent_vendor_stream:{NameValue}"

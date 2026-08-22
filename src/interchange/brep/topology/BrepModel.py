@@ -126,12 +126,14 @@ class BrepModel(ModelBase):
 
     # lowercase validation stays concrete because static consumers cannot observe runtime aliases
     def validate(
-        self, design_body_ids: frozenset[str] = frozenset()
+        self, design_body_ids: frozenset[str] = KNoDesignBodies
     ) -> tuple[str, ...]:
         from interchange.brep.validation.BrepValidate import GetBrepErrors
 
         return GetBrepErrors(self, design_body_ids)
 
     # pascal validation remains available because existing adapters still use the canonical method
-    def GetErrors(self, DesignBodyIds: frozenset[str] = frozenset()) -> tuple[str, ...]:
+    def GetErrors(
+        self, DesignBodyIds: frozenset[str] = KNoDesignBodies
+    ) -> tuple[str, ...]:
         return self.validate(DesignBodyIds)

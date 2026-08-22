@@ -106,8 +106,11 @@ from convert.adapters.freecad.Protocol import (
     XML_TRUE_VALUES as XmlTrueValues,
 )
 
-
 # mapping payloads require string keys before archive fields can be inspected safely
+# shared empty set keeps parameter defaults free of repeated constructor calls
+KNoNativeBreps: frozenset[NativeBrepKey] = frozenset()
+
+
 def IsPayloadMap(Value: object) -> TypeGuard[Mapping[str, object]]:
     return isinstance(Value, Mapping)
 
@@ -1005,7 +1008,7 @@ def PayloadNative(
     Payload: BrepPayload,
     MappedPayload: Mapping[str, object] | None = None,
     NativeDigestText: str = "",
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[NativeBrepKey] = KNoNativeBreps,
 ) -> bytes | None:
     if not (
         Payload.role == PayloadRole.BREP
@@ -1025,7 +1028,7 @@ def IsBrepPayload(
     Payload: BrepPayload,
     MappedPayload: Mapping[str, object] | None = None,
     NativeDigestText: str = "",
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[NativeBrepKey] = KNoNativeBreps,
 ) -> bool:
     return (
         PayloadNative(Payload, MappedPayload, NativeDigestText, TrustedNativeBreps)
@@ -1106,7 +1109,7 @@ def IsMeshUsable(MeshValue: MeshValue) -> bool:
 
 # this definition exists because focused behavior needs one stable owner
 def IsNativeGeom(
-    DocValue: CadDocument, TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset()
+    DocValue: CadDocument, TrustedNativeBreps: frozenset[NativeBrepKey] = KNoNativeBreps
 ) -> bool:
     Items = [DocValue]
     if DocValue.assembly is not None:
@@ -1471,7 +1474,7 @@ def CapabilityA(
     TargetPath: FilePath | None,
     Portable: bool,
     Exact: bool,
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[NativeBrepKey] = KNoNativeBreps,
 ) -> tuple[CapabilityTransfer, ...]:
     Required = DocValue.capabilities | InferCapabilities(
         DocValue,
@@ -2072,7 +2075,7 @@ def WriteComponents(
     Validate: bool,
     DocTimestamp: str,
     TimestampEpoch: float,
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[NativeBrepKey] = KNoNativeBreps,
 ) -> tuple[dict[str, dict[str, object]], int]:
     Paths = ComponentPaths(DocValue, Target)
     if not Overwrite:

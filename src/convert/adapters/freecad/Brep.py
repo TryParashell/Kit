@@ -72,6 +72,10 @@ KGeomValue = tuple[
 
 
 # point like runtime objects need typed coordinates without weakening mesh inputs
+# shared empty set keeps parameter defaults free of repeated constructor calls
+KNoActiveFormats: frozenset[str] = frozenset()
+
+
 @runtime_checkable
 class PointSource(Protocol):
     x: SupportsFloat
@@ -1066,7 +1070,7 @@ def EncodeNurbs(Value: NurbsSurface) -> str:
 def SurfaceRecord(
     Value: BrepSurface,
     Surfaces: Mapping[str, BrepSurface],
-    Active: frozenset[str] = frozenset(),
+    Active: frozenset[str] = KNoActiveFormats,
 ) -> str:
     BasicRecord = EncodeBasic(Value)
     if BasicRecord is not None:
