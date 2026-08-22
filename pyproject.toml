@@ -26,8 +26,8 @@ maintainers = [
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 keywords = ["cad"]
-classifiers = ["Private :: Do Not Upload"]
 dependencies = [
+    "defusedxml>=0.7.1",
     "typing-extensions>=4.12",
 ]
 
@@ -73,7 +73,6 @@ dev = [
     "bandit>=1.9.4",
     "black==26.3.1",
     "checkov>=3.3.11",
-    "cve-bin-tool>=3.4",
     "cyclonedx-bom>=4.6.1",
     "detect-secrets>=1.5.0",
     "dlint>=0.16.0",
@@ -120,7 +119,7 @@ enable_error_code = [
 explicit_package_bases = true
 files = ["src", "tests", "tools"]
 exclude = '^(\.venv|examples|Parashell|modules)/'
-mypy_path = ["src", ".", "re/tooling/ghidra/Generation"]
+mypy_path = ["src", "typings", ".", "re/tooling/ghidra/Generation"]
 warn_unused_configs = true
 show_error_codes = true
 pretty = true
@@ -155,3 +154,12 @@ reportUnusedCallResult = "error"
 reportUnusedExpression = "error"
 reportUnusedImport = "error"
 reportUnusedVariable = "error"
+
+[tool.uv]
+# these floors exist because vulnerable locked releases stay pinned by declared caps of
+# security tooling (semgrep caps click, opentelemetry-proto caps protobuf), so the override
+# lifts the floor while staying inside the majors those tools are expected to tolerate
+override-dependencies = [
+    "click>=8.3.3,<8.5",
+    "protobuf>=5.29.6,<6",
+]
