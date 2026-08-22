@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed
 
-from .Registry import (
+from .Registry import (  # lgtm[py/unused-import]
     AnnotationOps as AnnotationOps,
     FieldOwners as FieldOwners,
     KFieldOwners as KFieldOwners,

@@ -25,7 +25,7 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     RequireInt,
 )
 
-from .Registry import (
+from .Registry import (  # lgtm[py/unused-import]
     ConfigOps as ConfigOps,
     FieldOwners as FieldOwners,
     KFieldOwners as KFieldOwners,

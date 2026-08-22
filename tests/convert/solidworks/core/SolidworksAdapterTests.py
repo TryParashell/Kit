@@ -443,6 +443,10 @@ def TestNFTMTNK(NativeKind: str, NeutralKind: FeatureKind) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Engine_Block.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestCHWFRTT() -> None:
     Document = ReadSldprt(KCorpus / "Engine_Block.SLDPRT", include_brep=False)
     Holes = [
@@ -656,6 +660,10 @@ def TestARCGWG() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Cover.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAAPCP() -> None:
     Document = ReadSldprt(KCorpus / "Cover.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:26")
@@ -677,6 +685,10 @@ def TestAAPCP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Cover.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestABDOBMP() -> None:
     Document = ReadSldprt(KCorpus / "Cover.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:77")
@@ -707,6 +719,10 @@ def TestABDOBMP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Engine_Block.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestARLEBNMI() -> None:
     Document = ReadSldprt(KCorpus / "Engine_Block.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:139")
@@ -953,6 +969,10 @@ def TestBMCSUCS() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Engine_Block.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAPULBRNI() -> None:
     Document = ReadSldprt(KCorpus / "Engine_Block.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:200")
@@ -1034,6 +1054,10 @@ def TestAAMARNJ() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KCorpus.is_dir(),
+    reason="the SOLIDWORKS corpus is not present in this checkout",
+)
 def TestELSCD() -> None:
     Examples = FilePath(__file__).resolve().parents[4] / "examples"
     Parts = sorted(
@@ -1066,6 +1090,10 @@ def TestELSCD() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Addons" / "Alternator.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAHPZPFV() -> None:
     Document = ReadSldprt(KCorpus / "Addons" / "Alternator.SLDPRT", include_brep=False)
     Plane = Document.plane("sldprt:plane:289")
@@ -1076,6 +1104,10 @@ def TestAHPZPFV() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Cylinder_heads" / "Spark_plug.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAAOITDD() -> None:
     Document = ReadSldprt(
         KCorpus / "Cylinder_heads" / "Spark_plug.SLDPRT", include_brep=False

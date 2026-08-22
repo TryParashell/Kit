@@ -215,6 +215,8 @@ def TestNFIDNIFS() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.fixture(scope="module")
 def Document() -> CadDocument:
+    if not KAssembly.is_file():
+        PytestLib.skip("random assembly corpus is unavailable")
     return SldprtAdapter().read(KAssembly, ReadOptions(IncludeBrep=False))
 
 
@@ -674,6 +676,9 @@ def TestMARDMVAA(Document: CadDocument) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
+)
 def TestMTUNCWLFR() -> None:
     Archive = SldprtArchive.open(KConrod)
     RecordInfo = next(
@@ -734,6 +739,9 @@ def TestMTUNCWLFR() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
+)
 def TestRMCTSARI() -> None:
     Archive = SldprtArchive.open(KConrod)
     RecordInfo = next(
@@ -758,6 +766,9 @@ def TestRMCTSARI() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KAssembly.is_file(), reason="random assembly corpus is unavailable"
+)
 def TestMGBAS() -> None:
     Archive = SldprtArchive.open(KAssembly)
     RecordInfo = next(
@@ -797,6 +808,9 @@ def TestMGBAS() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
+)
 def TestCCPRWNS() -> None:
     Archive = SldprtArchive.open(KConrod)
     Native = DecodeNativeAssembly(Archive)
@@ -832,6 +846,9 @@ def TestCCPRWNS() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
+)
 def TestMLDUSWTSIR() -> None:
     BlobInfo = KConrod.read_bytes()
     Archive = SldprtArchive.from_bytes(BlobInfo, KConrod)

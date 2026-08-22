@@ -2215,6 +2215,9 @@ def AssertPinModes(ResultData: WriteResult) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KFreeCadRevPin.is_file(), reason="revolve pin FreeCAD corpus unavailable"
+)
 def TestFCPRWRCE(TmpPath: FilePath) -> None:
     SourceData = ReadFreecad(KFreeCadRevPin)
     TargetPath = TmpPath / "FreeCadPinRevolution.SLDPRT"

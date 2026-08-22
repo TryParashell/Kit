@@ -508,6 +508,8 @@ def TestSFMRADK() -> None:
     assert set(KPartSuffixes) | set(KAssemblySuffixes) == ReadmeSuffixes
     assert set(KPartSuffixes) & set(KAssemblySuffixes) == {".FCStd"}
     Counts = Counter(Suffix(PathValueA) for PathValueA in KCorpusFiles)
+    if not (KExamples / "Random").is_dir():
+        Pytest.skip("bundled random example corpus is unavailable")
     MissingSuffixes = tuple(
         SuffixName
         for SuffixName, ExpectedCount in KExpectedSuffixCounts.items()

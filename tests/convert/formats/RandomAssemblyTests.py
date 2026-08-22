@@ -40,6 +40,8 @@ KOracle = GetFreecadPath()
 # this definition exists because focused behavior needs one stable owner
 @Pytest.fixture(scope="module")
 def RandomDocument() -> CadDocument:
+    if not KRandom.is_file():
+        Pytest.skip("random assembly corpus is unavailable")
     return OpenDocument(KRandom)
 
 

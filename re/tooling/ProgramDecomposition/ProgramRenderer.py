@@ -319,7 +319,7 @@ def RewriteFacade(ProgramData: ProgramData) -> str:
     InsertAfter = max(ImportEnds)
     ImportLines = [
         "",
-        "from .Registry import (",
+        "from .Registry import (  # lgtm[py/unused-import]",
         *(f"    {RegistryName} as {RegistryName}," for RegistryName in RegistryNames),
         ")",
     ]

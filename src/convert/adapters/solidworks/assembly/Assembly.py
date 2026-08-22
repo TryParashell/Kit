@@ -2438,7 +2438,7 @@ def MateRecordStart(DataValue: bytes, NamePrefixOffset: int) -> int:
     Inline = DataValue.rfind(ClassMarker, 0, NamePrefixOffset)
     if Inline >= 0 and Inline + 6 <= NamePrefixOffset:
         SizeValue = Struct.unpack_from("<H", DataValue, Inline + 4)[0]
-        if Inline + 6 + SizeValue == NamePrefixOffset:
+        if Inline + 6 + SizeValue in (NamePrefixOffset - 2, NamePrefixOffset):
             return Inline
     return max(6, NamePrefixOffset - 2)
 

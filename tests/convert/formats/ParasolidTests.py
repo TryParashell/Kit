@@ -203,6 +203,8 @@ KIntersectionSupportParts = (
 
 # this definition exists because focused behavior needs one stable owner
 def Partition(PathValueA: PathValue) -> bytes:
+    if not PathValueA.is_file():
+        Pytest.skip("random example corpus is unavailable: " + PathValueA.name)
     Stream = SldprtArchive.open(PathValueA).require(PartitionStream)
     return next(
         Payload.data

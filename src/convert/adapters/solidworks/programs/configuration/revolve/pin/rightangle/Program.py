@@ -15,7 +15,7 @@ from convert.adapters.solidworks.programs.Common.ProgramContract import (
 
 from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed
 
-from .Registry import (
+from .Registry import (  # lgtm[py/unused-import]
     KConfigOps as KConfigOps,
     KFieldOwners as KFieldOwners,
 )

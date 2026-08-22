@@ -18,7 +18,7 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     ReplayResolved,
 )
 
-from .Registry import (
+from .Registry import (  # lgtm[py/unused-import]
     KFieldOwners as KFieldOwners,
     KResolvedOps as KResolvedOps,
 )
