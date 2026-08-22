@@ -55,9 +55,12 @@ class AdapterCaps(ModelBase):
     def HasCapability(self, CapabilityValue: Capability) -> bool:
         return CapabilityValue in self.Values
 
-    if TYPE_CHECKING:
-        values: ClassVar[frozenset[Capability]]
-        supports = HasCapability
+    # lowercase reads and the historical method alias stay real runtime members
+    @property
+    def values(self) -> frozenset[Capability]:
+        return self.Values
+
+    supports = HasCapability
 
 
 BindCompatMut(
