@@ -12,22 +12,19 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.payloads.PayloadRoles import PayloadRole
 
 
+# one shared empty set keeps rule defaults free of repeated constructor calls
+KEmptyKindSets: frozenset[str] = frozenset()
+
+
 # legacy payload inference needs declarative evidence that remains independently testable
-@ModelDataMut(
-    DefaultMap={
-        "format_ids": frozenset[str](),
-        "kinds": frozenset[str](),
-        "schemas": frozenset[str](),
-        "source_suffixes": frozenset[str](),
-    }
-)
+@ModelDataMut
 class PayloadRule(ModelBase):
     role: PayloadRole
     file_extension: str
-    format_ids: frozenset[str]
-    kinds: frozenset[str]
-    schemas: frozenset[str]
-    source_suffixes: frozenset[str]
+    format_ids: frozenset[str] = KEmptyKindSets
+    kinds: frozenset[str] = KEmptyKindSets
+    schemas: frozenset[str] = KEmptyKindSets
+    source_suffixes: frozenset[str] = KEmptyKindSets
     if TYPE_CHECKING:
         ValueRole: ClassVar[PayloadRole]
         FileExtension: ClassVar[str]
