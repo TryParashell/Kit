@@ -6,7 +6,6 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.geometry.models.VectorPlane import PlaneVector
@@ -19,11 +18,22 @@ class EllipseGeometry(ModelBase):
     major_axis: PlaneVector
     major_radius: float
     minor_radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        MajorAxis: ClassVar[PlaneVector]
-        MajorRadius: ClassVar[float]
-        MinorRadius: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def MajorAxis(self) -> PlaneVector:
+        return self.major_axis
+
+    @property
+    def MajorRadius(self) -> float:
+        return self.major_radius
+
+    @property
+    def MinorRadius(self) -> float:
+        return self.minor_radius
 
 
 # elliptical arcs preserve exact support plus source trimming parameters
@@ -35,13 +45,30 @@ class ArcEllipseGeom(ModelBase):
     minor_radius: float
     start_angle: float
     end_angle: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        MajorAxis: ClassVar[PlaneVector]
-        MajorRadius: ClassVar[float]
-        MinorRadius: ClassVar[float]
-        StartAngle: ClassVar[float]
-        EndAngle: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def MajorAxis(self) -> PlaneVector:
+        return self.major_axis
+
+    @property
+    def MajorRadius(self) -> float:
+        return self.major_radius
+
+    @property
+    def MinorRadius(self) -> float:
+        return self.minor_radius
+
+    @property
+    def StartAngle(self) -> float:
+        return self.start_angle
+
+    @property
+    def EndAngle(self) -> float:
+        return self.end_angle
 
 
 # hyperbolas retain exact conic parameters when target sketchers support them
@@ -51,11 +78,22 @@ class HyperbolaGeom(ModelBase):
     major_axis: PlaneVector
     major_radius: float
     minor_radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        MajorAxis: ClassVar[PlaneVector]
-        MajorRadius: ClassVar[float]
-        MinorRadius: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def MajorAxis(self) -> PlaneVector:
+        return self.major_axis
+
+    @property
+    def MajorRadius(self) -> float:
+        return self.major_radius
+
+    @property
+    def MinorRadius(self) -> float:
+        return self.minor_radius
 
 
 # hyperbolic arcs preserve conic identity while retaining finite source bounds
@@ -67,13 +105,30 @@ class ArcHyperGeom(ModelBase):
     minor_radius: float
     start_angle: float
     end_angle: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        MajorAxis: ClassVar[PlaneVector]
-        MajorRadius: ClassVar[float]
-        MinorRadius: ClassVar[float]
-        StartAngle: ClassVar[float]
-        EndAngle: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def MajorAxis(self) -> PlaneVector:
+        return self.major_axis
+
+    @property
+    def MajorRadius(self) -> float:
+        return self.major_radius
+
+    @property
+    def MinorRadius(self) -> float:
+        return self.minor_radius
+
+    @property
+    def StartAngle(self) -> float:
+        return self.start_angle
+
+    @property
+    def EndAngle(self) -> float:
+        return self.end_angle
 
 
 # parabolas retain focus geometry instead of relying on lossy spline conversion
@@ -82,10 +137,18 @@ class ParabolaGeom(ModelBase):
     center: PlaneVector
     axis: PlaneVector
     focal_length: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        AxisVector: ClassVar[PlaneVector]
-        FocalLength: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def AxisVector(self) -> PlaneVector:
+        return self.axis
+
+    @property
+    def FocalLength(self) -> float:
+        return self.focal_length
 
 
 # parabolic arcs preserve exact support geometry and finite parameter bounds
@@ -96,9 +159,23 @@ class ArcParabGeom(ModelBase):
     focal_length: float
     start_angle: float
     end_angle: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        AxisVector: ClassVar[PlaneVector]
-        FocalLength: ClassVar[float]
-        StartAngle: ClassVar[float]
-        EndAngle: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def AxisVector(self) -> PlaneVector:
+        return self.axis
+
+    @property
+    def FocalLength(self) -> float:
+        return self.focal_length
+
+    @property
+    def StartAngle(self) -> float:
+        return self.start_angle
+
+    @property
+    def EndAngle(self) -> float:
+        return self.end_angle

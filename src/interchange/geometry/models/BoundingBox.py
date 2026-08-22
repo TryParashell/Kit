@@ -6,7 +6,6 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.geometry.models.VectorSpace import SpaceVector
@@ -17,6 +16,11 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 class BoundingBox(ModelBase):
     minimum: SpaceVector
     maximum: SpaceVector
-    if TYPE_CHECKING:
-        Minimum: ClassVar[SpaceVector]
-        Maximum: ClassVar[SpaceVector]
+
+    @property
+    def Minimum(self) -> SpaceVector:
+        return self.minimum
+
+    @property
+    def Maximum(self) -> SpaceVector:
+        return self.maximum

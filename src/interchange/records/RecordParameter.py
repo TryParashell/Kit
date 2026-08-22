@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
-from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -24,22 +23,38 @@ class ParameterValue(ModelBase):
     value: str | int | float | bool
     kind: ValueKind = ValueKind.KNumber
     unit: str = ""
-    if TYPE_CHECKING:
-        Value: ClassVar[str | int | float | bool]
-        EntityKind: ClassVar[ValueKind]
-        UnitName: ClassVar[str]
+
+    @property
+    def Value(self) -> str | int | float | bool:
+        return self.value
+
+    @property
+    def EntityKind(self) -> ValueKind:
+        return self.kind
+
+    @property
+    def UnitName(self) -> str:
+        return self.unit
 
 
 # expressions preserve editable relationships instead of reducing every parameter to literals
-@ModelDataMut(DefaultMap={"parameter_ids": (), "language": "kit"})
+@ModelDataMut
 class Expression(ModelBase):
     source: str
-    parameter_ids: tuple[str, ...]
-    language: str
-    if TYPE_CHECKING:
-        Source: ClassVar[str]
-        ParameterIds: ClassVar[tuple[str, ...]]
-        Language: ClassVar[str]
+    parameter_ids: tuple[str, ...] = ()
+    language: str = "kit"
+
+    @property
+    def Source(self) -> str:
+        return self.source
+
+    @property
+    def ParameterIds(self) -> tuple[str, ...]:
+        return self.parameter_ids
+
+    @property
+    def Language(self) -> str:
+        return self.language
 
 
 # parameters retain editable values ownership and source evidence across format boundaries
@@ -53,12 +68,35 @@ class Parameter(ModelBase):
     owner_id: str = ""
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        Value: ClassVar[ParameterValue]
-        ValueRole: ClassVar[ParameterRole]
-        Expression: ClassVar[Expression | None]
-        OwnerId: ClassVar[str]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def Value(self) -> ParameterValue:
+        return self.value
+
+    @property
+    def ValueRole(self) -> ParameterRole:
+        return self.role
+
+    @property
+    def Expression(self) -> Expression | None:
+        return self.expression
+
+    @property
+    def OwnerId(self) -> str:
+        return self.owner_id
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

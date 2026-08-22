@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -34,40 +34,63 @@ def FindExtError(ExtensionText: object) -> str:
 
 
 # native bytes need identity purpose and integrity metadata for lossless translation
-@ModelDataMut(
-    DefaultMap={
-        "data": None,
-        "source_stream": "",
-        "provenance": None,
-        "role": PayloadRole.KAuxiliary,
-        "file_extension": ".bin",
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class BrepPayload(ModelBase):
     id: str
     format_id: str
     kind: str
     schema: str
     sha256: str
-    data: bytes | None
-    source_stream: str
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    role: PayloadRole
-    file_extension: str
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        FormatId: ClassVar[str]
-        EntityKind: ClassVar[str]
-        SchemaText: ClassVar[str]
-        SourceDigest: ClassVar[str]
-        PayloadData: ClassVar[bytes | None]
-        SourceStream: ClassVar[str]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
-        ValueRole: ClassVar[PayloadRole]
-        FileExtension: ClassVar[str]
+    data: bytes | None = None
+    source_stream: str = ""
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    role: PayloadRole = PayloadRole.KAuxiliary
+    file_extension: str = ".bin"
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def EntityKind(self) -> str:
+        return self.kind
+
+    @property
+    def SchemaText(self) -> str:
+        return self.schema
+
+    @property
+    def SourceDigest(self) -> str:
+        return self.sha256
+
+    @property
+    def PayloadData(self) -> bytes | None:
+        return self.data
+
+    @property
+    def SourceStream(self) -> str:
+        return self.source_stream
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes
+
+    @property
+    def ValueRole(self) -> PayloadRole:
+        return self.role
+
+    @property
+    def FileExtension(self) -> str:
+        return self.file_extension
 
     # invalid metadata must fail before bytes reach archive writers
     def __post_init__(self) -> None:

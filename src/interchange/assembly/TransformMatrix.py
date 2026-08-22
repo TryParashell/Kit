@@ -7,10 +7,8 @@
 # to you under it immediately and permanently.
 
 from math import isfinite as IsFiniteNum
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
-
 
 # one identity tuple keeps placement defaults free of repeated constructor calls
 KIdentityValues: tuple[float, ...] = (
@@ -37,8 +35,10 @@ KIdentityValues: tuple[float, ...] = (
 @ModelDataMut
 class TransformMatrix(ModelBase):
     values: tuple[float, ...] = KIdentityValues
-    if TYPE_CHECKING:
-        Values: ClassVar[tuple[float, ...]]
+
+    @property
+    def Values(self) -> tuple[float, ...]:
+        return self.values
 
     # matrix consumers need validated rows before indexing the homogeneous layout
     def GetRows(self) -> tuple[tuple[float, float, float, float], ...]:
@@ -77,3 +77,7 @@ class TransformMatrix(ModelBase):
             + MatrixRows[2][2] * ZCoord
             + MatrixRows[2][3],
         )
+
+
+# one identity matrix keeps placement defaults free of repeated constructor calls
+KIdentityMatrix: TransformMatrix = TransformMatrix()

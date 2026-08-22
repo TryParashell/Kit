@@ -28,41 +28,23 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
 # boundary models aggregate analytic geometry and incidence into one neutral graph
-@ModelDataMut(
-    DefaultMap={
-        "curves": (),
-        "pcurves": (),
-        "surfaces": (),
-        "vertices": (),
-        "edges": (),
-        "coedges": (),
-        "loops": (),
-        "wires": (),
-        "faces": (),
-        "face_uses": (),
-        "shells": (),
-        "shell_uses": (),
-        "regions": (),
-        "bodies": (),
-        "schema_version": "1.0",
-    }
-)
+@ModelDataMut
 class BrepModel(ModelBase):
-    curves: tuple[BrepCurve, ...]
-    pcurves: tuple[BrepPcurve, ...]
-    surfaces: tuple[BrepSurface, ...]
-    vertices: tuple[BrepVertex, ...]
-    edges: tuple[BrepEdge, ...]
-    coedges: tuple[BrepCoedge, ...]
-    loops: tuple[BrepLoop, ...]
-    wires: tuple[BrepWire, ...]
-    faces: tuple[BrepFace, ...]
-    face_uses: tuple[BrepFaceUse, ...]
-    shells: tuple[BrepShell, ...]
-    shell_uses: tuple[BrepShellUse, ...]
-    regions: tuple[BrepRegion, ...]
-    bodies: tuple[BrepBody, ...]
-    schema_version: str
+    curves: tuple[BrepCurve, ...] = ()
+    pcurves: tuple[BrepPcurve, ...] = ()
+    surfaces: tuple[BrepSurface, ...] = ()
+    vertices: tuple[BrepVertex, ...] = ()
+    edges: tuple[BrepEdge, ...] = ()
+    coedges: tuple[BrepCoedge, ...] = ()
+    loops: tuple[BrepLoop, ...] = ()
+    wires: tuple[BrepWire, ...] = ()
+    faces: tuple[BrepFace, ...] = ()
+    face_uses: tuple[BrepFaceUse, ...] = ()
+    shells: tuple[BrepShell, ...] = ()
+    shell_uses: tuple[BrepShellUse, ...] = ()
+    regions: tuple[BrepRegion, ...] = ()
+    bodies: tuple[BrepBody, ...] = ()
+    schema_version: str = "1.0"
 
     # pascal consumers remain typed while lowercase fields own dataclass storage
     @property

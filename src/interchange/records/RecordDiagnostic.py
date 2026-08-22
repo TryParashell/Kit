@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Mapping as TypeMap, TYPE_CHECKING
+from dataclasses import field as MakeDataField
+from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumDocument import Severity
@@ -17,25 +18,35 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # diagnostics carry recoverable translation issues without invalidating useful documents
-@ModelDataMut(
-    DefaultMap={
-        "severity": Severity.KWarning,
-        "entity_id": "",
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class Diagnostic(ModelBase):
     code: str
     message: str
-    severity: Severity
-    entity_id: str
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        ErrorCode: ClassVar[str]
-        MessageText: ClassVar[str]
-        Level: ClassVar[Severity]
-        EntityId: ClassVar[str]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    severity: Severity = Severity.KWarning
+    entity_id: str = ""
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def ErrorCode(self) -> str:
+        return self.code
+
+    @property
+    def MessageText(self) -> str:
+        return self.message
+
+    @property
+    def Level(self) -> Severity:
+        return self.severity
+
+    @property
+    def EntityId(self) -> str:
+        return self.entity_id
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

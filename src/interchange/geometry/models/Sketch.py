@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
-from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -20,26 +19,43 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # sketch entities pair semantic kinds with exact geometry and source state
-@ModelDataMut(
-    DefaultMap={"construction": False, "fixed": False, "provenance": None},
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class SketchEntity(ModelBase):
     id: str
     kind: GeometryKind | str
     geometry: KGeometryTypes
-    construction: bool
-    fixed: bool
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityKind: ClassVar[GeometryKind | str]
-        Geometry: ClassVar[KGeometryTypes]
-        IsConstruction: ClassVar[bool]
-        IsFixed: ClassVar[bool]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    construction: bool = False
+    fixed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityKind(self) -> GeometryKind | str:
+        return self.kind
+
+    @property
+    def Geometry(self) -> KGeometryTypes:
+        return self.geometry
+
+    @property
+    def IsConstruction(self) -> bool:
+        return self.construction
+
+    @property
+    def IsFixed(self) -> bool:
+        return self.fixed
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes
 
 
 # constraint references preserve the participating subelement of each entity
@@ -47,9 +63,14 @@ class SketchEntity(ModelBase):
 class ConstraintRef(ModelBase):
     entity_id: str
     point: str = ""
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        PointName: ClassVar[str]
+
+    @property
+    def EntityId(self) -> str:
+        return self.entity_id
+
+    @property
+    def PointName(self) -> str:
+        return self.point
 
 
 # sketch relations retain solver intent and parameter bindings across formats
@@ -63,47 +84,90 @@ class SketchRelation(ModelBase):
     suppressed: bool = False
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityKind: ClassVar[str]
-        References: ClassVar[tuple[ConstraintRef, ...]]
-        ParameterId: ClassVar[str | None]
-        IsDriving: ClassVar[bool]
-        IsSuppressed: ClassVar[bool]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityKind(self) -> str:
+        return self.kind
+
+    @property
+    def References(self) -> tuple[ConstraintRef, ...]:
+        return self.references
+
+    @property
+    def ParameterId(self) -> str | None:
+        return self.parameter_id
+
+    @property
+    def IsDriving(self) -> bool:
+        return self.driving
+
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes
 
 
 # sketches group geometry relations and profile identity into editable inputs
-@ModelDataMut(
-    DefaultMap={
-        "constraints": (),
-        "parameter_ids": (),
-        "closed_profile_entity_ids": (),
-        "suppressed": False,
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class Sketch(ModelBase):
     id: str
     name: str
     support_plane_id: str
     entities: tuple[SketchEntity, ...]
-    constraints: tuple[SketchRelation, ...]
-    parameter_ids: tuple[str, ...]
-    closed_profile_entity_ids: tuple[tuple[str, ...], ...]
-    suppressed: bool
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        SupportPlaneId: ClassVar[str]
-        Entities: ClassVar[tuple[SketchEntity, ...]]
-        Constraints: ClassVar[tuple[SketchRelation, ...]]
-        ParameterIds: ClassVar[tuple[str, ...]]
-        ClosedProfileEntityIds: ClassVar[tuple[tuple[str, ...], ...]]
-        IsSuppressed: ClassVar[bool]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    constraints: tuple[SketchRelation, ...] = ()
+    parameter_ids: tuple[str, ...] = ()
+    closed_profile_entity_ids: tuple[tuple[str, ...], ...] = ()
+    suppressed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def SupportPlaneId(self) -> str:
+        return self.support_plane_id
+
+    @property
+    def Entities(self) -> tuple[SketchEntity, ...]:
+        return self.entities
+
+    @property
+    def Constraints(self) -> tuple[SketchRelation, ...]:
+        return self.constraints
+
+    @property
+    def ParameterIds(self) -> tuple[str, ...]:
+        return self.parameter_ids
+
+    @property
+    def ClosedProfileEntityIds(self) -> tuple[tuple[str, ...], ...]:
+        return self.closed_profile_entity_ids
+
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

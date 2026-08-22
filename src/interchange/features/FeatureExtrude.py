@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.enums.EnumBase import WireEnum
 from interchange.features.FeatureContract import FeatureDef
@@ -59,17 +58,55 @@ class ExtrudeFeature(FeatureDef):
     second_draft_angle: ParameterValue | None = None
     up_to_reference: str = ""
     second_up_to_reference: str = ""
-    if TYPE_CHECKING:
-        Length: ClassVar[ParameterValue]
-        EndCondition: ClassVar[ExtrudeEnd | str]
-        IsReversed: ClassVar[bool]
-        IsSymmetric: ClassVar[bool]
-        Direction: ClassVar[SpaceVector | None]
-        SecondLength: ClassVar[ParameterValue | None]
-        SecondEndCondition: ClassVar[ExtrudeEnd | str | None]
-        Offset: ClassVar[ParameterValue | None]
-        SecondOffset: ClassVar[ParameterValue | None]
-        DraftAngle: ClassVar[ParameterValue | None]
-        SecondDraftAngle: ClassVar[ParameterValue | None]
-        UpToReference: ClassVar[str]
-        SecondUpToRef: ClassVar[str]
+
+    @property
+    def Length(self) -> ParameterValue:
+        return self.length
+
+    @property
+    def EndCondition(self) -> ExtrudeEnd | str:
+        return self.end_condition
+
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
+
+    @property
+    def IsSymmetric(self) -> bool:
+        return self.symmetric
+
+    @property
+    def Direction(self) -> SpaceVector | None:
+        return self.direction
+
+    @property
+    def SecondLength(self) -> ParameterValue | None:
+        return self.second_length
+
+    @property
+    def SecondEndCondition(self) -> ExtrudeEnd | str | None:
+        return self.second_end_condition
+
+    @property
+    def Offset(self) -> ParameterValue | None:
+        return self.offset
+
+    @property
+    def SecondOffset(self) -> ParameterValue | None:
+        return self.second_offset
+
+    @property
+    def DraftAngle(self) -> ParameterValue | None:
+        return self.draft_angle
+
+    @property
+    def SecondDraftAngle(self) -> ParameterValue | None:
+        return self.second_draft_angle
+
+    @property
+    def UpToReference(self) -> str:
+        return self.up_to_reference
+
+    @property
+    def SecondUpToRef(self) -> str:
+        return self.second_up_to_reference

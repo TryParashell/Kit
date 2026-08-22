@@ -41,10 +41,18 @@ class FeatureCfgState(ModelBase):
     configuration_id: str
     suppressed: bool = False
     parameter_override_ids: tuple[str, ...] = ()
-    if TYPE_CHECKING:
-        ConfigurationId: ClassVar[str]
-        IsSuppressed: ClassVar[bool]
-        ParamOverrideIds: ClassVar[tuple[str, ...]]
+
+    @property
+    def ConfigurationId(self) -> str:
+        return self.configuration_id
+
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    @property
+    def ParamOverrideIds(self) -> tuple[str, ...]:
+        return self.parameter_override_ids
 
 
 # feature steps preserve ordered dependencies and definitions for editable translation
@@ -64,21 +72,62 @@ class FeatureStep(FeatureHintBase):
     configuration_states: tuple[FeatureCfgState, ...] = ()
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        EntityKind: ClassVar[FeatureKind | str]
-        Order: ClassVar[int]
-        InputFeatureIds: ClassVar[tuple[str, ...]]
-        SketchId: ClassVar[str | None]
-        ParameterIds: ClassVar[tuple[str, ...]]
-        Operation: ClassVar[BooleanOp | str | None]
-        Definition: ClassVar[FeatureDef | None]
-        SelectionIds: ClassVar[tuple[str, ...]]
-        IsSuppressed: ClassVar[bool]
-        ConfigStates: ClassVar[tuple[FeatureCfgState, ...]]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def EntityKind(self) -> FeatureKind | str:
+        return self.kind
+
+    @property
+    def Order(self) -> int:
+        return self.order
+
+    @property
+    def InputFeatureIds(self) -> tuple[str, ...]:
+        return self.input_feature_ids
+
+    @property
+    def SketchId(self) -> str | None:
+        return self.sketch_id
+
+    @property
+    def ParameterIds(self) -> tuple[str, ...]:
+        return self.parameter_ids
+
+    @property
+    def Operation(self) -> BooleanOp | str | None:
+        return self.operation
+
+    @property
+    def Definition(self) -> FeatureDef | None:
+        return self.definition
+
+    @property
+    def SelectionIds(self) -> tuple[str, ...]:
+        return self.selection_ids
+
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    @property
+    def ConfigStates(self) -> tuple[FeatureCfgState, ...]:
+        return self.configuration_states
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes
 
     # invalid definitions must fail before corrupt feature records propagate
     def __post_init__(self) -> None:

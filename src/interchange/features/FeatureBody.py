@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
-from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -29,11 +28,31 @@ class DesignBody(ModelBase):
     material_id: str | None = None
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        FinalFeatureId: ClassVar[str]
-        Topology: ClassVar[TopologyCounts]
-        MaterialId: ClassVar[str | None]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def FinalFeatureId(self) -> str:
+        return self.final_feature_id
+
+    @property
+    def Topology(self) -> TopologyCounts:
+        return self.topology
+
+    @property
+    def MaterialId(self) -> str | None:
+        return self.material_id
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

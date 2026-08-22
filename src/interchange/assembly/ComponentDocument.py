@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING as IsTypeCheck
+from typing import TYPE_CHECKING as IsTypeCheck
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
@@ -23,6 +23,11 @@ if IsTypeCheck:
 class ComponentDoc(ModelBase):
     id: str
     document: CadDocument
-    if IsTypeCheck:
-        EntityId: ClassVar[str]
-        Document: ClassVar[CadDocument]
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def Document(self) -> CadDocument:
+        return self.document

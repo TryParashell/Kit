@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyEnums import MateEntityKind
@@ -19,35 +19,55 @@ from interchange.assembly.TransformMatrix import TransformMatrix
 
 
 # mate entities resolve constraint geometry through occurrence paths and optional frames
-@ModelDataMut(
-    DefaultMap={
-        "source_entity_id": "",
-        "selection_id": "",
-        "frame": None,
-        "radius": None,
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class MateEntity(ModelBase):
     id: str
     owner_definition_id: str
     instance_path: tuple[str, ...]
     kind: MateEntityKind | str
-    source_entity_id: str
-    selection_id: str
-    frame: TransformMatrix | None
-    radius: float | None
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        OwnerDefinitionId: ClassVar[str]
-        InstancePath: ClassVar[tuple[str, ...]]
-        EntityKind: ClassVar[MateEntityKind | str]
-        SourceEntityId: ClassVar[str]
-        SelectionId: ClassVar[str]
-        Frame: ClassVar[TransformMatrix | None]
-        Radius: ClassVar[float | None]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    source_entity_id: str = ""
+    selection_id: str = ""
+    frame: TransformMatrix | None = None
+    radius: float | None = None
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def OwnerDefinitionId(self) -> str:
+        return self.owner_definition_id
+
+    @property
+    def InstancePath(self) -> tuple[str, ...]:
+        return self.instance_path
+
+    @property
+    def EntityKind(self) -> MateEntityKind | str:
+        return self.kind
+
+    @property
+    def SourceEntityId(self) -> str:
+        return self.source_entity_id
+
+    @property
+    def SelectionId(self) -> str:
+        return self.selection_id
+
+    @property
+    def Frame(self) -> TransformMatrix | None:
+        return self.frame
+
+    @property
+    def Radius(self) -> float | None:
+        return self.radius
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

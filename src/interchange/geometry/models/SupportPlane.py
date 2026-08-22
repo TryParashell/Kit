@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -18,27 +18,40 @@ from interchange.geometry.models.Transform import Transform
 
 
 # support planes retain sketch attachment and offset relationships across systems
-@ModelDataMut(
-    DefaultMap={
-        "support_selection_id": None,
-        "offset_parameter_id": None,
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class SupportPlane(ModelBase):
     id: str
     name: str
     transform: Transform
-    support_selection_id: str | None
-    offset_parameter_id: str | None
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        Transform: ClassVar[Transform]
-        SupportSelectionId: ClassVar[str | None]
-        OffsetParameterId: ClassVar[str | None]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    support_selection_id: str | None = None
+    offset_parameter_id: str | None = None
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def Transform(self) -> Transform:
+        return self.transform
+
+    @property
+    def SupportSelectionId(self) -> str | None:
+        return self.support_selection_id
+
+    @property
+    def OffsetParameterId(self) -> str | None:
+        return self.offset_parameter_id
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

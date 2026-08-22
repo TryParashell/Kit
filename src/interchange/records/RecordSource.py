@@ -8,30 +8,43 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
-from typing import TYPE_CHECKING
 
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
 # source identity anchors every portable document to original bytes and application
-@ModelDataMut(
-    DefaultMap={"container_version": "", "application_version": ""},
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class CadSource(ModelBase):
     format_id: str
     path: str
     sha256: str
-    container_version: str
-    application_version: str
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        FormatId: ClassVar[str]
-        FilePath: ClassVar[str]
-        SourceDigest: ClassVar[str]
-        ContainerVersion: ClassVar[str]
-        ApplicationVersion: ClassVar[str]
-        Attributes: ClassVar[TypeMap[str, object]]
+    container_version: str = ""
+    application_version: str = ""
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def FilePath(self) -> str:
+        return self.path
+
+    @property
+    def SourceDigest(self) -> str:
+        return self.sha256
+
+    @property
+    def ContainerVersion(self) -> str:
+        return self.container_version
+
+    @property
+    def ApplicationVersion(self) -> str:
+        return self.application_version
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
-from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -26,9 +25,14 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 class FilletFeature(FeatureDef):
     radius: ParameterValue
     variable_radius_parameter_ids: tuple[str, ...] = ()
-    if TYPE_CHECKING:
-        Radius: ClassVar[ParameterValue]
-        VariableRadiusParamIds: ClassVar[tuple[str, ...]]
+
+    @property
+    def Radius(self) -> ParameterValue:
+        return self.radius
+
+    @property
+    def VariableRadiusParamIds(self) -> tuple[str, ...]:
+        return self.variable_radius_parameter_ids
 
 
 # revolutions preserve axis direction and angular extent rather than only geometry
@@ -38,11 +42,22 @@ class RevolveFeature(FeatureDef):
     axis_entity_id: str
     reversed: bool = False
     symmetric: bool = False
-    if TYPE_CHECKING:
-        Angle: ClassVar[ParameterValue]
-        AxisEntityId: ClassVar[str]
-        IsReversed: ClassVar[bool]
-        IsSymmetric: ClassVar[bool]
+
+    @property
+    def Angle(self) -> ParameterValue:
+        return self.angle
+
+    @property
+    def AxisEntityId(self) -> str:
+        return self.axis_entity_id
+
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
+
+    @property
+    def IsSymmetric(self) -> bool:
+        return self.symmetric
 
 
 # holes retain diameter depth and termination so targets create native features
@@ -51,10 +66,18 @@ class HoleFeature(FeatureDef):
     diameter: ParameterValue
     depth: ParameterValue
     end_condition: ExtrudeEnd | str = ExtrudeEnd.KBlind
-    if TYPE_CHECKING:
-        Diameter: ClassVar[ParameterValue]
-        Depth: ClassVar[ParameterValue]
-        EndCondition: ClassVar[ExtrudeEnd | str]
+
+    @property
+    def Diameter(self) -> ParameterValue:
+        return self.diameter
+
+    @property
+    def Depth(self) -> ParameterValue:
+        return self.depth
+
+    @property
+    def EndCondition(self) -> ExtrudeEnd | str:
+        return self.end_condition
 
 
 # chamfers retain alternate measurement modes so targets receive equivalent intent
@@ -64,11 +87,22 @@ class ChamferFeature(FeatureDef):
     mode: str = "equal_distance"
     second_distance: ParameterValue | None = None
     angle: ParameterValue | None = None
-    if TYPE_CHECKING:
-        Distance: ClassVar[ParameterValue]
-        ValueMode: ClassVar[str]
-        SecondDistance: ClassVar[ParameterValue | None]
-        Angle: ClassVar[ParameterValue | None]
+
+    @property
+    def Distance(self) -> ParameterValue:
+        return self.distance
+
+    @property
+    def ValueMode(self) -> str:
+        return self.mode
+
+    @property
+    def SecondDistance(self) -> ParameterValue | None:
+        return self.second_distance
+
+    @property
+    def Angle(self) -> ParameterValue | None:
+        return self.angle
 
 
 # shell features retain thickness orientation when topology cannot recover intent
@@ -76,9 +110,14 @@ class ChamferFeature(FeatureDef):
 class ShellFeature(FeatureDef):
     thickness: ParameterValue
     outward: bool | None = None
-    if TYPE_CHECKING:
-        Thickness: ClassVar[ParameterValue]
-        IsOutward: ClassVar[bool | None]
+
+    @property
+    def Thickness(self) -> ParameterValue:
+        return self.thickness
+
+    @property
+    def IsOutward(self) -> bool | None:
+        return self.outward
 
 
 # linear patterns preserve editable pitch count and direction bindings
@@ -88,11 +127,22 @@ class LinearPattern(FeatureDef):
     instance_count: int
     direction_selection_id: str
     reversed: bool = False
-    if TYPE_CHECKING:
-        Spacing: ClassVar[ParameterValue]
-        InstanceCount: ClassVar[int]
-        DirectionSelectionId: ClassVar[str]
-        IsReversed: ClassVar[bool]
+
+    @property
+    def Spacing(self) -> ParameterValue:
+        return self.spacing
+
+    @property
+    def InstanceCount(self) -> int:
+        return self.instance_count
+
+    @property
+    def DirectionSelectionId(self) -> str:
+        return self.direction_selection_id
+
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
 
 
 # circular patterns preserve angular span count and selected axis bindings
@@ -102,11 +152,22 @@ class CirclePattern(FeatureDef):
     instance_count: int
     axis_selection_id: str
     reversed: bool = False
-    if TYPE_CHECKING:
-        Angle: ClassVar[ParameterValue]
-        InstanceCount: ClassVar[int]
-        AxisSelectionId: ClassVar[str]
-        IsReversed: ClassVar[bool]
+
+    @property
+    def Angle(self) -> ParameterValue:
+        return self.angle
+
+    @property
+    def InstanceCount(self) -> int:
+        return self.instance_count
+
+    @property
+    def AxisSelectionId(self) -> str:
+        return self.axis_selection_id
+
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
 
 
 # reference planes retain support and offset bindings for editable reconstruction
@@ -115,18 +176,28 @@ class RefPlaneFeature(FeatureDef):
     support_plane_id: str
     reference_plane_id: str
     offset: ParameterValue
-    if TYPE_CHECKING:
-        SupportPlaneId: ClassVar[str]
-        ReferencePlaneId: ClassVar[str]
-        Offset: ClassVar[ParameterValue]
+
+    @property
+    def SupportPlaneId(self) -> str:
+        return self.support_plane_id
+
+    @property
+    def ReferencePlaneId(self) -> str:
+        return self.reference_plane_id
+
+    @property
+    def Offset(self) -> ParameterValue:
+        return self.offset
 
 
 # dome features retain their driving height rather than only resulting surfaces
 @MakeDataClass(frozen=True, slots=True)
 class DomeFeature(FeatureDef):
     height: ParameterValue
-    if TYPE_CHECKING:
-        Height: ClassVar[ParameterValue]
+
+    @property
+    def Height(self) -> ParameterValue:
+        return self.height
 
 
 # body moves retain explicit translations and copy intent across histories
@@ -134,25 +205,34 @@ class DomeFeature(FeatureDef):
 class MoveBodyFeature(FeatureDef):
     translation: SpaceVector
     copy: bool = False
-    if TYPE_CHECKING:
-        Translation: ClassVar[SpaceVector]
-        IsCopy: ClassVar[bool]
+
+    @property
+    def Translation(self) -> SpaceVector:
+        return self.translation
+
+    @property
+    def IsCopy(self) -> bool:
+        return self.copy
 
 
 # combine features preserve constructive operation intent between modeling kernels
 @MakeDataClass(frozen=True, slots=True)
 class CombineFeature(FeatureDef):
     operation: BooleanOp = BooleanOp.KJoin
-    if TYPE_CHECKING:
-        Operation: ClassVar[BooleanOp]
+
+    @property
+    def Operation(self) -> BooleanOp:
+        return self.operation
 
 
 # scale features retain anisotropic factors needed to reconstruct target operations
 @MakeDataClass(frozen=True, slots=True)
 class ScaleFeature(FeatureDef):
     factors: SpaceVector
-    if TYPE_CHECKING:
-        Factors: ClassVar[SpaceVector]
+
+    @property
+    def Factors(self) -> SpaceVector:
+        return self.factors
 
 
 # native definitions preserve unsupported data without claiming portable semantics
@@ -161,7 +241,15 @@ class NativeFeature(FeatureDef):
     format_id: str
     type_id: str
     object_data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        FormatId: ClassVar[str]
-        TypeId: ClassVar[str]
-        ObjectData: ClassVar[TypeMap[str, object]]
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def TypeId(self) -> str:
+        return self.type_id
+
+    @property
+    def ObjectData(self) -> TypeMap[str, object]:
+        return self.object_data

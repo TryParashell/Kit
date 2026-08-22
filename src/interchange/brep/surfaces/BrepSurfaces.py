@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
-from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
 from interchange.brep.curves.BrepCurves import BrepEntity, ValidateBrepId
@@ -33,10 +32,18 @@ class PlaneSurface(BrepSurface):
     origin: SpaceVector
     normal: SpaceVector
     reference_direction: SpaceVector
-    if TYPE_CHECKING:
-        Origin: ClassVar[SpaceVector]
-        Normal: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
+
+    @property
+    def Origin(self) -> SpaceVector:
+        return self.origin
+
+    @property
+    def Normal(self) -> SpaceVector:
+        return self.normal
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
 
 
 # cylinders retain exact axes reference directions and radii
@@ -46,11 +53,22 @@ class CylinderSurface(BrepSurface):
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
-    if TYPE_CHECKING:
-        Origin: ClassVar[SpaceVector]
-        AxisVector: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
-        Radius: ClassVar[float]
+
+    @property
+    def Origin(self) -> SpaceVector:
+        return self.origin
+
+    @property
+    def AxisVector(self) -> SpaceVector:
+        return self.axis
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
 
 
 # cones retain exact axes base radii and half angles
@@ -61,12 +79,26 @@ class ConeSurface(BrepSurface):
     reference_direction: SpaceVector
     radius: float
     half_angle: float
-    if TYPE_CHECKING:
-        Origin: ClassVar[SpaceVector]
-        AxisVector: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
-        Radius: ClassVar[float]
-        HalfAngle: ClassVar[float]
+
+    @property
+    def Origin(self) -> SpaceVector:
+        return self.origin
+
+    @property
+    def AxisVector(self) -> SpaceVector:
+        return self.axis
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
+
+    @property
+    def HalfAngle(self) -> float:
+        return self.half_angle
 
 
 # spheres retain exact centers orientation frames and radii
@@ -76,11 +108,22 @@ class SphereSurface(BrepSurface):
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[SpaceVector]
-        AxisVector: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
-        Radius: ClassVar[float]
+
+    @property
+    def Center(self) -> SpaceVector:
+        return self.center
+
+    @property
+    def AxisVector(self) -> SpaceVector:
+        return self.axis
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
 
 
 # tori retain exact centers orientation frames and both radii
@@ -91,12 +134,26 @@ class TorusSurface(BrepSurface):
     reference_direction: SpaceVector
     major_radius: float
     minor_radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[SpaceVector]
-        AxisVector: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
-        MajorRadius: ClassVar[float]
-        MinorRadius: ClassVar[float]
+
+    @property
+    def Center(self) -> SpaceVector:
+        return self.center
+
+    @property
+    def AxisVector(self) -> SpaceVector:
+        return self.axis
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
+
+    @property
+    def MajorRadius(self) -> float:
+        return self.major_radius
+
+    @property
+    def MinorRadius(self) -> float:
+        return self.minor_radius
 
 
 # spline surfaces retain complete tensor basis data for exact reconstruction
@@ -112,17 +169,46 @@ class NurbsSurface(BrepSurface):
     weights: tuple[tuple[float, ...], ...] = ()
     periodic_u: bool = False
     periodic_v: bool = False
-    if TYPE_CHECKING:
-        DegreeU: ClassVar[int]
-        DegreeV: ClassVar[int]
-        ControlPoints: ClassVar[tuple[tuple[SpaceVector, ...], ...]]
-        KnotValuesU: ClassVar[tuple[float, ...]]
-        KnotValuesV: ClassVar[tuple[float, ...]]
-        MultiplicitiesU: ClassVar[tuple[int, ...]]
-        MultiplicitiesV: ClassVar[tuple[int, ...]]
-        Weights: ClassVar[tuple[tuple[float, ...], ...]]
-        IsPeriodicU: ClassVar[bool]
-        IsPeriodicV: ClassVar[bool]
+
+    @property
+    def DegreeU(self) -> int:
+        return self.degree_u
+
+    @property
+    def DegreeV(self) -> int:
+        return self.degree_v
+
+    @property
+    def ControlPoints(self) -> tuple[tuple[SpaceVector, ...], ...]:
+        return self.control_points
+
+    @property
+    def KnotValuesU(self) -> tuple[float, ...]:
+        return self.knots_u
+
+    @property
+    def KnotValuesV(self) -> tuple[float, ...]:
+        return self.knots_v
+
+    @property
+    def MultiplicitiesU(self) -> tuple[int, ...]:
+        return self.multiplicities_u
+
+    @property
+    def MultiplicitiesV(self) -> tuple[int, ...]:
+        return self.multiplicities_v
+
+    @property
+    def Weights(self) -> tuple[tuple[float, ...], ...]:
+        return self.weights
+
+    @property
+    def IsPeriodicU(self) -> bool:
+        return self.periodic_u
+
+    @property
+    def IsPeriodicV(self) -> bool:
+        return self.periodic_v
 
 
 # offset surfaces preserve analytic relationships instead of flattening to splines
@@ -130,9 +216,14 @@ class NurbsSurface(BrepSurface):
 class OffsetSurface(BrepSurface):
     base_surface_id: str
     distance: float
-    if TYPE_CHECKING:
-        BaseSurfaceId: ClassVar[str]
-        Distance: ClassVar[float]
+
+    @property
+    def BaseSurfaceId(self) -> str:
+        return self.base_surface_id
+
+    @property
+    def Distance(self) -> float:
+        return self.distance
 
 
 # native surfaces preserve unsupported kernel data without false portable semantics
@@ -141,7 +232,15 @@ class NativeSurface(BrepSurface):
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        FormatId: ClassVar[str]
-        EntityType: ClassVar[str]
-        PayloadData: ClassVar[TypeMap[str, object]]
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def EntityType(self) -> str:
+        return self.entity_type
+
+    @property
+    def PayloadData(self) -> TypeMap[str, object]:
+        return self.data

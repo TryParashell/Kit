@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
-from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -25,19 +24,25 @@ def ValidateBrepId(SourceValue: object) -> None:
 
 
 # shared topology identity avoids duplicated provenance fields across curve families
-@ModelDataMut(
-    DefaultMap={"provenance": None},
-    FactoryMap={"attributes": FreezeMapping},
-    KeywordOnly=frozenset({"provenance", "attributes"}),
-)
+@ModelDataMut
 class BrepEntity(ModelBase):
     id: str
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    provenance: Provenance | None = MakeDataField(default=None, kw_only=True)
+    attributes: TypeMap[str, object] = MakeDataField(
+        default_factory=FreezeMapping, kw_only=True
+    )
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes
 
 
 # curve identity checks reject malformed records before topology validation
@@ -54,9 +59,14 @@ class BrepCurve(BrepEntity):
 class LineCurve(BrepCurve):
     origin: SpaceVector
     direction: SpaceVector
-    if TYPE_CHECKING:
-        Origin: ClassVar[SpaceVector]
-        Direction: ClassVar[SpaceVector]
+
+    @property
+    def Origin(self) -> SpaceVector:
+        return self.origin
+
+    @property
+    def Direction(self) -> SpaceVector:
+        return self.direction
 
 
 # circle curves preserve exact spatial frames and radii across kernels
@@ -66,11 +76,22 @@ class CircleCurve(BrepCurve):
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[SpaceVector]
-        AxisVector: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
-        Radius: ClassVar[float]
+
+    @property
+    def Center(self) -> SpaceVector:
+        return self.center
+
+    @property
+    def AxisVector(self) -> SpaceVector:
+        return self.axis
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
 
 
 # ellipse curves preserve exact spatial frames and both principal radii
@@ -81,12 +102,26 @@ class EllipseCurve(BrepCurve):
     reference_direction: SpaceVector
     major_radius: float
     minor_radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[SpaceVector]
-        AxisVector: ClassVar[SpaceVector]
-        RefDirection: ClassVar[SpaceVector]
-        MajorRadius: ClassVar[float]
-        MinorRadius: ClassVar[float]
+
+    @property
+    def Center(self) -> SpaceVector:
+        return self.center
+
+    @property
+    def AxisVector(self) -> SpaceVector:
+        return self.axis
+
+    @property
+    def RefDirection(self) -> SpaceVector:
+        return self.reference_direction
+
+    @property
+    def MajorRadius(self) -> float:
+        return self.major_radius
+
+    @property
+    def MinorRadius(self) -> float:
+        return self.minor_radius
 
 
 # spline curves retain full basis data needed for exact reconstruction
@@ -98,13 +133,30 @@ class NurbsCurve(BrepCurve):
     multiplicities: tuple[int, ...]
     weights: tuple[float, ...] = ()
     periodic: bool = False
-    if TYPE_CHECKING:
-        Degree: ClassVar[int]
-        ControlPoints: ClassVar[tuple[SpaceVector, ...]]
-        KnotValues: ClassVar[tuple[float, ...]]
-        Multiplicities: ClassVar[tuple[int, ...]]
-        Weights: ClassVar[tuple[float, ...]]
-        IsPeriodic: ClassVar[bool]
+
+    @property
+    def Degree(self) -> int:
+        return self.degree
+
+    @property
+    def ControlPoints(self) -> tuple[SpaceVector, ...]:
+        return self.control_points
+
+    @property
+    def KnotValues(self) -> tuple[float, ...]:
+        return self.knots
+
+    @property
+    def Multiplicities(self) -> tuple[int, ...]:
+        return self.multiplicities
+
+    @property
+    def Weights(self) -> tuple[float, ...]:
+        return self.weights
+
+    @property
+    def IsPeriodic(self) -> bool:
+        return self.periodic
 
 
 # intersection curves preserve supporting surfaces and sampled verification evidence
@@ -114,11 +166,22 @@ class IntersectCurve(BrepCurve):
     second_surface_id: str
     samples: tuple[SpaceVector, ...] = ()
     tolerance: float = 0.0
-    if TYPE_CHECKING:
-        FirstSurfaceId: ClassVar[str]
-        SecondSurfaceId: ClassVar[str]
-        Samples: ClassVar[tuple[SpaceVector, ...]]
-        Tolerance: ClassVar[float]
+
+    @property
+    def FirstSurfaceId(self) -> str:
+        return self.first_surface_id
+
+    @property
+    def SecondSurfaceId(self) -> str:
+        return self.second_surface_id
+
+    @property
+    def Samples(self) -> tuple[SpaceVector, ...]:
+        return self.samples
+
+    @property
+    def Tolerance(self) -> float:
+        return self.tolerance
 
 
 # native curves retain unsupported kernel data without claiming portable semantics
@@ -127,7 +190,15 @@ class NativeCurve(BrepCurve):
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        FormatId: ClassVar[str]
-        EntityType: ClassVar[str]
-        PayloadData: ClassVar[TypeMap[str, object]]
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def EntityType(self) -> str:
+        return self.entity_type
+
+    @property
+    def PayloadData(self) -> TypeMap[str, object]:
+        return self.data

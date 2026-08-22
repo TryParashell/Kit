@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
-from typing import TYPE_CHECKING, ClassVar
 from typing import Mapping as TypeMap
 
 from interchange.brep.curves.BrepCurves import BrepEntity, ValidateBrepId
@@ -32,9 +31,14 @@ class BrepPcurve(BrepEntity):
 class LinePcurve(BrepPcurve):
     origin: PlaneVector
     direction: PlaneVector
-    if TYPE_CHECKING:
-        Origin: ClassVar[PlaneVector]
-        Direction: ClassVar[PlaneVector]
+
+    @property
+    def Origin(self) -> PlaneVector:
+        return self.origin
+
+    @property
+    def Direction(self) -> PlaneVector:
+        return self.direction
 
 
 # planar circle curves preserve exact parameter space centers and radii
@@ -42,9 +46,14 @@ class LinePcurve(BrepPcurve):
 class CirclePcurve(BrepPcurve):
     center: PlaneVector
     radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        Radius: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
 
 
 # planar spline curves retain full basis data required for trimming
@@ -56,13 +65,30 @@ class NurbsPcurve(BrepPcurve):
     multiplicities: tuple[int, ...]
     weights: tuple[float, ...] = ()
     periodic: bool = False
-    if TYPE_CHECKING:
-        Degree: ClassVar[int]
-        ControlPoints: ClassVar[tuple[PlaneVector, ...]]
-        KnotValues: ClassVar[tuple[float, ...]]
-        Multiplicities: ClassVar[tuple[int, ...]]
-        Weights: ClassVar[tuple[float, ...]]
-        IsPeriodic: ClassVar[bool]
+
+    @property
+    def Degree(self) -> int:
+        return self.degree
+
+    @property
+    def ControlPoints(self) -> tuple[PlaneVector, ...]:
+        return self.control_points
+
+    @property
+    def KnotValues(self) -> tuple[float, ...]:
+        return self.knots
+
+    @property
+    def Multiplicities(self) -> tuple[int, ...]:
+        return self.multiplicities
+
+    @property
+    def Weights(self) -> tuple[float, ...]:
+        return self.weights
+
+    @property
+    def IsPeriodic(self) -> bool:
+        return self.periodic
 
 
 # native parameter curves preserve unsupported kernel specific trimming data
@@ -71,7 +97,15 @@ class NativePcurve(BrepPcurve):
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        FormatId: ClassVar[str]
-        EntityType: ClassVar[str]
-        PayloadData: ClassVar[TypeMap[str, object]]
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def EntityType(self) -> str:
+        return self.entity_type
+
+    @property
+    def PayloadData(self) -> TypeMap[str, object]:
+        return self.data

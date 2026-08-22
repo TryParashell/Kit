@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 from typing import TYPE_CHECKING as IsTypeCheck
 
@@ -30,28 +30,48 @@ if IsTypeCheck:
 
 
 # assembly data composes occurrences documents and mates into one portable graph
-@ModelDataMut(
-    DefaultMap={"documents": (), "mate_entities": (), "mates": (), "mate_groups": ()},
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class AssemblyData(ModelBase):
     root_definition_id: str
     definitions: tuple[ComponentDef, ...]
     instances: tuple[ComponentInst, ...]
-    documents: tuple[ComponentDoc, ...]
-    mate_entities: tuple[MateEntity, ...]
-    mates: tuple[MateConstraint, ...]
-    mate_groups: tuple[MateGroup, ...]
-    attributes: TypeMap[str, object]
-    if IsTypeCheck:
-        RootDefinitionId: ClassVar[str]
-        Definitions: ClassVar[tuple[ComponentDef, ...]]
-        Instances: ClassVar[tuple[ComponentInst, ...]]
-        Documents: ClassVar[tuple[ComponentDoc, ...]]
-        MateEntities: ClassVar[tuple[MateEntity, ...]]
-        Mates: ClassVar[tuple[MateConstraint, ...]]
-        MateGroups: ClassVar[tuple[MateGroup, ...]]
-        Attributes: ClassVar[TypeMap[str, object]]
+    documents: tuple[ComponentDoc, ...] = ()
+    mate_entities: tuple[MateEntity, ...] = ()
+    mates: tuple[MateConstraint, ...] = ()
+    mate_groups: tuple[MateGroup, ...] = ()
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def RootDefinitionId(self) -> str:
+        return self.root_definition_id
+
+    @property
+    def Definitions(self) -> tuple[ComponentDef, ...]:
+        return self.definitions
+
+    @property
+    def Instances(self) -> tuple[ComponentInst, ...]:
+        return self.instances
+
+    @property
+    def Documents(self) -> tuple[ComponentDoc, ...]:
+        return self.documents
+
+    @property
+    def MateEntities(self) -> tuple[MateEntity, ...]:
+        return self.mate_entities
+
+    @property
+    def Mates(self) -> tuple[MateConstraint, ...]:
+        return self.mates
+
+    @property
+    def MateGroups(self) -> tuple[MateGroup, ...]:
+        return self.mate_groups
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes
 
     # definition lookup gives callers one consistent missing identifier failure mode
     def GetDefinition(self, EntityId: str) -> ComponentDef:

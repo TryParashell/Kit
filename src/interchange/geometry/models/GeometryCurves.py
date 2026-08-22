@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
-from typing import ClassVar, TYPE_CHECKING
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -21,8 +20,10 @@ from interchange.geometry.models.VectorPlane import PlaneVector
 @ModelDataMut
 class PointGeometry(ModelBase):
     point: PlaneVector
-    if TYPE_CHECKING:
-        Point: ClassVar[PlaneVector]
+
+    @property
+    def Point(self) -> PlaneVector:
+        return self.point
 
 
 # line geometry preserves finite sketch segments independently from support lines
@@ -30,9 +31,14 @@ class PointGeometry(ModelBase):
 class LineGeometry(ModelBase):
     start: PlaneVector
     end: PlaneVector
-    if TYPE_CHECKING:
-        Start: ClassVar[PlaneVector]
-        EndPoint: ClassVar[PlaneVector]
+
+    @property
+    def Start(self) -> PlaneVector:
+        return self.start
+
+    @property
+    def EndPoint(self) -> PlaneVector:
+        return self.end
 
 
 # circle geometry retains exact centers and radii instead of sampled approximations
@@ -40,9 +46,14 @@ class LineGeometry(ModelBase):
 class CircleGeometry(ModelBase):
     center: PlaneVector
     radius: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        Radius: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
 
 
 # arc geometry preserves angular trimming on an exact circular support curve
@@ -52,36 +63,57 @@ class ArcGeometry(ModelBase):
     radius: float
     start_angle: float
     end_angle: float
-    if TYPE_CHECKING:
-        Center: ClassVar[PlaneVector]
-        Radius: ClassVar[float]
-        StartAngle: ClassVar[float]
-        EndAngle: ClassVar[float]
+
+    @property
+    def Center(self) -> PlaneVector:
+        return self.center
+
+    @property
+    def Radius(self) -> float:
+        return self.radius
+
+    @property
+    def StartAngle(self) -> float:
+        return self.start_angle
+
+    @property
+    def EndAngle(self) -> float:
+        return self.end_angle
 
 
 # splines retain control data needed for editable and exact reconstruction
-@ModelDataMut(
-    DefaultMap={
-        "knots": (),
-        "multiplicities": (),
-        "weights": (),
-        "periodic": False,
-    }
-)
+@ModelDataMut
 class SplineGeometry(ModelBase):
     control_points: tuple[PlaneVector, ...]
     degree: int
-    knots: tuple[float, ...]
-    multiplicities: tuple[int, ...]
-    weights: tuple[float, ...]
-    periodic: bool
-    if TYPE_CHECKING:
-        ControlPoints: ClassVar[tuple[PlaneVector, ...]]
-        Degree: ClassVar[int]
-        KnotValues: ClassVar[tuple[float, ...]]
-        Multiplicities: ClassVar[tuple[int, ...]]
-        Weights: ClassVar[tuple[float, ...]]
-        IsPeriodic: ClassVar[bool]
+    knots: tuple[float, ...] = ()
+    multiplicities: tuple[int, ...] = ()
+    weights: tuple[float, ...] = ()
+    periodic: bool = False
+
+    @property
+    def ControlPoints(self) -> tuple[PlaneVector, ...]:
+        return self.control_points
+
+    @property
+    def Degree(self) -> int:
+        return self.degree
+
+    @property
+    def KnotValues(self) -> tuple[float, ...]:
+        return self.knots
+
+    @property
+    def Multiplicities(self) -> tuple[int, ...]:
+        return self.multiplicities
+
+    @property
+    def Weights(self) -> tuple[float, ...]:
+        return self.weights
+
+    @property
+    def IsPeriodic(self) -> bool:
+        return self.periodic
 
 
 # native geometry preserves unsupported entities without pretending they are portable
@@ -90,7 +122,15 @@ class NativeGeometry(ModelBase):
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-    if TYPE_CHECKING:
-        FormatId: ClassVar[str]
-        EntityType: ClassVar[str]
-        PayloadData: ClassVar[TypeMap[str, object]]
+
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    @property
+    def EntityType(self) -> str:
+        return self.entity_type
+
+    @property
+    def PayloadData(self) -> TypeMap[str, object]:
+        return self.data

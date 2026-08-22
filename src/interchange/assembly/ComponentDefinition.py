@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyEnums import ComponentKind
@@ -19,48 +19,75 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # component definitions describe reusable nodes independently from their occurrences
-@ModelDataMut(
-    DefaultMap={
-        "document_id": "",
-        "configuration_name": "",
-        "configuration_id": "",
-        "bounding_box": None,
-        "body_ids": (),
-        "mesh_ids": (),
-        "source_path": "",
-        "source_format_id": "",
-        "source_sha256": "",
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class ComponentDef(ModelBase):
     id: str
     name: str
     kind: ComponentKind | str
-    document_id: str
-    configuration_name: str
-    configuration_id: str
-    bounding_box: BoundingBox | None
-    body_ids: tuple[str, ...]
-    mesh_ids: tuple[str, ...]
-    source_path: str
-    source_format_id: str
-    source_sha256: str
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        EntityKind: ClassVar[ComponentKind | str]
-        DocumentId: ClassVar[str]
-        ConfigurationName: ClassVar[str]
-        ConfigurationId: ClassVar[str]
-        BoundingBox: ClassVar[BoundingBox | None]
-        BodyIds: ClassVar[tuple[str, ...]]
-        MeshIds: ClassVar[tuple[str, ...]]
-        SourcePath: ClassVar[str]
-        SourceFormatId: ClassVar[str]
-        SourceDigest: ClassVar[str]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    document_id: str = ""
+    configuration_name: str = ""
+    configuration_id: str = ""
+    bounding_box: BoundingBox | None = None
+    body_ids: tuple[str, ...] = ()
+    mesh_ids: tuple[str, ...] = ()
+    source_path: str = ""
+    source_format_id: str = ""
+    source_sha256: str = ""
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def EntityKind(self) -> ComponentKind | str:
+        return self.kind
+
+    @property
+    def DocumentId(self) -> str:
+        return self.document_id
+
+    @property
+    def ConfigurationName(self) -> str:
+        return self.configuration_name
+
+    @property
+    def ConfigurationId(self) -> str:
+        return self.configuration_id
+
+    @property
+    def BoundingBox(self) -> BoundingBox | None:
+        return self.bounding_box
+
+    @property
+    def BodyIds(self) -> tuple[str, ...]:
+        return self.body_ids
+
+    @property
+    def MeshIds(self) -> tuple[str, ...]:
+        return self.mesh_ids
+
+    @property
+    def SourcePath(self) -> str:
+        return self.source_path
+
+    @property
+    def SourceFormatId(self) -> str:
+        return self.source_format_id
+
+    @property
+    def SourceDigest(self) -> str:
+        return self.source_sha256
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

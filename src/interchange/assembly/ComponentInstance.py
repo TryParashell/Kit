@@ -8,63 +8,95 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.records.RecordProvenance import Provenance
-from interchange.assembly.TransformMatrix import TransformMatrix
+from interchange.assembly.TransformMatrix import TransformMatrix, KIdentityMatrix
 
 
 # component instances preserve placement order suppression and configuration choices
-@ModelDataMut(
-    DefaultMap={
-        "transform": TransformMatrix(),
-        "order": 0,
-        "reference_number": "",
-        "configuration_name": "",
-        "configuration_id": "",
-        "suppressed": False,
-        "hidden": False,
-        "fixed": False,
-        "flexible": False,
-        "exclude_from_bom": False,
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class ComponentInst(ModelBase):
     id: str
     name: str
     definition_id: str
     owner_definition_id: str
-    transform: TransformMatrix
-    order: int
-    reference_number: str
-    configuration_name: str
-    configuration_id: str
-    suppressed: bool
-    hidden: bool
-    fixed: bool
-    flexible: bool
-    exclude_from_bom: bool
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        DefinitionId: ClassVar[str]
-        OwnerDefinitionId: ClassVar[str]
-        Transform: ClassVar[TransformMatrix]
-        Order: ClassVar[int]
-        ReferenceNumber: ClassVar[str]
-        ConfigurationName: ClassVar[str]
-        ConfigurationId: ClassVar[str]
-        IsSuppressed: ClassVar[bool]
-        IsHidden: ClassVar[bool]
-        IsFixed: ClassVar[bool]
-        IsFlexible: ClassVar[bool]
-        IsExcludedBom: ClassVar[bool]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    transform: TransformMatrix = KIdentityMatrix
+    order: int = 0
+    reference_number: str = ""
+    configuration_name: str = ""
+    configuration_id: str = ""
+    suppressed: bool = False
+    hidden: bool = False
+    fixed: bool = False
+    flexible: bool = False
+    exclude_from_bom: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def DefinitionId(self) -> str:
+        return self.definition_id
+
+    @property
+    def OwnerDefinitionId(self) -> str:
+        return self.owner_definition_id
+
+    @property
+    def Transform(self) -> TransformMatrix:
+        return self.transform
+
+    @property
+    def Order(self) -> int:
+        return self.order
+
+    @property
+    def ReferenceNumber(self) -> str:
+        return self.reference_number
+
+    @property
+    def ConfigurationName(self) -> str:
+        return self.configuration_name
+
+    @property
+    def ConfigurationId(self) -> str:
+        return self.configuration_id
+
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    @property
+    def IsHidden(self) -> bool:
+        return self.hidden
+
+    @property
+    def IsFixed(self) -> bool:
+        return self.fixed
+
+    @property
+    def IsFlexible(self) -> bool:
+        return self.flexible
+
+    @property
+    def IsExcludedBom(self) -> bool:
+        return self.exclude_from_bom
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

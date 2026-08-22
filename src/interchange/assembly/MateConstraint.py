@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.assembly.AssemblyEnums import MateAlignment, MateKind
@@ -19,43 +19,70 @@ from interchange.records.RecordProvenance import Provenance
 
 
 # mate constraints preserve relationships values and bindings across systems
-@ModelDataMut(
-    DefaultMap={
-        "order": 0,
-        "value": None,
-        "parameter_ids": (),
-        "alignment": MateAlignment.KUnknown,
-        "suppressed": False,
-        "driving": True,
-        "provenance": None,
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class MateConstraint(ModelBase):
     id: str
     name: str
     kind: MateKind | str
     owner_definition_id: str
     entity_ids: tuple[str, ...]
-    order: int
-    value: ParameterValue | None
-    parameter_ids: tuple[str, ...]
-    alignment: MateAlignment | str
-    suppressed: bool
-    driving: bool
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        EntityKind: ClassVar[MateKind | str]
-        OwnerDefinitionId: ClassVar[str]
-        EntityIds: ClassVar[tuple[str, ...]]
-        Order: ClassVar[int]
-        Value: ClassVar[ParameterValue | None]
-        ParameterIds: ClassVar[tuple[str, ...]]
-        Alignment: ClassVar[MateAlignment | str]
-        IsSuppressed: ClassVar[bool]
-        IsDriving: ClassVar[bool]
-        Provenance: ClassVar[Provenance | None]
-        Attributes: ClassVar[TypeMap[str, object]]
+    order: int = 0
+    value: ParameterValue | None = None
+    parameter_ids: tuple[str, ...] = ()
+    alignment: MateAlignment | str = MateAlignment.KUnknown
+    suppressed: bool = False
+    driving: bool = True
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def EntityKind(self) -> MateKind | str:
+        return self.kind
+
+    @property
+    def OwnerDefinitionId(self) -> str:
+        return self.owner_definition_id
+
+    @property
+    def EntityIds(self) -> tuple[str, ...]:
+        return self.entity_ids
+
+    @property
+    def Order(self) -> int:
+        return self.order
+
+    @property
+    def Value(self) -> ParameterValue | None:
+        return self.value
+
+    @property
+    def ParameterIds(self) -> tuple[str, ...]:
+        return self.parameter_ids
+
+    @property
+    def Alignment(self) -> MateAlignment | str:
+        return self.alignment
+
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    @property
+    def IsDriving(self) -> bool:
+        return self.driving
+
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -21,34 +21,51 @@ from interchange.records.RecordParameter import ParameterValue
 class ParamOverride(ModelBase):
     parameter_id: str
     value: ParameterValue
-    if TYPE_CHECKING:
-        ParameterId: ClassVar[str]
-        Value: ClassVar[ParameterValue]
+
+    @property
+    def ParameterId(self) -> str:
+        return self.parameter_id
+
+    @property
+    def Value(self) -> ParameterValue:
+        return self.value
 
 
 # configurations retain product variants and suppression state within one portable document
-@ModelDataMut(
-    DefaultMap={
-        "active": False,
-        "parent_id": None,
-        "overrides": (),
-        "suppressed_feature_ids": (),
-    },
-    FactoryMap={"attributes": FreezeMapping},
-)
+@ModelDataMut
 class Configuration(ModelBase):
     id: str
     name: str
-    active: bool
-    parent_id: str | None
-    overrides: tuple[ParamOverride, ...]
-    suppressed_feature_ids: tuple[str, ...]
-    attributes: TypeMap[str, object]
-    if TYPE_CHECKING:
-        EntityId: ClassVar[str]
-        EntityName: ClassVar[str]
-        IsActive: ClassVar[bool]
-        ParentId: ClassVar[str | None]
-        Overrides: ClassVar[tuple[ParamOverride, ...]]
-        SuppressedFeatureIds: ClassVar[tuple[str, ...]]
-        Attributes: ClassVar[TypeMap[str, object]]
+    active: bool = False
+    parent_id: str | None = None
+    overrides: tuple[ParamOverride, ...] = ()
+    suppressed_feature_ids: tuple[str, ...] = ()
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    @property
+    def IsActive(self) -> bool:
+        return self.active
+
+    @property
+    def ParentId(self) -> str | None:
+        return self.parent_id
+
+    @property
+    def Overrides(self) -> tuple[ParamOverride, ...]:
+        return self.overrides
+
+    @property
+    def SuppressedFeatureIds(self) -> tuple[str, ...]:
+        return self.suppressed_feature_ids
+
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

@@ -6,11 +6,9 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.payloads.PayloadRoles import PayloadRole
-
 
 # one shared empty set keeps rule defaults free of repeated constructor calls
 KEmptyKindSets: frozenset[str] = frozenset()
@@ -25,10 +23,27 @@ class PayloadRule(ModelBase):
     kinds: frozenset[str] = KEmptyKindSets
     schemas: frozenset[str] = KEmptyKindSets
     source_suffixes: frozenset[str] = KEmptyKindSets
-    if TYPE_CHECKING:
-        ValueRole: ClassVar[PayloadRole]
-        FileExtension: ClassVar[str]
-        FormatIds: ClassVar[frozenset[str]]
-        Kinds: ClassVar[frozenset[str]]
-        Schemas: ClassVar[frozenset[str]]
-        SourceSuffixes: ClassVar[frozenset[str]]
+
+    @property
+    def ValueRole(self) -> PayloadRole:
+        return self.role
+
+    @property
+    def FileExtension(self) -> str:
+        return self.file_extension
+
+    @property
+    def FormatIds(self) -> frozenset[str]:
+        return self.format_ids
+
+    @property
+    def Kinds(self) -> frozenset[str]:
+        return self.kinds
+
+    @property
+    def Schemas(self) -> frozenset[str]:
+        return self.schemas
+
+    @property
+    def SourceSuffixes(self) -> frozenset[str]:
+        return self.source_suffixes

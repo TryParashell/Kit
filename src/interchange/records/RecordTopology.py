@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.geometry.models.BoundingBox import BoundingBox
 from interchange.core.ModelBase import ModelBase
@@ -27,13 +26,39 @@ class TopologyCounts(ModelBase):
     surface_area: float | None = None
     bounding_box: BoundingBox | None = None
     valid: bool | None = None
-    if TYPE_CHECKING:
-        SolidCount: ClassVar[int]
-        ShellCount: ClassVar[int]
-        FaceCount: ClassVar[int]
-        EdgeCount: ClassVar[int]
-        VertexCount: ClassVar[int]
-        Volume: ClassVar[float | None]
-        SurfaceArea: ClassVar[float | None]
-        BoundingBox: ClassVar[BoundingBox | None]
-        IsValid: ClassVar[bool | None]
+
+    @property
+    def SolidCount(self) -> int:
+        return self.solid_count
+
+    @property
+    def ShellCount(self) -> int:
+        return self.shell_count
+
+    @property
+    def FaceCount(self) -> int:
+        return self.face_count
+
+    @property
+    def EdgeCount(self) -> int:
+        return self.edge_count
+
+    @property
+    def VertexCount(self) -> int:
+        return self.vertex_count
+
+    @property
+    def Volume(self) -> float | None:
+        return self.volume
+
+    @property
+    def SurfaceArea(self) -> float | None:
+        return self.surface_area
+
+    @property
+    def BoundingBox(self) -> BoundingBox | None:
+        return self.bounding_box
+
+    @property
+    def IsValid(self) -> bool | None:
+        return self.valid

@@ -6,7 +6,6 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import ClassVar, TYPE_CHECKING
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
@@ -16,6 +15,11 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 class PlaneVector(ModelBase):
     x: float
     y: float
-    if TYPE_CHECKING:
-        XCoord: ClassVar[float]
-        YCoord: ClassVar[float]
+
+    @property
+    def XCoord(self) -> float:
+        return self.x
+
+    @property
+    def YCoord(self) -> float:
+        return self.y
