@@ -404,7 +404,7 @@ jobs:
           chmod u+x "${BinaryPath}"
 
       - name: Run OSV-Scanner lockfile audit
-        run: '"${RUNNER_TEMP}/osv-scanner" scan source --lockfile=uv.lock'
+        run: '"${RUNNER_TEMP}/osv-scanner" scan source --lockfile=uv.lock --config .github/config/OsvScanner.toml'
 
   scorecard:
     name: Scorecard
