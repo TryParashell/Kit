@@ -19,7 +19,7 @@ requires-python = ">=3.11"
 license = "LicenseRef-PolyForm-Strict-1.0.0"
 license-files = ["LICENSE"]
 authors = [
-    { name = "Parashell, Inc." },
+    { name = "Parashell" },
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 maintainers = [
@@ -27,7 +27,9 @@ maintainers = [
 ]
 keywords = ["cad"]
 classifiers = ["Private :: Do Not Upload"]
-dependencies = []
+dependencies = [
+    "typing-extensions>=4.12",
+]
 
 [project.urls]
 Repository = "https://github.com/TryParashell/Kit"
@@ -100,6 +102,18 @@ skips = ["B101", "B105", "B314", "B404", "B405", "B603", "B607"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+disallow_any_explicit = true
+warn_unreachable = true
+extra_checks = true
+enable_error_code = [
+    "explicit-override",
+    "ignore-without-code",
+    "mutable-override",
+    "possibly-undefined",
+    "redundant-expr",
+    "unimported-reveal",
+    "unused-awaitable",
+]
 explicit_package_bases = true
 files = ["src", "tests", "tools"]
 exclude = '^(\.venv|examples|Parashell|modules)/'
@@ -113,3 +127,23 @@ include = ["src", "tests", "tools"]
 exclude = [".venv", "examples", "Parashell", "modules", "tests/oracle"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
+reportAssertTypeFailure = "error"
+reportCallInDefaultInitializer = "error"
+reportDeprecated = "error"
+reportImplicitOverride = "error"
+reportImplicitStringConcatenation = "error"
+reportInvalidStubStatement = "error"
+reportIncompleteStubValue = "error"
+reportMissingSuperCall = "error"
+reportSelfClsParameterName = "error"
+reportUninitializedInstanceVariable = "error"
+reportUnnecessaryCast = "error"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnsupportedDunderAll = "error"
+reportUnusedCallResult = "error"
+reportUnusedExpression = "error"
+reportUnusedImport = "error"
+reportUnusedVariable = "error"
