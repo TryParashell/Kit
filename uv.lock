@@ -1404,6 +1404,9 @@ wheels = [
 name = "kit"
 version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "typing-extensions" },
+]
 
 [package.optional-dependencies]
 dev = [
@@ -1433,6 +1436,7 @@ dev = [
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'dev'", specifier = "==312" },
+    { name = "typing-extensions", specifier = ">=4.12" },
 ]
 provides-extras = ["dev"]
 
