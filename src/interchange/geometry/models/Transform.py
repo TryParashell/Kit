@@ -12,22 +12,26 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.geometry.models.VectorSpace import SpaceVector
 
 
+# shared frame defaults stay precomputed constants so parameter defaults never call constructors
+KOriginZero: SpaceVector = SpaceVector(0.0, 0.0, 0.0)
+KAxisX: SpaceVector = SpaceVector(1.0, 0.0, 0.0)
+KAxisY: SpaceVector = SpaceVector(0.0, 1.0, 0.0)
+KAxisZ: SpaceVector = SpaceVector(0.0, 0.0, 1.0)
+
+
 # orthogonal frames preserve placement without assuming one vendor coordinate convention
-@ModelDataMut(
-    DefaultMap={
-        "origin": SpaceVector(0.0, 0.0, 0.0),
-        "x_axis": SpaceVector(1.0, 0.0, 0.0),
-        "y_axis": SpaceVector(0.0, 1.0, 0.0),
-        "z_axis": SpaceVector(0.0, 0.0, 1.0),
-    }
-)
+@ModelDataMut
 class Transform(ModelBase):
-    origin: SpaceVector
-    x_axis: SpaceVector
-    y_axis: SpaceVector
-    z_axis: SpaceVector
+    origin: SpaceVector = KOriginZero
+    x_axis: SpaceVector = KAxisX
+    y_axis: SpaceVector = KAxisY
+    z_axis: SpaceVector = KAxisZ
     if TYPE_CHECKING:
         Origin: ClassVar[SpaceVector]
         XAxis: ClassVar[SpaceVector]
         YAxis: ClassVar[SpaceVector]
         ZAxis: ClassVar[SpaceVector]
+
+
+# one identity transform keeps placement defaults free of repeated constructor calls
+KTransformIdentity: Transform = Transform()
