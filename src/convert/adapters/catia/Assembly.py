@@ -265,7 +265,7 @@ def NativeProductE(
     DefinitionIds: dict[str, str] = {}
     FirstOccurrences: dict[str, NativeProduct] = {}
     for ItemValue in Table.occurrences:
-        FirstOccurrences.setdefault(ItemValue.definition_name, ItemValue)
+        _ = FirstOccurrences.setdefault(ItemValue.definition_name, ItemValue)
     for DefinitionName in dict.fromkeys(
         (ItemValue.definition_name for ItemValue in Table.occurrences)
     ):
@@ -1049,7 +1049,7 @@ def IsReparsePoint(PathValue: FilePath) -> bool:
 # this definition exists because focused behavior needs one stable owner
 def IsUnderRoot(PathValue: FilePath, RootValue: FilePath) -> bool:
     try:
-        PathValue.relative_to(RootValue)
+        _ = PathValue.relative_to(RootValue)
     except ValueError:
         return False
     return True

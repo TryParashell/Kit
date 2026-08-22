@@ -188,7 +188,7 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch: MonkeyPatch) -> None:
     Source, _ = MeshSource(Linked=True)
     Output = TmpPath / "assembly.FCStd"
     Component = TmpPath / "assembly" / "Piston.FCStd"
-    WriteFreecad(Source, Output)
+    _ = WriteFreecad(Source, Output)
     FirstRoot = XmlAction(Output)
     FirstComponent = XmlAction(Component)
     FirstStamp = "2026-08-01T18:00:00Z"
@@ -196,7 +196,7 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch: MonkeyPatch) -> None:
     for RootValue in (FirstRoot, FirstComponent):
         assert DocTimestamp(RootValue, "CreationDate") == FirstStamp
         assert DocTimestamp(RootValue, "LastModifiedDate") == FirstStamp
-    WriteFreecad(Source, Output, Overwrite=True)
+    _ = WriteFreecad(Source, Output, Overwrite=True)
     SecondRoot = XmlAction(Output)
     SecondComponent = XmlAction(Component)
     SecondStamp = "2026-08-01T18:00:01Z"
@@ -256,7 +256,7 @@ def TestNestedAsmTo(TmpPath: Path) -> None:
         ),
     )
     Output = TmpPath / "nested.FCStd"
-    WriteFreecad(Source, Output)
+    _ = WriteFreecad(Source, Output)
     AsmComponent = TmpPath / "nested" / "Piston.FCStd"
     PartComponent = TmpPath / "nested" / "Piston_2.FCStd"
     AsmRoot = XmlAction(AsmComponent)
@@ -281,7 +281,7 @@ def TestNestedAsmTo(TmpPath: Path) -> None:
 def TestPathAsmMesh(TmpPath: Path) -> None:
     Source, MeshValue = MeshSource(Linked=False)
     Output = TmpPath / "toolbox.FCStd"
-    WriteFreecad(Source, Output)
+    _ = WriteFreecad(Source, Output)
     Component = TmpPath / "toolbox" / "Piston.FCStd"
     RootValue = XmlAction(Output)
     LinkValue = LinkedObject(RootValue)
@@ -297,7 +297,7 @@ def TestPathAsmMesh(TmpPath: Path) -> None:
 def TestBinaryAsm() -> None:
     Stream = IoStream.BytesIO()
     Result = WriteFreecad(AsmDoc(), Stream)
-    Stream.seek(0)
+    _ = Stream.seek(0)
     with Zipfile.ZipFile(Stream) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
     Links = RootValue.findall(

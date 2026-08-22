@@ -62,7 +62,7 @@ def ReadPrefixMut(SourceValue: Source, Limit: int) -> bytes:
     Position = SourceValue.tell() if isinstance(SourceValue, TellSource) else None
     Value = SourceValue.read(Limit)
     if Position is not None and isinstance(SourceValue, SeekSource):
-        SourceValue.seek(Position)
+        _ = SourceValue.seek(Position)
     return Value.encode("utf-8") if isinstance(Value, str) else bytes(Value)
 
 

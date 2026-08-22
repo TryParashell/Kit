@@ -5,8 +5,8 @@
 # removed, altered, or obscured. Doing so is a material breach of
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
-
 from __future__ import annotations as Annotations
+
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass as Dataclass, field as Field
 import json as JsonModule
@@ -662,16 +662,28 @@ class RunGroup:
     element_runs = ElemRuns
 
 
-# this definition exists because layout state predicates form one focused property interface
-class LayoutFlags:
-    groups: tuple[RunGroup, ...]
-    repeat_unresolved: bool
-    repeat_prefix: int
-    runs: Mapping[str, int]
-    runs_by_version: Mapping[str, Mapping[int, int]]
-    RunsByChildClass: Mapping[str, Mapping[str, int]]
+# this definition exists because class layout storage composes state and run selection behavior
+@Dataclass(frozen=True, slots=True)
+class ClassLayout:
+    name: str
     child_slots: tuple[str, ...]
+    runs: Mapping[str, int]
     variable_runs: Mapping[str, tuple[VariableRun, ...]]
+    confidence: str
+    source: str
+    repeat_note: str = ""
+    repeat_count: RepeatField | None = None
+    repeat_unresolved: bool = False
+    repeat_prefix: int = 0
+    RepeatTrailer: int = 0
+    ChildCounts: ChildCountBy | None = None
+    runs_by_version: Mapping[str, Mapping[int, int]] = Field(
+        default_factory=dict[str, Mapping[int, int]]
+    )
+    RunsByChildClass: Mapping[str, Mapping[str, int]] = Field(
+        default_factory=dict[str, Mapping[str, int]]
+    )
+    groups: tuple[RunGroup, ...] = ()
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -708,20 +720,6 @@ class LayoutFlags:
     Repeats = IsRepeats
     WalksAPrefix = IsWalksAPrefix
     WalksGroups = IsWalksGroups
-
-
-# this definition exists because layout run selection forms one focused lookup interface
-class LayoutRuns:
-    child_slots: tuple[str, ...]
-    groups: tuple[RunGroup, ...]
-    repeat_count: RepeatField | None
-    repeat_prefix: int
-    template_slot: int
-    runs: Mapping[str, int]
-    runs_by_version: Mapping[str, Mapping[int, int]]
-    variable_runs: Mapping[str, tuple[VariableRun, ...]]
-    walks_a_prefix: bool
-    constant_run_keys: frozenset[str]
 
     # this definition exists because focused behavior needs one stable owner
     def ConstantRun(self, KeyValue: str, MoVersion: int | None) -> int | None:
@@ -764,30 +762,6 @@ class LayoutRuns:
     constant_run = ConstantRun
     run_key = RunKey
     run_keys = RunKeys
-
-
-# this definition exists because class layout storage composes state and run selection behavior
-@Dataclass(frozen=True, slots=True)
-class ClassLayout(LayoutFlags, LayoutRuns):
-    name: str
-    child_slots: tuple[str, ...]
-    runs: Mapping[str, int]
-    variable_runs: Mapping[str, tuple[VariableRun, ...]]
-    confidence: str
-    source: str
-    repeat_note: str = ""
-    repeat_count: RepeatField | None = None
-    repeat_unresolved: bool = False
-    repeat_prefix: int = 0
-    RepeatTrailer: int = 0
-    ChildCounts: ChildCountBy | None = None
-    runs_by_version: Mapping[str, Mapping[int, int]] = Field(
-        default_factory=dict[str, Mapping[int, int]]
-    )
-    RunsByChildClass: Mapping[str, Mapping[str, int]] = Field(
-        default_factory=dict[str, Mapping[str, int]]
-    )
-    groups: tuple[RunGroup, ...] = ()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2514,7 +2488,9 @@ def OpenSlotsMut(
     if Total == 0:
         return (Cursor, False)
     Frames.append(
-        Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=Total)
+        _=Frame(
+            node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=Total
+        )
     )
     return (Cursor, True)
 

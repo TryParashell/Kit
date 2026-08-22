@@ -222,7 +222,7 @@ def TestBCCPRVWO() -> None:
         (ItemData for ItemData in KResolvedOps if ItemData[3] == "string")
     )
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeProgram({StringField[0]: "variable width metadata is unsupported"})
+        _ = EncodeProgram({StringField[0]: "variable width metadata is unsupported"})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

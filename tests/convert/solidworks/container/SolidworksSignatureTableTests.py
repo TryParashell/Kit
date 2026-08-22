@@ -189,7 +189,7 @@ def TestGCUTCR() -> None:
 def TestFIWACRRTIS() -> None:
     Absent = next((ItemValue for ItemValue in range(1, 1 << 20) if ItemValue != IdInfo))
     with PytestLib.raises(ValueError, match="native template"):
-        BuildSldprt({"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=Absent)
+        _ = BuildSldprt({"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=Absent)
     assert SignatureTriplet(Absent) is None
     assert SignatureTriplet(IdInfo) == Signatures
 

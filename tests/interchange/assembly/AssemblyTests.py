@@ -121,7 +121,7 @@ def CheckMeshRound() -> None:
             SpaceVector(0.0, 1.0, 0.0),
         ),
         ((0, 1, 2),),
-        Normals=(SpaceVector(0.0, 0.0, 1.0),) * 3,
+        normals=(SpaceVector(0.0, 0.0, 1.0),) * 3,
     )
     Definitions = tuple(
         (
@@ -153,7 +153,7 @@ def CheckMeshErrors() -> None:
         "Invalid",
         (SpaceVector(float("nan"), 0.0, 0.0),),
         ((0, 1, 2),),
-        Normals=(SpaceVector(0.0, 0.0, 1.0), SpaceVector(0.0, 0.0, 1.0)),
+        normals=(SpaceVector(0.0, 0.0, 1.0), SpaceVector(0.0, 0.0, 1.0)),
     )
     InvalidValue = ReplaceValue(SourceValue, meshes=(MeshValue,))
     ErrorValues = InvalidValue.validate()

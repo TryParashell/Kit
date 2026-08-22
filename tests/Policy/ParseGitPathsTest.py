@@ -28,7 +28,7 @@ class TestGitPaths(UnitTest.TestCase):
     # malformed records must fail closed because partial path sets could approve violations
     def CheckBadFraming(self) -> None:
         with self.assertRaises(GitFailure):
-            ParseGitPaths(b"Alpha.py")
+            _ = ParseGitPaths(b"Alpha.py")
         with self.assertRaises(GitFailure):
-            ParseGitPaths(b"Alpha.py\0\0")
+            _ = ParseGitPaths(b"Alpha.py\0\0")
         self.assertEqual(ParseGitPaths(b""), ())

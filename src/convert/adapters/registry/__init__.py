@@ -85,6 +85,7 @@ class AdapterRegistry(
 
     # empty isolated state supports independent applications tests and transactional discovery
     def __init__(self) -> None:
+        super().__init__()
         self.BindingMap = {}
         self.AliasMap = {}
 

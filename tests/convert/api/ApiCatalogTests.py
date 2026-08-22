@@ -69,7 +69,7 @@ def CheckDocExts() -> None:
         assert set(InfoData.extensions_for(assembly=False)) <= set(InfoData.extensions)
         assert set(InfoData.extensions_for(assembly=True)) <= set(InfoData.extensions)
     with Pytest.raises(TypeError):
-        AdapterMap["freecad.fcstd"].extensions_for(assembly=cast(bool, 1))
+        _ = AdapterMap["freecad.fcstd"].extensions_for(assembly=cast(bool, 1))
     AssemblyInfo = AdapterInfo(
         "format.assembly-only",
         "Assembly only",

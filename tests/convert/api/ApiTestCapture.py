@@ -23,6 +23,7 @@ class CaptureEngine:
         CapturedVals: list[dict[str, object]],
         SentinelValue: object,
     ) -> None:
+        super().__init__()
         self.CapturedVals = CapturedVals
         self.SentinelValue = SentinelValue
 

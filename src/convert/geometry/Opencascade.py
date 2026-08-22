@@ -117,6 +117,7 @@ class TokenCursor:
 
     # this definition exists because focused parser behavior needs one stable owner
     def __init__(self, DataValue: bytes) -> None:
+        super().__init__()
         self.DataValueA = DataValue
         self.Iterator = iter(KTokenPattern.finditer(DataValue))
         self.Lookahead: RegexLib.Match[bytes] | None = None
@@ -354,7 +355,7 @@ def ReadNumbers(TokensA: Tokens, Count: int) -> None:
     if Count < 0 or Count > KMaxGeometry:
         raise DecodeFailure("BRep numeric record is out of bounds")
     for _ in range(Count):
-        TokensA.ReadNumber()
+        _ = TokensA.ReadNumber()
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -399,14 +400,14 @@ def CurveSpline(TokensA: Tokens, Dimension: int, KindValue: int) -> None:
         Poles = Degree + 1
         ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
         return
-    IsBoolean(TokensA)
-    TokensA.ReadInteger(1, KMaxGeometry)
+    _ = IsBoolean(TokensA)
+    _ = TokensA.ReadInteger(1, KMaxGeometry)
     Poles = TokensA.ReadInteger(2, KMaxGeometry)
     Knots = TokensA.ReadInteger(2, KMaxGeometry)
     ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
     for _ in range(Knots):
-        TokensA.ReadNumber()
-        TokensA.ReadInteger(1, KMaxGeometry)
+        _ = TokensA.ReadNumber()
+        _ = TokensA.ReadInteger(1, KMaxGeometry)
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -427,7 +428,7 @@ def CurveGeometry(TokensA: Tokens, Dimension: int, Depth: int = 0) -> None:
         ReadNumbers(TokensA, 2)
         CurveGeometry(TokensA, Dimension, Depth + 1)
     else:
-        TokensA.ReadNumber()
+        _ = TokensA.ReadNumber()
         if Dimension == 3:
             ReadNumbers(TokensA, 3)
         CurveGeometry(TokensA, Dimension, Depth + 1)
@@ -443,10 +444,10 @@ def SurfaceSpline(TokensA: Tokens, KindValue: int) -> None:
         Poles = BoundedProduct(UDegree + 1, VDegree + 1)
         ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
         return
-    IsBoolean(TokensA)
-    IsBoolean(TokensA)
-    TokensA.ReadInteger(1, KMaxGeometry)
-    TokensA.ReadInteger(1, KMaxGeometry)
+    _ = IsBoolean(TokensA)
+    _ = IsBoolean(TokensA)
+    _ = TokensA.ReadInteger(1, KMaxGeometry)
+    _ = TokensA.ReadInteger(1, KMaxGeometry)
     UPoles = TokensA.ReadInteger(2, KMaxGeometry)
     VPoles = TokensA.ReadInteger(2, KMaxGeometry)
     UKnots = TokensA.ReadInteger(2, KMaxGeometry)
@@ -455,8 +456,8 @@ def SurfaceSpline(TokensA: Tokens, KindValue: int) -> None:
     ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
     for Count in (UKnots, VKnots):
         for _ in range(Count):
-            TokensA.ReadNumber()
-            TokensA.ReadInteger(1, KMaxGeometry)
+            _ = TokensA.ReadNumber()
+            _ = TokensA.ReadInteger(1, KMaxGeometry)
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -479,7 +480,7 @@ def SurfaceGeometry(TokensA: Tokens, Depth: int = 0) -> None:
         ReadNumbers(TokensA, 4)
         SurfaceGeometry(TokensA, Depth + 1)
     else:
-        TokensA.ReadNumber()
+        _ = TokensA.ReadNumber()
         SurfaceGeometry(TokensA, Depth + 1)
 
 
@@ -493,7 +494,7 @@ def LocationProduct(
             Combined = Result[-1][1] + Power
             if Combined < KMinIntThreeTwo or Combined > KMaxIntThreeTwo:
                 raise DecodeFailure("BRep location power is out of bounds")
-            Result.pop()
+            _ = Result.pop()
             if Combined:
                 Result.append((Datum, Combined))
         else:
@@ -590,7 +591,7 @@ def ParseTransform(TokensA: Tokens) -> tuple[float, ...]:
         (Columns[0][1], Columns[1][1], Columns[2][1]),
         (Columns[0][2], Columns[1][2], Columns[2][2]),
     )
-    OrthoVectors(RowsValue)
+    _ = OrthoVectors(RowsValue)
     return Values
 
 
@@ -875,7 +876,7 @@ def ReadLocations(TokensA: Tokens) -> int:
         LocationA: tuple[tuple[int, int], ...]
         KindValue = TokensA.ReadInteger(1, 2)
         if KindValue == 1:
-            ParseTransform(TokensA)
+            _ = ParseTransform(TokensA)
             LocationA = ((IndexA, 1),)
         else:
             LocationA = ()
@@ -956,7 +957,7 @@ def Triangulations(TokensA: Tokens) -> tuple[int, ...]:
         if Parameters:
             ReadNumbers(TokensA, BoundedProduct(Nodes, 2))
         for _ in range(BoundedProduct(Triangles, 3)):
-            TokensA.ReadInteger(1, Nodes)
+            _ = TokensA.ReadInteger(1, Nodes)
     return tuple(NodeCounts)
 
 
@@ -979,14 +980,14 @@ def VertexStructure(
                 raise DecodeFailure("invalid BRep vertex terminator")
             return
         if KindValue == 1:
-            PositiveIndex(TokensA, CurvesThreeD)
+            _ = PositiveIndex(TokensA, CurvesThreeD)
         elif KindValue == 2:
-            PositiveIndex(TokensA, CurvesTwoD)
-            PositiveIndex(TokensA, SurfacesA)
+            _ = PositiveIndex(TokensA, CurvesTwoD)
+            _ = PositiveIndex(TokensA, SurfacesA)
         else:
-            TokensA.ReadNumber()
-            PositiveIndex(TokensA, SurfacesA)
-        LocationIndex(TokensA, LocationsA)
+            _ = TokensA.ReadNumber()
+            _ = PositiveIndex(TokensA, SurfacesA)
+        _ = LocationIndex(TokensA, LocationsA)
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -1003,7 +1004,7 @@ def IndexContinuity(TokensA: Tokens, Count: int) -> None:
     IndexA = int(Value)
     if IndexA < 1 or IndexA > Count:
         raise DecodeFailure("BRep curve index is out of bounds")
-    Continuity(TokensA)
+    _ = Continuity(TokensA)
 
 
 # this definition exists because curve edge representations need focused validation
@@ -1016,26 +1017,26 @@ def EdgeCurveRep(
     SurfacesA: int,
 ) -> None:
     if KindValue == 1:
-        PositiveIndex(TokensA, CurvesThreeD)
-        LocationIndex(TokensA, LocationsA)
+        _ = PositiveIndex(TokensA, CurvesThreeD)
+        _ = LocationIndex(TokensA, LocationsA)
         ReadNumbers(TokensA, 2)
     elif KindValue == 2:
-        PositiveIndex(TokensA, CurvesTwoD)
-        PositiveIndex(TokensA, SurfacesA)
-        LocationIndex(TokensA, LocationsA)
+        _ = PositiveIndex(TokensA, CurvesTwoD)
+        _ = PositiveIndex(TokensA, SurfacesA)
+        _ = LocationIndex(TokensA, LocationsA)
         ReadNumbers(TokensA, 2)
     elif KindValue == 3:
-        PositiveIndex(TokensA, CurvesTwoD)
+        _ = PositiveIndex(TokensA, CurvesTwoD)
         IndexContinuity(TokensA, CurvesTwoD)
-        PositiveIndex(TokensA, SurfacesA)
-        LocationIndex(TokensA, LocationsA)
+        _ = PositiveIndex(TokensA, SurfacesA)
+        _ = LocationIndex(TokensA, LocationsA)
         ReadNumbers(TokensA, 2)
     else:
-        Continuity(TokensA)
-        PositiveIndex(TokensA, SurfacesA)
-        LocationIndex(TokensA, LocationsA)
-        PositiveIndex(TokensA, SurfacesA)
-        LocationIndex(TokensA, LocationsA)
+        _ = Continuity(TokensA)
+        _ = PositiveIndex(TokensA, SurfacesA)
+        _ = LocationIndex(TokensA, LocationsA)
+        _ = PositiveIndex(TokensA, SurfacesA)
+        _ = LocationIndex(TokensA, LocationsA)
 
 
 # this definition exists because polygon edge representations need focused validation
@@ -1048,8 +1049,8 @@ def EdgePolygonRep(
     TriangulationsA: tuple[int, ...],
 ) -> None:
     if KindValue == 5:
-        PositiveIndex(TokensA, PolygonsThreeD)
-        LocationIndex(TokensA, LocationsA)
+        _ = PositiveIndex(TokensA, PolygonsThreeD)
+        _ = LocationIndex(TokensA, LocationsA)
         return
     PolygonIndexes = [PositiveIndex(TokensA, len(PolygonsOnTriangulations))]
     if KindValue == 7:
@@ -1059,7 +1060,7 @@ def EdgePolygonRep(
         TriangulationsA[Triangulation - 1]
     ):
         raise DecodeFailure("BRep polygon node is out of bounds")
-    LocationIndex(TokensA, LocationsA)
+    _ = LocationIndex(TokensA, LocationsA)
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -1075,9 +1076,9 @@ def EdgeStructure(
 ) -> None:
     if TokensA.ReadNumber() < 0.0:
         raise DecodeFailure("negative BRep edge tolerance")
-    IsBoolean(TokensA)
-    IsBoolean(TokensA)
-    IsBoolean(TokensA)
+    _ = IsBoolean(TokensA)
+    _ = IsBoolean(TokensA)
+    _ = IsBoolean(TokensA)
     while True:
         KindValue = TokensA.ReadInteger(0, 7)
         if KindValue == 0:
@@ -1114,16 +1115,16 @@ def FaceStructure(
         if TokensA.ReadNumber() < 0.0:
             raise DecodeFailure("negative BRep face tolerance")
         Surface = TokensA.ReadInteger(0, SurfacesA)
-        LocationIndex(TokensA, LocationsA)
+        _ = LocationIndex(TokensA, LocationsA)
         HasTriangulation = False
         if TokensA.IsFaceTriNext():
             TokensA.ExpectToken(b"2")
-            PositiveIndex(TokensA, len(TriangulationsA))
+            _ = PositiveIndex(TokensA, len(TriangulationsA))
             HasTriangulation = True
         if Surface == 0 and not HasTriangulation:
             raise DecodeFailure("BRep face has no geometry")
     else:
-        PositiveIndex(TokensA, len(TriangulationsA))
+        _ = PositiveIndex(TokensA, len(TriangulationsA))
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -1279,13 +1280,13 @@ def VertexGeometry(TokensA: Tokens) -> VertexData:
                 raise DecodeFailure("invalid BRep vertex representation terminator")
             break
         if Representation == 1:
-            TokensA.ReadInteger(1, KMaxGeometry)
+            _ = TokensA.ReadInteger(1, KMaxGeometry)
         elif Representation == 2:
-            TokensA.ReadInteger(1, KMaxGeometry)
-            TokensA.ReadInteger(1, KMaxGeometry)
+            _ = TokensA.ReadInteger(1, KMaxGeometry)
+            _ = TokensA.ReadInteger(1, KMaxGeometry)
         else:
-            TokensA.ReadNumber()
-            TokensA.ReadInteger(1, KMaxGeometry)
+            _ = TokensA.ReadNumber()
+            _ = TokensA.ReadInteger(1, KMaxGeometry)
         if TokensA.ReadInteger(0, 0) != 0:
             raise DecodeFailure("unsupported BRep vertex location")
     return VertexData(Tolerance, Point)
@@ -1311,18 +1312,18 @@ def ReadEdgeReps(
                 (Curve, TokensA.ReadNumber(), TokensA.ReadNumber(), LocationA)
             )
         elif Representation == 2:
-            TokensA.ReadInteger(1, CurveTwoDCount)
-            TokensA.ReadInteger(1, SurfaceCount)
-            LocationIndex(TokensA, LocationCount)
-            TokensA.ReadNumber()
-            TokensA.ReadNumber()
+            _ = TokensA.ReadInteger(1, CurveTwoDCount)
+            _ = TokensA.ReadInteger(1, SurfaceCount)
+            _ = LocationIndex(TokensA, LocationCount)
+            _ = TokensA.ReadNumber()
+            _ = TokensA.ReadNumber()
         elif Representation == 3:
-            TokensA.ReadInteger(1, CurveTwoDCount)
+            _ = TokensA.ReadInteger(1, CurveTwoDCount)
             IndexContinuity(TokensA, CurveTwoDCount)
-            TokensA.ReadInteger(1, SurfaceCount)
-            LocationIndex(TokensA, LocationCount)
-            TokensA.ReadNumber()
-            TokensA.ReadNumber()
+            _ = TokensA.ReadInteger(1, SurfaceCount)
+            _ = LocationIndex(TokensA, LocationCount)
+            _ = TokensA.ReadNumber()
+            _ = TokensA.ReadNumber()
         else:
             raise DecodeFailure("unsupported BRep edge representation")
 
@@ -1336,8 +1337,8 @@ def EdgeGeometry(
     LocationCount: int,
 ) -> EdgeData:
     Tolerance = TokensA.ReadNumber()
-    TokensA.ReadInteger(0, 1)
-    TokensA.ReadInteger(0, 1)
+    _ = TokensA.ReadInteger(0, 1)
+    _ = TokensA.ReadInteger(0, 1)
     Degenerate = TokensA.ReadInteger(0, 1)
     if Tolerance < 0.0 or Degenerate:
         raise DecodeFailure("unsupported BRep edge state")
@@ -1726,7 +1727,7 @@ def OrderWireUses(
             EdgeStack.append(UseValue)
             VertexStack.append(EndVertex)
             continue
-        VertexStack.pop()
+        _ = VertexStack.pop()
         if EdgeStack:
             Circuit.append(EdgeStack.pop())
     Circuit.reverse()
@@ -2147,7 +2148,7 @@ def BuildModel(
 # this definition exists because decoded model headers need one focused reader
 def ExpectHeader(TokensA: Tokens) -> None:
     if TokensA.PeekToken() == b"DBRep_DrawableShape":
-        TokensA.TakeToken()
+        _ = TokensA.TakeToken()
     TokensA.ExpectToken(b"CASCADE")
     TokensA.ExpectToken(b"Topology")
     TokensA.ExpectToken(b"V1,")

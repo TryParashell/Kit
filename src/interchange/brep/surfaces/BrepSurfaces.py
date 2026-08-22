@@ -12,6 +12,7 @@ from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.brep.curves.BrepCurves import BrepEntity, ValidateBrepId
+from interchange.records.RecordProvenance import Provenance
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelDataMut
 from interchange.geometry.models.VectorSpace import SpaceVector
@@ -20,6 +21,7 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 # surface identity checks reject malformed records before topology validation
 @ModelDataMut
 class BrepSurface(BrepEntity):
+    id: str
 
     # invalid identifiers must fail before surfaces enter topology collections
     def __post_init__(self) -> None:
@@ -29,9 +31,12 @@ class BrepSurface(BrepEntity):
 # planes retain exact spatial frames for analytic reconstruction
 @ModelDataMut
 class PlaneSurface(BrepSurface):
+    id: str
     origin: SpaceVector
     normal: SpaceVector
     reference_direction: SpaceVector
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Origin(self) -> SpaceVector:
@@ -49,10 +54,13 @@ class PlaneSurface(BrepSurface):
 # cylinders retain exact axes reference directions and radii
 @ModelDataMut
 class CylinderSurface(BrepSurface):
+    id: str
     origin: SpaceVector
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Origin(self) -> SpaceVector:
@@ -74,11 +82,14 @@ class CylinderSurface(BrepSurface):
 # cones retain exact axes base radii and half angles
 @ModelDataMut
 class ConeSurface(BrepSurface):
+    id: str
     origin: SpaceVector
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
     half_angle: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Origin(self) -> SpaceVector:
@@ -104,10 +115,13 @@ class ConeSurface(BrepSurface):
 # spheres retain exact centers orientation frames and radii
 @ModelDataMut
 class SphereSurface(BrepSurface):
+    id: str
     center: SpaceVector
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Center(self) -> SpaceVector:
@@ -129,11 +143,14 @@ class SphereSurface(BrepSurface):
 # tori retain exact centers orientation frames and both radii
 @ModelDataMut
 class TorusSurface(BrepSurface):
+    id: str
     center: SpaceVector
     axis: SpaceVector
     reference_direction: SpaceVector
     major_radius: float
     minor_radius: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Center(self) -> SpaceVector:
@@ -159,6 +176,7 @@ class TorusSurface(BrepSurface):
 # spline surfaces retain complete tensor basis data for exact reconstruction
 @ModelDataMut
 class NurbsSurface(BrepSurface):
+    id: str
     degree_u: int
     degree_v: int
     control_points: tuple[tuple[SpaceVector, ...], ...]
@@ -169,6 +187,8 @@ class NurbsSurface(BrepSurface):
     weights: tuple[tuple[float, ...], ...] = ()
     periodic_u: bool = False
     periodic_v: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def DegreeU(self) -> int:
@@ -214,8 +234,11 @@ class NurbsSurface(BrepSurface):
 # offset surfaces preserve analytic relationships instead of flattening to splines
 @ModelDataMut
 class OffsetSurface(BrepSurface):
+    id: str
     base_surface_id: str
     distance: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def BaseSurfaceId(self) -> str:
@@ -229,9 +252,12 @@ class OffsetSurface(BrepSurface):
 # native surfaces preserve unsupported kernel data without false portable semantics
 @ModelDataMut
 class NativeSurface(BrepSurface):
+    id: str
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def FormatId(self) -> str:

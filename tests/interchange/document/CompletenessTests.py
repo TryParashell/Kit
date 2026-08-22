@@ -125,7 +125,7 @@ def CheckFeatures() -> None:
     )
     assert isinstance(StepValue.definition, FeatureDefinition)
     with PytestLib.raises(TypeError, match="feature definition"):
-        ReplaceValue(
+        _ = ReplaceValue(
             StepValue,
             definition=CastValue(FeatureDefinition, {"type": "unregistered"}),
         )
@@ -153,8 +153,8 @@ def CheckNestedCaps() -> None:
         "parameter:child",
         "Child parameter",
         ParameterValue(1.0),
-        Expression=Expression("1.0"),
-        Provenance=Provenance("test", "parameter"),
+        expression=Expression("1.0"),
+        provenance=Provenance("test", "parameter"),
     )
     BrepData = b"nested-brep"
     PayloadValue = BrepPayload(
@@ -163,9 +163,9 @@ def CheckNestedCaps() -> None:
         "shape",
         "1",
         HashCodec.sha256(BrepData).hexdigest(),
-        PayloadData=BrepData,
-        ValueRole=PayloadRole.KBrep,
-        FileExtension=".brep",
+        data=BrepData,
+        role=PayloadRole.KBrep,
+        file_extension=".brep",
     )
     MeshValue = SurfaceMesh(
         "mesh:child",

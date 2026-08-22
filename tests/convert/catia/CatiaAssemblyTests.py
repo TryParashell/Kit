@@ -283,7 +283,7 @@ def TestCatproductI() -> None:
 def TestCatproductG(TmpPath: FilePath) -> None:
     Source = KRootValue / "examples" / ".CATPart" / "4876.CATPart"
     Renamed = TmpPath / "unrelated-name.CATPart"
-    Renamed.write_bytes(Source.read_bytes())
+    _ = Renamed.write_bytes(Source.read_bytes())
     DocValue = CatiaAdapter().read(
         KCatproducts / "Tilton_Set.CATProduct",
         ReadOptions(
@@ -304,8 +304,8 @@ def TestCatproductJ(TmpPath: FilePath) -> None:
     Source = KRootValue / "examples" / ".CATPart" / "4876.CATPart"
     First = TmpPath / "a.CATPart"
     Second = TmpPath / "b.CATPart"
-    First.write_bytes(Source.read_bytes())
-    Second.write_bytes(Source.read_bytes())
+    _ = First.write_bytes(Source.read_bytes())
+    _ = Second.write_bytes(Source.read_bytes())
     DocValue = CatiaAdapter().read(
         KCatproducts / "Tilton_Set.CATProduct",
         ReadOptions(
@@ -719,7 +719,7 @@ def TestCatproductO(TmpPath: FilePath) -> None:
     Source = KCatproducts / "Brake_Pedal_Assembly - Backup 1.CATProduct"
     Output = TmpPath / "Brake.FCStd"
     with Pytest.raises(AppUsabilityError) as Captured:
-        Convert(Source, Output, allow_carrier=False)
+        _ = Convert(Source, Output, allow_carrier=False)
     assert "opaque_source_data" in Captured.value.issues
     assert not Output.exists()
     assert tuple(TmpPath.iterdir()) == ()
@@ -748,7 +748,7 @@ def TestCatproductN() -> None:
     Source = KCatproducts / "Brake_Pedal_Assembly - Backup 1.CATProduct"
     DocValue = OpenDoc(Source)
     Output = IoStream.BytesIO()
-    WriteFreecad(DocValue, Output)
+    _ = WriteFreecad(DocValue, Output)
     DataValue = Output.getvalue()
     Restored = ReadFreecad(DataValue)
     AsmValue = Restored.assembly

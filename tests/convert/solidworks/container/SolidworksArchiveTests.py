@@ -332,7 +332,7 @@ def TestCDTRT() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCDRAEN() -> None:
     with PytestLib.raises(ArchiveError, match="empty name"):
-        ReadTag(StructLib.pack("<HHH", 65535, 1, 0), 0)
+        _ = ReadTag(StructLib.pack("<HHH", 65535, 1, 0), 0)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -436,17 +436,17 @@ def TestUASUTNELP() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestUVRIOT() -> None:
     with PytestLib.raises(ArchiveError):
-        EncodeClassDefinition("cläss", 1)
+        _ = EncodeClassDefinition("cläss", 1)
     with PytestLib.raises(ArchiveError):
-        EncodeClassDefinition("", 1)
+        _ = EncodeClassDefinition("", 1)
     with PytestLib.raises(ArchiveError):
-        EncodeObjectReference(-1)
+        _ = EncodeObjectReference(-1)
     with PytestLib.raises(ArchiveError):
-        EncodeClassReference(1073741824)
+        _ = EncodeClassReference(1073741824)
     with PytestLib.raises(ArchiveError):
-        ReadTag(b"\xff\xff\x01", 0)
+        _ = ReadTag(b"\xff\xff\x01", 0)
     with PytestLib.raises(ArchiveError):
-        ReadString(b"\x04\x01", 0)
+        _ = ReadString(b"\x04\x01", 0)
     assert issubclass(ArchiveError, SldprtFormatError)
 
 
@@ -506,7 +506,7 @@ def TestMRAUNK() -> None:
     ModelDoc = Model(header=b"", base=1)
     ModelDoc.nodes.append(NodeInfo(kind="bogus", body=b""))
     with PytestLib.raises(ArchiveError):
-        ModelDoc.emit()
+        _ = ModelDoc.emit()
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -529,7 +529,7 @@ def TestSRAOLR() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1) + b"\x00" * 8
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert Failure.value.class_name == "solo"
     assert Failure.value.slot == "leaf"
     assert Failure.value.offset == SizeInfo
@@ -554,7 +554,7 @@ def TestSRAVCC() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert Failure.value.class_name == "solo"
     assert "child count" in str(Failure.value)
 
@@ -564,7 +564,7 @@ def TestSRACWALE() -> None:
     LayoutsA = LayoutTable.from_mapping({"version": 1, "classes": {}})
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert Failure.value.class_name == "solo"
     assert "no layout entry" in str(Failure.value)
 
@@ -576,7 +576,7 @@ def TestSRARPTEOTS() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert "past" in str(Failure.value)
 
 
@@ -587,7 +587,7 @@ def TestSRAURAOATB() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassReference(120)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert "no definition has been seen" in str(Failure.value)
 
 
@@ -677,7 +677,7 @@ def TestAPSLABBIU() -> None:
         + EncodeClassReference(42)
     )
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert Failure.value.class_name == "external#42"
     assert "no layout entry" in str(Failure.value)
 
@@ -742,9 +742,9 @@ def TestRBRAUSOL() -> None:
     LayoutsA = BaseRT()
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("first", 1)
     with PytestLib.raises(ArchiveError):
-        ResolveBase(BlobInfo, 0, LayoutsA)
+        _ = ResolveBase(BlobInfo, 0, LayoutsA)
     with PytestLib.raises(ArchiveError):
-        ResolveBase(BlobInfo, 109, LayoutsA, limit=0)
+        _ = ResolveBase(BlobInfo, 109, LayoutsA, limit=0)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -756,7 +756,7 @@ def TestIBIAUOR() -> None:
         + EncodeObjectReference(18000)
     )
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert Failure.value.unresolved_index == 18000
     assert Failure.value.unresolved_kind == KindInfoC
     assert ImpliedBases(Failure.value, 109) == ()
@@ -965,7 +965,7 @@ def TestURCIR() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert "child count" in str(Failure.value)
 
 
@@ -1011,7 +1011,7 @@ def TestARPWTKCARTT() -> None:
     assert Layout.run_key(0) == "0"
     assert Layout.run_key(1) == "tail"
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(PrefixStream(), 109, LayoutsA)
+        _ = Segment(PrefixStream(), 109, LayoutsA)
     assert Failure.value.class_name == "solo"
     assert Failure.value.slot == "tail"
     assert Failure.value.offset == SizeInfo
@@ -1031,7 +1031,7 @@ def TestARPWTKCARTT() -> None:
 def TestAPOORBTSC() -> None:
     LayoutsA = PrefixTable(1)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(PrefixStream(), 109, LayoutsA)
+        _ = Segment(PrefixStream(), 109, LayoutsA)
     assert Failure.value.slot == "tail"
     assert len(Failure.value.reached) == 2
 
@@ -1040,7 +1040,7 @@ def TestAPOORBTSC() -> None:
 def TestACWNPISRAIL() -> None:
     LayoutsA = PrefixTable(0)
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(PrefixStream(), 109, LayoutsA)
+        _ = Segment(PrefixStream(), 109, LayoutsA)
     assert Failure.value.slot == "lead"
     assert "child count" in str(Failure.value)
 
@@ -1048,11 +1048,11 @@ def TestACWNPISRAIL() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRPIV() -> None:
     with PytestLib.raises(ArchiveError):
-        PrefixTable(-1)
+        _ = PrefixTable(-1)
     with PytestLib.raises(ArchiveError):
-        PrefixTable(4)
+        _ = PrefixTable(4)
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {
                 "version": 1,
                 "classes": {
@@ -1306,10 +1306,10 @@ def TestRGAV() -> None:
     )
     for GroupData in InvalidGroups:
         with PytestLib.raises(ArchiveError):
-            MakeLayout(GroupData)
+            _ = MakeLayout(GroupData)
     for ChildSlots, RunData in ((["*"], {"lead": 0, "0": 0}), ([], {})):
         with PytestLib.raises(ArchiveError):
-            MakeLayout(Sound, ChildSlots, RunData)
+            _ = MakeLayout(Sound, ChildSlots, RunData)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1600,7 +1600,7 @@ def TestACRWAWIR() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1) + b"\x00" * 4
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert "count width" in str(Failure.value)
 
 
@@ -1616,7 +1616,7 @@ def TestACRWAPIR() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1) + b"\x00" * 4
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert "predicate" in str(Failure.value)
     Guarded = SingleCT(
         {
@@ -1640,7 +1640,7 @@ def TestACRWAPIR() -> None:
         b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1) + StructLib.pack("<I", 1)
     )
     with PytestLib.raises(SegmentationError) as Failure:
-        Segment(Rejected, 109, Guarded)
+        _ = Segment(Rejected, 109, Guarded)
     assert "rejected value 1" in str(Failure.value)
 
 
@@ -1730,12 +1730,12 @@ def TestAVGRWAFIR() -> None:
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1) + b"\x00" * 4
     assert Segment(BlobInfo, 109, LayoutsA, mo_version=18000)[0].end == len(BlobInfo)
     with PytestLib.raises(SegmentationError) as Missed:
-        Segment(BlobInfo, 109, LayoutsA, mo_version=14000)
+        _ = Segment(BlobInfo, 109, LayoutsA, mo_version=14000)
     assert Missed.value.class_name == "solo"
     assert Missed.value.slot == "leaf"
     assert "document version 14000" in str(Missed.value)
     with PytestLib.raises(SegmentationError) as Unknown:
-        Segment(BlobInfo, 109, LayoutsA)
+        _ = Segment(BlobInfo, 109, LayoutsA)
     assert "no document version was supplied" in str(Unknown.value)
 
 
@@ -1746,32 +1746,32 @@ def TestSRANDV() -> None:
     )
     BlobInfo = b"\x00" * SizeInfo + EncodeClassDefinition("solo", 1)
     with PytestLib.raises(ArchiveError):
-        Segment(BlobInfo, 109, LayoutsA, mo_version=-1)
+        _ = Segment(BlobInfo, 109, LayoutsA, mo_version=-1)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRBVIV() -> None:
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {"version": 1, "classes": {"solo": {"runs_by_version": []}}}
         )
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {"version": 1, "classes": {"solo": {"runs_by_version": {"leaf": 4}}}}
         )
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {"version": 1, "classes": {"solo": {"runs_by_version": {"leaf": {}}}}}
         )
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {
                 "version": 1,
                 "classes": {"solo": {"runs_by_version": {"leaf": {"v8": 4}}}},
             }
         )
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {
                 "version": 1,
                 "classes": {"solo": {"runs_by_version": {"leaf": {"18000": -1}}}},
@@ -1795,19 +1795,19 @@ def NamedTTSTGMCFCO() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestLTVII() -> None:
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping({"version": 1})
+        _ = LayoutTable.from_mapping({"version": 1})
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping({"version": 1, "classes": {"solo": 3}})
+        _ = LayoutTable.from_mapping({"version": 1, "classes": {"solo": 3}})
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {"version": 1, "classes": {"solo": {"child_slots": "abc"}}}
         )
     with PytestLib.raises(ArchiveError):
-        LayoutTable.from_mapping(
+        _ = LayoutTable.from_mapping(
             {"version": 1, "classes": {"solo": {"runs": {"leaf": -1}}}}
         )
     with PytestLib.raises(ArchiveError):
-        LayoutTable.load(KRootInfo / "re" / "data" / "class_layouts_missing.json")
+        _ = LayoutTable.load(KRootInfo / "re" / "data" / "class_layouts_missing.json")
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

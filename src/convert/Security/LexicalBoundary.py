@@ -17,5 +17,5 @@ def ResolveLexical(PathValue: str | PathLikeValue[str], RootPath: PathInfo) -> P
     if not CandidatePath.is_absolute():
         CandidatePath = RootPath / CandidatePath
     LexicalPath = PathInfo(AbsolutePath(CandidatePath))
-    LexicalPath.relative_to(RootPath)
+    _ = LexicalPath.relative_to(RootPath)
     return LexicalPath

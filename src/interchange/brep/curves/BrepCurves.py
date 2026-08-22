@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import field as MakeDataField
+from typing import cast as CastValue
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
@@ -24,33 +25,27 @@ def ValidateBrepId(SourceValue: object) -> None:
 
 
 # shared topology identity avoids duplicated provenance fields across curve families
-@ModelDataMut(
-    FieldOverrides={
-        "provenance": MakeDataField(default=None, kw_only=True),
-        "attributes": MakeDataField(default_factory=FreezeMapping, kw_only=True),
-    }
-)
 class BrepEntity(ModelBase):
-    id: str
-    provenance: Provenance | None
-    attributes: TypeMap[str, object]
 
+    # storage contracts stay structural so leaf dataclasses own every field declaration
     @property
     def EntityId(self) -> str:
-        return self.id
+        return CastValue(str, object.__getattribute__(self, "id"))
 
     @property
     def Provenance(self) -> Provenance | None:
-        return self.provenance
+        return CastValue(Provenance | None, object.__getattribute__(self, "provenance"))
 
     @property
     def Attributes(self) -> TypeMap[str, object]:
-        return self.attributes
+        return CastValue(
+            TypeMap[str, object], object.__getattribute__(self, "attributes")
+        )
 
 
 # curve identity checks reject malformed records before topology validation
-@ModelDataMut
 class BrepCurve(BrepEntity):
+    id: str
 
     # invalid identifiers must fail before curves enter topology collections
     def __post_init__(self) -> None:
@@ -60,8 +55,11 @@ class BrepCurve(BrepEntity):
 # line curves retain exact origin and direction without sampled approximation
 @ModelDataMut
 class LineCurve(BrepCurve):
+    id: str
     origin: SpaceVector
     direction: SpaceVector
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Origin(self) -> SpaceVector:
@@ -75,10 +73,13 @@ class LineCurve(BrepCurve):
 # circle curves preserve exact spatial frames and radii across kernels
 @ModelDataMut
 class CircleCurve(BrepCurve):
+    id: str
     center: SpaceVector
     axis: SpaceVector
     reference_direction: SpaceVector
     radius: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Center(self) -> SpaceVector:
@@ -100,11 +101,14 @@ class CircleCurve(BrepCurve):
 # ellipse curves preserve exact spatial frames and both principal radii
 @ModelDataMut
 class EllipseCurve(BrepCurve):
+    id: str
     center: SpaceVector
     axis: SpaceVector
     reference_direction: SpaceVector
     major_radius: float
     minor_radius: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Center(self) -> SpaceVector:
@@ -130,12 +134,15 @@ class EllipseCurve(BrepCurve):
 # spline curves retain full basis data needed for exact reconstruction
 @ModelDataMut
 class NurbsCurve(BrepCurve):
+    id: str
     degree: int
     control_points: tuple[SpaceVector, ...]
     knots: tuple[float, ...]
     multiplicities: tuple[int, ...]
     weights: tuple[float, ...] = ()
     periodic: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Degree(self) -> int:
@@ -165,10 +172,13 @@ class NurbsCurve(BrepCurve):
 # intersection curves preserve supporting surfaces and sampled verification evidence
 @ModelDataMut
 class IntersectCurve(BrepCurve):
+    id: str
     first_surface_id: str
     second_surface_id: str
     samples: tuple[SpaceVector, ...] = ()
     tolerance: float = 0.0
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def FirstSurfaceId(self) -> str:
@@ -190,9 +200,12 @@ class IntersectCurve(BrepCurve):
 # native curves retain unsupported kernel data without claiming portable semantics
 @ModelDataMut
 class NativeCurve(BrepCurve):
+    id: str
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def FormatId(self) -> str:

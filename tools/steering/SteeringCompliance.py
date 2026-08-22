@@ -726,7 +726,7 @@ def FindReasonSites(
             )
         if TargetNode is not None:
             LineNum, ColNum = GetStartPos(TargetNode)
-            SiteMap.setdefault((LineNum, ColNum), KindText)
+            _ = SiteMap.setdefault((LineNum, ColNum), KindText)
     return [(*SitePos, KindText) for SitePos, KindText in sorted(SiteMap.items())]
 
 
@@ -1366,12 +1366,12 @@ def ParseArgs(ArgValues: list[str] | None = None) -> Argparse.Namespace:
     ParserInfo = Argparse.ArgumentParser(
         description="check python files against repository steering conventions"
     )
-    ParserInfo.add_argument(
+    _ = ParserInfo.add_argument(
         "--baseline-file",
         type=FilePath,
         help="tab separated finding fingerprints accepted as migration debt",
     )
-    ParserInfo.add_argument(
+    _ = ParserInfo.add_argument(
         "PathValues",
         metavar="PATH",
         nargs="+",

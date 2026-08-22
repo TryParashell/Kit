@@ -84,7 +84,7 @@ def CheckTransfers(TransferValues: object, DroppedCaps: object) -> None:
 
 # dropped capability validation keeps loss reporting limited to known enum values
 def CheckDropped(DroppedCaps: object) -> None:
-    GetDropped(DroppedCaps)
+    _ = GetDropped(DroppedCaps)
 
 
 # requirement validation keeps application dependencies precise and deterministic

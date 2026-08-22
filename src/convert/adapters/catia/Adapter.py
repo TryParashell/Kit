@@ -171,7 +171,7 @@ class CatiaMetadata:
             Archive = CfvTwoArchive.from_bytes(DataValue)
             Manifest = ManifestBytes(Archive)
             if Manifest is not None:
-                ManifestDoc(Manifest)
+                _ = ManifestDoc(Manifest)
                 return ProbeResult(KFormatId, 1.0, "Kit manifest in V5_CFV2")
             Declarations = Archive.declarations()
             if Declarations:
@@ -515,7 +515,7 @@ def SourceBytesMut(Source: Source) -> tuple[bytes, str]:
             Position = PositionValue
     Value = Reader()
     if Position is not None and callable(SeekMethod):
-        SeekMethod(Position)
+        _ = SeekMethod(Position)
     if not isinstance(Value, (bytes, bytearray)):
         raise TypeError("CATIA source stream must be binary")
     return (bytes(Value), getattr(Source, "name", "<stream>"))
@@ -540,7 +540,7 @@ def WriteBytes(
     Temporary = PathValue.with_name(PathValue.name + f".{OsModule.getpid()}.tmp")
     try:
         with Temporary.open("xb") as Handle:
-            Handle.write(DataValue)
+            _ = Handle.write(DataValue)
             Handle.flush()
             OsModule.fsync(Handle.fileno())
         OsModule.replace(Temporary, PathValue)
@@ -1045,7 +1045,7 @@ def FormatDocType(Archive: Cfv2Archive) -> str:
 # this definition exists because focused behavior needs one stable owner
 def ProductFallback(Archive: Cfv2Archive) -> str:
     try:
-        DecodeProductTable(Archive)
+        _ = DecodeProductTable(Archive)
     except CfvTwoFormatError:
         return ""
     return ProductDocType

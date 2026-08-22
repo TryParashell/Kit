@@ -63,7 +63,7 @@ def TestFRPOISWEV(TmpPath: FilePath) -> None:
 def TestSRGWACP(TmpPath: FilePath) -> None:
     Document = FreecadRPD()
     TargetDoc = TmpPath / "NoPartition.SLDPRT"
-    WriteDocument(Document, TargetDoc, allow_carrier=False)
+    _ = WriteDocument(Document, TargetDoc, allow_carrier=False)
     Archive = SldprtArchive.from_bytes(TargetDoc.read_bytes())
     assert Archive.get(Stream) is not None
     Layout = LocateRectanglePad(Archive.require(StreamA))

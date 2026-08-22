@@ -838,7 +838,7 @@ def TestPPFSCRPS() -> None:
         ),
     )
     Generated = BytesIO()
-    WriteSldprt(SourceDoc, Generated)
+    _ = WriteSldprt(SourceDoc, Generated)
     Archive = SldprtArchive.from_bytes(Generated.getvalue())
     Manifest = JsonLib.loads(Archive.require(StreamF))
     for Payload in Manifest["brep_payloads"]["$tuple"]:
@@ -876,7 +876,7 @@ def TestSSREAFR(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Fcstd = TmpPath / "source.FCStd"
     Output = TmpPath / "source.SLDPRT"
-    WriteFreecad(SourceDoc, Fcstd)
+    _ = WriteFreecad(SourceDoc, Fcstd)
     Restored = ReadFreecad(Fcstd)
     ResultInfo = WriteSldprt(Restored, Output)
     assert Output.read_bytes() == KSample.read_bytes()
@@ -893,7 +893,7 @@ def TestSSREACC(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KSample)
     Catpart = TmpPath / "source.CATPart"
     Output = TmpPath / "source.SLDPRT"
-    WriteCatia(SourceDoc, Catpart, allow_non_native=True)
+    _ = WriteCatia(SourceDoc, Catpart, allow_non_native=True)
     Restored = ReadCatia(Catpart)
     ResultInfo = WriteSldprt(Restored, Output)
     assert Output.read_bytes() == KSample.read_bytes()
@@ -907,9 +907,9 @@ def TestPSADACCE(TmpPath: FilePath) -> None:
     SourceDoc = ReadSldprt(KAssembly)
     Catproduct = TmpPath / "source.CATProduct"
     Output = TmpPath / "source.SLDASM"
-    WriteCatia(SourceDoc, Catproduct, allow_non_native=True)
+    _ = WriteCatia(SourceDoc, Catproduct, allow_non_native=True)
     Restored = OpenDocument(Catproduct)
-    WriteDocument(Restored, Output, allow_carrier=True)
+    _ = WriteDocument(Restored, Output, allow_carrier=True)
     ReversedDocument = ReadSldprt(Output)
     assert ReversedDocument.brep_payloads == SourceDoc.brep_payloads
     assert ReversedDocument.assembly == SourceDoc.assembly
@@ -1042,10 +1042,10 @@ def TestFDWSSC(TmpPath: FilePath) -> None:
     SourceDoc = Document()
     Fcstd = TmpPath / "neutral.FCStd"
     Output = TmpPath / "neutral.SLDPRT"
-    WriteFreecad(SourceDoc, Fcstd)
+    _ = WriteFreecad(SourceDoc, Fcstd)
     Restored = ReadFreecad(Fcstd)
     with PytestLib.raises(SldprtFormatError, match="allow_non_native"):
-        WriteSldprt(Restored, Output, allow_non_native=False)
+        _ = WriteSldprt(Restored, Output, allow_non_native=False)
     ResultInfo = WriteSldprt(Restored, Output)
     Archive = SldprtArchive.open(Output)
     AssertNeutral(Archive)
@@ -1076,8 +1076,8 @@ def TestFDWSSC(TmpPath: FilePath) -> None:
 def BuildStablePart() -> SldprtArchiveContract:
     First = BytesIO()
     Second = BytesIO()
-    WriteSldprt(Document(), First)
-    WriteSldprt(Document(), Second)
+    _ = WriteSldprt(Document(), First)
+    _ = WriteSldprt(Document(), Second)
     assert First.getvalue() == Second.getvalue()
     return SldprtArchive.from_bytes(First.getvalue())
 
@@ -1184,7 +1184,7 @@ def TestSLBPWNBP() -> None:
         capabilities=frozenset(),
     )
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     assert Archive.require(StreamI) == EncodeBPS()
 
@@ -1194,7 +1194,7 @@ def TestSLBPWNBP() -> None:
 def TestSLNSFAEO() -> None:
     SourceDoc = DocumentWithoutSource(ReadSldprt(KRingInfo, include_brep=False))
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     assert StreamK not in Archive.streams
     Native = DecodeNativeModel(
@@ -1381,7 +1381,7 @@ def TestSLNRMR() -> None:
     )
     SourceDoc = ReplaceData(SourceDoc, sketches=(SketchA,))
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     Native = DecodeNativeModel(
         Archive.require(StreamE), Archive.require(StreamH), resolved_stream=StreamH
@@ -1430,7 +1430,7 @@ def TestSLNRBRAP() -> None:
     )
     SourceDoc = ReplaceData(SourceDoc, sketches=(SketchA,), feature_timeline=(Feature,))
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     assert StreamK in Archive.streams
     assert StreamH not in Archive.streams
@@ -2549,7 +2549,7 @@ def TestSLNRBPPCN() -> None:
     )
     SourceDoc = ReplaceData(SourceDoc, sketches=(SketchA,), feature_timeline=(Feature,))
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     Native = DecodeNativeModel(
         Archive.require(StreamE), Archive.require(StreamH), resolved_stream=StreamH
@@ -2643,7 +2643,7 @@ def TestNNDWNVRFL() -> None:
 def TestNNKRSPDR() -> None:
     SourceDoc = NonNRBD()
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     Keywords = Archive.require(StreamE)
     Native = DecodeNativeModel(
@@ -2738,7 +2738,7 @@ def TestSLBOWNIFM() -> None:
         capabilities=frozenset({Capability.KBrep}),
     )
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Archive = SldprtArchive.from_bytes(Output.getvalue())
     assert StreamK not in Archive.streams
     assert Archive.require(StreamA)
@@ -2770,7 +2770,7 @@ def TestGPPINB(TmpPath: FilePath) -> None:
     )
     Blocked = TmpPath / "blocked.SLDPRT"
     with PytestLib.raises(ApplicationUsabilityError) as Captured:
-        WriteDocument(SourceDoc, Blocked, allow_carrier=False)
+        _ = WriteDocument(SourceDoc, Blocked, allow_carrier=False)
     assert Capability.KBrep not in Captured.value.unimplemented_capabilities
     assert Captured.value.unimplemented_capabilities == frozenset(
         {
@@ -2819,7 +2819,7 @@ def TestNSRPPAATB() -> None:
     SourceDoc = SldprtArchive.open(KSample)
     StreamsA = SourceDoc.streams
     StreamsA[StreamI] = Encoded
-    StreamsA.pop("Contents/Config-0-GhostPartition", None)
+    _ = StreamsA.pop("Contents/Config-0-GhostPartition", None)
     Native = BuildSldprt(
         StreamsA,
         file_id=SourceDoc.file_id,
@@ -2854,7 +2854,7 @@ def TestNSIBFOTARG() -> None:
     SourceDoc = SldprtArchive.open(KSample)
     StreamsA = SourceDoc.streams
     StreamsA[StreamI] = Encoded
-    StreamsA.pop("Contents/Config-0-GhostPartition", None)
+    _ = StreamsA.pop("Contents/Config-0-GhostPartition", None)
     Native = BuildSldprt(
         StreamsA,
         file_id=SourceDoc.file_id,
@@ -2923,7 +2923,7 @@ def TestGCIBFRNGP(TmpPath: FilePath) -> None:
         | frozenset({Capability.KBrep, Capability.KNativePayloads}),
     )
     TargetDoc = TmpPath / "payloads.SLDPRT"
-    WriteSldprt(SourceDoc, TargetDoc)
+    _ = WriteSldprt(SourceDoc, TargetDoc)
     WithoutBrep = ReadSldprt(TargetDoc, include_brep=False)
     assert [Payload.id for Payload in WithoutBrep.brep_payloads] == ["history"]
     assert WithoutBrep.brep_payloads[0].data == b"history"
@@ -2937,7 +2937,7 @@ def TestGCIBFRNGP(TmpPath: FilePath) -> None:
 @PytestLib.mark.parametrize("SourceDoc", (Document(), AssemblyDocument()))
 def TestGCPDSC(SourceDoc: CadDocument) -> None:
     Output = BytesIO()
-    WriteSldprt(SourceDoc, Output)
+    _ = WriteSldprt(SourceDoc, Output)
     Restored = ReadSldprt(Output.getvalue())
     assert Restored.capabilities == SourceDoc.capabilities
     if SourceDoc.assembly is not None:
@@ -2994,7 +2994,7 @@ def TestFDPMIOR(PayloadIndex: int, Changes: dict[str, bytes | str]) -> None:
         ),
     )
     Carrier = BytesIO()
-    WriteSldprt(SourceDoc, Carrier)
+    _ = WriteSldprt(SourceDoc, Carrier)
     Original = Carrier.getvalue()
     Restored = ReadSldprt(Original)
     Payloads = list(Restored.brep_payloads)
@@ -3019,7 +3019,7 @@ def TestSEUNTWCNE(TmpPath: FilePath) -> None:
     )
     Output = TmpPath / "edited.SLDPRT"
     with PytestLib.raises(SldprtFormatError, match="allow_non_native"):
-        WriteSldprt(Edited, Output, allow_non_native=False)
+        _ = WriteSldprt(Edited, Output, allow_non_native=False)
     ResultInfo = WriteSldprt(Edited, Output)
     OriginalArchive = SldprtArchive.open(KSample)
     EditedArchive = SldprtArchive.open(Output)
@@ -3061,8 +3061,8 @@ def TestNTPDDWCOI(TmpPath: FilePath) -> None:
     } <= ResultInfo.native_capabilities
     Archive = SldprtArchive.open(Output)
     StreamsA = Archive.streams
-    StreamsA.pop(StreamF)
-    StreamsA.pop(StreamG)
+    _ = StreamsA.pop(StreamF)
+    _ = StreamsA.pop(StreamG)
     Native = ReadSldprt(
         BuildSldprt(
             StreamsA,
@@ -3136,7 +3136,7 @@ def TestRACFNTC(TmpPath: FilePath) -> None:
     assert Restored.parameters[0].value.value == PytestLib.approx(ForgedValue)
     Blocked = TmpPath / "blocked.SLDPRT"
     with PytestLib.raises(ApplicationUsabilityError):
-        WriteDocument(Restored, Blocked, allow_carrier=False)
+        _ = WriteDocument(Restored, Blocked, allow_carrier=False)
     assert not Blocked.exists()
     Output = TmpPath / "carrier.SLDPRT"
     ResultInfo = WriteDocument(Restored, Output)
@@ -3164,7 +3164,7 @@ def TestACPKSTNE(TmpPath: FilePath) -> None:
         ),
     )
     Trusted = TmpPath / "trusted.SLDPRT"
-    WriteDocument(Edited, Trusted)
+    _ = WriteDocument(Edited, Trusted)
     Archive = SldprtArchive.open(Trusted)
     StreamsA = Archive.streams
     Attestation = JsonLib.loads(StreamsA[StreamG].decode("utf-8"))
@@ -3183,7 +3183,7 @@ def TestACPKSTNE(TmpPath: FilePath) -> None:
     Restored = ReadSldprt(Forged)
     Blocked = TmpPath / "blocked.SLDPRT"
     with PytestLib.raises(ApplicationUsabilityError):
-        WriteDocument(Restored, Blocked, allow_carrier=False)
+        _ = WriteDocument(Restored, Blocked, allow_carrier=False)
     assert not Blocked.exists()
     Output = TmpPath / "carrier.SLDPRT"
     ResultInfo = WriteDocument(Restored, Output)
@@ -3210,8 +3210,8 @@ def TestNTPSWFN(TmpPath: FilePath) -> None:
     assert ResultInfo.near_lossless is True
     Archive = SldprtArchive.open(Output)
     StreamsA = Archive.streams
-    StreamsA.pop(StreamF)
-    StreamsA.pop(StreamG)
+    _ = StreamsA.pop(StreamF)
+    _ = StreamsA.pop(StreamG)
     Native = ReadSldprt(
         BuildSldprt(
             StreamsA,
@@ -3238,9 +3238,9 @@ def TestSAEDK(TmpPath: FilePath) -> None:
     assert Adapter.supports(PartDoc, BytesIO())
     assert not Adapter.supports(PartDoc, StringIO())
     with PytestLib.raises(ValueError, match="\\.SLDPRT"):
-        WriteSldprt(PartDoc, TmpPath / "part.SLDASM")
+        _ = WriteSldprt(PartDoc, TmpPath / "part.SLDASM")
     with PytestLib.raises(ValueError, match="\\.SLDASM"):
-        WriteSldprt(Assembly, TmpPath / "assembly.SLDPRT")
+        _ = WriteSldprt(Assembly, TmpPath / "assembly.SLDPRT")
     ResultInfo = WriteSldprt(
         Assembly, TmpPath / "assembly.SLDASM", allow_non_native=True
     )
@@ -3249,11 +3249,11 @@ def TestSAEDK(TmpPath: FilePath) -> None:
     AssemblyJson = Assembly.write_json(TmpPath / "assembly.json")
     PartJson = PartDoc.write_json(TmpPath / "part.json")
     with PytestLib.raises(ValueError, match="does not support this document kind"):
-        Convert(PartJson, BytesIO(), destination_format="solidworks.sldasm")
+        _ = Convert(PartJson, BytesIO(), destination_format="solidworks.sldasm")
     with PytestLib.raises(ValueError, match="does not support this document kind"):
-        Convert(AssemblyJson, BytesIO(), destination_format="solidworks.sldprt")
+        _ = Convert(AssemblyJson, BytesIO(), destination_format="solidworks.sldprt")
     with PytestLib.raises(ValueError, match="does not support this document kind"):
-        Convert(
+        _ = Convert(
             PartJson,
             TmpPath / "explicit.SLDPRT",
             destination_format="solidworks.sldasm",
@@ -3275,19 +3275,19 @@ def TestSRRNSKM(SourceDoc: FilePath, WrongSuffix: str, TmpPath: FilePath) -> Non
     if not SourceDoc.is_file():
         PytestLib.skip("solidworks corpus unavailable")
     Renamed = TmpPath / f"renamed{WrongSuffix}"
-    Renamed.write_bytes(SourceDoc.read_bytes())
+    _ = Renamed.write_bytes(SourceDoc.read_bytes())
     with PytestLib.raises(SldprtFormatError, match="content requires"):
-        ReadSldprt(Renamed)
+        _ = ReadSldprt(Renamed)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSRRCSKM(TmpPath: FilePath) -> None:
     Valid = TmpPath / "valid.SLDPRT"
-    WriteSldprt(Document(), Valid)
+    _ = WriteSldprt(Document(), Valid)
     Renamed = TmpPath / "renamed.SLDASM"
-    Renamed.write_bytes(Valid.read_bytes())
+    _ = Renamed.write_bytes(Valid.read_bytes())
     with PytestLib.raises(SldprtFormatError, match="content requires"):
-        ReadSldprt(Renamed)
+        _ = ReadSldprt(Renamed)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -3418,16 +3418,16 @@ def TestPSRECOI(TmpPath: FilePath) -> None:
     Direct = TmpPath / "direct.SLDPRT"
     Blocked = TmpPath / "blocked.SLDPRT"
     with PytestLib.raises(ApplicationUsabilityError):
-        WriteDocument(SourceDoc, Blocked, allow_carrier=False)
+        _ = WriteDocument(SourceDoc, Blocked, allow_carrier=False)
     assert not Blocked.exists()
     Written = WriteDocument(SourceDoc, Direct, allow_carrier=True)
     assert Written.metadata["compatibility"] == "native-metadata-with-kit-neutral"
     Fcstd = TmpPath / "source.FCStd"
     Converted = TmpPath / "converted.SLDPRT"
-    WriteFreecad(SourceDoc, Fcstd)
+    _ = WriteFreecad(SourceDoc, Fcstd)
     BlockedConversion = TmpPath / "blocked_conversion.SLDPRT"
     with PytestLib.raises(ApplicationUsabilityError):
-        Convert(Fcstd, BlockedConversion, allow_carrier=False)
+        _ = Convert(Fcstd, BlockedConversion, allow_carrier=False)
     assert not BlockedConversion.exists()
     ResultInfo = Convert(Fcstd, Converted, allow_carrier=True)
     assert ResultInfo.destination_format == "solidworks.sldprt"
@@ -3500,7 +3500,7 @@ def TestPSDTPAW(TmpPath: FilePath) -> None:
 def TestIPADTRC(TmpPath: FilePath) -> None:
     Isolated = TmpPath / "isolated" / KAssembly.name
     Isolated.parent.mkdir()
-    Isolated.write_bytes(KAssembly.read_bytes())
+    _ = Isolated.write_bytes(KAssembly.read_bytes())
     SourceDoc = ReadSldprt(Isolated)
     assert SourceDoc.assembly is not None
     assert SourceDoc.assembly.documents == ()
@@ -3524,7 +3524,7 @@ def TestIPADTRC(TmpPath: FilePath) -> None:
     assert Restored.meshes == SourceDoc.meshes
     Blocked = TmpPath / "blocked" / KAssembly.name
     with PytestLib.raises(ApplicationUsabilityError) as Captured:
-        WriteDocument(SourceDoc, Blocked, allow_carrier=False)
+        _ = WriteDocument(SourceDoc, Blocked, allow_carrier=False)
     assert Captured.value.requirements == ("referenced SOLIDWORKS component files",)
     assert not Blocked.exists()
 
@@ -3558,7 +3558,7 @@ def TestCDTRSRC(TmpPath: FilePath) -> None:
     assert all(RecordFlags)
     Relocated = TmpPath / "relocated" / Output.name
     Relocated.parent.mkdir()
-    Relocated.write_bytes(Output.read_bytes())
+    _ = Relocated.write_bytes(Output.read_bytes())
     Restored = OpenDocument(Relocated)
     assert Restored.assembly == SourceDoc.assembly
     assert Restored.meshes == SourceDoc.meshes

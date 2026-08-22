@@ -539,7 +539,7 @@ def TestRAWECF(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestRAFLRAPPE(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
     Output = ResolveTemp(TmpPath / "V8_engine.FCStd")
-    WriteDocument(RandomDocument, Output)
+    _ = WriteDocument(RandomDocument, Output)
     ExpectedBounds = PlacedMB(RandomDocument)
     CodeValue = """
 import os

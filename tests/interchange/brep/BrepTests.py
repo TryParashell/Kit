@@ -73,8 +73,8 @@ def BuildTriangle() -> BrepModel:
         )
     )
     return BrepModel(
-        Curves=Curves,
-        Surfaces=(
+        curves=Curves,
+        surfaces=(
             PlaneSurface(
                 "surface:0",
                 SpaceVector(0.0, 0.0, 0.0),
@@ -82,20 +82,20 @@ def BuildTriangle() -> BrepModel:
                 SpaceVector(1.0, 0.0, 0.0),
             ),
         ),
-        Vertices=Vertices,
-        Edges=Edges,
-        Coedges=Coedges,
-        Loops=(
+        vertices=Vertices,
+        edges=Edges,
+        coedges=Coedges,
+        loops=(
             BrepLoop(
                 "loop:0", tuple((ItemValue.EntityId for ItemValue in Coedges)), True
             ),
         ),
-        Faces=(BrepFace("face:0", "surface:0", ("loop:0",)),),
-        FaceUses=(BrepFaceUse("face-use:0", "face:0"),),
-        Shells=(BrepShell("shell:0", ("face-use:0",), False),),
-        ShellUses=(BrepShellUse("shell-use:0", "shell:0"),),
-        Regions=(BrepRegion("region:0", ("shell-use:0",), False),),
-        Bodies=(BrepBody("brep-body:0", ("region:0",), Transform(), "body:1"),),
+        faces=(BrepFace("face:0", "surface:0", ("loop:0",)),),
+        face_uses=(BrepFaceUse("face-use:0", "face:0"),),
+        shells=(BrepShell("shell:0", ("face-use:0",), False),),
+        shell_uses=(BrepShellUse("shell-use:0", "shell:0"),),
+        regions=(BrepRegion("region:0", ("shell-use:0",), False),),
+        bodies=(BrepBody("brep-body:0", ("region:0",), Transform(), "body:1"),),
     )
 
 

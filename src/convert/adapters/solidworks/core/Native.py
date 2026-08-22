@@ -17,7 +17,8 @@ import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
 from typing import Mapping, Sequence, TypeGuard
-import xml.etree.ElementTree as XmlTree
+# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
+import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 from interchange import (
     BooleanOperation as BoolOperation,
     CadDocument as CadDoc,
@@ -49,6 +50,7 @@ from interchange import (
     Vector2 as VectorTwo,
 )
 from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
+from convert.adapters.base import ParseUntrusted
 from convert.adapters.solidworks.container.Archive import (
     encode_class_reference as EncodeClassRef,
 )
@@ -3568,7 +3570,7 @@ def FinishIdsMut(
         if isinstance(Native, int) and Native == SketchNative:
             Result[f"feature:{Feature.id}"] = Native
         else:
-            Assign(f"feature:{Feature.id}", Native)
+            _ = Assign(f"feature:{Feature.id}", Native)
     ConfigIds: set[int] = set()
     NextConfigId = 0
     for Config in DocValue.configurations:
@@ -3615,9 +3617,9 @@ def WriteObjectIds(DocValue: CadDocument) -> dict[str, int]:
         if Plane.id in Principal:
             Result[KeyValue] = Principal[Plane.id]
         else:
-            Assign(KeyValue, Plane.attributes.get("native_object_id"))
+            _ = Assign(KeyValue, Plane.attributes.get("native_object_id"))
     for Sketch in DocValue.sketches:
-        Assign(f"sketch:{Sketch.id}", Sketch.attributes.get("native_object_id"))
+        _ = Assign(f"sketch:{Sketch.id}", Sketch.attributes.get("native_object_id"))
 
     return FinishIdsMut(DocValue, Result, Assign)
 
@@ -11801,7 +11803,7 @@ def ParseXml(DataValue: bytes) -> XmlTree.Element:
     if Start < 0:
         raise SldprtFormatError("XML stream contains no document element")
     try:
-        return XmlTree.fromstring(DataValue[Start:])
+        return ParseUntrusted(DataValue[Start:])
     except XmlTree.ParseError as ErrorInfo:
         raise SldprtFormatError(
             f"invalid XML metadata stream: {ErrorInfo}"

@@ -38,9 +38,9 @@ def CheckNestedPack(
     PackagePath = TmpPath / PackageName
     FormatPath = PackagePath / "nested"
     FormatPath.mkdir(parents=True)
-    (PackagePath / "__init__.py").write_text("", encoding="utf-8")
-    (FormatPath / "__init__.py").write_text("", encoding="utf-8")
-    (FormatPath / "implementation.py").write_text(
+    _ = (PackagePath / "__init__.py").write_text("", encoding="utf-8")
+    _ = (FormatPath / "__init__.py").write_text("", encoding="utf-8")
+    _ = (FormatPath / "implementation.py").write_text(
         "from convert.adapters.json.Adapter import JsonAdapter\n"
         "class NestedAdapter(JsonAdapter):\n    Discovered = True\n",
         encoding="utf-8",
@@ -58,7 +58,7 @@ def CheckReaderTie() -> None:
     RegistryData.extend(BuildAdapter(FormatId) for FormatId in FormatIds)
     SourceData = BuildSource().ToJson().encode("utf-8")
     with Pytest.raises(AmbiguousAdapterError) as ErrorInfo:
-        RegistryData.select_reader(SourceData)
+        _ = RegistryData.select_reader(SourceData)
     assert all(FormatId in str(ErrorInfo.value) for FormatId in FormatIds)
 
 
@@ -68,11 +68,11 @@ def CheckResults() -> None:
     ReaderRegistry = AdapterRegistry()
     ReaderRegistry.register(BuildAdapter("format.probe", ProbeFormat="format.other"))
     with Pytest.raises(AdapterRegistryError, match="returned probe format"):
-        ReaderRegistry.select_reader(SourceData)
+        _ = ReaderRegistry.select_reader(SourceData)
     WriterRegistry = AdapterRegistry()
     WriterRegistry.register(BuildAdapter("format.write", WriteFormat="format.other"))
     with Pytest.raises(AdapterRegistryError, match="returned write format"):
-        WriterRegistry.write(
+        _ = WriterRegistry.write(
             BuildSource(),
             BytesIO(),
             format_id="format.write",
@@ -122,7 +122,7 @@ def CheckLossGate() -> None:
     RegistryData.register(AdapterData)
     TargetData = BytesIO()
     with Pytest.raises(CapabilityLossError) as ErrorInfo:
-        RegistryData.write(BuildSource(), TargetData, format_id="format.lossy")
+        _ = RegistryData.write(BuildSource(), TargetData, format_id="format.lossy")
     assert ErrorInfo.value.dropped
     assert Capability.KEditableSketches in ErrorInfo.value.dropped
     assert TargetData.getvalue() == b""

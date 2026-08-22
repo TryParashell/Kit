@@ -416,10 +416,10 @@ def AssertTransfer(Result: ConversionResult, SuffixA: str) -> None:
 # this helper verifies native metadata types and emitted reference files
 def AssertMetaShape(Result: ConversionResult, IsAssembly: bool) -> None:
     Metadata = Result.output.metadata
-    IsMetaFlag(Metadata, "vendor_loadable")
-    IsMetaFlag(Metadata, "native_geometry")
-    IsMetaFlag(Metadata, "native_history")
-    IsMetaFlag(Metadata, "native_assembly")
+    _ = IsMetaFlag(Metadata, "vendor_loadable")
+    _ = IsMetaFlag(Metadata, "native_geometry")
+    _ = IsMetaFlag(Metadata, "native_history")
+    _ = IsMetaFlag(Metadata, "native_assembly")
     NativeSelfContained = IsMetaFlag(Metadata, "native_self_contained")
     ReferencedFilesWritten = GetMetaCount(Metadata, "referenced_files_written")
     assert ReferencedFilesWritten >= 0
@@ -588,7 +588,7 @@ def TestAMIRFARBN(Source: PathValue) -> None:
     Missing = KMissingReferenceFiles[Source]
     assert not tuple(KExamples.rglob(Missing))
     with Pytest.raises(SldprtFormatError) as Captured:
-        OpenDocument(Source)
+        _ = OpenDocument(Source)
     Message = str(Captured.value)
     assert Message.startswith("nested assembly mate source is unavailable: ")
     assert Message.endswith(Missing)

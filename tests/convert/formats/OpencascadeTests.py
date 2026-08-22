@@ -96,8 +96,8 @@ def FaceTF(Surface: int, TailValue: bytes) -> bytes:
     return b"".join(
         (
             b"DBRep_DrawableShape\n\n"
-            b"CASCADE Topology V1, (c) Matra-Datavision\n"
-            b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
+            + b"CASCADE Topology V1, (c) Matra-Datavision\n"
+            + +b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
             b"PolygonOnTriangulations 0\n",
             Surfaces,
             b"Triangulations 1\n3 1 0 0\n0 0 0 1 0 0 0 1 0 1 2 3\nTShapes 1\nFa\n",
@@ -112,10 +112,9 @@ def FaceTF(Surface: int, TailValue: bytes) -> bytes:
 def PolygonTF() -> bytes:
     return b"".join(
         (
-            b"DBRep_DrawableShape\n\n"
-            b"CASCADE Topology V1, (c) Matra-Datavision\n"
+            b"DBRep_DrawableShape\n\n" + b"CASCADE Topology V1, (c) Matra-Datavision\n"
             b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
-            b"PolygonOnTriangulations 1\n"
+            + +b"PolygonOnTriangulations 1\n"
             b"2 1 4\np 0 0\n"
             b"Surfaces 0\nTriangulations 2\n"
             b"4 1 0 0\n"

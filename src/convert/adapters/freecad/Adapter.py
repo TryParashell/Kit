@@ -21,13 +21,16 @@ from pathlib import Path as FilePath
 import re as RegexLib
 import tempfile as Tempfile
 from typing import TypeGuard
-import xml.etree.ElementTree as XmlTree
+
+# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
+import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 import zipfile as Zipfile
 from convert.adapters.base import (
     AdapterInfo,
     CarrierReason,
     CapabilityTransfer,
     Destination as Target,
+    ParseUntrusted,
     ProbeResult,
     ReadOptions,
     Source,
@@ -187,7 +190,7 @@ def SourceBytes(Source: Source) -> bytes:
         DataValue = Reader()
         if Position is not None and callable(SeekValue):
             with Suppress(OSError, ValueError):
-                SeekValue(Position)
+                _ = SeekValue(Position)
         if isinstance(DataValue, str):
             raise TypeError("FCStd input must be opened in binary mode")
         if isinstance(DataValue, (bytes, bytearray)):
@@ -1035,7 +1038,7 @@ def IsNeutralBrep(DocValue: CadDocument) -> bool:
     if DocValue.brep is None:
         return False
     try:
-        BrepModelBrep(DocValue.brep)
+        _ = BrepModelBrep(DocValue.brep)
     except FreeCadBrepWriteError:
         return False
     return True
@@ -1534,7 +1537,7 @@ def WriteBytes(
     )
     try:
         with OsModule.fdopen(Descriptor, "wb") as Stream:
-            Stream.write(DataValue)
+            _ = Stream.write(DataValue)
             Stream.flush()
             OsModule.fsync(Stream.fileno())
         OsModule.replace(TemporaryName, PathValue)
@@ -1784,7 +1787,7 @@ def XmlScale(NodeValue: ET.Element) -> list[float]:
 # this definition exists because focused behavior needs one stable owner
 def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, object]]]:
     with Zipfile.ZipFile(IoStream.BytesIO(DataValue)) as Archive:
-        RootValue = XmlTree.fromstring(Archive.read(DocEntry))
+        RootValue = ParseUntrusted(Archive.read(DocEntry))
     Value = RootValue.find(
         "./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String"
     )
@@ -1898,7 +1901,7 @@ def FileTimestamps(PathValue: FilePath) -> tuple[float, ...]:
         return ()
     try:
         with Zipfile.ZipFile(PathValue) as Archive:
-            RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
+            RootValue = ParseUntrusted(Archive.read("Document.xml"))
     except (OSError, KeyError, XmlTree.ParseError, Zipfile.BadZipFile):
         return tuple(Values)
     for PropName in ("CreationDate", "LastModifiedDate"):
@@ -2107,7 +2110,7 @@ def WriteComponents(
             trusted_native_breps=TrustedNativeBreps,
         )
         TargetA, Occurrences = OuterLink(DataValue)
-        WriteBytes(PathValue, DataValue, Overwrite)
+        _ = WriteBytes(PathValue, DataValue, Overwrite)
         OsModule.utime(PathValue, (TimestampEpoch, TimestampEpoch))
         ComponentLinks[DefinitionId] = {
             "path": PathValue,
@@ -2263,7 +2266,7 @@ def ProbeSource(Instance: FreeCadAdapter, Source: Source) -> ProbeResult:
         Archive.close()
         if ManifestEntry in Members:
             try:
-                ManifestDoc(ExtractManifestFromFcstd(DataValue))
+                _ = ManifestDoc(ExtractManifestFromFcstd(DataValue))
             except (ValueError, FreeCadAdapterA) as ErrorInfo:
                 return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
             return ProbeResult(Instance.info.FormatId, 1.0, "Kit FCStd archive")
@@ -2278,7 +2281,7 @@ def ProbeSource(Instance: FreeCadAdapter, Source: Source) -> ProbeResult:
                     return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
             else:
                 try:
-                    ManifestDoc(Value)
+                    _ = ManifestDoc(Value)
                 except FreeCadAdapterA as ErrorInfo:
                     return ProbeResult(Instance.info.FormatId, 0.0, str(ErrorInfo))
                 return ProbeResult(Instance.info.FormatId, 1.0, "Kit FCStd archive")

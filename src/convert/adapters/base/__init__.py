@@ -19,6 +19,7 @@ from convert.adapters.base.ContractTypes import KSourceType
 from convert.adapters.base.ContractTypes import KTargetType
 from convert.adapters.base.ProbeResult import ProbeResult
 from convert.adapters.base.ReadOptions import ReadOptions
+from convert.adapters.base.SafeParsing import ParseUntrusted
 from convert.adapters.base.TransferContract import CapTransfer
 from convert.adapters.base.TransferContract import CarrierReason
 from convert.adapters.base.TransferContract import TransferMode
@@ -92,6 +93,7 @@ __all__ = (
     "Destination",
     "Diagnostic",
     "Mapping",
+    "ParseUntrusted",
     "Path",
     "ProbeResult",
     "ReadOptions",

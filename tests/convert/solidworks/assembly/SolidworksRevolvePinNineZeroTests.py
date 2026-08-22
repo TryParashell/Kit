@@ -237,7 +237,7 @@ def TestPNZPCAPV() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPNZPRVWO() -> None:
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeProgram({11451: "D100"})
+        _ = EncodeProgram({11451: "D100"})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

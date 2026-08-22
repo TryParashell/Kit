@@ -415,7 +415,7 @@ def TestCGRTTTSDP() -> None:
     assert CircleRadiusMm(ValueX, ValueY) == PytestLib.approx(4.0)
     for Radius in (0.0, -1.0, MathInfo.nan, MathInfo.inf):
         with PytestLib.raises(SldprtFormatError):
-            CircleCPM(Radius)
+            _ = CircleCPM(Radius)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -531,7 +531,7 @@ def TestPFRETSCH() -> None:
     )
     for Edits in Rejected:
         with PytestLib.raises(SldprtFormatError):
-            PatchFeatures(Resolved, Edits)
+            _ = PatchFeatures(Resolved, Edits)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -561,7 +561,7 @@ def TestDBPRIDD() -> None:
     ProgramData = EncodeBoxProgram()
     for DimensionData in ((10.0,), (10.0, 0.0), (10.0, MathInfo.nan)):
         with PytestLib.raises(SldprtFormatError):
-            PatchFeatures(
+            _ = PatchFeatures(
                 ProgramData, {0: FeatureEdit(SketchDimensionsMm=DimensionData)}
             )
 
@@ -985,7 +985,7 @@ def TestTAFHNDSBKIS() -> None:
     Patched = PatchFeatures(Resolved, {1: FeatureEdit(corners_mm=Corners)})
     assert LocateFeatures(Patched)[1].corners_mm == Corners
     with PytestLib.raises(SldprtFormatError):
-        PatchFeatures(Resolved, {1: FeatureEdit(depth_mm=4.0)})
+        _ = PatchFeatures(Resolved, {1: FeatureEdit(depth_mm=4.0)})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1209,7 +1209,7 @@ def TestPSARAACR() -> None:
     assert PatchSketchArcs(Resolved, {}) == Resolved
     for Radii in ({len(ArcsInfo): 5.0}, {0: 0.0}, {0: MathInfo.inf}, {0: MathInfo.nan}):
         with PytestLib.raises(SldprtFormatError):
-            PatchSketchArcs(Resolved, Radii)
+            _ = PatchSketchArcs(Resolved, Radii)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1242,7 +1242,7 @@ def TestPFRTROACP() -> None:
     )
     for Edits in Rejected:
         with PytestLib.raises(SldprtFormatError):
-            PatchFeatures(Resolved, Edits)
+            _ = PatchFeatures(Resolved, Edits)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

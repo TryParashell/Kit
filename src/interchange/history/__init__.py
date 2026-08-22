@@ -8,8 +8,6 @@
 
 from dataclasses import dataclass as DataClass
 from inspect import Signature as FuncSig
-from typing import ClassVar
-from typing import TYPE_CHECKING
 
 from interchange.enums.EnumDocument import Capability
 from interchange.features.FeatureBody import DesignBody
@@ -37,7 +35,6 @@ from interchange.core.ModelBase import ModelBase
 from interchange.compatibility.PythonCompat import BindCompatMut
 from interchange.compatibility.PythonCompatHistoryMethods import BindHistoryMut
 from interchange.records.RecordTopology import TopologyCounts
-
 
 # one shared empty set keeps capability defaults free of repeated constructor calls
 KEmptyCaps: frozenset[Capability] = frozenset()

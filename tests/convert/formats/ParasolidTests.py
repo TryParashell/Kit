@@ -323,7 +323,7 @@ def TestPSERRP() -> None:
 # this definition exists because focused behavior needs one stable owner
 def TestPSERNPD() -> None:
     with Pytest.raises(ValueError, match="must start"):
-        EncodePartitionStream(b"not parasolid")
+        _ = EncodePartitionStream(b"not parasolid")
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -846,13 +846,13 @@ def TestVOSBARCFI() -> None:
     assert b"LAST_BODY_MODIFYING_FEATURE_ID" in PartitionA
     assert DecodeBrepModel(PartitionA) is not None
     with Pytest.raises(ValueError, match="cover every"):
-        EncodeBrepModel(
+        _ = EncodeBrepModel(
             Model,
             partition=False,
             solidworks_feature_ids={"missing": 26},
         )
     with Pytest.raises(ValueError, match="positive i32"):
-        EncodeBrepModel(
+        _ = EncodeBrepModel(
             Model,
             partition=False,
             solidworks_feature_ids={Model.bodies[0].id: 0},

@@ -46,7 +46,7 @@ def CheckPayloadArg() -> None:
 def CheckNoFormats() -> None:
     PackageNames = ListFormatPacks()
     RegistryData = AdapterRegistry()
-    RegistryData.introspect()
+    _ = RegistryData.introspect()
     AdapterNames = {
         type(AdapterData).__name__
         for AdapterData in (*RegistryData.readers(), *RegistryData.writers())

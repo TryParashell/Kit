@@ -198,4 +198,4 @@ def TestGCRTI() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestGCRUFI() -> None:
     with PytestLib.raises(ValueError, match="native template"):
-        BuildSldprt({"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=1)
+        _ = BuildSldprt({"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=1)

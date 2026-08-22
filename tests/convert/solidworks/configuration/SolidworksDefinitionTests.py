@@ -149,10 +149,10 @@ def TestVBASTB() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestUDSIR() -> None:
     with PytestLib.raises(SldprtFormatError):
-        EncodeDefinitionStream(standard="moDIN_c")
+        _ = EncodeDefinitionStream(standard="moDIN_c")
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSVBIR() -> None:
     with PytestLib.raises(SldprtFormatError):
-        EncodeDefinitionStream(view=(1.0, 0.0, 0.0))
+        _ = EncodeDefinitionStream(view=(1.0, 0.0, 0.0))

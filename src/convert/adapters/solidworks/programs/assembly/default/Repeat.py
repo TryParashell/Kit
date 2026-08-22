@@ -124,6 +124,7 @@ class RepeatItem:
             1.0,
         ),
     ) -> None:
+        super().__init__()
         if len(BasisVals) != 9:
             raise SldprtFormatError("assembly transform basis requires nine values")
         self.OccurName = OccurName

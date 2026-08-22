@@ -19,6 +19,10 @@ from convert.adapters.registry import AdapterRegistry
 class EngineRead:
     registry: AdapterRegistry
 
+    # direct initialization keeps each engine half usable in isolation
+    def __init__(self, registry: AdapterRegistry) -> None:
+        self.registry = registry
+
     # registry delegation preserves one validation path for every public document read
     def ReadSource(
         self,

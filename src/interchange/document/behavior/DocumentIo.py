@@ -71,7 +71,7 @@ def FromJson(ClassType: type[DocumentType], SourceValue: str) -> DocumentType:
 def WriteJson(DocumentValue: object, PathValue: str | FilePath) -> FilePath:
     OutputPath = FilePath(PathValue).expanduser().resolve()
     OutputPath.parent.mkdir(parents=True, exist_ok=True)
-    OutputPath.write_text(ToJson(DocumentValue) + "\n", encoding="utf-8")
+    _ = OutputPath.write_text(ToJson(DocumentValue) + "\n", encoding="utf-8")
     return OutputPath
 
 

@@ -18,6 +18,8 @@ from interchange import Capability
 
 from convert.adapters.base.ContractCompat import ContractBase
 
+from typing_extensions import override as Override
+
 
 # legacy extension keywords need one strict translation point before document kind lookup
 def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
@@ -170,6 +172,8 @@ class AdapterInfo(ContractBase):
         return self.AssemblyExts if Assembly else self.PartExts
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
+    @Override
+    @Override
     def __repr__(self) -> str:
         FieldValues = ", ".join(
             f"{LegacyName}={getattr(self, ModelName)!r}"

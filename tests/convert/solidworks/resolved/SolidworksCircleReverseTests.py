@@ -152,6 +152,6 @@ def TestRPMCO() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRPRVWO() -> None:
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeResolved({9853: "saved paths are intentionally unsupported"})
+        _ = EncodeResolved({9853: "saved paths are intentionally unsupported"})
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeConfig({44: "saved document names are intentionally unsupported"})
+        _ = EncodeConfig({44: "saved document names are intentionally unsupported"})

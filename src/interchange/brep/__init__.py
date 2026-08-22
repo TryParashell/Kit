@@ -53,20 +53,16 @@ from interchange.compatibility.PythonCompatBrepMethods import BindBrepMut
 
 BindCompatMut(
     (
-        BrepEntity,
-        BrepCurve,
         LineCurve,
         CircleCurve,
         EllipseCurve,
         NurbsCurve,
         IntersectCurve,
         NativeCurve,
-        BrepPcurve,
         LinePcurve,
         CirclePcurve,
         NurbsPcurve,
         NativePcurve,
-        BrepSurface,
         PlaneSurface,
         CylinderSurface,
         ConeSurface,

@@ -28,6 +28,7 @@ class ConversionEngine:
 
     # registry injection keeps adapters replaceable without coupling conversion to discovery
     def __init__(self, registry: AdapterRegistry) -> None:
+        super().__init__()
         self.registry = registry
 
     # document reads retain the public compatibility signature at the static composition root

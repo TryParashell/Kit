@@ -65,7 +65,7 @@ class TestDiffGuard(UnitTestCase):
         for PathBytes in BadPaths:
             with self.subTest(PathBytes=PathBytes):
                 with self.assertRaises(ValueError):
-                    ParseDiff(b"M\0" + PathBytes + b"\0")
+                    _ = ParseDiff(b"M\0" + PathBytes + b"\0")
 
 
 # byte focused fixtures protect untouched content from newline normalization during repair
@@ -79,13 +79,13 @@ class TestByteRepair(UnitTestCase):
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             CrLfPath = RootPath / "CrLf.py"
-            CrLfPath.write_bytes(b"print('ok')\r\n")
+            _ = CrLfPath.write_bytes(b"print('ok')\r\n")
             RepairModule.WriteMissingMut(CrLfPath, HeaderLines)
             HeaderBytes = RepairModule.MakeHeader(HeaderLines, b"\r\n")
             self.assertEqual(CrLfPath.read_bytes(), HeaderBytes + b"print('ok')\r\n")
             ScriptPath = RootPath / "Script.py"
             ShebangBytes = b"#!/usr/bin/env python"
-            ScriptPath.write_bytes(ShebangBytes)
+            _ = ScriptPath.write_bytes(ShebangBytes)
             RepairModule.WriteMissingMut(ScriptPath, HeaderLines)
             self.assertEqual(
                 ScriptPath.read_bytes(),
@@ -104,9 +104,9 @@ class TestSpanRepair(UnitTestCase):
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             SafePath = RootPath / "Safe.py"
-            SafePath.write_bytes(
+            _ = SafePath.write_bytes(
                 b"# SPDX-License-Identifier: damaged\n"
-                b"# SPDX-FileCopyrightText: damaged\n\n"
+                + ++b"# SPDX-FileCopyrightText: damaged\n\n"
                 b"print('safe')\n"
             )
             self.assertTrue(RepairModule.CanRepairMut(SafePath, HeaderLines, "#"))
@@ -117,7 +117,7 @@ class TestSpanRepair(UnitTestCase):
                 b"# unrelated module documentation\n\n"
                 b"print('safe')\n"
             )
-            DocsPath.write_bytes(DocsBytes)
+            _ = DocsPath.write_bytes(DocsBytes)
             self.assertFalse(RepairModule.CanRepairMut(DocsPath, HeaderLines, "#"))
             self.assertEqual(DocsPath.read_bytes(), DocsBytes)
             EncodingPath = RootPath / "Encoding.py"
@@ -126,7 +126,7 @@ class TestSpanRepair(UnitTestCase):
                 b"# SPDX-License-Identifier: damaged\n\n"
                 b"print('safe')\n"
             )
-            EncodingPath.write_bytes(EncodingBytes)
+            _ = EncodingPath.write_bytes(EncodingBytes)
             self.assertFalse(RepairModule.CanRepairMut(EncodingPath, HeaderLines, "#"))
             self.assertEqual(EncodingPath.read_bytes(), EncodingBytes)
 
@@ -141,9 +141,9 @@ class TestStyleGuard(UnitTestCase):
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             DebugPath = RootPath / "Debug.trace"
-            DebugPath.write_bytes(
+            _ = DebugPath.write_bytes(
                 b"$$ SPDX-License-Identifier: damaged\n"
-                b"$$ SPDX-FileCopyrightText: damaged\n\n"
+                + ++b"$$ SPDX-FileCopyrightText: damaged\n\n"
                 b"command\n"
             )
             IsFixed, ReasonText = GuardModule.RepairHeadMut(
@@ -152,10 +152,10 @@ class TestStyleGuard(UnitTestCase):
             self.assertTrue(IsFixed, ReasonText)
             self.assertTrue(DebugPath.read_bytes().startswith(b"$$ SPDX-"))
             BlockPath = RootPath / "Markup.trace"
-            BlockPath.write_bytes(
+            _ = BlockPath.write_bytes(
                 b"<!--\n"
-                b"SPDX-License-Identifier: damaged\n"
-                b"SPDX-FileCopyrightText: damaged\n"
+                + b"SPDX-License-Identifier: damaged\n"
+                + +b"SPDX-FileCopyrightText: damaged\n"
                 b"-->\n\n"
                 b"markup\n"
             )
@@ -165,7 +165,7 @@ class TestStyleGuard(UnitTestCase):
             self.assertTrue(IsFixed, ReasonText)
             self.assertTrue(BlockPath.read_bytes().startswith(b"<!--\nSPDX-"))
             MissingPath = RootPath / "Missing.trace"
-            MissingPath.write_bytes(b"command\n")
+            _ = MissingPath.write_bytes(b"command\n")
             OriginalBytes = MissingPath.read_bytes()
             IsFixed, ReasonText = GuardModule.RepairHeadMut(
                 MissingPath, CanonLines, RootPath
@@ -183,7 +183,7 @@ class TestTextGuard(UnitTestCase):
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath)
             SourcePath = RootPath / "Invalid.py"
-            SourcePath.write_bytes(b"\xff\xfe")
+            _ = SourcePath.write_bytes(b"\xff\xfe")
             IsValid, ReasonText = GuardModule.CheckFile(
                 SourcePath, GuardModule.LoadCanon(), RootPath
             )
@@ -200,14 +200,14 @@ class TestPathGuard(UnitTestCase):
         with Tempfile.TemporaryDirectory() as TempPath:
             RootPath = Pathlib.Path(TempPath).resolve()
             SourcePath = RootPath / "Source.py"
-            SourcePath.write_text("source\n", encoding="utf-8")
+            _ = SourcePath.write_text("source\n", encoding="utf-8")
             self.assertEqual(GuardModule.ResolvePath(RootPath, "Source.py"), SourcePath)
             self.assertIsNone(GuardModule.ResolvePath(RootPath, "Missing.py"))
             FolderPath = RootPath / "Folder"
             FolderPath.mkdir()
             self.assertIsNone(GuardModule.ResolvePath(RootPath, "Folder"))
             ChildPath = FolderPath / "Child.py"
-            ChildPath.write_text("child\n", encoding="utf-8")
+            _ = ChildPath.write_text("child\n", encoding="utf-8")
             with Mocking.patch.object(
                 GuardModule.StatLib, "S_ISLNK", return_value=True
             ):
@@ -224,7 +224,7 @@ class TestSkillGuard(UnitTestCase):
             RootPath = Pathlib.Path(TempPath)
             SkillPath = RootPath / ".agents" / "skills" / "alpha" / "SKILL.md"
             SkillPath.parent.mkdir(parents=True)
-            SkillPath.write_bytes(
+            _ = SkillPath.write_bytes(
                 b"---\r\nname: alpha\r\nlicense: damaged\r\n---\r\nbody\r\n"
             )
             IsFixed, ReasonText = GuardModule.RepairHeadMut(

@@ -416,6 +416,7 @@ class ArchiveWriter(ArchiveValues):
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self) -> None:
+        super().__init__()
         self.chunks = []
         self.classes = {}
         self.next_index = KFirstLoadArrayIndex

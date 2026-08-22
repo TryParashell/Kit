@@ -43,6 +43,6 @@ def ExtractBrep(
         PayloadBytes = PayloadData.PayloadData
         if PayloadBytes is None:
             continue
-        OutputPath.write_bytes(PayloadBytes)
+        _ = OutputPath.write_bytes(PayloadBytes)
         OutputPaths.append(OutputPath)
     return tuple(OutputPaths)

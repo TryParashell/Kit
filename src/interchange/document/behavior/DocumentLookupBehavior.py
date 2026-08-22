@@ -6,7 +6,6 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from typing import TYPE_CHECKING as TypeChecking
 
 from interchange.features.FeatureStep import FeatureStep
 from interchange.records.RecordParameter import Parameter
@@ -17,11 +16,6 @@ from interchange.geometry.models.SupportPlane import SupportPlane
 # document lookup methods preserve convenient access without owning collection storage
 class DocumentLookup:
     locals()["__slots__"] = ()
-    if TypeChecking:
-        parameters: tuple[Parameter, ...]
-        sketches: tuple[Sketch, ...]
-        feature_timeline: tuple[FeatureStep, ...]
-        support_planes: tuple[SupportPlane, ...]
 
     # parameter lookup uses its public spelling so its return type remains concrete
     def parameter(self, entity_id: str) -> Parameter:

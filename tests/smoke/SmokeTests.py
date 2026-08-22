@@ -17,7 +17,7 @@ from interchange import CadSource
 def TestPkgImports() -> None:
     assert (
         CadDocument(
-            source=CadSource(FormatId="smoke", FilePath=None, SourceDigest=None),
+            source=CadSource(format_id="smoke", path="", sha256=""),
             configurations=(),
             parameters=(),
             support_planes=(),

@@ -472,6 +472,27 @@ class BrepTopology:
 
     # topology maps must exist before ownership validation can traverse them
     def __init__(self, Model: BrepModel) -> None:
+        super().__init__()
+        self.bodies = {}
+        self.coedge_loop = {}
+        self.coedges = {}
+        self.edge_coedges = {}
+        self.edges = {}
+        self.face_face_use = {}
+        self.face_uses = {}
+        self.faces = {}
+        self.loop_face = {}
+        self.loops = {}
+        self.region_body = {}
+        self.regions = {}
+        self.shell_face_use = {}
+        self.shell_shell_use = {}
+        self.shell_use_region = {}
+        self.shell_uses = {}
+        self.shells = {}
+        self.surface_by_id = {}
+        self.curve_by_id = {}
+        self.vertex_by_id = {}
         InitTopologyMut(self, Model)
 
     # face orientation is retained here as topology state owns this traversal
@@ -1311,23 +1332,23 @@ def SetTopoNodesMut(
     Nodes: EncodeNodeState,
 ) -> None:
     for RegionData in Model.regions:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KRegions[RegionData.id],
             Topology.region_body[RegionData.id],
             Config,
             Nodes,
         )
     for BodyId, Index in Indices.KExteriorRegions.items():
-        AssignNodeIdMut(Index, BodyId, Config, Nodes)
+        _ = AssignNodeIdMut(Index, BodyId, Config, Nodes)
     for ShellData in Model.shells:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KShells[ShellData.id],
             Owners.KShellBody[ShellData.id],
             Config,
             Nodes,
         )
     for ShellId, Index in Indices.KExteriorShells.items():
-        AssignNodeIdMut(Index, Owners.KShellBody[ShellId], Config, Nodes)
+        _ = AssignNodeIdMut(Index, Owners.KShellBody[ShellId], Config, Nodes)
 
 
 # geometry node assignment numbers carriers vertices edges loops and faces
@@ -1340,39 +1361,39 @@ def SetGeomNodesMut(
     Nodes: EncodeNodeState,
 ) -> None:
     for SurfValue in Model.surfaces:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KSurfaces[SurfValue.id],
             Owners.KFaceBody[Owners.KSurfFaces[SurfValue.id][0]],
             Config,
             Nodes,
         )
     for Curve in Model.curves:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KCurves[Curve.id],
             Owners.KEdgeBody[Owners.KCurveEdges[Curve.id][0]],
             Config,
             Nodes,
         )
     for Vertex in Model.vertices:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KPoints[Vertex.id], Owners.KVertexBody[Vertex.id], Config, Nodes
         )
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KVertices[Vertex.id], Owners.KVertexBody[Vertex.id], Config, Nodes
         )
     for EdgeData in Model.edges:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KEdges[EdgeData.id], Owners.KEdgeBody[EdgeData.id], Config, Nodes
         )
     for LoopData in Model.loops:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KLoops[LoopData.id],
             Owners.KFaceBody[Topology.loop_face[LoopData.id]],
             Config,
             Nodes,
         )
     for FaceData in Model.faces:
-        AssignNodeIdMut(
+        _ = AssignNodeIdMut(
             Indices.KFaces[FaceData.id], Owners.KFaceBody[FaceData.id], Config, Nodes
         )
 
@@ -1389,7 +1410,7 @@ def SetAttrNodesMut(
     BodyId = Model.bodies[0].id
     for FaceData in Model.faces:
         for Index in Indices.KSolidFaceAttrs[FaceData.id]:
-            AssignNodeIdMut(Index, BodyId, Config, Nodes)
+            _ = AssignNodeIdMut(Index, BodyId, Config, Nodes)
     for NameValue in (
         "timestamp",
         "feature",
@@ -1399,7 +1420,7 @@ def SetAttrNodesMut(
         "lightweight",
         "recipe",
     ):
-        AssignNodeIdMut(Indices.KSolidBodyAttrs[NameValue], BodyId, Config, Nodes)
+        _ = AssignNodeIdMut(Indices.KSolidBodyAttrs[NameValue], BodyId, Config, Nodes)
 
 
 # node state construction runs topology geometry and vendor numbering phases
@@ -1525,7 +1546,7 @@ def MakeFinState(
     SetFinOrderMut(Model, Indices, VertexFins)
     FirstFaceByBody: dict[str, str] = {}
     for FaceData in Model.faces:
-        FirstFaceByBody.setdefault(Owners.KFaceBody[FaceData.id], FaceData.id)
+        _ = FirstFaceByBody.setdefault(Owners.KFaceBody[FaceData.id], FaceData.id)
     return EncodeFinState(
         EncodedLoops, EncodedReversed, VertexFins, FinVertex, FinOther, FirstFaceByBody
     )
@@ -4394,7 +4415,7 @@ def FaceUnchanged(
         else:
             Unchanged[Owner] = ValueRecords[ValueIndex]
     for Owner in Ambiguous:
-        Unchanged.pop(Owner, None)
+        _ = Unchanged.pop(Owner, None)
     return Unchanged
 
 
@@ -4549,7 +4570,7 @@ def ScanTopoMut(
     if Topology is not None:
         Target, Record = Topology
         if Record is not None:
-            Target.setdefault(Record.attribute, Record)
+            _ = Target.setdefault(Record.attribute, Record)
 
 
 # chart scanning owns intersection samples terms and support parameter records

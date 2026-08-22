@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
-from typing import ClassVar
 from typing import Mapping as TypeMap
-from typing import TYPE_CHECKING
 
 from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
 from interchange.features.FeatureContract import FeatureDef
 from interchange.core.ModelBase import ModelBase
 from interchange.records.RecordProvenance import Provenance
+
+from typing_extensions import override as Override
 
 
 # runtime construction accepts untrusted values so feature definitions need one checked boundary
@@ -30,7 +30,7 @@ def ValidateFeature(SourceValue: object) -> FeatureDef | None:
 
 # canonical typing needs an inherited key while public reflection exposes historical fields
 class FeatureHintBase(ModelBase):
-    definition: FeatureDef | None
+    definition: FeatureDef | None = None
 
     @property
     def Definition(self) -> FeatureDef | None:
@@ -108,6 +108,8 @@ class FeatureStep(FeatureHintBase):
         return self.operation
 
     @property
+    @Override
+    @Override
     def Definition(self) -> FeatureDef | None:
         return self.definition
 
@@ -133,4 +135,4 @@ class FeatureStep(FeatureHintBase):
 
     # invalid definitions must fail before corrupt feature records propagate
     def __post_init__(self) -> None:
-        ValidateFeature(self.definition)
+        _ = ValidateFeature(self.definition)

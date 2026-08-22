@@ -183,7 +183,7 @@ def WritePathStaged(
     AbsentPaths = GetAbsentPaths(FinalPath.parent)
     CreatedValues: list[tuple[FilePath, tuple[int, int, int]]] = []
     try:
-        MakeParentsMut(AbsentPaths, CreatedValues)
+        _ = MakeParentsMut(AbsentPaths, CreatedValues)
         PrefixText = f".{FinalPath.name}.kit-"
         with TempDirectory(prefix=PrefixText, dir=FinalPath.parent) as TempName:
             StagingPath = FilePath(TempName)

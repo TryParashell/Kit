@@ -111,7 +111,7 @@ def CheckReadFilter() -> None:
 def CheckMissingCfg() -> None:
     PayloadData = BuildSource().ToJson().encode("utf-8")
     with Pytest.raises(ValueError, match="configuration"):
-        JsonAdapter().read(
+        _ = JsonAdapter().read(
             PayloadData,
             ReadOptions(configuration="configuration:missing"),
         )

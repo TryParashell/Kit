@@ -106,24 +106,24 @@ def TestPSPRCO() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPSPRVWO() -> None:
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeProgram({32: "a deliberately incompatible comment width"})
+        _ = EncodeProgram({32: "a deliberately incompatible comment width"})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPSPVIS() -> None:
     with PytestLib.raises(SldprtFormatError, match="exactly six"):
-        PadFieldMap(KDonorPoints[:5], 8.0)
+        _ = PadFieldMap(KDonorPoints[:5], 8.0)
     with PytestLib.raises(SldprtFormatError, match="finite"):
-        PadFieldMap((*KDonorPoints[:5], (MathInfo.inf, 25.0)), 8.0)
+        _ = PadFieldMap((*KDonorPoints[:5], (MathInfo.inf, 25.0)), 8.0)
     with PytestLib.raises(SldprtFormatError, match="unique"):
-        PadFieldMap((*KDonorPoints[:5], KDonorPoints[0]), 8.0)
+        _ = PadFieldMap((*KDonorPoints[:5], KDonorPoints[0]), 8.0)
     with PytestLib.raises(SldprtFormatError, match="intersect"):
-        PadFieldMap(
+        _ = PadFieldMap(
             ((0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0), (3.0, 0.0), (3.0, 3.0)),
             8.0,
         )
     with PytestLib.raises(SldprtFormatError, match="positive"):
-        PadFieldMap(KDonorPoints, 0.0)
+        _ = PadFieldMap(KDonorPoints, 0.0)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

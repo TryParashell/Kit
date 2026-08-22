@@ -36,7 +36,7 @@ def GetReplayMut(SourceData: KSourceType) -> KSourceType:
         CanReplay = True
         try:
             StreamPos = SourceData.tell()
-            SourceData.seek(StreamPos)
+            _ = SourceData.seek(StreamPos)
         except (OSError, TypeError, ValueError):
             CanReplay = False
         if CanReplay:

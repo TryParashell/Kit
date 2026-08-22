@@ -110,7 +110,7 @@ def BindReaderMut(
             return
         raise RegistryError(f"reader already registered for {InfoData.FormatId}")
     BindAliasesMut(InfoData, AliasMap, ReplaceFlag)
-    BindingMap.setdefault(FormatKey, BindingData)
+    _ = BindingMap.setdefault(FormatKey, BindingData)
     BindingData.reader = AdapterData
 
 
@@ -142,5 +142,5 @@ def BindWriterMut(
             return
         raise RegistryError(f"writer already registered for {InfoData.FormatId}")
     BindAliasesMut(InfoData, AliasMap, ReplaceFlag)
-    BindingMap.setdefault(FormatKey, BindingData)
+    _ = BindingMap.setdefault(FormatKey, BindingData)
     BindingData.writer = AdapterData

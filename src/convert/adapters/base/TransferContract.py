@@ -93,7 +93,7 @@ class CapTransfer(ContractBase):
 
     # invalid combinations are rejected here so every writer result stays truthful
     def __post_init__(self) -> None:
-        GetCapability(self.CapabilityData)
+        _ = GetCapability(self.CapabilityData)
         ModeValue = GetTransferMode(self.TransferModeData)
         if ModeValue is TransferMode.KNative:
             if self.CarrierCause is not None:
@@ -102,7 +102,7 @@ class CapTransfer(ContractBase):
         if self.CarrierCause is None:
             object.__setattr__(self, "CarrierCause", CarrierReason.KWriterGap)
         else:
-            GetCarrierCause(self.CarrierCause)
+            _ = GetCarrierCause(self.CarrierCause)
 
     # legacy callers need statically typed access to the preserved capability
     @property

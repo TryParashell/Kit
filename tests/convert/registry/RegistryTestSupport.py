@@ -24,6 +24,8 @@ from convert.api.ApiOpen import OpenDocument
 from interchange import CadDocument, Capability
 from tests.convert.api.ApiTestPaths import KSamplePath
 
+from typing_extensions import override as Override
+
 
 # configurable results let registry tests provoke contract mismatches without duplicating adapters
 class ResultAdapter(JsonAdapter):
@@ -36,16 +38,21 @@ class ResultAdapter(JsonAdapter):
         ProbeFormat: str | None = None,
         WriteFormat: str | None = None,
     ) -> None:
+        super().__init__()
         self.InfoData = InfoData
         self.ProbeFormat = ProbeFormat
         self.WriteFormat = WriteFormat
 
     # injected metadata keeps tests independent from the json adapter singleton
     @property
+    @Override
+    @Override
     def info(self) -> AdapterInfo:
         return self.InfoData
 
     # probe rewriting exercises registry validation while retaining real json recognition
+    @Override
+    @Override
     def probe(self, source: Source) -> ProbeResult:
         ResultData = super().probe(source)
         return ReplaceValue(
@@ -54,6 +61,8 @@ class ResultAdapter(JsonAdapter):
         )
 
     # write rewriting exercises registry validation while retaining real output behavior
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -71,6 +80,8 @@ class ResultAdapter(JsonAdapter):
 class CarrierAdapter(ResultAdapter):
 
     # path restriction forces registry staging through its transactional filesystem branch
+    @Override
+    @Override
     def supports(
         self,
         document: CadDocument,
@@ -79,6 +90,8 @@ class CarrierAdapter(ResultAdapter):
         return isinstance(destination, (str, FilePath))
 
     # unusable output exercises rollback after a writer creates the staged artifact
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -89,7 +102,7 @@ class CarrierAdapter(ResultAdapter):
             raise TypeError("carrier adapter requires a filesystem destination")
         OutputPath = FilePath(destination).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
-        OutputPath.write_bytes(b"carrier")
+        _ = OutputPath.write_bytes(b"carrier")
         return WriteResult(
             OutputPath,
             self.info.format_id,

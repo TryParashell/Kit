@@ -135,9 +135,9 @@ def CheckInfo() -> None:
     assert AdapterInfo.extensions_for.__module__ == "convert.adapters.base"
     assert InfoData.extensions_for(assembly=False) == ()
     with Pytest.raises(TypeError):
-        CallCompat(InfoData.extensions_for, assembly=False, Assembly=False)
+        _ = CallCompat(InfoData.extensions_for, assembly=False, Assembly=False)
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             AdapterInfo,
             "format.test",
             "Test",
@@ -146,7 +146,7 @@ def CheckInfo() -> None:
             format_id="other",
         )
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             AdapterInfo,
             "format.test",
             "Test",
@@ -156,7 +156,7 @@ def CheckInfo() -> None:
             format_id="other",
         )
     with Pytest.raises(TypeError):
-        DataClasses.replace(InfoData, FormatId="format.other")
+        _ = DataClasses.replace(InfoData, FormatId="format.other")
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -188,9 +188,9 @@ def CheckBinding() -> None:
         == "(self, reader: 'CadReaderAdapter | None' = None, writer: 'CadWriterAdapter | None' = None) -> None"
     )
     with Pytest.raises(TypeError):
-        CallCompat(AdapterBinding, reader=AdapterData, ReaderData=AdapterData)
+        _ = CallCompat(AdapterBinding, reader=AdapterData, ReaderData=AdapterData)
     with Pytest.raises(TypeError):
-        CallCompat(AdapterBinding, writer=AdapterData, WriterData=AdapterData)
+        _ = CallCompat(AdapterBinding, writer=AdapterData, WriterData=AdapterData)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -208,23 +208,23 @@ def CheckErrors() -> None:
         assert ErrorType.__module__ == "convert.adapters.registry"
         assert Pickle.loads(Pickle.dumps(ErrorType)) is ErrorType
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             CapabilityLossError,
             "format.test",
             frozenset[Capability](),
             format_id="other",
         )
     with Pytest.raises(TypeError):
-        AppUsabilityError("format.test", ResultData, result=ResultData)
+        _ = AppUsabilityError("format.test", ResultData, result=ResultData)
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             CapabilityLossError,
             format_id="format.test",
             dropped=frozenset[Capability](),
             unknown=True,
         )
     with Pytest.raises(TypeError):
-        AppUsabilityError(format_id="format.test", result=ResultData, unknown=True)
+        _ = AppUsabilityError(format_id="format.test", result=ResultData, unknown=True)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -247,29 +247,29 @@ def CheckRegistry() -> None:
         assert "NamedValues" not in str(Inspect.signature(MethodData))
         assert Typing.get_type_hints(MethodData)
     with Pytest.raises(TypeError):
-        CallCompat(RegistryData.register, AdapterData, unknown=True)
+        _ = CallCompat(RegistryData.register, AdapterData, unknown=True)
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             RegistryData.register,
             AdapterData,
             replace=False,
             ReplaceFlag=False,
         )
     with Pytest.raises(TypeError):
-        CallCompat(RegistryData.read, b"{}", unknown=True)
+        _ = CallCompat(RegistryData.read, b"{}", unknown=True)
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             RegistryData.read,
             b"{}",
             format_id="interchange.json",
             FormatId="interchange.json",
         )
     with Pytest.raises(TypeError):
-        CallCompat(RegistryData.write, None, None, unknown=True)
+        _ = CallCompat(RegistryData.write, None, None, unknown=True)
     with Pytest.raises(TypeError):
-        CallCompat(RegistryData.extend, (), unknown=True)
+        _ = CallCompat(RegistryData.extend, (), unknown=True)
     with Pytest.raises(TypeError):
-        CallCompat(RegistryData.extend, (), replace=False, ReplaceFlag=False)
+        _ = CallCompat(RegistryData.extend, (), replace=False, ReplaceFlag=False)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -301,7 +301,7 @@ def CheckReadWords() -> None:
 def CheckWriteWords() -> None:
     RegistryData = AdapterRegistry()
     with Pytest.raises(TypeError):
-        CallCompat(
+        _ = CallCompat(
             RegistryData.write,
             None,
             None,
@@ -309,7 +309,7 @@ def CheckWriteWords() -> None:
             FormatId="test",
         )
     with Pytest.raises(TypeError):
-        CallCompat(RegistryData.write, None, None, options=None, OptionsData=None)
+        _ = CallCompat(RegistryData.write, None, None, options=None, OptionsData=None)
 
 
 # this definition exists because focused behavior needs one stable owner

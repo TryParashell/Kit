@@ -85,7 +85,7 @@ KSourcePath = (
 def TestFPPWRFC(TmpPath: FilePath) -> None:
     SourceData = ReadFreecad(KSourcePath)
     with PytestLib.raises(ApplicationUsabilityError):
-        WriteDocument(
+        _ = WriteDocument(
             SourceData, TmpPath / "FrontPinPending.SLDPRT", allow_carrier=False
         )
 
@@ -234,7 +234,7 @@ def TestFPPCAPV() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFPPRVWO() -> None:
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeProgram({11179: "D100"})
+        _ = EncodeProgram({11179: "D100"})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

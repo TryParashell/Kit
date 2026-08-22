@@ -12,6 +12,7 @@ from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.brep.curves.BrepCurves import BrepEntity, ValidateBrepId
+from interchange.records.RecordProvenance import Provenance
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelDataMut
 from interchange.geometry.models.VectorPlane import PlaneVector
@@ -20,6 +21,7 @@ from interchange.geometry.models.VectorPlane import PlaneVector
 # parameter curve identity checks reject malformed topology records early
 @ModelDataMut
 class BrepPcurve(BrepEntity):
+    id: str
 
     # invalid identifiers must fail before parameter curves enter collections
     def __post_init__(self) -> None:
@@ -29,8 +31,11 @@ class BrepPcurve(BrepEntity):
 # planar line curves retain exact parameter space origin and direction
 @ModelDataMut
 class LinePcurve(BrepPcurve):
+    id: str
     origin: PlaneVector
     direction: PlaneVector
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Origin(self) -> PlaneVector:
@@ -44,8 +49,11 @@ class LinePcurve(BrepPcurve):
 # planar circle curves preserve exact parameter space centers and radii
 @ModelDataMut
 class CirclePcurve(BrepPcurve):
+    id: str
     center: PlaneVector
     radius: float
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Center(self) -> PlaneVector:
@@ -59,12 +67,15 @@ class CirclePcurve(BrepPcurve):
 # planar spline curves retain full basis data required for trimming
 @ModelDataMut
 class NurbsPcurve(BrepPcurve):
+    id: str
     degree: int
     control_points: tuple[PlaneVector, ...]
     knots: tuple[float, ...]
     multiplicities: tuple[int, ...]
     weights: tuple[float, ...] = ()
     periodic: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Degree(self) -> int:
@@ -94,9 +105,12 @@ class NurbsPcurve(BrepPcurve):
 # native parameter curves preserve unsupported kernel specific trimming data
 @ModelDataMut
 class NativePcurve(BrepPcurve):
+    id: str
     format_id: str
     entity_type: str
     data: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def FormatId(self) -> str:

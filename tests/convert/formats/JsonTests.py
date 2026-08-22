@@ -30,6 +30,8 @@ from convert.adapters.json import JsonAdapter
 from interchange import CadDocument, Capability
 from tests.interchange.document.DocumentTests import document as DocValue
 
+from typing_extensions import override as Override
+
 # nonseekable test streams preserve their concrete text or binary payload type
 KStreamData = TypeVar("KStreamData", str, bytes)
 
@@ -39,6 +41,8 @@ class FirstAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
+    @Override
+    @Override
     def InfoAction(self) -> AdapterInfo:
         return AdapterInfo("first", "First", "1", (".first",), ("second",))
 
@@ -50,6 +54,8 @@ class SecondAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
+    @Override
+    @Override
     def InfoAction(self) -> AdapterInfo:
         return AdapterInfo("second", "Second", "1", (".second",))
 
@@ -61,6 +67,8 @@ class Duplicate(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
+    @Override
+    @Override
     def InfoAction(self) -> AdapterInfo:
         return AdapterInfo("first", "Duplicate", "1", (".first",), ("orphan",))
 
@@ -72,6 +80,8 @@ class SwapAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
+    @Override
+    @Override
     def InfoAction(self) -> AdapterInfo:
         return AdapterInfo(
             "first", "Replacement", "2", (".replacement",), ("replacement",)
@@ -87,6 +97,7 @@ class ReaderOnly:
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self, InfoValue: AdapterInfo) -> None:
+        super().__init__()
         self.InfoValue = InfoValue
         self.Delegate = JsonAdapter()
 
@@ -117,6 +128,7 @@ class WriterOnly:
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self, InfoValue: AdapterInfo) -> None:
+        super().__init__()
         self.InfoValue = InfoValue
         self.Delegate = JsonAdapter()
 
@@ -170,6 +182,7 @@ class NonSeekable(Generic[KStreamData]):
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self, Value: KStreamData) -> None:
+        super().__init__()
         self.StreamValue = Value
         self.IsConsumed = False
 
@@ -227,7 +240,7 @@ def TestStream(
     StreamType: type[PartialBytesIo] | type[PartialStringIo],
 ) -> None:
     with Pytest.raises(OSError, match="short JSON write"):
-        JsonAdapter().write(DocValue(), StreamType())
+        _ = JsonAdapter().write(DocValue(), StreamType())
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -240,7 +253,7 @@ def TestProbeStream(StreamType: type[BytesIo] | type[StringIo]) -> None:
         if StreamType is BytesIo
         else StringIo(Serialized)
     )
-    Stream.seek(7)
+    _ = Stream.seek(7)
     assert JsonAdapter().probe(Stream).confidence == 1.0
     assert Stream.tell() == 7
 
@@ -250,7 +263,7 @@ def TestPublicSdk() -> None:
     Value = DocValue()
     Source = StringIo(Value.to_json() + "\n")
     assert OpenDoc(Source) == Value
-    Source.seek(0)
+    _ = Source.seek(0)
     Target = StringIo()
     Result = Convert(Source, Target, destination_format="interchange.json")
     assert Result.destination_format == "interchange.json"
@@ -281,7 +294,7 @@ def TestPublicSdkA(Binary: bool) -> None:
 def TestExplicitNon(TmpPath: FilePath) -> None:
     Source = StringIo(DocValue().to_json())
     with Pytest.raises(AdapterNotFoundError, match="does not support"):
-        Convert(
+        _ = Convert(
             Source,
             TmpPath / "contradiction.SLDPRT",
             destination_format="interchange.json",
@@ -310,7 +323,7 @@ def TestFailedDoes() -> None:
     ):
         Registry.register(Duplicate())
     with Pytest.raises(AdapterNotFoundError):
-        Registry.reader("orphan")
+        _ = Registry.reader("orphan")
     assert Registry.reader("first") is First
     assert Registry.format_ids() == ("first", "second")
 
@@ -322,7 +335,7 @@ def TestReplacement() -> None:
     Replacement = SwapAdapter()
     Registry.register(Replacement, replace=True)
     with Pytest.raises(AdapterNotFoundError):
-        Registry.reader("second")
+        _ = Registry.reader("second")
     assert Registry.reader("replacement") is Replacement
     assert Registry.writer("replacement") is Replacement
     assert Registry.format_ids() == ("first", "replacement")
@@ -350,9 +363,9 @@ def TestSplitReader() -> None:
     with Pytest.raises(AdapterRegistryError, match="metadata differ"):
         Registry.register(WriterOnly(WriterInfo))
     with Pytest.raises(AdapterNotFoundError):
-        Registry.writer("split")
+        _ = Registry.writer("split")
     with Pytest.raises(AdapterNotFoundError):
-        Registry.reader("write.alias")
+        _ = Registry.reader("write.alias")
     assert Registry.reader("read.alias") is Reader
     assert Registry.format_ids() == ("read.alias", "split")
 

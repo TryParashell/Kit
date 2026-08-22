@@ -40,9 +40,9 @@ def BuildRegistry(FormatId: str) -> tuple[AdapterRegistry, AdapterInfo]:
 def CheckExisting(TmpPath: FilePath) -> None:
     RegistryData, InfoData = BuildRegistry("format.path-carrier")
     TargetPath = TmpPath / "existing.carrier"
-    TargetPath.write_bytes(b"original")
+    _ = TargetPath.write_bytes(b"original")
     with Pytest.raises(ApplicationUsabilityError):
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetPath,
             format_id=InfoData.format_id,
@@ -56,7 +56,7 @@ def CheckExisting(TmpPath: FilePath) -> None:
 def CheckCommit(TmpPath: FilePath) -> None:
     RegistryData, InfoData = BuildRegistry("format.path-carrier")
     TargetPath = TmpPath / "existing.carrier"
-    TargetPath.write_bytes(b"original")
+    _ = TargetPath.write_bytes(b"original")
     ResultData = RegistryData.write(
         BuildSource(),
         TargetPath,
@@ -78,7 +78,7 @@ def CheckNewFolders(TmpPath: FilePath) -> None:
     RegistryData, InfoData = BuildRegistry("format.nested-carrier")
     AbsentRoot = TmpPath / "absent"
     with Pytest.raises(ApplicationUsabilityError):
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             AbsentRoot / "one" / "two" / "blocked.carrier",
             format_id=InfoData.format_id,
@@ -87,7 +87,7 @@ def CheckNewFolders(TmpPath: FilePath) -> None:
     ExistingRoot = TmpPath / "existing"
     ExistingRoot.mkdir()
     with Pytest.raises(ApplicationUsabilityError):
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             ExistingRoot / "one" / "two" / "blocked.carrier",
             format_id=InfoData.format_id,
@@ -116,7 +116,7 @@ def CheckPartMake(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
 
     MonkeyPatch.setattr(FilePath, "mkdir", FailMakeMut)
     with Pytest.raises(OSError, match="forced staging directory failure"):
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetPath,
             format_id=InfoData.format_id,
@@ -148,7 +148,7 @@ def CheckConcurrent(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
 
     MonkeyPatch.setattr(FilePath, "mkdir", RaceMakeMut)
     with Pytest.raises(ApplicationUsabilityError):
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetPath,
             format_id=InfoData.format_id,

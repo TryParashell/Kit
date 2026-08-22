@@ -36,7 +36,7 @@ def ResolveWithin(
         raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
     ResultPath = CandidatePath.resolve(strict=RequireFile)
     try:
-        ResultPath.relative_to(RootPath)
+        _ = ResultPath.relative_to(RootPath)
     except ValueError as ErrorInfo:
         raise UnsafePath(f"path escapes trusted root {str(RootPath)!r}") from ErrorInfo
     if RequireFile and not ResultPath.is_file():

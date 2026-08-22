@@ -21,12 +21,15 @@ import struct as Struct
 import tempfile as Tempfile
 from types import MappingProxyType
 from typing import Mapping, Sequence, TypeGuard, cast as CastValue
-import xml.etree.ElementTree as XmlTree
+
+# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
+import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 from convert.adapters.base import (
     AdapterInfo,
     CapabilityTransfer,
     CarrierReason,
     Destination as Target,
+    ParseUntrusted,
     ProbeResult,
     ReadOptions,
     Source,
@@ -837,7 +840,7 @@ def WriteDocument(
     )
     Output = WriteTargetMut(Target, PlanValue.DataValue, Settings.overwrite)
     for BundlePath, Payload in PlanValue.Bundle.payloads.items():
-        WriteTargetMut(BundlePath, Payload, Settings.overwrite)
+        _ = WriteTargetMut(BundlePath, Payload, Settings.overwrite)
     return MakeWriteResult(DocValue, Output, FormatId, PlanValue, RequiredCaps)
 
 
@@ -1237,7 +1240,7 @@ def SourceTemplate(DocValue: CadDocument, Target: Path | None) -> bytes | None:
         if ExpectedSuffix is None or Target.suffix.casefold() != ExpectedSuffix:
             return None
     try:
-        SldprtArchive.from_bytes(DataValue)
+        _ = SldprtArchive.from_bytes(DataValue)
     except SldprtFormatError:
         return None
     return DataValue
@@ -2391,7 +2394,7 @@ def AsmCoreStreams(
         raise SldprtFormatError(
             "first-principles assembly history requires a direct component"
         )
-    XmlRoot = XmlTree.fromstring(EncodingValue.component_tree)
+    XmlRoot = ParseUntrusted(EncodingValue.component_tree)
     XmlSpace = {"sw": "http://www.solidworks.com/sw2003/schema"}
     OccurNames = GeneratedItem(AsmValue)
     CoreItems: list[AsmCoreItem] = []
@@ -3042,7 +3045,7 @@ def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
         else b"\n" if RawValue.endswith(b"\n") else b""
     )
     try:
-        RootValue = XmlTree.fromstring(RawValue)
+        RootValue = ParseUntrusted(RawValue)
     except XmlTree.ParseError as ErrorInfo:
         raise SldprtFormatError(f"invalid keyword XML: {ErrorInfo}") from ErrorInfo
     return (Prefix, RootValue, Trailing)
@@ -3398,7 +3401,7 @@ def PatchPointsMut(
                 EntityId, f"sldprt:sketch:{Sketch.object_id}:native:"
             )
             if MarkerOffset is not None:
-                IsPatchCoordina(
+                _ = IsPatchCoordina(
                     Resolved, MarkerOffset, PointValues(TargetEntity.geometry.point)
                 )
 
@@ -3449,8 +3452,8 @@ def PatchShapesMut(
             Center[0] + DxValue / Length * TargetEntity.geometry.radius,
             Center[1] + DyValue / Length * TargetEntity.geometry.radius,
         )
-        IsPatchCoordina(Resolved, Profile.marker_offsets[0], Center)
-        IsPatchCoordina(Resolved, Profile.marker_offsets[1], EdgeValue)
+        _ = IsPatchCoordina(Resolved, Profile.marker_offsets[0], Center)
+        _ = IsPatchCoordina(Resolved, Profile.marker_offsets[1], EdgeValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3539,7 +3542,7 @@ def PatchRectangle(
                     )
                 )
             ):
-                IsPatchCoordina(Resolved, Marker.offset, Target)
+                _ = IsPatchCoordina(Resolved, Marker.offset, Target)
                 break
 
 
@@ -4719,7 +4722,7 @@ def WriteTargetMut(
     )
     try:
         with OsModule.fdopen(Descriptor, "wb") as Stream:
-            Stream.write(DataValue)
+            _ = Stream.write(DataValue)
             Stream.flush()
             OsModule.fsync(Stream.fileno())
         OsModule.replace(TemporaryName, PathValue)
@@ -6020,7 +6023,7 @@ def RestoreStream(SourceData: Source, Position: int | None) -> None:
     if Position is None or not callable(SeekValue):
         return
     try:
-        SeekValue(Position)
+        _ = SeekValue(Position)
     except (OSError, ValueError):
         return
 
@@ -6190,7 +6193,7 @@ def Parameters(Model: NativeModel) -> tuple[Param, ...]:
                     ),
                 )
             )
-            DimensionIds.setdefault((Feature.name, Dimension.name), ParamId)
+            _ = DimensionIds.setdefault((Feature.name, Dimension.name), ParamId)
     return ApplyNativeMut(Parameters, Model, DimensionIds)
 
 
@@ -7017,7 +7020,7 @@ def RulePartsMut(
 ]:
     ResolvedRefs = [RefMap.get(RefValue) for RefValue in RuleValue.references]
     References = (
-        [RuleRef(RefValue) for RefValue in ResolvedRefs]
+        [RuleRef(Resolved) for Resolved in ResolvedRefs if Resolved is not None]
         if ResolvedRefs and all(ResolvedRefs)
         else []
     )

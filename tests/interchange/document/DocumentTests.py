@@ -115,9 +115,9 @@ def CheckPayRole(RoleValue: PayloadRole) -> None:
         "custom",
         "v1",
         "0" * 64,
-        PayloadData=b"geometry",
-        ValueRole=RoleValue,
-        FileExtension=".geo",
+        data=b"geometry",
+        role=RoleValue,
+        file_extension=".geo",
     )
     RestoredValue = CadDocument.from_json(
         ReplaceValue(BuildDocument(), brep_payloads=(PayloadValue,)).to_json()
@@ -216,13 +216,13 @@ def CheckOldPayload(
             KindValue,
             SchemaText,
             HashCodec.sha256(b"legacy payload").hexdigest(),
-            PayloadData=b"legacy payload",
-            SourceStream=SourceStream,
+            data=b"legacy payload",
+            source_stream=SourceStream,
         )
     )
     assert isinstance(RawValue, dict)
-    RawValue.pop("role")
-    RawValue.pop("file_extension")
+    _ = RawValue.pop("role")
+    _ = RawValue.pop("file_extension")
     RestoredValue = FromData(RawValue)
     assert isinstance(RestoredValue, BrepPayload)
     RestoredPayload = RestoredValue
@@ -243,21 +243,21 @@ def CheckPartial() -> None:
             "binary",
             "SCH_3500040",
             HashCodec.sha256(b"payload").hexdigest(),
-            PayloadData=b"payload",
-            ValueRole=PayloadRole.KAuxiliary,
-            FileExtension=".custom",
+            data=b"payload",
+            role=PayloadRole.KAuxiliary,
+            file_extension=".custom",
         )
     )
     assert isinstance(RawValue, dict)
     WithoutRole = dict(RawValue)
-    WithoutRole.pop("role")
+    _ = WithoutRole.pop("role")
     RestoredRole = FromData(WithoutRole)
     assert isinstance(RestoredRole, BrepPayload)
     RolePayload = RestoredRole
     assert RolePayload.ValueRole == PayloadRole.KBrep
     assert RolePayload.FileExtension == ".custom"
     WithoutExt = dict(RawValue)
-    WithoutExt.pop("file_extension")
+    _ = WithoutExt.pop("file_extension")
     RestoredExt = FromData(WithoutExt)
     assert isinstance(RestoredExt, BrepPayload)
     ExtPayload = RestoredExt
@@ -275,13 +275,13 @@ def CheckPartial() -> None:
             "native_document_binding",
             "sha256",
             HashCodec.sha256(b"binding").hexdigest(),
-            PayloadData=b"binding",
-            ValueRole=PayloadRole.KDocument,
-            FileExtension=".bin",
+            data=b"binding",
+            role=PayloadRole.KDocument,
+            file_extension=".bin",
         )
     )
     assert isinstance(BindingValue, dict)
-    BindingValue.pop("file_extension")
+    _ = BindingValue.pop("file_extension")
     RestoredBinding = FromData(BindingValue)
     assert isinstance(RestoredBinding, BrepPayload)
     BindingPayload = RestoredBinding
@@ -298,13 +298,13 @@ def CheckUnknown() -> None:
             "opaque",
             "v9",
             HashCodec.sha256(b"unknown").hexdigest(),
-            PayloadData=b"unknown",
-            SourceStream="Container/Opaque.future",
+            data=b"unknown",
+            source_stream="Container/Opaque.future",
         )
     )
     assert isinstance(RawValue, dict)
-    RawValue.pop("role")
-    RawValue.pop("file_extension")
+    _ = RawValue.pop("role")
+    _ = RawValue.pop("file_extension")
     RestoredValue = FromData(RawValue)
     assert isinstance(RestoredValue, BrepPayload)
     RestoredPayload = RestoredValue
@@ -316,13 +316,13 @@ def CheckUnknown() -> None:
 # malformed wire values must fail before they can reach model constructors
 def CheckWireData() -> None:
     with PytestLib.raises(TypeError, match="wire object keys must be strings"):
-        ToData({1: "invalid"})
+        _ = ToData({1: "invalid"})
     with PytestLib.raises(TypeError, match="wire object keys must be strings"):
-        FromData({1: "invalid"})
+        _ = FromData({1: "invalid"})
     with PytestLib.raises(ValueError, match="value must be a list"):
-        FromData({"$tuple": "invalid"})
+        _ = FromData({"$tuple": "invalid"})
     with PytestLib.raises(ValueError, match="type must be nonempty text"):
-        FromData({"$enum": 1, "value": "invalid"})
+        _ = FromData({"$enum": 1, "value": "invalid"})
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -352,8 +352,8 @@ def CheckFiltering() -> None:
                 RoleValue.value,
                 "1",
                 HashCodec.sha256(RoleValue.value.encode("ascii")).hexdigest(),
-                PayloadData=RoleValue.value.encode("ascii"),
-                ValueRole=RoleValue,
+                data=RoleValue.value.encode("ascii"),
+                role=RoleValue,
             )
             for RoleValue in (
                 PayloadRole.KBrep,
@@ -419,8 +419,8 @@ def CheckCapTypes() -> None:
 # diagnostic links may target the same entity without becoming duplicate identities
 def CheckDiagLinks() -> None:
     SourceValue = BuildDocument()
-    FirstValue = Diagnostic("first", "first message", EntityId="body:1")
-    SecondValue = Diagnostic("second", "second message", EntityId="body:1")
+    FirstValue = Diagnostic("first", "first message", entity_id="body:1")
+    SecondValue = Diagnostic("second", "second message", entity_id="body:1")
     ReplaceValue(SourceValue, diagnostics=(FirstValue, SecondValue)).assert_valid()
 
 
@@ -451,8 +451,8 @@ def CheckOrdering() -> None:
         ComponentDef("root", "Root", ComponentKind.KAssembly),
         ComponentDef("part", "Part", ComponentKind.KPart),
     )
-    SecondValue = ComponentInst("second", "Second", "part", "root", Order=1)
-    FirstValue = ComponentInst("first", "First", "part", "root", Order=1)
+    SecondValue = ComponentInst("second", "Second", "part", "root", order=1)
+    FirstValue = ComponentInst("first", "First", "part", "root", order=1)
     AssemblyValue = AssemblyData("root", Definitions, (SecondValue, FirstValue))
     assert AssemblyValue.GetChildren("root") == (FirstValue, SecondValue)
     Capabilities = InferCaps(ReplaceValue(BuildDocument(), assembly=AssemblyValue))
@@ -482,20 +482,22 @@ def CheckOrdering() -> None:
 )
 def CheckExtensions(ExtensionText: str) -> None:
     with PytestLib.raises(ValueError, match="file extension"):
-        BrepPayload("geometry", "kernel", "shape", "", "", FileExtension=ExtensionText)
+        _ = BrepPayload(
+            "geometry", "kernel", "shape", "", "", file_extension=ExtensionText
+        )
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckRoleType() -> None:
     with PytestLib.raises(TypeError, match="PayloadRole"):
-        BrepPayload(
+        _ = BrepPayload(
             "geometry",
             "kernel",
             "shape",
             "",
             "",
-            ValueRole="brep",
-            FileExtension=".brep",
+            role="brep",
+            file_extension=".brep",
         )
 
 

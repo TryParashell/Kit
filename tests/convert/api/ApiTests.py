@@ -34,7 +34,7 @@ from tests.convert.api.ApiTestPaths import KSamplePath
 def CheckApiBridge(TmpPath: FilePath) -> None:
     FormatNames = {AdapterData.format_id for AdapterData in GetAdapters()}
     RegistryData = AdapterRegistry()
-    RegistryData.introspect()
+    _ = RegistryData.introspect()
     assert FormatNames == {
         AdapterData.info.format_id for AdapterData in RegistryData.readers()
     }
@@ -100,7 +100,7 @@ def CheckCarryOut(TmpPath: FilePath) -> None:
 def CheckStrictGate(TmpPath: FilePath) -> None:
     TargetPath = TmpPath / "blocked.CATPart"
     with Pytest.raises(ApplicationUsabilityError) as CapturedError:
-        ConvertLegacy(KSamplePath, TargetPath, allow_carrier=False)
+        _ = ConvertLegacy(KSamplePath, TargetPath, allow_carrier=False)
     assert CapturedError.value.code == "output_not_application_usable"
     assert CapturedError.value.format_id == "catia.v5"
     assert "carrier_only" in CapturedError.value.issues
@@ -119,7 +119,7 @@ def CheckWriteGate(TmpPath: FilePath) -> None:
     assert ResultData.dropped == frozenset()
     StrictPath = TmpPath / "blocked.CATPart"
     with Pytest.raises(ApplicationUsabilityError):
-        WriteLegacy(DocumentData, StrictPath, allow_carrier=False)
+        _ = WriteLegacy(DocumentData, StrictPath, allow_carrier=False)
     assert not StrictPath.exists()
 
 

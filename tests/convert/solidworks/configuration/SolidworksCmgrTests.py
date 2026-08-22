@@ -224,31 +224,31 @@ def TestMVARATPD() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAFDGIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="generation"):
-        EncodeCmgrStream(generation=14000)
+        _ = EncodeCmgrStream(generation=14000)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAEFSIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="at least one solid feature"):
-        EncodeCmgrStream(feature_tree_ids=())
+        _ = EncodeCmgrStream(feature_tree_ids=())
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestASDGCIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="display_geometry_cache"):
-        EncodeCmgrStream(display_geometry_cache=bytes(64))
+        _ = EncodeCmgrStream(display_geometry_cache=bytes(64))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestANDGCIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="display_geometry_cache"):
-        EncodeCmgrStream(display_geometry_cache=b"\x01" + bytes(Bytes - 1))
+        _ = EncodeCmgrStream(display_geometry_cache=b"\x01" + bytes(Bytes - 1))
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestALCWOTIPAIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="tree ids"):
-        EncodeCmgrStream(
+        _ = EncodeCmgrStream(
             feature_tree_ids=(32, 40), link_atom_ids=(101, 102), link_tree_ids=(32,)
         )
 
@@ -256,6 +256,6 @@ def TestALCWOTIPAIR() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAZFATIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="at least one solid feature"):
-        AtomIdsFor(0)
+        _ = AtomIdsFor(0)
     with PytestLib.raises(SldprtFormatError, match="at least one solid feature"):
-        TreeIdsFor(0)
+        _ = TreeIdsFor(0)

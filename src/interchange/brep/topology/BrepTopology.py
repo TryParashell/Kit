@@ -8,8 +8,12 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
 
 from interchange.brep.curves.BrepCurves import BrepEntity
+from interchange.records.RecordProvenance import Provenance
+from typing import Mapping as TypeMap
+from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelDataMut
 from interchange.geometry.models.Transform import Transform, KTransformIdentity
 from interchange.geometry.models.VectorSpace import SpaceVector
@@ -18,8 +22,11 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 # vertices anchor topological incidence to precise spatial points
 @ModelDataMut
 class BrepVertex(BrepEntity):
+    id: str
     point: SpaceVector
     tolerance: float = 0.0
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def Point(self) -> SpaceVector:
@@ -33,6 +40,7 @@ class BrepVertex(BrepEntity):
 # edges connect vertices through exact curve parameter intervals
 @ModelDataMut
 class BrepEdge(BrepEntity):
+    id: str
     start_vertex_id: str
     end_vertex_id: str
     curve_id: str
@@ -40,6 +48,8 @@ class BrepEdge(BrepEntity):
     end_parameter: float
     tolerance: float = 0.0
     degenerate: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def StartVertexId(self) -> str:
@@ -73,9 +83,12 @@ class BrepEdge(BrepEntity):
 # coedges preserve oriented edge use and optional parameter curve bindings
 @ModelDataMut
 class BrepCoedge(BrepEntity):
+    id: str
     edge_id: str
     pcurve_id: str = ""
     reversed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def EdgeId(self) -> str:
@@ -93,8 +106,11 @@ class BrepCoedge(BrepEntity):
 # loops exist because face trimming boundaries require ordered connected coedges
 @ModelDataMut
 class BrepLoop(BrepEntity):
+    id: str
     coedge_ids: tuple[str, ...]
     outer: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def CoedgeIds(self) -> tuple[str, ...]:
@@ -108,8 +124,11 @@ class BrepLoop(BrepEntity):
 # some boundaries have no owning face so standalone coedge groups preserve them
 @ModelDataMut
 class BrepWire(BrepEntity):
+    id: str
     coedge_ids: tuple[str, ...]
     closed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def CoedgeIds(self) -> tuple[str, ...]:
@@ -123,10 +142,13 @@ class BrepWire(BrepEntity):
 # faces bind analytic surfaces to ordered trimming loops
 @ModelDataMut
 class BrepFace(BrepEntity):
+    id: str
     surface_id: str
     loop_ids: tuple[str, ...]
     same_sense: bool = True
     tolerance: float = 0.0
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def SurfaceId(self) -> str:
@@ -148,8 +170,11 @@ class BrepFace(BrepEntity):
 # face uses preserve orientation when shells reuse face definitions
 @ModelDataMut
 class BrepFaceUse(BrepEntity):
+    id: str
     face_id: str
     reversed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def FaceId(self) -> str:
@@ -163,8 +188,11 @@ class BrepFaceUse(BrepEntity):
 # shells collect oriented faces and preserve closure state
 @ModelDataMut
 class BrepShell(BrepEntity):
+    id: str
     face_use_ids: tuple[str, ...]
     closed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def FaceUseIds(self) -> tuple[str, ...]:
@@ -178,8 +206,11 @@ class BrepShell(BrepEntity):
 # shell uses preserve orientation when regions reuse shell definitions
 @ModelDataMut
 class BrepShellUse(BrepEntity):
+    id: str
     shell_id: str
     reversed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def ShellId(self) -> str:
@@ -193,8 +224,11 @@ class BrepShellUse(BrepEntity):
 # regions collect oriented shells and preserve solid classification
 @ModelDataMut
 class BrepRegion(BrepEntity):
+    id: str
     shell_use_ids: tuple[str, ...]
     solid: bool = True
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def ShellUseIds(self) -> tuple[str, ...]:
@@ -208,11 +242,14 @@ class BrepRegion(BrepEntity):
 # bodies connect region wire and vertex topology to document design bodies
 @ModelDataMut
 class BrepBody(BrepEntity):
+    id: str
     region_ids: tuple[str, ...]
     transform: Transform = KTransformIdentity
     design_body_id: str = ""
     wire_ids: tuple[str, ...] = ()
     vertex_ids: tuple[str, ...] = ()
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     @property
     def RegionIds(self) -> tuple[str, ...]:

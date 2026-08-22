@@ -171,7 +171,7 @@ def WriteFolder(
     FolderFlags: int = 0,
     FolderState: int = 0,
 ) -> None:
-    Writer.PutClass(ClassName)
+    _ = Writer.PutClass(ClassName)
     WriteNodeData(Writer, StateData)
     WriteFeatData(Writer, StateData)
     Writer.PutValues("<ii", FolderFlags, FolderState)
@@ -212,11 +212,11 @@ def WriteSysFolder(
 
 # this definition exists because focused behavior needs one stable owner
 def WriteHistItem(Writer: ResolveWriter, FeatureIdent: int, FeatureStamp: int) -> None:
-    Writer.PutClass("moHistoryFeatItemData_c")
+    _ = Writer.PutClass("moHistoryFeatItemData_c")
     Writer.PutNull()
     Writer.PutValues("<iiii", 1, 1073741824, -1, 0)
     Writer.PutString("")
-    Writer.PutClass("moCompFeature_c")
+    _ = Writer.PutClass("moCompFeature_c")
     Writer.PutExtern(43)
     Writer.PutObjRef(2)
     Writer.PutValues(
@@ -266,7 +266,7 @@ def WriteDetailTree(
     FirstState: FeatureState,
     SecondState: FeatureState,
 ) -> None:
-    Writer.PutClass("moDetailCabinet_c")
+    _ = Writer.PutClass("moDetailCabinet_c")
     WriteNodeData(Writer, CabinetState)
     Writer.PutNull()
     Writer.PutValues("<H", 2)
@@ -284,7 +284,7 @@ def WriteEmpty(Writer: ResolveWriter) -> None:
 
 # this definition exists because empty sketch headers form one native record section
 def WriteEmptyHead(Writer: ResolveWriter) -> None:
-    Writer.PutClass("sgSketch")
+    _ = Writer.PutClass("sgSketch")
     Writer.PutValues("<iHii", 1, 0, 0, 1)
     Writer.PutValues("<HHBIHhf", 65535, 31, 3, 4294967295, 65535, -1, -1.0)
     Writer.PutValues("<i4Hhf", 1, 0, 4, 2, 1, 0, -1.0)
@@ -306,7 +306,7 @@ def WriteEmptyHead(Writer: ResolveWriter) -> None:
 def WriteEmptyTail(Writer: ResolveWriter) -> None:
     Writer.PutValues("<HBi4H", 0, 0, 17, 2, 0, 0, 65534)
     Writer.PutValues("<H", 0)
-    Writer.PutClass("sgPointHandle")
+    _ = Writer.PutClass("sgPointHandle")
     Writer.PutValues("<Hii", 0, -1, 0)
     Writer.PutValues("<7H", *[0] * 7)
     Writer.PutExtern(82)
@@ -343,7 +343,7 @@ def WriteEmptyTail(Writer: ResolveWriter) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WriteCompPlane(Writer: ResolveWriter, FeatureStamp: int) -> None:
-    Writer.PutClass("moCompRefPlane_c")
+    _ = Writer.PutClass("moCompRefPlane_c")
     Writer.PutExtern(43)
     Writer.PutObjRef(2)
     Writer.PutValues(
@@ -357,7 +357,7 @@ def WriteCompPlane(Writer: ResolveWriter, FeatureStamp: int) -> None:
 def WriteOrigin(
     Writer: ResolveWriter, StateData: FeatureState, FeatureStamp: int
 ) -> None:
-    Writer.PutClass("moOriginProfileFeature_c")
+    _ = Writer.PutClass("moOriginProfileFeature_c")
     WriteNodeData(Writer, StateData)
     WriteFeatData(Writer, StateData)
     Writer.PutValues("<ii", 0, 0)
@@ -387,7 +387,7 @@ def WriteStockData(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WritePlaneData(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
-    Writer.PutClass("moDefaultRefPlnData_c")
+    _ = Writer.PutClass("moDefaultRefPlnData_c")
     Writer.PutValues("<3d3d", 0.0, 0.0, 0.0, *PlaneData.NormalVec)
     HasMatrix = bool(PlaneData.BasisMatrix)
     Writer.PutValues("<B", int(HasMatrix))
@@ -407,7 +407,7 @@ def WritePlaneData(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WriteRefPlane(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
-    Writer.PutClass("moRefPlane_c")
+    _ = Writer.PutClass("moRefPlane_c")
     WriteNodeData(Writer, PlaneData.FeatureData)
     WriteFeatData(Writer, PlaneData.FeatureData)
     WriteStockData(Writer, PlaneData)

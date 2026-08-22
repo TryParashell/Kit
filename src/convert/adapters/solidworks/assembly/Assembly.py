@@ -15,7 +15,9 @@ import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Sequence, cast as CastValue
-import xml.etree.ElementTree as XmlTree
+
+# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
+import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 from interchange import (
     AssemblyData as AsmData,
     ComponentDefinition,
@@ -29,6 +31,7 @@ from interchange import (
     Matrix4 as MatrixFour,
     ValueKind,
 )
+from convert.adapters.base import ParseUntrusted
 from convert.adapters.solidworks.container.Container import (
     SldprtArchive,
     SldprtFormatError,
@@ -679,7 +682,7 @@ def AddAsmHeader(RootValue: XmlTree.Element, PlanValue: AsmEncodePlan) -> None:
                 if PlanValue.FileKeys[ItemValue.id] == KeyValue
             )
         )
-        XmlTree.SubElement(
+        _ = XmlTree.SubElement(
             Header,
             "swFile",
             {
@@ -702,7 +705,7 @@ def AddAsmReference(
     PlanValue: AsmEncodePlan,
 ) -> None:
     RefValue = RefNumber(Instance, ItemIndex + 1)
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         ModelValue,
         "swReference",
         {
@@ -804,7 +807,7 @@ def AddAsmConfigs(
         {"swObjCount": str(len(PlanValue.SelectedConfigs))},
     )
     for Config in PlanValue.SelectedConfigs:
-        XmlTree.SubElement(
+        _ = XmlTree.SubElement(
             ConfigList,
             "swConfiguration",
             {
@@ -849,7 +852,7 @@ def EncodeNativeAsm(
     AddAsmHeader(RootValue, PlanValue)
     AddAsmModels(RootValue, PlanValue, AsmValue.root_definition_id)
     AddAsmConfigs(RootValue, PlanValue, AsmValue.root_definition_id)
-    XmlTree.SubElement(RootValue, "swExtFeatureList", {"swObjCount": "0"})
+    _ = XmlTree.SubElement(RootValue, "swExtFeatureList", {"swObjCount": "0"})
     Mates = EncodeMateA(
         AsmValue,
         PlanValue.Definitions,
@@ -2209,7 +2212,7 @@ def XmlRoot(DataValue: bytes) -> XmlTree.Element:
     if Marker >= 0:
         DataValue = DataValue[Marker:]
     try:
-        return XmlTree.fromstring(DataValue)
+        return ParseUntrusted(DataValue)
     except XmlTree.ParseError as ErrorInfo:
         raise SldprtFormatError(
             f"invalid assembly component XML: {ErrorInfo}"

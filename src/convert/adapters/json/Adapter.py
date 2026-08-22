@@ -17,6 +17,8 @@ from convert.adapters.json.Reader import JsonReader
 from convert.adapters.json.Writer import JsonWriter
 from interchange.document.models.DocumentModel import CadDocument
 
+from typing_extensions import override as Override
+
 
 # this adapter composes focused reading writing and metadata responsibilities
 class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
@@ -25,10 +27,14 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
     locals()["__slots__"] = KAdapterSlots
 
     # public probing keywords need exact names because structural callers may pass them directly
+    @Override
+    @Override
     def probe(self, source: Source) -> ProbeResult:
         return self.Probe(source)
 
     # public reading keywords need exact names because structural callers may pass them directly
+    @Override
+    @Override
     def read(
         self,
         source: Source,
@@ -37,10 +43,14 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
         return self.ReadAction(source, options)
 
     # public support keywords need exact names because structural callers may pass them directly
+    @Override
+    @Override
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         return self.CanSupport(document, destination)
 
     # public writing keywords need exact names because structural callers may pass them directly
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,

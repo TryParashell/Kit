@@ -901,8 +901,8 @@ def AddHeadMut(Nodes: list[NodeValue], Params: CMgrParameters) -> int:
     AddNullMut(Nodes, Table(KViewStyle))
     AddNullMut(Nodes, DisplayState(Params.display_stamp, Params.session_counter))
     Config = AddDefMut(Nodes, KConfigClass, b"")
-    AddDefMut(Nodes, KNodeNameClass, NodeName(Params.configuration_name))
-    AddDefMut(Nodes, KVisualClass, Visual(Params))
+    _ = AddDefMut(Nodes, KNodeNameClass, NodeName(Params.configuration_name))
+    _ = AddDefMut(Nodes, KVisualClass, Visual(Params))
     AddNullMut(Nodes, Table(KViewStyle))
     AddNullMut(Nodes, DisplayStateA(Params))
     AddNullMut(Nodes, AtomHead(Params.atom_head_count, Params.generation))
@@ -922,7 +922,7 @@ def AddHeadMut(Nodes: list[NodeValue], Params: CMgrParameters) -> int:
 def AddLinksMut(Nodes: list[NodeValue], Params: CMgrParameters) -> None:
     LinkValue = -1
     if Params.terminal_parent_tree_id is not None:
-        AddDefMut(
+        _ = AddDefMut(
             Nodes,
             KLinkClass,
             TerminalLink(
@@ -972,7 +972,7 @@ def AddTailMut(Nodes: list[NodeValue], Params: CMgrParameters, Config: int) -> N
     AddNullMut(Nodes, ReverseTable(Params.reverse_atom_ids))
     AddObjectMut(Nodes, Config, PackAction("u32", 1) + PackAction("u16", 1))
     AddObjectMut(Nodes, Config, PackAction("u32", 1))
-    AddDefMut(Nodes, KExtObjectClass, b"")
+    _ = AddDefMut(Nodes, KExtObjectClass, b"")
     Handle = AddDefMut(Nodes, KStringHandleClass, EncodeString(""))
     AddClassMut(Nodes, Handle, StringHandle(Params))
     ObjList = AddDefMut(Nodes, KObjectListClass, StampList(Params.feature_stamps))

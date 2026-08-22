@@ -243,7 +243,7 @@ def TestGAIVLWNRG() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestGAARIOC() -> None:
     Output = BytesIO()
-    WriteSldprt(AssemblyDocument(), Output)
+    _ = WriteSldprt(AssemblyDocument(), Output)
     DataValue = Output.getvalue()
     Attestation = NativeAttestation(DataValue)
     assert Attestation is not None
@@ -460,7 +460,7 @@ def TestSIMCUTTVR() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPABHNSP(TmpPath: FilePath) -> None:
     OutputPath = TmpPath / "final" / "Engine.SLDASM"
-    WriteDocument(AssemblyDocument(), OutputPath)
+    _ = WriteDocument(AssemblyDocument(), OutputPath)
     HeaderData = b"".join(
         (
             SldprtArchive.open(PathValue).streams["Contents/Config-0-ModelHeader"]
@@ -477,8 +477,8 @@ def TestPABHNSP(TmpPath: FilePath) -> None:
             if PathValue != OutputPath
         )
     )
-    MemberPath.write_bytes(b"stale")
-    WriteDocument(AssemblyDocument(), OutputPath, overwrite=True)
+    _ = MemberPath.write_bytes(b"stale")
+    _ = WriteDocument(AssemblyDocument(), OutputPath, overwrite=True)
     assert MemberPath.read_bytes() != b"stale"
     HeaderData = b"".join(
         (

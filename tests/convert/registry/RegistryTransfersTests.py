@@ -28,6 +28,8 @@ from interchange import CadDocument, Capability
 from interchange.document.models.DocumentCaps import InferCaps
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
+from typing_extensions import override as Override
+
 
 # one sorted capability view keeps transfer fixtures deterministic across hash seeds
 def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
@@ -44,6 +46,8 @@ def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
 class MixedAdapter(ResultAdapter):
 
     # one native transfer plus writer gaps exercises mixed preservation without capability loss
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -79,7 +83,7 @@ def CheckWriterGap() -> None:
     RegistryData.register(MixedAdapter(InfoData))
     TargetData = BytesIO()
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(BuildSource(), TargetData, format_id=InfoData.format_id)
+        _ = RegistryData.write(BuildSource(), TargetData, format_id=InfoData.format_id)
     assert TargetData.getvalue() == b""
     assert ErrorInfo.value.application_usable is True
     assert ErrorInfo.value.vendor_loadable is True
@@ -91,6 +95,8 @@ def CheckWriterGap() -> None:
 class TargetAdapter(ResultAdapter):
 
     # native seed plus intrinsic carriers proves near losslessness accepts target limitations
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -147,6 +153,8 @@ def CheckTargetGap() -> None:
 class OnlyCarrier(ResultAdapter):
 
     # every intrinsic carrier proves native emptiness alone does not make usable output invalid
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,

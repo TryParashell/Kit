@@ -16,8 +16,9 @@ from pathlib import Path as FilePath, PurePosixPath
 import re as RegexLib
 import struct as Struct
 from typing import Any as AnyValue, cast as Cast
-import xml.etree.ElementTree as XmlTree
-import xml.etree.ElementTree as ET
+
+# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
+import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 import zipfile as Zipfile
 from interchange.serialization.WireData import ValidateWireMap
 from interchange.geometry.models.GeometryTypes import KGeometryTypes as GeometryTypes
@@ -199,7 +200,7 @@ def EntryName(NameValue: str) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def DeclaredCount(NodeValue: ET.Element, Actual: int, Label: str) -> None:
+def DeclaredCount(NodeValue: XmlTree.Element, Actual: int, Label: str) -> None:
     Value = NodeValue.get("Count", NodeValue.get("count"))
     if Value is None:
         return
@@ -222,7 +223,9 @@ def ArchiveMembers(
 
 
 # this definition exists because focused behavior needs one stable owner
-def StoredCount(NodeValue: ET.Element, NameValue: str, Actual: int, Label: str) -> None:
+def StoredCount(
+    NodeValue: XmlTree.Element, NameValue: str, Actual: int, Label: str
+) -> None:
     Value = NodeValue.get(NameValue)
     if Value is None:
         return
@@ -235,7 +238,7 @@ def StoredCount(NodeValue: ET.Element, NameValue: str, Actual: int, Label: str) 
 
 
 # this definition validates and indexes native object declarations
-def ParseDecls(ObjectsNode: ET.Element) -> dict[str, tuple[str, int, str, bool]]:
+def ParseDecls(ObjectsNode: XmlTree.Element) -> dict[str, tuple[str, int, str, bool]]:
     Declarations = ObjectsNode.findall("./Object")
     DeclaredCount(ObjectsNode, len(Declarations), "object")
     DeclByName: dict[str, tuple[str, int, str, bool]] = {}
@@ -247,7 +250,7 @@ def ParseDecls(ObjectsNode: ET.Element) -> dict[str, tuple[str, int, str, bool]]
         if not NameValue or not TypeId or NameValue in DeclByName:
             raise NativeFreeCad("FreeCAD object declarations are malformed")
         try:
-            ValidatedObjectName(NameValue)
+            _ = ValidatedObjectName(NameValue)
         except ValueError as ErrorInfo:
             raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
         if ObjectId and ObjectId in IdsValue:
@@ -264,7 +267,7 @@ def ParseDecls(ObjectsNode: ET.Element) -> dict[str, tuple[str, int, str, bool]]
 
 
 # this definition validates and indexes native object data records
-def ParseDataMap(DataNode: ET.Element) -> dict[str, ET.Element]:
+def ParseDataMap(DataNode: XmlTree.Element) -> dict[str, XmlTree.Element]:
     ObjectData = DataNode.findall("./Object")
     DeclaredCount(DataNode, len(ObjectData), "object data")
     DataByName: dict[str, XmlTree.Element] = {}
@@ -278,7 +281,7 @@ def ParseDataMap(DataNode: ET.Element) -> dict[str, ET.Element]:
 
 # this definition validates native object dependency relationships
 def ParseDeps(
-    ObjectsNode: ET.Element, DeclByName: Mapping[str, AnyValue]
+    ObjectsNode: XmlTree.Element, DeclByName: Mapping[str, AnyValue]
 ) -> dict[str, tuple[str, ...]]:
     Dependencies: dict[str, tuple[str, ...]] = {}
     for NodeValue in ObjectsNode.findall("./ObjectDeps"):
@@ -297,8 +300,8 @@ def ParseDeps(
 
 # this definition validates and indexes one native objects persistent properties
 def ParseProps(
-    NameValue: str, ObjectElem: ET.Element
-) -> tuple[tuple[ET.Element, ...], dict[str, ET.Element]]:
+    NameValue: str, ObjectElem: XmlTree.Element
+) -> tuple[tuple[XmlTree.Element, ...], dict[str, XmlTree.Element]]:
     PropertiesElem = ObjectElem.find("./Properties")
     if PropertiesElem is None:
         raise NativeFreeCad(f"FreeCAD object {NameValue!r} has no properties")
@@ -306,7 +309,7 @@ def ParseProps(
     Transient = tuple(PropertiesElem.findall("./_Property"))
     StoredCount(PropertiesElem, "Count", len(Properties), "property")
     StoredCount(PropertiesElem, "TransientCount", len(Transient), "transient property")
-    PropNodes: dict[str, ET.Element] = {}
+    PropNodes: dict[str, XmlTree.Element] = {}
     for NodeValue in Properties:
         PropName = NodeValue.get("name", "")
         if not PropName or PropName in PropNodes:
@@ -318,7 +321,7 @@ def ParseProps(
 
 
 # this definition combines validated declarations data dependencies and properties
-def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
+def ParseObjects(RootValue: XmlTree.Element) -> tuple[NativeObject, ...]:
     ObjectsNode = RootValue.find("./Objects")
     DataNode = RootValue.find("./ObjectData")
     if ObjectsNode is None or DataNode is None:
@@ -350,7 +353,7 @@ def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
 
 # this definition validates every sidecar name referenced by document xml
 def ReferencedNames(
-    RootValue: ET.Element, Members: Mapping[str, Zipfile.ZipInfo]
+    RootValue: XmlTree.Element, Members: Mapping[str, Zipfile.ZipInfo]
 ) -> set[str]:
     Referenced: set[str] = set()
     for NodeValue in RootValue.findall(".//*[@file]"):
@@ -422,7 +425,7 @@ def ProbeNative(DataValue: bytes) -> tuple[float, str]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ElemData(NodeValue: ET.Element) -> dict[str, AnyValue]:
+def ElemData(NodeValue: XmlTree.Element) -> dict[str, AnyValue]:
     Result: dict[str, AnyValue] = {
         "tag": NodeValue.tag,
         "attributes": dict(sorted(NodeValue.attrib.items())),
@@ -655,7 +658,7 @@ def PlacementElem(ObjValue: NativeObject, NameValue: str) -> XmlTree.Element | N
 
 
 # this definition exists because focused behavior needs one stable owner
-def PlacementMatrix(NodeValue: ET.Element | None) -> tuple[float, ...]:
+def PlacementMatrix(NodeValue: XmlTree.Element | None) -> tuple[float, ...]:
     if NodeValue is None:
         return (
             1.0,
@@ -715,7 +718,7 @@ def PlacementMatrix(NodeValue: ET.Element | None) -> tuple[float, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TransformA(NodeValue: ET.Element | None) -> Transform:
+def TransformA(NodeValue: XmlTree.Element | None) -> Transform:
     Values = PlacementMatrix(NodeValue)
     return Transform(
         origin=VectorThree(Values[3], Values[7], Values[11]),
@@ -740,7 +743,7 @@ def ReadExpressions(ObjValue: NativeObject) -> dict[str, str]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PropParamValue(NodeValue: ET.Element) -> ParamValue | None:
+def PropParamValue(NodeValue: XmlTree.Element) -> ParamValue | None:
     TypeId = NodeValue.get("type", "")
     if TypeId == "App::PropertyEnumeration":
         Child = NodeValue.find("./Integer")
@@ -776,7 +779,7 @@ def PropParamValue(NodeValue: ET.Element) -> ParamValue | None:
 
 
 # this definition decodes one line segment geometry record
-def LineAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+def LineAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
     Value = NodeValue.find("./LineSegment")
     if Value is None:
         return None
@@ -786,7 +789,7 @@ def LineAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
 
 
 # this definition decodes one circle geometry record
-def CircleAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+def CircleAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
     Value = NodeValue.find("./Circle")
     if Value is None:
         return None
@@ -795,7 +798,7 @@ def CircleAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
 
 
 # this definition decodes one circular arc geometry record
-def ArcAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+def ArcAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
     Value = NodeValue.find("./ArcOfCircle")
     if Value is None:
         return None
@@ -812,7 +815,7 @@ def ArcAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
 
 
 # this definition decodes one point geometry record
-def PointAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+def PointAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
     Value = NodeValue.find("./GeomPoint")
     if Value is None:
         Value = NodeValue.find("./Point")
@@ -824,7 +827,7 @@ def PointAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
 
 # this definition decodes complete and trimmed ellipse geometry records
 def EllipseAction(
-    NodeValue: ET.Element, TypeId: str
+    NodeValue: XmlTree.Element, TypeId: str
 ) -> tuple[GeomKind, AnyValue] | None:
     IsArc = TypeId == "Part::GeomArcOfEllipse"
     Value = NodeValue.find("./ArcOfEllipse" if IsArc else "./Ellipse")
@@ -850,7 +853,7 @@ def EllipseAction(
 
 # this definition decodes complete and trimmed hyperbola geometry records
 def HyperbolaAction(
-    NodeValue: ET.Element, TypeId: str
+    NodeValue: XmlTree.Element, TypeId: str
 ) -> tuple[GeomKind, AnyValue] | None:
     IsArc = TypeId == "Part::GeomArcOfHyperbola"
     Value = NodeValue.find("./ArcOfHyperbola" if IsArc else "./Hyperbola")
@@ -876,7 +879,7 @@ def HyperbolaAction(
 
 # this definition decodes complete and trimmed parabola geometry records
 def ParabolaAction(
-    NodeValue: ET.Element, TypeId: str
+    NodeValue: XmlTree.Element, TypeId: str
 ) -> tuple[GeomKind, AnyValue] | None:
     IsArc = TypeId == "Part::GeomArcOfParabola"
     Value = NodeValue.find("./ArcOfParabola" if IsArc else "./Parabola")
@@ -901,7 +904,7 @@ def ParabolaAction(
 
 # this definition decodes bezier and spline geometry records
 def SplineAction(
-    NodeValue: ET.Element, TypeId: str
+    NodeValue: XmlTree.Element, TypeId: str
 ) -> tuple[GeomKind, AnyValue] | None:
     Value = NodeValue.find("./BSplineCurve")
     if Value is None:
@@ -942,7 +945,7 @@ def SplineAction(
 
 
 # this definition dispatches each supported geometry record to its focused decoder
-def GeomAction(NodeValue: ET.Element, EntityId: str) -> tuple[GeomKind, AnyValue]:
+def GeomAction(NodeValue: XmlTree.Element, EntityId: str) -> tuple[GeomKind, AnyValue]:
     TypeId = NodeValue.get("type", "")
     Result = None
     if TypeId == "Part::GeomLineSegment":
@@ -970,7 +973,7 @@ def GeomAction(NodeValue: ET.Element, EntityId: str) -> tuple[GeomKind, AnyValue
 
 
 # this definition exists because focused behavior needs one stable owner
-def GeomAxis(Value: ET.Element) -> VectorTwo:
+def GeomAxis(Value: XmlTree.Element) -> VectorTwo:
     if Value.get("MajorAxisX") is not None:
         return VectorTwo(
             Number(Value.get("MajorAxisX"), 1.0), Number(Value.get("MajorAxisY"))
@@ -1505,7 +1508,7 @@ def RuleExpression(Expressions: dict[str, str], Index: int, NameValue: str) -> s
 
 
 # this definition exists because focused behavior needs one stable owner
-def RuleElemSlots(NodeValue: ET.Element) -> tuple[tuple[int, int], ...]:
+def RuleElemSlots(NodeValue: XmlTree.Element) -> tuple[tuple[int, int], ...]:
     ElemIds = NodeValue.get("ElementIds")
     ElemPositions = NodeValue.get("ElementPositions")
     Values: list[tuple[int, int]] = []
@@ -1654,7 +1657,7 @@ def AddSupportMut(
 
 
 # this definition identifies construction geometry from native flags
-def IsConstruction(NodeValue: ET.Element) -> bool:
+def IsConstruction(NodeValue: XmlTree.Element) -> bool:
     ConstructionNode = NodeValue.find("./Construction")
     if ConstructionNode is not None:
         Value = ConstructionNode.get("value", "0").casefold()
@@ -1670,8 +1673,8 @@ def IsConstruction(NodeValue: ET.Element) -> bool:
 # this definition decodes all geometry entities owned by one native sketch
 def SketchEntities(
     SketchId: str,
-    GeomNodes: Sequence[ET.Element],
-    RuleNodes: Sequence[ET.Element],
+    GeomNodes: Sequence[XmlTree.Element],
+    RuleNodes: Sequence[XmlTree.Element],
     Reframe: tuple[float, float, float, float, float, float] | None,
 ) -> list[SketchEntity]:
     FixedIndices = {
@@ -1703,7 +1706,7 @@ def SketchEntities(
 
 # this definition resolves rule references and preserves native slot metadata
 def RuleRefs(
-    NodeValue: ET.Element, Entities: Sequence[SketchEntity]
+    NodeValue: XmlTree.Element, Entities: Sequence[SketchEntity]
 ) -> tuple[list[RuleRef], list[dict[str, AnyValue]]]:
     References: list[RuleRef] = []
     RefSlots: list[dict[str, AnyValue]] = []
@@ -1735,7 +1738,7 @@ def RuleParamMut(
     SketchId: str,
     Index: int,
     NameValue: str,
-    NodeValue: ET.Element,
+    NodeValue: XmlTree.Element,
     Expressions: Mapping[str, str],
     Parameters: list[Parameter],
     Consumed: set[tuple[str, str]],
@@ -1777,7 +1780,7 @@ def RuleParamMut(
 def SketchRulesMut(
     ObjValue: NativeObject,
     SketchId: str,
-    RuleNodes: Sequence[ET.Element],
+    RuleNodes: Sequence[XmlTree.Element],
     Entities: Sequence[SketchEntity],
     Parameters: list[Parameter],
     Consumed: set[tuple[str, str]],
@@ -2254,7 +2257,7 @@ def PartExtrusion(ObjValue: NativeObject) -> ExtrusionFeature:
 
 # this definition collects auxiliary files referenced by one shape property
 def BrepSidecars(
-    NodeValue: ET.Element, FileName: str, Entries: Mapping[str, bytes]
+    NodeValue: XmlTree.Element, FileName: str, Entries: Mapping[str, bytes]
 ) -> list[dict[str, AnyValue]]:
     Sidecars: list[dict[str, AnyValue]] = []
     for Child in NodeValue.findall(".//*[@file]"):
@@ -2271,8 +2274,8 @@ def BrepSidecars(
 def MakeBrepPayload(
     ObjValue: NativeObject,
     PropName: str,
-    NodeValue: ET.Element,
-    PartValue: ET.Element,
+    NodeValue: XmlTree.Element,
+    PartValue: XmlTree.Element,
     DataValue: bytes,
     FileName: str,
     Entries: Mapping[str, bytes],
@@ -2440,7 +2443,7 @@ def BinaryMesh(
 
 # this definition decodes an xml embedded mesh representation
 def XmlMesh(
-    Value: ET.Element,
+    Value: XmlTree.Element,
 ) -> tuple[tuple[VectorThree, ...], tuple[tuple[int, int, int], ...]]:
     if Value.find("./Points") is None:
         return ((), ())
@@ -2463,7 +2466,7 @@ def XmlMesh(
 
 # this definition chooses binary or xml mesh decoding for one property
 def MeshData(
-    Value: ET.Element, Entries: Mapping[str, bytes]
+    Value: XmlTree.Element, Entries: Mapping[str, bytes]
 ) -> tuple[tuple[VectorThree, ...], tuple[tuple[int, int, int], ...]]:
     DataValue = Entries.get(Value.get("file", ""))
     return BinaryMesh(DataValue) if DataValue is not None else XmlMesh(Value)
@@ -2891,7 +2894,7 @@ def ResolveOuter(
         return (None, "absolute external paths are not allowed")
     try:
         Choice = (Source.parent / FileName).resolve(strict=True)
-        Choice.relative_to(State.root)
+        _ = Choice.relative_to(State.root)
     except (OSError, RuntimeError, ValueError):
         return (None, "external reference is missing or outside the document root")
     if IsReparsePath(Choice, State.root):

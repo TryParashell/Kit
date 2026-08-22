@@ -64,7 +64,7 @@ def CheckExactBrep(TmpPath: FilePath) -> None:
     ]
     assert {OutputPath.suffix for OutputPath in OutputPaths} == {".x_b"}
     with Pytest.raises(FileExistsError):
-        ExtractLegacy(DocumentData, TmpPath)
+        _ = ExtractLegacy(DocumentData, TmpPath)
 
 
 # reserved device names need prefixes because extraction must work safely on windows filesystems

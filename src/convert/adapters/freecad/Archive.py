@@ -19,12 +19,15 @@ from pathlib import PurePosixPath
 import re as RegexLib
 import struct as Struct
 import uuid as UuidValue
-import xml.etree.ElementTree as XmlTree
+
+# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
+import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 import zipfile as Zipfile
 import zlib as ZlibValue
 from typing import Iterator, Mapping, TypeGuard
 from interchange import CadDocument as CadDoc
 from interchange.serialization.WireData import ValidateWireMap
+from convert.adapters.base import ParseUntrusted
 from convert.adapters.freecad.Brep import (
     FreeCADBrepWriteError as FreeCadBrepWriteError,
     brep_model_brep as BrepModelBrep,
@@ -341,7 +344,7 @@ def GraphNodesMut(
     )
     DataNode = XmlTree.Element("ObjectData", {"Count": str(len(FeatureData))})
     for Index, Feature in enumerate(Features, start=1):
-        XmlTree.SubElement(
+        _ = XmlTree.SubElement(
             ObjectsNode,
             "Object",
             {
@@ -372,7 +375,7 @@ def ReadDeclNames(ObjectsNode: XmlTree.Element) -> set[str]:
         ObjectId = DeclValue.get("id", "")
         if not NameValue or not TypeId or NameValue in DeclaredNames:
             raise ValueError("FreeCAD object declarations are malformed")
-        ValidatedObject(NameValue)
+        _ = ValidatedObject(NameValue)
         if ObjectId and ObjectId in ObjectIds:
             raise ValueError("FreeCAD object declarations contain duplicate ids")
         DeclaredNames.add(NameValue)
@@ -456,7 +459,7 @@ def ValidatedDocXml(
         raise ValueError("FCStd archive has no safe Document.xml")
     try:
         DocXml = Archive.read(DocInfo)
-        RootValue = XmlTree.fromstring(DocXml)
+        RootValue = ParseUntrusted(DocXml)
     except (
         OSError,
         RuntimeError,
@@ -493,7 +496,7 @@ def ManifestMapping(RawValue: bytes) -> dict[str, object]:
         try:
             ItemValue = next(Values)
         except StopIteration:
-            Stack.pop()
+            _ = Stack.pop()
             continue
         if IsPayloadMap(ItemValue):
             Depth = ParentDepth + 1
@@ -706,7 +709,7 @@ def StringProp(
     NameValue: str, Value: object, *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyString", Dynamic=Dynamic)
-    XmlTree.SubElement(Result, "String", {"value": TextAction(Value)})
+    _ = XmlTree.SubElement(Result, "String", {"value": TextAction(Value)})
     return Result
 
 
@@ -717,7 +720,7 @@ def StringListProp(
     Result = PropAction(NameValue, "App::PropertyStringList", Dynamic=Dynamic)
     Child = XmlTree.SubElement(Result, "StringList", {"count": str(len(Values))})
     for Value in Values:
-        XmlTree.SubElement(Child, "String", {"value": Value})
+        _ = XmlTree.SubElement(Child, "String", {"value": Value})
     return Result
 
 
@@ -726,7 +729,9 @@ def BoolProp(
     NameValue: str, Value: object, *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyBool", Dynamic=Dynamic)
-    XmlTree.SubElement(Result, "Bool", {"value": "true" if bool(Value) else "false"})
+    _ = XmlTree.SubElement(
+        Result, "Bool", {"value": "true" if bool(Value) else "false"}
+    )
     return Result
 
 
@@ -739,7 +744,7 @@ def FloatProp(
     Dynamic: bool = False,
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, PropType, Dynamic=Dynamic)
-    XmlTree.SubElement(Result, "Float", {"value": FmtAction(Value)})
+    _ = XmlTree.SubElement(Result, "Float", {"value": FmtAction(Value)})
     return Result
 
 
@@ -748,14 +753,14 @@ def IntegerProp(
     NameValue: str, Value: object, *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyInteger", Dynamic=Dynamic)
-    XmlTree.SubElement(Result, "Integer", {"value": str(int(Number(Value)))})
+    _ = XmlTree.SubElement(Result, "Integer", {"value": str(int(Number(Value)))})
     return Result
 
 
 # this definition exists because focused behavior needs one stable owner
 def EnumerationProA(NameValue: str, Value: object) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyEnumeration")
-    XmlTree.SubElement(Result, "Integer", {"value": str(int(Number(Value)))})
+    _ = XmlTree.SubElement(Result, "Integer", {"value": str(int(Number(Value)))})
     return Result
 
 
@@ -764,7 +769,7 @@ def VectorProp(
     NameValue: str, Value: tuple[float, float, float], *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyVector", Dynamic=Dynamic)
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         Result,
         "PropertyVector",
         {
@@ -796,7 +801,7 @@ def MakePlacement(
         if SineValue <= 1e-12
         else (FirstCoord / SineValue, SecondCoord / SineValue, ThirdCoord / SineValue)
     )
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         Result,
         "PropertyPlacement",
         {
@@ -819,7 +824,7 @@ def MakePlacement(
 # this definition exists because focused behavior needs one stable owner
 def LinkProp(NameValue: str, Target: str, *, Dynamic: bool = False) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyLink", Dynamic=Dynamic)
-    XmlTree.SubElement(Result, "Link", {"value": Target})
+    _ = XmlTree.SubElement(Result, "Link", {"value": Target})
     return Result
 
 
@@ -830,7 +835,7 @@ def LinkListProp(
     Result = PropAction(NameValue, "App::PropertyLinkList", Dynamic=Dynamic)
     Child = XmlTree.SubElement(Result, "LinkList", {"count": str(len(Targets))})
     for Target in Targets:
-        XmlTree.SubElement(Child, "Link", {"value": Target})
+        _ = XmlTree.SubElement(Child, "Link", {"value": Target})
     return Result
 
 
@@ -841,7 +846,7 @@ def LinkSubListProp(
     Result = PropAction(NameValue, "App::PropertyLinkSubList", Dynamic=Dynamic)
     Child = XmlTree.SubElement(Result, "LinkSubList", {"count": str(len(Targets))})
     for Target, SubElem in Targets:
-        XmlTree.SubElement(Child, "Link", {"obj": Target, "sub": SubElem})
+        _ = XmlTree.SubElement(Child, "Link", {"obj": Target, "sub": SubElem})
     return Result
 
 
@@ -855,7 +860,7 @@ def XlinkProp(
     Status: str | None = "256",
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyXLink", Status=Status)
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         Result, "XLink", {"file": FileValue, "stamp": Stamp, "name": Target}
     )
     return Result
@@ -864,7 +869,7 @@ def XlinkProp(
 # this definition exists because focused behavior needs one stable owner
 def PythonProxyProp(Module: str, ClassName: str) -> XmlTree.Element:
     Result = PropAction("Proxy", "App::PropertyPythonObject")
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         Result,
         "Python",
         {"value": "bnVsbA==", "encoded": "yes", "module": Module, "class": ClassName},
@@ -883,7 +888,7 @@ def XlinkSubProp(
         {"file": "", "stamp": "", "name": Target, "count": str(len(Subelements))},
     )
     for SubElem in Subelements:
-        XmlTree.SubElement(Child, "Sub", {"value": SubElem})
+        _ = XmlTree.SubElement(Child, "Sub", {"value": SubElem})
     return Result
 
 
@@ -892,12 +897,12 @@ def EnumerationProp(
     NameValue: str, Choices: ValueSequence[str], Selected: int, *, Dynamic: bool = False
 ) -> XmlTree.Element:
     Result = PropAction(NameValue, "App::PropertyEnumeration", Dynamic=Dynamic)
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         Result, "Integer", {"value": str(Selected), "CustomEnum": "true"}
     )
     Values = XmlTree.SubElement(Result, "CustomEnumList", {"count": str(len(Choices))})
     for Choice in Choices:
-        XmlTree.SubElement(Values, "Enum", {"value": Choice})
+        _ = XmlTree.SubElement(Values, "Enum", {"value": Choice})
     return Result
 
 
@@ -910,7 +915,7 @@ def ExpressionProp(Expressions: list[tuple[str, str]]) -> XmlTree.Element:
         Result, "ExpressionEngine", {"count": str(len(Expressions))}
     )
     for PathValue, Expression in Expressions:
-        XmlTree.SubElement(
+        _ = XmlTree.SubElement(
             Child, "Expression", {"path": PathValue, "expression": Expression}
         )
     return Result
@@ -947,6 +952,7 @@ class ObjectGraph:
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self) -> None:
+        super().__init__()
         self.Objects: list[Object] = []
         self.Names: set[str] = set()
 
@@ -1176,10 +1182,10 @@ def AppendParamMut(
 ) -> None:
     ParamId = TextAction(ItemValue.get("id"), f"parameter_{RowValue}")
     NameValue = TextAction(ItemValue.get("name"), ParamId)
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         CellsMut, "Cell", {"address": f"A{RowValue}", "content": "'" + NameValue}
     )
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         CellsMut,
         "Cell",
         {
@@ -1201,19 +1207,19 @@ def SheetProps(Instance: ParamCatalog) -> list[XmlTree.Element]:
     Cells = XmlTree.SubElement(
         Sheet, "Cells", {"Count": str(len(Instance.Parameters) * 2), "xlink": "1"}
     )
-    XmlTree.SubElement(Cells, "XLinks", {"count": "0"})
+    _ = XmlTree.SubElement(Cells, "XLinks", {"count": "0"})
     for RowValue, ItemValue in enumerate(Instance.Parameters, start=1):
         AppendParamMut(Cells, Instance, RowValue, ItemValue)
     Result.append(Sheet)
     Widths = PropAction(
         "columnWidths", "Spreadsheet::PropertyColumnWidths", Status="218103808"
     )
-    XmlTree.SubElement(Widths, "ColumnInfo", {"Count": "0"})
+    _ = XmlTree.SubElement(Widths, "ColumnInfo", {"Count": "0"})
     Result.append(Widths)
     Heights = PropAction(
         "rowHeights", "Spreadsheet::PropertyRowHeights", Status="218103808"
     )
-    XmlTree.SubElement(Heights, "RowInfo", {"Count": "0"})
+    _ = XmlTree.SubElement(Heights, "RowInfo", {"Count": "0"})
     Result.append(Heights)
     return Result
 
@@ -1223,6 +1229,7 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self, Parameters: list[dict[str, object]]) -> None:
+        super().__init__()
         self.Parameters: list[dict[str, object]] = []
         self.ByIdentifier: dict[str, dict[str, object]] = {}
         self.Aliases: dict[str, str] = {}
@@ -1367,7 +1374,7 @@ def NativeObject(Value: Mapping[str, object]) -> Object:
     TypeId = TextAction(Value.get("type_id"))
     if not NameValue or not TypeId:
         raise ValueError("native FreeCAD object metadata requires name and type_id")
-    ValidatedObject(NameValue)
+    _ = ValidatedObject(NameValue)
     TransientProperties = [
         ElemValue
         for ItemValue in Sequence(Value.get("transient_properties", []))
@@ -1579,7 +1586,7 @@ def AddPolesMut(
 ) -> None:
     for Point, Weight in zip(Points, Weights, strict=True):
         FirstCoord, SecondCoord = PointTwo(Point)
-        XmlTree.SubElement(
+        _ = XmlTree.SubElement(
             Curve,
             "Pole",
             {
@@ -1596,7 +1603,7 @@ def AddKnotsMut(
     Curve: XmlTree.Element, Knots: list[float], Multiplicities: list[int]
 ) -> None:
     for KnotValue, Multiplicity in zip(Knots, Multiplicities, strict=True):
-        XmlTree.SubElement(
+        _ = XmlTree.SubElement(
             Curve,
             "Knot",
             {"Value": FmtAction(KnotValue), "Mult": str(Multiplicity)},
@@ -1692,7 +1699,7 @@ def GeomDiagnostic(
 def AddLineGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, object]) -> None:
     Start = PointTwo(GeomValue.get("start"))
     EndValue = PointTwo(GeomValue.get("end"))
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         ItemValue,
         "LineSegment",
         {
@@ -1724,7 +1731,7 @@ def AddCircleMut(
     if KindValue == "arc":
         Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
         Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         ItemValue, "ArcOfCircle" if KindValue == "arc" else "Circle", Attributes
     )
 
@@ -1733,7 +1740,7 @@ def AddCircleMut(
 def AddEllipseMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, object]) -> None:
     Center = PointTwo(GeomValue.get("center"))
     MajorAxis = PointTwo(GeomValue.get("major_axis"))
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         ItemValue,
         "Ellipse",
         {
@@ -1775,7 +1782,7 @@ def AddConicGeomMut(
     if KindValue != "hyperbola":
         Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
         Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
-    XmlTree.SubElement(ItemValue, TagValue, Attributes)
+    _ = XmlTree.SubElement(ItemValue, TagValue, Attributes)
 
 
 # this definition exists because neutral parabola geometry needs canonical freecad coordinates
@@ -1798,7 +1805,7 @@ def AddParabGeomMut(
     if KindValue == "arc_parabola":
         Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
         Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
-    XmlTree.SubElement(ItemValue, TagValue, Attributes)
+    _ = XmlTree.SubElement(ItemValue, TagValue, Attributes)
 
 
 # this definition exists because neutral spline geometry needs canonical freecad controls
@@ -1832,7 +1839,7 @@ def AddPointGeomMut(
     ItemValue: XmlTree.Element, GeomValue: Mapping[str, object]
 ) -> None:
     Point = PointTwo(GeomValue.get("point", GeomValue.get("center")))
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         ItemValue,
         "GeomPoint",
         {"X": FmtAction(Point[0]), "Y": FmtAction(Point[1]), "Z": FmtAction(0)},
@@ -1878,7 +1885,7 @@ def AddNeutralMut(
         bool(ClosedIds) and EntityId not in ClosedIds
     )
     Flags = "00000000000000000000000000000010" if Construction else "0" * 32
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         Extensions,
         "GeoExtension",
         {
@@ -1890,7 +1897,7 @@ def AddNeutralMut(
         },
     )
     AddGeomBodyMut(ItemValue, GeomValue, KindValue)
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         ItemValue, "Construction", {"value": "1" if Construction else "0"}
     )
 
@@ -2614,7 +2621,7 @@ def BuildRuleProp(Encoded: list[dict[str, object]]) -> XmlTree.Element:
         Result, "ConstraintList", {"count": str(len(Encoded))}
     )
     for ItemValue in Encoded:
-        XmlTree.SubElement(RuleList, "Constrain", RuleXmlAttrs(ItemValue))
+        _ = XmlTree.SubElement(RuleList, "Constrain", RuleXmlAttrs(ItemValue))
     return Result
 
 
@@ -2969,7 +2976,7 @@ def OrderedProfile(
         Points.append(EndValue if IsPointClose(Current, Start) else Start)
     if not IsPointClose(Points[-1], Points[0]):
         return None
-    Points.pop()
+    _ = Points.pop()
     return Points
 
 
@@ -3298,16 +3305,16 @@ def DefinitionProps(Definition: Mapping[str, object]) -> list[XmlTree.Element]:
 def ShapeProp(FileName: str = "", NameValue: str = "Shape") -> XmlTree.Element:
     Result = PropAction(NameValue, "Part::PropertyPartShape")
     Attributes = {"file": FileName} if FileName else {}
-    XmlTree.SubElement(Result, "Part", Attributes)
+    _ = XmlTree.SubElement(Result, "Part", Attributes)
     if FileName:
-        XmlTree.SubElement(Result, "ElementMap")
+        _ = XmlTree.SubElement(Result, "ElementMap")
     return Result
 
 
 # this definition exists because focused behavior needs one stable owner
 def FilletEdgesProp(FileName: str) -> XmlTree.Element:
     Result = PropAction("Edges", "Part::PropertyFilletEdges")
-    XmlTree.SubElement(Result, "FilletEdges", {"file": FileName})
+    _ = XmlTree.SubElement(Result, "FilletEdges", {"file": FileName})
     return Result
 
 
@@ -3318,7 +3325,7 @@ def EdgeLinkProp(BaseValue: str, EdgeIndices: list[int]) -> XmlTree.Element:
         Result, "LinkSub", {"value": BaseValue, "count": str(len(EdgeIndices))}
     )
     for EdgeIndex in EdgeIndices:
-        XmlTree.SubElement(Child, "Sub", {"value": f"Edge{EdgeIndex}"})
+        _ = XmlTree.SubElement(Child, "Sub", {"value": f"Edge{EdgeIndex}"})
     return Result
 
 
@@ -3599,7 +3606,7 @@ def Expanded(
 # this definition exists because focused behavior needs one stable owner
 def MeshProp(FileName: str) -> XmlTree.Element:
     Result = PropAction("Mesh", "Mesh::PropertyMeshKernel")
-    XmlTree.SubElement(Result, "Mesh", {"file": FileName})
+    _ = XmlTree.SubElement(Result, "Mesh", {"file": FileName})
     return Result
 
 
@@ -3880,7 +3887,7 @@ def ImportArchive(
     DocXml, ChildPayloads = BuildDocXml(
         DocValue, "", Digest, TrustedNativeBreps=TrustedNativeBreps
     )
-    return (XmlTree.fromstring(DocXml), ChildPayloads)
+    return (ParseUntrusted(DocXml), ChildPayloads)
 
 
 # this definition exists because imported document nodes need indexed data and dependency lookup
@@ -4061,11 +4068,11 @@ def MateSubelements(Entity: Mapping[str, object]) -> list[str]:
 # this definition exists because focused behavior needs one stable owner
 def Without(Value: Mapping[str, object]) -> dict[str, object]:
     Result = dict(Value)
-    Result.pop("tessellation", None)
+    _ = Result.pop("tessellation", None)
     Attributes = Result.get("attributes")
     if IsPayloadMap(Attributes):
         Cleaned = dict(Attributes)
-        Cleaned.pop("tessellation", None)
+        _ = Cleaned.pop("tessellation", None)
         Result["attributes"] = Cleaned
     return Result
 
@@ -4280,10 +4287,12 @@ def GroundPropsMut(Joint: Object) -> None:
         Joint.properties.insert(
             1, PropAction("Label", "App::PropertyString", Status="134217728")
         )
-        XmlTree.SubElement(Joint.properties[1], "String", {"value": "GroundedJoint"})
+        _ = XmlTree.SubElement(
+            Joint.properties[1], "String", {"value": "GroundedJoint"}
+        )
     if not any((ItemValue.get("name") == "Label2" for ItemValue in Joint.properties)):
         LabelTwo = PropAction("Label2", "App::PropertyString", Status="67108992")
-        XmlTree.SubElement(LabelTwo, "String", {"value": ""})
+        _ = XmlTree.SubElement(LabelTwo, "String", {"value": ""})
         Joint.properties.append(LabelTwo)
     if not any((ItemValue.get("name") == "Proxy" for ItemValue in Joint.properties)):
         Joint.properties.append(PythonProxyProp("JointObject", "GroundedJoint"))
@@ -4291,7 +4300,7 @@ def GroundPropsMut(Joint: Object) -> None:
         (ItemValue.get("name") == "Visibility" for ItemValue in Joint.properties)
     ):
         Visibility = PropAction("Visibility", "App::PropertyBool", Status="648")
-        XmlTree.SubElement(Visibility, "Bool", {"value": "true"})
+        _ = XmlTree.SubElement(Visibility, "Bool", {"value": "true"})
         Joint.properties.append(Visibility)
 
 
@@ -4876,7 +4885,7 @@ def AddInstanceMut(
     )
     Component.properties.extend(NativeA(NativeValue))
     if IsAssembly:
-        AddOriginMut(Context.Graph, Component)
+        _ = AddOriginMut(Context.Graph, Component)
     if ComponentKind == "assembly" and not bool(Instance.get("flexible")):
         ItemsState.RigidInstanceIds.add(InstanceId)
     Suppressed = bool(Instance.get("suppressed"))
@@ -5105,7 +5114,7 @@ def CreateOuterMut(
         ),
     )
     if IsAssembly:
-        AddOriginMut(Context.Graph, Proxy)
+        _ = AddOriginMut(Context.Graph, Proxy)
     Proxy.properties.extend(
         OuterProps(
             Record,
@@ -5143,7 +5152,7 @@ def AddOuterMut(
         Chain = (*ParentChain, Proxy.name)
         ItemsState.ProxyChainByPath[FullPath] = Chain
         if IsAssembly:
-            AddOuterMut(
+            _ = AddOuterMut(
                 Context,
                 ItemsState,
                 RootPath,
@@ -5161,7 +5170,7 @@ def AddOuterMut(
 # this definition exists because every external assembly link needs its occurrence proxy tree
 def AddOutersMut(Context: AsmContext, ItemsState: AsmItems) -> None:
     for RootPath, Component, Outer in ItemsState.AsmLinkRecords:
-        AddOuterMut(
+        _ = AddOuterMut(
             Context,
             ItemsState,
             RootPath,
@@ -5887,7 +5896,7 @@ def GroupLinksMut(MatesGroup: Object, MateChildren: list[str]) -> None:
     LinkList.clear()
     LinkList.set("count", str(len(MateChildren)))
     for Target in MateChildren:
-        XmlTree.SubElement(LinkList, "Link", {"value": Target})
+        _ = XmlTree.SubElement(LinkList, "Link", {"value": Target})
 
 
 # this definition exists because joint groups require standard label expression and visibility properties
@@ -5898,15 +5907,15 @@ def JointPropsMut(MatesGroup: Object) -> None:
         MatesGroup.properties.insert(0, ExpressionProp([]))
     if not any(Value.get("name") == "Label" for Value in MatesGroup.properties):
         LabelProp = PropAction("Label", "App::PropertyString", Status="134217728")
-        XmlTree.SubElement(LabelProp, "String", {"value": "Joints"})
+        _ = XmlTree.SubElement(LabelProp, "String", {"value": "Joints"})
         MatesGroup.properties.append(LabelProp)
     if not any(Value.get("name") == "Label2" for Value in MatesGroup.properties):
         LabelTwoProp = PropAction("Label2", "App::PropertyString", Status="67108992")
-        XmlTree.SubElement(LabelTwoProp, "String", {"value": ""})
+        _ = XmlTree.SubElement(LabelTwoProp, "String", {"value": ""})
         MatesGroup.properties.append(LabelTwoProp)
     if not any(Value.get("name") == "Visibility" for Value in MatesGroup.properties):
         VisibilityProp = PropAction("Visibility", "App::PropertyBool", Status="648")
-        XmlTree.SubElement(VisibilityProp, "Bool", {"value": "true"})
+        _ = XmlTree.SubElement(VisibilityProp, "Bool", {"value": "true"})
         MatesGroup.properties.append(VisibilityProp)
 
 
@@ -6114,10 +6123,10 @@ def DocProperties(Label: str, DocId: str, DocTimestamp: str) -> XmlTree.Element:
     )
     for NameValue in ("CreationDate", "LastModifiedDate"):
         Timestamp = PropAction(NameValue, "App::PropertyString", Status="16777217")
-        XmlTree.SubElement(Timestamp, "String", {"value": DocTimestamp})
+        _ = XmlTree.SubElement(Timestamp, "String", {"value": DocTimestamp})
         Properties.append(Timestamp)
     UidValue = PropAction("Uid", "App::PropertyUUID", Status="16777217")
-    XmlTree.SubElement(
+    _ = XmlTree.SubElement(
         UidValue,
         "Uuid",
         {"value": str(UuidValue.uuid5(UuidValue.NAMESPACE_URL, DocId))},
@@ -6137,7 +6146,7 @@ def SerializeObject(Parent: ET.Element, ObjValue: Object) -> None:
             ElemValue, "Extensions", {"Count": str(len(ObjValue.extensions))}
         )
         for Extension in ObjValue.extensions:
-            XmlTree.SubElement(
+            _ = XmlTree.SubElement(
                 Extensions,
                 "Extension",
                 {"type": Extension, "name": Extension.rsplit("::", 1)[-1]},
@@ -6169,7 +6178,7 @@ def SanitizePayload(Objects: list[Object], PayloadEntries: Mapping[str, bytes]) 
                 Parent = Stack.pop()
                 FileName = Parent.get("file", "")
                 if Parent.tag != "XLink" and FileName not in PayloadEntries:
-                    Parent.attrib.pop("file", None)
+                    _ = Parent.attrib.pop("file", None)
                 for Child in list(Parent):
                     FileName = Child.get("file", "")
                     if (
@@ -7952,7 +7961,7 @@ def AddDepsMut(Graph: ObjectGraph, Objects: XmlTree.Element) -> None:
             {"Name": ObjValue.name, "Count": str(len(Dependencies))},
         )
         for Target in Dependencies:
-            XmlTree.SubElement(Dependency, "Dep", {"Name": Target})
+            _ = XmlTree.SubElement(Dependency, "Dep", {"Name": Target})
 
 
 # this definition exists because object ids must remain unique while preserving native assignments
@@ -7971,7 +7980,7 @@ def AddObjectsMut(Graph: ObjectGraph, Objects: XmlTree.Element) -> None:
         Attributes = {"type": ObjValue.type_id, "name": ObjValue.name, "id": ObjectId}
         if ObjValue.touched:
             Attributes["Touched"] = "1"
-        XmlTree.SubElement(Objects, "Object", Attributes)
+        _ = XmlTree.SubElement(Objects, "Object", Attributes)
 
 
 # this definition exists because object property data must follow the emitted object ordering

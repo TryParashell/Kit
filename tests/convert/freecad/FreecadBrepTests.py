@@ -220,7 +220,7 @@ def TestTriangle(
     Message: str,
 ) -> None:
     with Pytest.raises(ValueError, match=Message):
-        TriangleMeshBrep(Vertices, Triangles)
+        _ = TriangleMeshBrep(Vertices, Triangles)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -540,7 +540,7 @@ def TestNeutralBreA() -> None:
     with Pytest.raises(
         FreeCadBrepWriteError, match="writer_unimplemented.*NativeCurve"
     ) as Error:
-        BrepModelBrep(Unsupported)
+        _ = BrepModelBrep(Unsupported)
     assert Error.value.reason == "writer_unimplemented"
 
 
@@ -558,7 +558,7 @@ def TestNeutralBreB() -> None:
     with Pytest.raises(
         FreeCadBrepWriteError, match="writer_unimplemented.*identity body transforms"
     ):
-        BrepModelBrep(Transformed)
+        _ = BrepModelBrep(Transformed)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -716,7 +716,7 @@ def TestPublicSdkA(TmpPath: Path) -> None:
     DocValue = RawBrepDoc(DataValue)
     Blocked = TmpPath / "blocked.FCStd"
     with Pytest.raises(AppUsabilityError) as Captured:
-        WriteDoc(DocValue, Blocked, allow_carrier=False)
+        _ = WriteDoc(DocValue, Blocked, allow_carrier=False)
     assert (
         Captured.value.carrier_reasons[Capability.BREP] is CarrierReason.SOURCE_OPAQUE
     )
@@ -862,7 +862,7 @@ def TestUnsupported() -> None:
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestPeriodicIs(TmpPath: Path) -> None:
     PathValue = ResolveTemp(TmpPath / "cylinder-band.brp")
-    PathValue.write_bytes(BrepModelBrep(CylinderBand()))
+    _ = PathValue.write_bytes(BrepModelBrep(CylinderBand()))
     CodeValue = "import os;import Part;s=Part.Shape();s.read(os.environ['KIT_ORACLE_PATH']);print('KIT_SEAM',s.ShapeType,len(s.Faces),len(s.Wires),len(s.Edges),len(s.Vertexes),s.isValid())"
     OracleEnv = OsModule.environ.copy()
     OracleEnv["KIT_ORACLE_PATH"] = str(PathValue)
@@ -888,14 +888,14 @@ def TestPeriodicIs(TmpPath: Path) -> None:
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestTriangleAs(TmpPath: Path) -> None:
     Tetrahedron = ResolveTemp(TmpPath / "tetrahedron.brp")
-    Tetrahedron.write_bytes(
+    _ = Tetrahedron.write_bytes(
         TriangleMeshBrep(
             ((0, 0, 0), (2, 0, 0), (0, 3, 0), (0, 0, 4)),
             ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)),
         )
     )
     Square = ResolveTemp(TmpPath / "square.brp")
-    Square.write_bytes(
+    _ = Square.write_bytes(
         TriangleMeshBrep(
             ((0, 0, 0), (2, 0, 0), (2, 3, 0), (0, 3, 0)), ((0, 1, 2), (0, 2, 3))
         )

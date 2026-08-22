@@ -22,4 +22,6 @@ def WriteSkills() -> None:
     for SkillName in sorted(KDescriptions):
         TargetFile = GetTargetPath(SkillName)
         TargetFile.parent.mkdir(parents=True, exist_ok=True)
-        TargetFile.write_text(RenderSkill(SkillName), encoding="utf-8", newline="\n")
+        _ = TargetFile.write_text(
+            RenderSkill(SkillName), encoding="utf-8", newline="\n"
+        )

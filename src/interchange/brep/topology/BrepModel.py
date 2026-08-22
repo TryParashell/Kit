@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+# shared empty set keeps parameter defaults free of repeated constructor calls
+KNoDesignBodies: frozenset[str] = frozenset()
+
 from interchange.brep.curves.BrepCurves import BrepCurve
 from interchange.brep.curves.BrepPcurves import BrepPcurve
 from interchange.brep.surfaces.BrepSurfaces import BrepSurface

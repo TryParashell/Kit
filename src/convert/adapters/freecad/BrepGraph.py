@@ -264,6 +264,27 @@ class ModelGraph:
 
     # graph consumers need initialized ownership indexes before topology queries begin
     def __init__(self, Model: BrepModel) -> None:
+        super().__init__()
+        self.bodies = {}
+        self.coedge_owner = {}
+        self.coedges = {}
+        self.curves = {}
+        self.edge_uses = {}
+        self.edges = {}
+        self.face_uses = {}
+        self.faces = {}
+        self.loop_face = {}
+        self.loops = {}
+        self.pcurves = {}
+        self.region_body = {}
+        self.regions = {}
+        self.shell_owners = {}
+        self.shell_uses = {}
+        self.shells = {}
+        self.surfaces = {}
+        self.vertices = {}
+        self.wire_body = {}
+        self.wires = {}
         InitGraph(self, Model)
 
     # graph construction keeps this binding private so parent ownership cannot diverge

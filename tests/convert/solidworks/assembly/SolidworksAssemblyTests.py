@@ -200,7 +200,7 @@ def TestSCRNB(CoreItems: tuple[AsmCoreItem, ...]) -> None:
     QuarterTurn = (0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
     RotatedItems = (ReplaceData(CoreItems[0], BasisVals=QuarterTurn), *CoreItems[1:])
     with PytestLib.raises(ValueError, match="requires identity component bases"):
-        EncodeAsmCore("StaticCore", "Default", RotatedItems)
+        _ = EncodeAsmCore("StaticCore", "Default", RotatedItems)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

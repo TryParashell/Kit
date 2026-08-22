@@ -29,6 +29,8 @@ from convert.engine import ConversionEngine
 from interchange import CadDocument, Capability
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
+from typing_extensions import override as Override
+
 
 # source identity must retain an adapters reported alias rather than caller normalization
 def CheckSrcAlias() -> None:
@@ -96,7 +98,7 @@ def CheckMetaRule(
 ) -> None:
     with Pytest.raises(ValueError, match="contradicts the write result"):
         if FieldName == "application_usable":
-            WriteResult(
+            _ = WriteResult(
                 None,
                 "format.contradictory",
                 0,
@@ -104,7 +106,7 @@ def CheckMetaRule(
                 application_usable=False,
             )
         else:
-            WriteResult(
+            _ = WriteResult(
                 None,
                 "format.contradictory",
                 0,
@@ -116,7 +118,7 @@ def CheckMetaRule(
 # application usability implies vendor loading because unusable vendor output cannot satisfy that claim
 def CheckUsableRule() -> None:
     with Pytest.raises(ValueError, match="must be vendor-loadable"):
-        WriteResult(
+        _ = WriteResult(
             None,
             "format.impossible",
             0,
@@ -174,6 +176,8 @@ def CheckCarFacts() -> None:
 class LoadableAdapter(ResultAdapter):
 
     # partial usability evidence exercises the registrys independent field preservation
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -222,7 +226,7 @@ def CheckErrorMap() -> None:
     RegistryData = AdapterRegistry()
     RegistryData.register(ResultAdapter(InfoData))
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(BuildSource(), BytesIO(), format_id=InfoData.format_id)
+        _ = RegistryData.write(BuildSource(), BytesIO(), format_id=InfoData.format_id)
     ErrorData = ErrorInfo.value
     assert ErrorData.code == "output_not_application_usable"
     assert ErrorData.issues == (

@@ -347,8 +347,12 @@ class SketchArc:
     FullCircle = IsFullCircle
 
 
-# this definition exists because swept arc coordinate properties form one geometric interface
-class ArcGeometry:
+# this definition exists because swept arc storage composes geometric and angular behavior
+@Dataclass(frozen=True, slots=True)
+class SweptArc:
+    centre_offset: int
+    start_offset: int
+    end_offset: int
     centre_x_mm: float
     centre_y_mm: float
     start_x_mm: float
@@ -358,116 +362,106 @@ class ArcGeometry:
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def CentreMm(Instance) -> tuple[float, float]:
-        return (Instance.centre_x_mm, Instance.centre_y_mm)
+    def CentreMm(self) -> tuple[float, float]:
+        return (self.centre_x_mm, self.centre_y_mm)
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def centre_mm(Instance) -> tuple[float, float]:
-        return Instance.CentreMm
+    def centre_mm(self) -> tuple[float, float]:
+        return self.CentreMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def StartMm(Instance) -> tuple[float, float]:
-        return (Instance.start_x_mm, Instance.start_y_mm)
+    def StartMm(self) -> tuple[float, float]:
+        return (self.start_x_mm, self.start_y_mm)
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def start_mm(Instance) -> tuple[float, float]:
-        return Instance.StartMm
+    def start_mm(self) -> tuple[float, float]:
+        return self.StartMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def EndMm(Instance) -> tuple[float, float]:
-        return (Instance.end_x_mm, Instance.end_y_mm)
+    def EndMm(self) -> tuple[float, float]:
+        return (self.end_x_mm, self.end_y_mm)
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def end_mm(Instance) -> tuple[float, float]:
-        return Instance.EndMm
+    def end_mm(self) -> tuple[float, float]:
+        return self.EndMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def RadiusMm(Instance) -> float:
+    def RadiusMm(self) -> float:
         return MathValue.hypot(
-            Instance.start_x_mm - Instance.centre_x_mm,
-            Instance.start_y_mm - Instance.centre_y_mm,
+            self.start_x_mm - self.centre_x_mm,
+            self.start_y_mm - self.centre_y_mm,
         )
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def radius_mm(Instance) -> float:
-        return Instance.RadiusMm
+    def radius_mm(self) -> float:
+        return self.RadiusMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def EndRadiusMm(Instance) -> float:
+    def EndRadiusMm(self) -> float:
         return MathValue.hypot(
-            Instance.end_x_mm - Instance.centre_x_mm,
-            Instance.end_y_mm - Instance.centre_y_mm,
+            self.end_x_mm - self.centre_x_mm,
+            self.end_y_mm - self.centre_y_mm,
         )
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def end_radius_mm(Instance) -> float:
-        return Instance.EndRadiusMm
+    def end_radius_mm(self) -> float:
+        return self.EndRadiusMm
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def IsConsistent(Instance) -> bool:
-        Radius = Instance.radius_mm
+    def IsConsistent(self) -> bool:
+        Radius = self.radius_mm
         if Radius <= KMinimumRadiusMm:
             return False
-        return abs(Instance.end_radius_mm - Radius) <= max(
+        return abs(self.end_radius_mm - Radius) <= max(
             KArcRadiusToleranceMm, Radius * 1e-09
         )
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def consistent(Instance) -> bool:
-        return Instance.IsConsistent
+    def consistent(self) -> bool:
+        return self.IsConsistent
 
     Consistent = IsConsistent
 
-
-# this definition exists because swept arc angular properties form one directional interface
-class ArcAngles:
-    centre_x_mm: float
-    centre_y_mm: float
-    start_x_mm: float
-    start_y_mm: float
-    end_x_mm: float
-    end_y_mm: float
-
     # this definition exists because focused behavior needs one stable owner
     @property
-    def StartAngle(Instance) -> float:
+    def StartAngle(self) -> float:
         return MathValue.degrees(
             MathValue.atan2(
-                Instance.start_y_mm - Instance.centre_y_mm,
-                Instance.start_x_mm - Instance.centre_x_mm,
+                self.start_y_mm - self.centre_y_mm,
+                self.start_x_mm - self.centre_x_mm,
             )
         )
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def start_angle_degrees(Instance) -> float:
-        return Instance.StartAngle
+    def start_angle_degrees(self) -> float:
+        return self.StartAngle
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def EndAngleDegrees(Instance) -> float:
+    def EndAngleDegrees(self) -> float:
         return MathValue.degrees(
             MathValue.atan2(
-                Instance.end_y_mm - Instance.centre_y_mm,
-                Instance.end_x_mm - Instance.centre_x_mm,
+                self.end_y_mm - self.centre_y_mm,
+                self.end_x_mm - self.centre_x_mm,
             )
         )
 
     # this definition exists because compatibility callers retain the original property spelling
     @property
-    def end_angle_degrees(Instance) -> float:
-        return Instance.EndAngleDegrees
+    def end_angle_degrees(self) -> float:
+        return self.EndAngleDegrees
 
     # this definition exists because focused behavior needs one stable owner
     def SweepAngle(self, Counterclockwise: bool) -> float:
@@ -482,20 +476,6 @@ class ArcAngles:
 
     def sweep_angle_degrees(self, Counterclockwise: bool) -> float:
         return self.SweepAngle(Counterclockwise)
-
-
-# this definition exists because swept arc storage composes geometric and angular behavior
-@Dataclass(frozen=True, slots=True)
-class SweptArc(ArcGeometry, ArcAngles):
-    centre_offset: int
-    start_offset: int
-    end_offset: int
-    centre_x_mm: float
-    centre_y_mm: float
-    start_x_mm: float
-    start_y_mm: float
-    end_x_mm: float
-    end_y_mm: float
 
 
 # this definition exists because core feature identity fields share one immutable record
@@ -513,98 +493,6 @@ class FeatureCore:
     arcs: tuple[SketchArc, ...]
 
 
-# this definition exists because derived feature geometry belongs outside immutable field storage
-class LayoutMath:
-    kind: str
-    angle_radians: float | None
-    points: tuple[SketchPoint, ...]
-    arcs: tuple[SketchArc, ...]
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def IsRevolution(Instance) -> bool:
-        return Instance.kind in KRevolveKinds
-
-    # this definition exists because compatibility callers retain the original property spelling
-    @property
-    def is_revolution(Instance) -> bool:
-        return Instance.IsRevolution
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def AngleDegrees(Instance) -> float | None:
-        if Instance.angle_radians is None:
-            return None
-        return Instance.angle_radians * KRadiansToDegrees
-
-    # this definition exists because compatibility callers retain the original property spelling
-    @property
-    def angle_degrees(Instance) -> float | None:
-        return Instance.AngleDegrees
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def CornersMm(Instance) -> tuple[tuple[float, float], ...]:
-        return tuple(((Point.x_mm, Point.y_mm) for Point in Instance.points))
-
-    # this definition exists because compatibility callers retain the original property spelling
-    @property
-    def corners_mm(Instance) -> tuple[tuple[float, float], ...]:
-        return Instance.CornersMm
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def RadiiMm(Instance) -> tuple[float, ...]:
-        return tuple((ArcValue.radius_mm for ArcValue in Instance.arcs))
-
-    # this definition exists because compatibility callers retain the original property spelling
-    @property
-    def radii_mm(Instance) -> tuple[float, ...]:
-        return Instance.RadiiMm
-
-
-# this definition exists because feature bounds derive independently from other layout properties
-class LayoutBounds:
-    points: tuple[SketchPoint, ...]
-    arcs: tuple[SketchArc, ...]
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def BoundsMm(Instance) -> tuple[float, float, float, float] | None:
-        if Instance.points:
-            XsValue = tuple((Point.x_mm for Point in Instance.points))
-            YsValue = tuple((Point.y_mm for Point in Instance.points))
-            return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
-        if Instance.arcs:
-            XsValue = tuple(
-                (
-                    Value
-                    for ArcValue in Instance.arcs
-                    for Value in (
-                        ArcValue.centre_x_mm - ArcValue.radius_mm,
-                        ArcValue.centre_x_mm + ArcValue.radius_mm,
-                    )
-                )
-            )
-            YsValue = tuple(
-                (
-                    Value
-                    for ArcValue in Instance.arcs
-                    for Value in (
-                        ArcValue.centre_y_mm - ArcValue.radius_mm,
-                        ArcValue.centre_y_mm + ArcValue.radius_mm,
-                    )
-                )
-            )
-            return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
-        return None
-
-    # this definition exists because compatibility callers retain the original property spelling
-    @property
-    def bounds_mm(Instance) -> tuple[float, float, float, float] | None:
-        return Instance.BoundsMm
-
-
 # this definition exists because required depth metadata extends stable feature identity fields
 @Dataclass(frozen=True, slots=True)
 class FeatureDepth(FeatureCore):
@@ -619,7 +507,7 @@ class FeatureDepth(FeatureCore):
 
 # this definition exists because optional feature geometry extends the stable identity record
 @Dataclass(frozen=True, slots=True)
-class FeatureLayout(LayoutMath, LayoutBounds, FeatureDepth):
+class FeatureLayout(FeatureDepth):
     from_reverse_offset: int | None = None
     angle_offset: int | None = None
     angle_radians: float | None = None
@@ -631,6 +519,84 @@ class FeatureLayout(LayoutMath, LayoutBounds, FeatureDepth):
     swept_arcs: tuple[SweptArc, ...] = ()
     SketchDimensionOffsets: tuple[int, ...] = ()
     SketchDimensionsMm: tuple[float, ...] = ()
+
+    # this definition exists because focused behavior needs one stable owner
+    @property
+    def IsRevolution(self) -> bool:
+        return self.kind in KRevolveKinds
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def is_revolution(self) -> bool:
+        return self.IsRevolution
+
+    # this definition exists because focused behavior needs one stable owner
+    @property
+    def AngleDegrees(self) -> float | None:
+        if self.angle_radians is None:
+            return None
+        return self.angle_radians * KRadiansToDegrees
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def angle_degrees(self) -> float | None:
+        return self.AngleDegrees
+
+    # this definition exists because focused behavior needs one stable owner
+    @property
+    def CornersMm(self) -> tuple[tuple[float, float], ...]:
+        return tuple(((Point.x_mm, Point.y_mm) for Point in self.points))
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def corners_mm(self) -> tuple[tuple[float, float], ...]:
+        return self.CornersMm
+
+    # this definition exists because focused behavior needs one stable owner
+    @property
+    def RadiiMm(self) -> tuple[float, ...]:
+        return tuple((ArcValue.radius_mm for ArcValue in self.arcs))
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def radii_mm(self) -> tuple[float, ...]:
+        return self.RadiiMm
+
+    # this definition exists because focused behavior needs one stable owner
+    @property
+    def BoundsMm(self) -> tuple[float, float, float, float] | None:
+        if self.points:
+            XsValue = tuple((Point.x_mm for Point in self.points))
+            YsValue = tuple((Point.y_mm for Point in self.points))
+            return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
+        if self.arcs:
+            XsValue = tuple(
+                (
+                    Value
+                    for ArcValue in self.arcs
+                    for Value in (
+                        ArcValue.centre_x_mm - ArcValue.radius_mm,
+                        ArcValue.centre_x_mm + ArcValue.radius_mm,
+                    )
+                )
+            )
+            YsValue = tuple(
+                (
+                    Value
+                    for ArcValue in self.arcs
+                    for Value in (
+                        ArcValue.centre_y_mm - ArcValue.radius_mm,
+                        ArcValue.centre_y_mm + ArcValue.radius_mm,
+                    )
+                )
+            )
+            return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
+        return None
+
+    # this definition exists because compatibility callers retain the original property spelling
+    @property
+    def bounds_mm(self) -> tuple[float, float, float, float] | None:
+        return self.BoundsMm
 
 
 # this definition exists because focused behavior needs one stable owner

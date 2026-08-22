@@ -35,7 +35,7 @@ KEmptyKeywords: frozenset[str] = frozenset()
 
 # wire lookup requires validated dataclass metadata before accepting dynamic model classes
 def GetRecordType(ClassType: type[object]) -> type[DataRecord]:
-    GetFieldMap(ClassType)
+    _ = GetFieldMap(ClassType)
     return CastValue(type[DataRecord], ClassType)
 
 
@@ -80,27 +80,25 @@ class ModelBase(metaclass=ModelMeta):
 
 # direct decoration retains concrete model types when no configuration wrapper is needed
 @TypeOverload
-@ModelTransform(frozen_default=True, field_spec=("FieldOverrides",))
+@ModelTransform(frozen_default=True)
 def ModelDataMut(
     ClassType: type[ModelValue],
     *,
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = KEmptyKeywords,
-    FieldOverrides: TypeMap[str, object] | None = None,
 ) -> type[ModelValue]: ...  # lgtm[py/ineffectual-statement]
 
 
 # configured decoration retains concrete model types after defaults are installed
 @TypeOverload
-@ModelTransform(frozen_default=True, field_spec=("FieldOverrides",))
+@ModelTransform(frozen_default=True)
 def ModelDataMut(
     ClassType: None = None,
     *,
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = KEmptyKeywords,
-    FieldOverrides: TypeMap[str, object] | None = None,
 ) -> ValueFactory[[type[ModelValue]], type[ModelValue]]: ...  # lgtm[py/ineffectual-statement]
 
 
@@ -111,24 +109,17 @@ def ModelDataMut(
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = KEmptyKeywords,
-    FieldOverrides: TypeMap[str, object] | None = None,
 ) -> object:
 
     # class mutation is isolated here because dataclasses require defaults before transformation
     def ApplyModelMut(TargetType: type) -> type:
-        for FieldName, FieldOverride in (FieldOverrides or {}).items():
-            setattr(TargetType, FieldName, FieldOverride)
         for FieldName, DefaultValue in (DefaultMap or {}).items():
-            if FieldName in (FieldOverrides or {}):
-                continue
             FieldInfo = MakeDataField(
                 default=DefaultValue,
                 kw_only=FieldName in KeywordOnly,
             )
             setattr(TargetType, FieldName, FieldInfo)
         for FieldName, FactoryValue in (FactoryMap or {}).items():
-            if FieldName in (FieldOverrides or {}):
-                continue
             FieldInfo = MakeDataField(
                 default_factory=FactoryValue,
                 kw_only=FieldName in KeywordOnly,

@@ -17,10 +17,11 @@ class RepoFixture:
 
     # every fixture needs deterministic authorship before it can create comparable revisions
     def __init__(self, RootPath: FilePath) -> None:
+        super().__init__()
         self.RootPath = RootPath
-        self.RunGit("init", "--quiet")
-        self.RunGit("config", "user.name", "Policy Tests")
-        self.RunGit("config", "user.email", "policy@example.invalid")
+        _ = self.RunGit("init", "--quiet")
+        _ = self.RunGit("config", "user.name", "Policy Tests")
+        _ = self.RunGit("config", "user.email", "policy@example.invalid")
 
     # one checked process helper turns setup failures into immediately useful test failures
     def RunGit(self, *ArgItems: str) -> str:
@@ -38,14 +39,14 @@ class RepoFixture:
     def WriteFile(self, RepoPath: str, ContentText: str = "sample\n") -> None:
         TargetPath = self.RootPath / RepoPath
         TargetPath.parent.mkdir(parents=True, exist_ok=True)
-        TargetPath.write_text(ContentText, encoding="utf-8")
+        _ = TargetPath.write_text(ContentText, encoding="utf-8")
 
     # git performs fixture moves so rename detection observes the same index metadata as production
     def MoveFile(self, OldPath: str, NewPath: str) -> None:
-        self.RunGit("mv", OldPath, NewPath)
+        _ = self.RunGit("mv", OldPath, NewPath)
 
     # focused commits expose stable refs for changed destination and head tree assertions
     def CommitAll(self, MsgText: str) -> str:
-        self.RunGit("add", "--all")
-        self.RunGit("commit", "--quiet", "-m", MsgText)
+        _ = self.RunGit("add", "--all")
+        _ = self.RunGit("commit", "--quiet", "-m", MsgText)
         return self.RunGit("rev-parse", "HEAD")

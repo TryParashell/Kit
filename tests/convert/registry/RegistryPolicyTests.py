@@ -25,11 +25,15 @@ from convert.adapters import (
 from interchange import CadDocument, Capability
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
+from typing_extensions import override as Override
+
 
 # requirement producing output isolates dependency policy from carrier and capability behavior
 class NeedAdapter(ResultAdapter):
 
     # external dependency evidence exercises default and self contained rejection gates
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -63,7 +67,7 @@ def CheckNeeds(OptionValues: dict[str, bool]) -> None:
     RegistryData, InfoData = BuildRegistry("format.requirement")
     TargetData = BytesIO()
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetData,
             format_id=InfoData.format_id,
@@ -79,7 +83,7 @@ def CheckStream() -> None:
     RegistryData, InfoData = BuildRegistry("format.self-contained-stream")
     TargetData = BytesIO(b"original")
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetData,
             format_id=InfoData.format_id,
@@ -99,6 +103,8 @@ def CheckStream() -> None:
 class BundleAdapter(ResultAdapter):
 
     # path restriction forces bundle rollback through transactional filesystem staging
+    @Override
+    @Override
     def supports(
         self,
         document: CadDocument,
@@ -107,6 +113,8 @@ class BundleAdapter(ResultAdapter):
         return isinstance(destination, (str, FilePath))
 
     # generated companions prove rejection restores both destination and neighboring files
+    @Override
+    @Override
     def write(
         self,
         document: CadDocument,
@@ -117,8 +125,8 @@ class BundleAdapter(ResultAdapter):
             raise TypeError("bundle adapter requires a filesystem destination")
         OutputPath = FilePath(destination).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
-        OutputPath.write_bytes(b"generated")
-        (OutputPath.parent / "component.bin").write_bytes(b"generated component")
+        _ = OutputPath.write_bytes(b"generated")
+        _ = (OutputPath.parent / "component.bin").write_bytes(b"generated component")
         return WriteResult(
             OutputPath,
             self.info.format_id,
@@ -143,10 +151,10 @@ def CheckBundle(TmpPath: FilePath) -> None:
     RegistryData.register(BundleAdapter(InfoData))
     TargetPath = TmpPath / "existing.bundle"
     ComponentPath = TmpPath / "component.bin"
-    TargetPath.write_bytes(b"original")
-    ComponentPath.write_bytes(b"original component")
+    _ = TargetPath.write_bytes(b"original")
+    _ = ComponentPath.write_bytes(b"original component")
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetPath,
             format_id=InfoData.format_id,

@@ -19,6 +19,8 @@ from convert.adapters.registry.RegistrySelect import SelectReader
 from convert.adapters.staging.SourceReplay import GetReplayMut
 from convert.adapters.staging.SourceReplay import ReplaySource as SeekableSource
 
+from typing_extensions import override as Override
+
 # historical source annotations need local resolution after public methods move to the registry facade
 Source = KSourceType
 
@@ -108,6 +110,8 @@ class ReadApi(ReadLookup):
         return self.ReadAdapter(SourceData, **NamedValues)[0]
 
     # replayable inputs ensure probing never consumes one shot sources before reading
+    @Override
+    @Override
     def ReadAdapter(
         self,
         SourceData: KSourceType,
@@ -122,7 +126,7 @@ class ReadApi(ReadLookup):
             self.GetReader(FormatId) if FormatId else self.PickReader(ReplaySource)
         )
         if isinstance(ReplaySource, SeekableSource):
-            ReplaySource.seek(StreamPos)
+            _ = ReplaySource.seek(StreamPos)
         DocumentData = AdapterData.read(ReplaySource, OptionsData)
         DocumentData.AssertValid()
         return DocumentData, AdapterData

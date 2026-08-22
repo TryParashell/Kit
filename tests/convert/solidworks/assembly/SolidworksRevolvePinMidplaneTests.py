@@ -102,7 +102,7 @@ KOraclePath = (
 def TestMPPWRFC(TmpPath: FilePath) -> None:
     SourceData = ReadFreecad(KSourcePath)
     with PytestLib.raises(ApplicationUsabilityError):
-        WriteDocument(
+        _ = WriteDocument(
             SourceData, TmpPath / "MidplanePinPending.SLDPRT", allow_carrier=False
         )
 
@@ -240,7 +240,7 @@ def TestMPPCAPV() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMPPRVWO() -> None:
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeProgram({11251: "D100"})
+        _ = EncodeProgram({11251: "D100"})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

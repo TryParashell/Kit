@@ -44,7 +44,7 @@ def BuildAdapter(
             f"invalid adapter {AdapterType.__module__}.{AdapterType.__qualname__}"
         )
     try:
-        ValidateAdapterInfo(ValidAdapter.info)
+        _ = ValidateAdapterInfo(ValidAdapter.info)
     except DiscoveryError as ErrorInfo:
         raise DiscoveryError(
             f"invalid adapter metadata {AdapterType.__module__}.{AdapterType.__qualname__}"

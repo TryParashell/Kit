@@ -35,7 +35,7 @@ class JsonWriter:
             if Output.exists() and not Settings.overwrite:
                 raise FileExistsError(Output)
             Output.parent.mkdir(parents=True, exist_ok=True)
-            Output.write_bytes(Payload)
+            _ = Output.write_bytes(Payload)
             return WriteResult(
                 Output,
                 KInfoValue.format_id,

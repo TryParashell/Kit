@@ -46,7 +46,7 @@ def MakeSource(BodyText: str) -> str:
 # isolated writes prevent leakage because compliance cases require independent fixture state
 def WriteSample(FolderPath: FilePath, SourceText: str) -> FilePath:
     SourcePath = FolderPath / "sample.py"
-    SourcePath.write_text(SourceText, encoding="utf-8")
+    _ = SourcePath.write_text(SourceText, encoding="utf-8")
     return SourcePath
 
 
@@ -494,7 +494,7 @@ class TestDataSplits(Unittest.TestCase):
         with Tempfile.TemporaryDirectory() as TmpPath:
             FolderPath = FilePath(TmpPath)
             SourcePath = FolderPath / "large_table.py"
-            SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
+            _ = SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
             CaseSelf.assertNotIn("SPL001", ReadCodes(SourcePath))
 
 
@@ -521,7 +521,7 @@ class TestPrograms(Unittest.TestCase):
                 / "src/convert/adapters/solidworks/programs/resolved/box/Methods/Serialize.py"
             )
             SourcePath.parent.mkdir(parents=True)
-            SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
+            _ = SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
             CaseSelf.assertNotIn("SPL001", ReadCodes(SourcePath))
 
     # near misses remain violations because only generated bindings at exact semantic paths are exceptional
@@ -541,7 +541,7 @@ class TestPrograms(Unittest.TestCase):
                 / "src/convert/adapters/solidworks/programs/resolved/box/Methods/Serialize.py"
             )
             SourcePath.parent.mkdir(parents=True)
-            SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
+            _ = SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
             CaseSelf.assertIn("SPL001", ReadCodes(SourcePath))
 
 
@@ -633,7 +633,7 @@ class TestPathFilter(Unittest.TestCase):
             RootPath = FilePath(TmpPath)
             SourcePath = RootPath / ".rescratch" / "Broken.py"
             SourcePath.parent.mkdir()
-            SourcePath.write_text("def bad():\n    pass\n", encoding="utf-8")
+            _ = SourcePath.write_text("def bad():\n    pass\n", encoding="utf-8")
             CaseSelf.assertEqual(CheckPaths([RootPath]), [])
 
 
