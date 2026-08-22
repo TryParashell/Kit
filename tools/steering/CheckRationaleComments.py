@@ -105,9 +105,7 @@ def MainRun(ArgList: list[str] | None = None) -> int:
             FindingList = CollectFull(RootPath, TargetPaths)
             ModeText = "full tree"
         else:
-            ChangedPaths = LoadChanged(
-                RootPath, ArgsInfo.BaseRef, ArgsInfo.HeadRef
-            )
+            ChangedPaths = LoadChanged(RootPath, ArgsInfo.BaseRef, ArgsInfo.HeadRef)
             TargetPaths = SelectPaths(ChangedPaths)
             FindingList = CollectDiff(
                 RootPath, ArgsInfo.BaseRef, ArgsInfo.HeadRef, TargetPaths
