@@ -31,8 +31,10 @@ def ValidateFeature(SourceValue: object) -> FeatureDef | None:
 # canonical typing needs an inherited key while public reflection exposes historical fields
 class FeatureHintBase(ModelBase):
     definition: FeatureDef | None
-    if TYPE_CHECKING:
-        Definition: ClassVar[FeatureDef | None]
+
+    @property
+    def Definition(self) -> FeatureDef | None:
+        return self.definition
 
 
 # configuration state retains suppression and parameter changes without duplicate features
