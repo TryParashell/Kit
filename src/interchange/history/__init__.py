@@ -39,17 +39,14 @@ from interchange.compatibility.PythonCompatHistoryMethods import BindHistoryMut
 from interchange.records.RecordTopology import TopologyCounts
 
 
+# one shared empty set keeps capability defaults free of repeated constructor calls
+KEmptyCaps: frozenset[Capability] = frozenset()
+
+
 # adapter capability sets centralize feature support checks for conversion decisions
 @DataClass(frozen=True, slots=True)
 class AdapterCaps(ModelBase):
-    Values: frozenset[Capability] = frozenset()
-
-    # historical constructor keywords must remain accepted without changing canonical storage
-    def __init__(
-        self,
-        Values: frozenset[Capability] = frozenset(),
-    ) -> None:
-        object.__setattr__(self, "Values", Values)
+    Values: frozenset[Capability] = KEmptyCaps
 
     # callers need one consistent containment check for adapter support declarations
     def HasCapability(self, CapabilityValue: Capability) -> bool:

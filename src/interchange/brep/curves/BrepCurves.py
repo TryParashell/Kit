@@ -24,13 +24,16 @@ def ValidateBrepId(SourceValue: object) -> None:
 
 
 # shared topology identity avoids duplicated provenance fields across curve families
-@ModelDataMut
+@ModelDataMut(
+    FieldOverrides={
+        "provenance": MakeDataField(default=None, kw_only=True),
+        "attributes": MakeDataField(default_factory=FreezeMapping, kw_only=True),
+    }
+)
 class BrepEntity(ModelBase):
     id: str
-    provenance: Provenance | None = MakeDataField(default=None, kw_only=True)
-    attributes: TypeMap[str, object] = MakeDataField(
-        default_factory=FreezeMapping, kw_only=True
-    )
+    provenance: Provenance | None
+    attributes: TypeMap[str, object]
 
     @property
     def EntityId(self) -> str:
