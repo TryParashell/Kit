@@ -7,6 +7,8 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+
+from interchange.payloads.PayloadRoles import PayloadRole
 from dataclasses import is_dataclass as IsDataClass
 from dataclasses import replace as ReplaceValue
 from enum import Enum as EnumBase
@@ -496,7 +498,7 @@ def CheckRoleType() -> None:
             "shape",
             "",
             "",
-            role="brep",
+            role=CastValue(PayloadRole, "brep"),
             file_extension=".brep",
         )
 
