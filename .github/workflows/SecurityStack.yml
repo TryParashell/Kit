@@ -243,7 +243,7 @@ jobs:
         run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Run cve-bin-tool environment audit
-        run: uv run cve-bin-tool .venv
+        run: uv run cve-bin-tool -n api2 .venv
 
   cyclonedx-sbom:
     name: CycloneDX SBOM
