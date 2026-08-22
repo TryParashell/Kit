@@ -1,0 +1,30 @@
+﻿# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+# Every entry documents an accepted finding: the advisory stays listed here only while the named
+# upstream blocker exists, and each blocker is re-checked whenever its package gets upgraded.
+
+[[IgnoredVulns]]
+id = "GHSA-89v8-rhwq-hf77"
+reason = "dev-only; checkov 3.3.13 (latest release) pins asteval==1.0.6 exactly, so 1.0.9 is unreachable"
+
+[[IgnoredVulns]]
+id = "GHSA-9w56-46f6-3qhx"
+reason = "dev-only; checkov 3.3.13 (latest release) pins asteval==1.0.6 exactly, so 1.0.9 is unreachable"
+
+[[IgnoredVulns]]
+id = "GHSA-wj6h-64fc-37mp"
+reason = "PYSEC-2026-1325 in ecdsa is dev-only, has no fixed release, and checkov requires ecdsa>=0.19,<1.0"
+
+[[IgnoredVulns]]
+id = "GHSA-vfmq-68hx-4jfw"
+reason = "PYSEC-2026-87 in lxml is dev-only, and cyclonedx-python-lib 7.6.2 (latest release) caps lxml<6, so 6.1.0 is unreachable"
+
+[[IgnoredVulns]]
+id = "GHSA-h35f-9h28-mq5c"
+reason = "PYSEC-2026-3447 in setuptools is dev-only, and setuptools>=83 removes pkg_resources, which semgrep still imports at runtime"
