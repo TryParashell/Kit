@@ -40,7 +40,7 @@ class TestPathPolicy(UnitTest.TestCase):
     def CheckCountCap(self) -> None:
         TrackedPaths = tuple(
             f"Crowded/File{chr(65 + IndexValue // 26)}"
-            f"{chr(65 + IndexValue % 26)}.py"
+            + f"{chr(65 + IndexValue % 26)}.py"
             for IndexValue in range(33)
         )
         FindingList = CheckPathPolicy(TrackedPaths)
@@ -57,7 +57,7 @@ class TestPathPolicy(UnitTest.TestCase):
     def CheckTargetDirs(self) -> None:
         CrowdedPaths = tuple(
             f"Crowded/File{chr(65 + IndexValue // 26)}"
-            f"{chr(65 + IndexValue % 26)}.py"
+            + f"{chr(65 + IndexValue % 26)}.py"
             for IndexValue in range(33)
         )
         TrackedPaths = (*CrowdedPaths, "Other/Alpha.py", "Legacy/bad_name.py")

@@ -108,8 +108,10 @@ def CheckByteOutput(TmpPath: FilePath) -> None:
 def CheckCollect(TmpPath: FilePath) -> None:
     TestPath = TmpPath / "test_mixed_names.py"
     _ = TestPath.write_text(
-        "def test_legacy_name():\n" + "    assert True\n\n" + "def CheckModern():\n"
-        "    assert True\n",
+        "def test_legacy_name():\n"
+        + "    assert True\n\n"
+        + "def CheckModern():\n"
+        + "    assert True\n",
         encoding="utf-8",
     )
     EnvValues = dict(OsEnv.environ)

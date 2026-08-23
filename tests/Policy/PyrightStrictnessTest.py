@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 import tomllib
+from typing import cast as CastValue
 from pathlib import Path
 
 import pytest
@@ -44,7 +45,7 @@ KRequiredRules = (
 )
 
 
-def LoadPyrightConfig() -> dict:
+def LoadPyrightConfig() -> dict[str, object]:
     Metadata = tomllib.loads((KRootPath / "pyproject.toml").read_text(encoding="utf-8"))
     return Metadata["tool"]["pyright"]
 
@@ -55,7 +56,8 @@ def TestStrictMode() -> None:
 
 def TestScopeCoversWholeTree() -> None:
     Config = LoadPyrightConfig()
-    assert set(Config["include"]) == {"src", "tests", "tools"}
+    IncludeValue = CastValue(list[str], Config["include"])
+    assert set(IncludeValue) == {"src", "tests", "tools"}
     assert Config["pythonVersion"] == "3.11"
 
 
