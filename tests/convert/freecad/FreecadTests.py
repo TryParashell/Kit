@@ -191,6 +191,7 @@ from interchange.enums.EnumGeometry import GeometryKind as GeomKind
 from interchange.enums.EnumValues import ValueKind
 from interchange.features.FeatureExtrude import ExtrudeEnd as ExtrusionEndCondition
 from interchange.features.FeatureExtrude import ExtrudeFeature as ExtrusionFeature
+from interchange.geometry.models.GeometryTypes import KGeometryTypes as GeometryTypes
 from tests.interchange.document.DocumentTests import document as NeutralDoc
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
@@ -2569,7 +2570,7 @@ def TestUnavailable() -> None:
 def TestNeutralTrip() -> None:
     Source = NeutralDoc()
     AxisValue = VectorTwo(0.6, 0.8)
-    Values = (
+    Values: tuple[tuple[GeomKind, GeometryTypes, str], ...] = (
         (
             GeomKind.ELLIPSE,
             EllipseGeom(VectorTwo(1.0, 2.0), AxisValue, 8.0, 3.0),
