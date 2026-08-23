@@ -147,7 +147,6 @@ def _build_registry() -> AdapterRegistry:
 
 registry = _build_registry()
 
-Any = AnyValue
 Mapping = TypeMap
 Path = FilePath
 PayloadRole = KPayloadRole
