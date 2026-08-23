@@ -388,6 +388,7 @@ class DocAccess(SessionState):
     __slots__ = ()
 
     # keeps this focused behavior isolated so regressions remain immediately visible
+    @Override
     @Contextmanager
     def Document(
         SelfRef, TargetPath: FilePath, DocType: int
