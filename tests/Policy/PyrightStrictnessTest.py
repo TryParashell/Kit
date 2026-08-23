@@ -48,7 +48,7 @@ KRequiredRules = (
  # config loading stays centralized so every assertion sees identical settings
 def LoadPyrightConfig() -> dict[str, object]:
     Metadata = tomllib.loads((KRootPath / "pyproject.toml").read_text(encoding="utf-8"))
-    return Metadata["tool"]["pyright"]
+    return CastValue(dict[str, object], Metadata["tool"]["pyright"])
 
 
  # strict mode is the baseline the whole policy depends on
