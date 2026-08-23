@@ -266,7 +266,6 @@ KTargetUnsupported = frozenset(
 )
 
 
-# this definition exists because focused behavior needs one stable owner
 # shared empty set keeps parameter defaults free of repeated constructor calls
 KNoMixedCaps: frozenset[Capability] = frozenset()
 
@@ -337,6 +336,7 @@ class SldprtAdapter:
     def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
         return IsSupports(self, DocValue, TargetValue)
 
+     # writer entrypoint stays thin so action modules own actual export behavior
     def write(
         self,
         DocValue: CadDocument,

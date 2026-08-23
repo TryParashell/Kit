@@ -18,10 +18,12 @@ class ComponentDoc(ModelBase):
     id: str
     document: CadDocument
 
+     # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
+     # underlying document access keeps assembly views decoupled from storage internals
     @property
     def Document(self) -> CadDocument:
         return self.document

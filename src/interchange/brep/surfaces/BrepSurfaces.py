@@ -38,14 +38,17 @@ class PlaneSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # anchor point keeps curve placement absolute without extra context
     @property
     def Origin(self) -> SpaceVector:
         return self.origin
 
+     # surface normal keeps side semantics unambiguous during trimming operations
     @property
     def Normal(self) -> SpaceVector:
         return self.normal
 
+     # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
@@ -62,18 +65,22 @@ class CylinderSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # anchor point keeps curve placement absolute without extra context
     @property
     def Origin(self) -> SpaceVector:
         return self.origin
 
+     # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> SpaceVector:
         return self.axis
 
+     # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
 
+     # radius keeps circles arcs and cylinders sized without sampling geometry
     @property
     def Radius(self) -> float:
         return self.radius
@@ -91,22 +98,27 @@ class ConeSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # anchor point keeps curve placement absolute without extra context
     @property
     def Origin(self) -> SpaceVector:
         return self.origin
 
+     # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> SpaceVector:
         return self.axis
 
+     # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
 
+     # radius keeps circles arcs and cylinders sized without sampling geometry
     @property
     def Radius(self) -> float:
         return self.radius
 
+     # half angle defines cone spread without trigonometry at read time
     @property
     def HalfAngle(self) -> float:
         return self.half_angle
@@ -123,18 +135,22 @@ class SphereSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> SpaceVector:
         return self.center
 
+     # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> SpaceVector:
         return self.axis
 
+     # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
 
+     # radius keeps circles arcs and cylinders sized without sampling geometry
     @property
     def Radius(self) -> float:
         return self.radius
@@ -152,22 +168,27 @@ class TorusSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> SpaceVector:
         return self.center
 
+     # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> SpaceVector:
         return self.axis
 
+     # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
 
+     # major extent keeps ellipse sizing exact without control point inference
     @property
     def MajorRadius(self) -> float:
         return self.major_radius
 
+     # minor extent completes ellipse shape so reconstruction never guesses
     @property
     def MinorRadius(self) -> float:
         return self.minor_radius
@@ -190,42 +211,52 @@ class NurbsSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # u degree controls surface smoothness along one parametric direction
     @property
     def DegreeU(self) -> int:
         return self.degree_u
 
+     # v degree completes bidirectional smoothness control for reconstruction
     @property
     def DegreeV(self) -> int:
         return self.degree_v
 
+     # hull points define spline shape so evaluation never needs vendor kernels
     @property
     def ControlPoints(self) -> tuple[tuple[SpaceVector, ...], ...]:
         return self.control_points
 
+     # u knots define segment joins so surfaces evaluate identically everywhere
     @property
     def KnotValuesU(self) -> tuple[float, ...]:
         return self.knots_u
 
+     # v knots define cross direction joins without vendor reevaluation
     @property
     def KnotValuesV(self) -> tuple[float, ...]:
         return self.knots_v
 
+     # u multiplicities preserve continuity breaks across one parametric direction
     @property
     def MultiplicitiesU(self) -> tuple[int, ...]:
         return self.multiplicities_u
 
+     # v multiplicities preserve continuity breaks across the other direction
     @property
     def MultiplicitiesV(self) -> tuple[int, ...]:
         return self.multiplicities_v
 
+     # rational weights keep conic splines representable exactly rather than approximately
     @property
     def Weights(self) -> tuple[tuple[float, ...], ...]:
         return self.weights
 
+     # u periodicity tells evaluators whether seam closure can be assumed
     @property
     def IsPeriodicU(self) -> bool:
         return self.periodic_u
 
+     # v periodicity completes seam handling for closed surfaces
     @property
     def IsPeriodicV(self) -> bool:
         return self.periodic_v
@@ -240,10 +271,12 @@ class OffsetSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # base surface link keeps offset geometry dependent on its parent
     @property
     def BaseSurfaceId(self) -> str:
         return self.base_surface_id
 
+     # offset distance keeps derived surfaces reproducible without measuring geometry
     @property
     def Distance(self) -> float:
         return self.distance
@@ -259,14 +292,17 @@ class NativeSurface(BrepSurface):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # format id keeps payload interpretation tied to its producing dialect
     @property
     def FormatId(self) -> str:
         return self.format_id
 
+     # native type string preserves vendor vocabulary that enums cannot fully cover
     @property
     def EntityType(self) -> str:
         return self.entity_type
 
+     # raw bytes keep vendor specifics recoverable even when schema parsing fails
     @property
     def PayloadData(self) -> TypeMap[str, object]:
         return self.data

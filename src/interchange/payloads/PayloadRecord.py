@@ -48,46 +48,57 @@ class BrepPayload(ModelBase):
     role: PayloadRole = PayloadRole.KAuxiliary
     file_extension: str = ".bin"
 
+     # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
+     # format id keeps payload interpretation tied to its producing dialect
     @property
     def FormatId(self) -> str:
         return self.format_id
 
+     # kind tag lets consumers branch on semantics without importing concrete classes
     @property
     def EntityKind(self) -> str:
         return self.kind
 
+     # inline schema keeps payloads self describing without external lookups
     @property
     def SchemaText(self) -> str:
         return self.schema
 
+     # digest lets consumers detect source drift without rereading containers
     @property
     def SourceDigest(self) -> str:
         return self.sha256
 
+     # raw bytes keep vendor specifics recoverable even when schema parsing fails
     @property
     def PayloadData(self) -> bytes | None:
         return self.data
 
+     # stream name tells extractors where the payload lives inside containers
     @property
     def SourceStream(self) -> str:
         return self.source_stream
 
+     # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
+     # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes
 
+     # role tags separate driven driving and reference usages cleanly
     @property
     def ValueRole(self) -> PayloadRole:
         return self.role
 
+     # extension hint keeps extracted files recognizable on disk immediately
     @property
     def FileExtension(self) -> str:
         return self.file_extension

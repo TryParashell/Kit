@@ -32,34 +32,42 @@ class AssemblyData(ModelBase):
     mate_groups: tuple[MateGroup, ...] = ()
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # root pointer keeps traversal order deterministic without storing parent chains everywhere
     @property
     def RootDefinitionId(self) -> str:
         return self.root_definition_id
 
+     # definition list stays immutable so assembly consumers can share it freely
     @property
     def Definitions(self) -> tuple[ComponentDef, ...]:
         return self.definitions
 
+     # instance order preserves placement sequence because downstream writers depend on it
     @property
     def Instances(self) -> tuple[ComponentInst, ...]:
         return self.instances
 
+     # document list keeps external references inspectable without reopening files
     @property
     def Documents(self) -> tuple[ComponentDoc, ...]:
         return self.documents
 
+     # mate entity tuples keep constraint geometry addressable across adapters uniformly
     @property
     def MateEntities(self) -> tuple[MateEntity, ...]:
         return self.mate_entities
 
+     # constraint list stays frozen so assembly validation sees one stable snapshot
     @property
     def Mates(self) -> tuple[MateConstraint, ...]:
         return self.mates
 
+     # group list keeps grouped constraints navigable without rescanning the whole assembly
     @property
     def MateGroups(self) -> tuple[MateGroup, ...]:
         return self.mate_groups
 
+     # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

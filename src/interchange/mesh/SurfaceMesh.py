@@ -28,30 +28,37 @@ class SurfaceMesh(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
+     # human readable label keeps diagnostics and diffs meaningful for reviewers
     @property
     def EntityName(self) -> str:
         return self.name
 
+     # vertex table keeps triangle resolution independent of cad precision
     @property
     def Vertices(self) -> tuple[SpaceVector, ...]:
         return self.vertices
 
+     # indexed triangles avoid repeating coordinates for compact transfer
     @property
     def Triangles(self) -> tuple[tuple[int, int, int], ...]:
         return self.triangles
 
+     # stored normals preserve shading intent without recomputation drift
     @property
     def Normals(self) -> tuple[SpaceVector, ...]:
         return self.normals
 
+     # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
+     # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

@@ -66,11 +66,11 @@ from convert.adapters.freecad.Protocol import (
     STRING_HASHER_TAGS as StringHasherTags,
 )
 
-# mapping payloads require string keys before archive fields can be inspected safely
 # shared empty set keeps parameter defaults free of repeated constructor calls
 KNoTrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset()
 
 
+ # mapping payload checks need a shared guard so archive readers narrow safely
 def IsPayloadMap(Value: object) -> TypeGuard[Mapping[str, object]]:
     return isinstance(Value, Mapping)
 

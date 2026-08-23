@@ -29,30 +29,37 @@ class DesignBody(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
+     # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
+     # human readable label keeps diagnostics and diffs meaningful for reviewers
     @property
     def EntityName(self) -> str:
         return self.name
 
+     # resolved feature id keeps downstream steps referencing stable results
     @property
     def FinalFeatureId(self) -> str:
         return self.final_feature_id
 
+     # counted topology keeps mass property claims checkable quickly
     @property
     def Topology(self) -> TopologyCounts:
         return self.topology
 
+     # optional material link keeps appearance data joinable later
     @property
     def MaterialId(self) -> str | None:
         return self.material_id
 
+     # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
+     # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

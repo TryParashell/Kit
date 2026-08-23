@@ -71,11 +71,11 @@ KGeomValue = tuple[
 ]
 
 
-# point like runtime objects need typed coordinates without weakening mesh inputs
 # shared empty set keeps parameter defaults free of repeated constructor calls
 KNoActiveFormats: frozenset[str] = frozenset()
 
 
+ # structural point access lets geometry readers accept vendor vectors without imports
 @runtime_checkable
 class PointSource(Protocol):
     x: SupportsFloat

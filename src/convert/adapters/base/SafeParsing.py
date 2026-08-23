@@ -17,8 +17,7 @@ import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 Element = XmlTree.Element
 
 
-# this wrapper exists because adapters must never hand attacker-controlled bytes to parsing that
-# permits DTDs, entity expansion, or external resolution, so every defense stays explicitly enabled
+# adapters must never feed attacker controlled bytes to parsers so every defense stays on
 def ParseUntrusted(ValueData: str | bytes) -> Element:
     return SafeXmlTree.fromstring(
         ValueData,

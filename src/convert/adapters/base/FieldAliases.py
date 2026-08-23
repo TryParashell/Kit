@@ -8,8 +8,7 @@
 
 from typing import Mapping as TypeMap
 
-# stored dataclass identifiers follow steering while historical Pascal spellings
-# remain accepted constructor keywords and readable attribute aliases
+# historical constructor keywords and attribute spellings stay mapped so stored names follow steering
 KFieldAliases: TypeMap[str, str] = {
     "AdapterName": "adapter",
     "AliasNames": "aliases",

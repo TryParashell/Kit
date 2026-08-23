@@ -29,7 +29,7 @@ from interchange.serialization.Wire import ResolveField
 # model decorators preserve each concrete class identity through dataclass transformation
 ModelValue = TypeVar("ModelValue")
 
-# shared frozen-set defaults stay one constant so parameter defaults never call constructors
+# shared frozen set defaults stay one constant so parameter defaults never call constructors
 KEmptyKeywords: frozenset[str] = frozenset()
 
 
