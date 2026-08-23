@@ -108,7 +108,7 @@ class ContractMeta(type):
                 PublicName = GetLegacyName(ModelName)
                 raise TypeError(
                     f"{self.__name__}() got multiple values for argument "
-                    f"{PublicName!r}"
+                    + f"{PublicName!r}"
                 )
         ResultValue = type.__call__(self, *ArgValues, **TranslatedValues)
         return CastValue(ContractValue, ResultValue)

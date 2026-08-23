@@ -28,7 +28,7 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
     if UnknownNames:
         raise TypeError(
             "AdapterInfo.extensions_for() got an unexpected keyword argument "
-            f"{UnknownNames[0]!r}"
+            + f"{UnknownNames[0]!r}"
         )
     if "assembly" in NamedValues and "Assembly" in NamedValues:
         raise TypeError(
@@ -37,7 +37,7 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
     if not NamedValues:
         raise TypeError(
             "AdapterInfo.extensions_for() missing required keyword only argument "
-            "'assembly'"
+            + "'assembly'"
         )
     Assembly = NamedValues.get("assembly", NamedValues.get("Assembly"))
     if not isinstance(Assembly, bool):

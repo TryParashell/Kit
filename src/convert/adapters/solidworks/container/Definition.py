@@ -365,7 +365,11 @@ def EncodeString(TextValue: str) -> bytes:
 
 # this definition exists because primitive archive values share one byte packing interface
 class ArchiveValues:
-    chunks: list[bytes]
+
+    # storage stays structural because only the writer subclass owns initialization
+    @property
+    def chunks(self) -> list[bytes]:
+        return CastValue(list[bytes], object.__getattribute__(self, "chunks"))
 
     # this definition exists because focused behavior needs one stable owner
     def RawAction(self, Chunk: bytes) -> None:

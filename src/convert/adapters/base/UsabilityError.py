@@ -81,7 +81,7 @@ def GetErrorArgs(
     if UnknownNames:
         raise TypeError(
             "ApplicationUsabilityError() got an unexpected keyword argument "
-            f"{UnknownNames[0]!r}"
+            + f"{UnknownNames[0]!r}"
         )
     if FormatId is not None and "format_id" in NamedValues:
         raise TypeError(
