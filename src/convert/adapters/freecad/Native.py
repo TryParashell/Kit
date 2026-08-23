@@ -2258,8 +2258,8 @@ def PartExtrusion(ObjValue: NativeObject) -> ExtrusionFeature:
 # this definition collects auxiliary files referenced by one shape property
 def BrepSidecars(
     NodeValue: XmlTree.Element, FileName: str, Entries: Mapping[str, bytes]
-) -> list[dict[str, AnyValue]]:
-    Sidecars: list[dict[str, AnyValue]] = []
+) -> list[dict[str, object]]:
+    Sidecars: list[dict[str, object]] = []
     for Child in NodeValue.findall(".//*[@file]"):
         SidecarName = Child.get("file", "")
         if not SidecarName or SidecarName == FileName:
@@ -2285,7 +2285,7 @@ def MakeBrepPayload(
     PayloadId = f"freecad:brep:{ObjValue.name}:{PropName}"
     Header = DataValue[:256].decode("ascii", "ignore")
     Match = RegexLib.search("CASCADE Topology V\\d+", Header)
-    Attributes: dict[str, AnyValue] = {
+    Attributes: dict[str, object] = {
         "freecad_object": ObjValue.name,
         "freecad_object_type": ObjValue.type_id,
         "freecad_property": PropName,
