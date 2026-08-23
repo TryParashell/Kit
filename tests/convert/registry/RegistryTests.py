@@ -42,7 +42,7 @@ def CheckNestedPack(
     _ = (FormatPath / "__init__.py").write_text("", encoding="utf-8")
     _ = (FormatPath / "implementation.py").write_text(
         "from convert.adapters.json.Adapter import JsonAdapter\n"
-        "class NestedAdapter(JsonAdapter):\n    Discovered = True\n",
+        + "class NestedAdapter(JsonAdapter):\n    Discovered = True\n",
         encoding="utf-8",
     )
     MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])

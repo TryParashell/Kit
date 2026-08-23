@@ -58,8 +58,8 @@ def CheckHiddenPack(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     _ = (PackagePath / "__init__.py").write_text("", encoding="utf-8")
     _ = (FormatPath / "__init__.py").write_text(
         "from convert.adapters.json.Adapter import JsonAdapter as _JsonAdapter\n"
-        "class HiddenAdapter(_JsonAdapter):\n    discovered = True\n"
-        "__all__ = []\n",
+        + "class HiddenAdapter(_JsonAdapter):\n    discovered = True\n"
+        + "__all__ = []\n",
         encoding="utf-8",
     )
     MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
@@ -75,7 +75,7 @@ def CheckSingleMod(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     _ = (PackagePath / "__init__.py").write_text("", encoding="utf-8")
     _ = (PackagePath / "single.py").write_text(
         "from convert.adapters.json.Adapter import JsonAdapter as _JsonAdapter\n"
-        "class SingleAdapter(_JsonAdapter):\n    discovered = True\n",
+        + "class SingleAdapter(_JsonAdapter):\n    discovered = True\n",
         encoding="utf-8",
     )
     MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])

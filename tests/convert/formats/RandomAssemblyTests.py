@@ -459,7 +459,7 @@ def AssertCompLinks(LinkedFiles: set[str], TmpPath: PathValue) -> None:
         ComponentRoot = ReadDocRoot(Component)
         Target = ComponentRoot.find(
             "./ObjectData/Object[@name='KitMetadata']/Properties/"
-            "Property[@name='ExternalLinkTarget']/String"
+            + "Property[@name='ExternalLinkTarget']/String"
         )
         assert Target is not None
         TargetName = Target.get("value")
