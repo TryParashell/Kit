@@ -406,7 +406,7 @@ jobs:
           OsvScannerSha256: f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be
         run: |
           set -euo pipefail
-          BinaryPath="${RUNNER_TEMP}/osv-scanner_linux_amd64"
+          BinaryPath="${RUNNER_TEMP}/osv-scanner"
           curl --fail --silent --show-error --location \
             --output "${BinaryPath}" \
             "https://github.com/google/osv-scanner/releases/download/v${OsvScannerVersion}/osv-scanner_linux_amd64"
