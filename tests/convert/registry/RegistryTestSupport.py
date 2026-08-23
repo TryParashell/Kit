@@ -57,7 +57,7 @@ class ResultAdapter(JsonAdapter):
         ResultData = super().probe(source)
         return ReplaceValue(
             ResultData,
-            FormatId=self.ProbeFormat or self.info.format_id,
+            format_id=self.ProbeFormat or self.info.format_id,
         )
 
     # write rewriting exercises registry validation while retaining real output behavior
@@ -72,7 +72,7 @@ class ResultAdapter(JsonAdapter):
         ResultData = super().write(document, destination, options)
         return ReplaceValue(
             ResultData,
-            AdapterName=self.WriteFormat or self.info.format_id,
+            adapter=self.WriteFormat or self.info.format_id,
         )
 
 
