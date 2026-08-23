@@ -259,7 +259,7 @@ def ResolveBuild(
     if Template is not None and Signatures is not None:
         raise ValueError("SLDPRT signatures cannot be given alongside a template")
     if Template is None and Signatures is not None:
-        if len(Signatures) != 3 or any((len(Value) != 4 for Value in Signatures)):
+        if any((len(Value) != 4 for Value in Signatures)):
             raise ValueError("SLDPRT signatures must be three four byte values")
         if FileId is None:
             raise ValueError("SLDPRT signatures require the paired file id")

@@ -369,7 +369,7 @@ class ArchiveValues:
     # storage stays structural because only the writer subclass owns initialization
     @property
     def chunks(self) -> list[bytes]:
-        return CastValue(list[bytes], object.__getattribute__(self, "chunks"))
+        return Cast(list[bytes], object.__getattribute__(self, "chunks"))
 
     # this definition exists because focused behavior needs one stable owner
     def RawAction(self, Chunk: bytes) -> None:
