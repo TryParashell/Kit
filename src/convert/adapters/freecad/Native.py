@@ -3189,15 +3189,16 @@ def JointRefsMut(
     RootDefinitionId: str,
     InstanceIds: Mapping[str, str],
     MateEntities: list[MateEntity],
-) -> tuple[list[str], list[dict[str, AnyValue]]]:
+) -> tuple[list[str], list[dict[str, object]]]:
     EntityIds: list[str] = []
-    References: list[dict[str, AnyValue]] = []
+    References: list[dict[str, object]] = []
     for RefIndex, PropName in enumerate(JointRefProperties, start=1):
         RefValue = XlinkData(ObjValue, PropName)
         References.append(RefValue)
         Placement = PlacementElem(ObjValue, f"Placement{RefIndex}")
         Frame = None if Placement is None else MatrixFour(PlacementMatrix(Placement))
-        for SubIndex, SubElem in enumerate(RefValue["subelements"]):
+        SubElements = Cast(list[str], RefValue["subelements"])
+        for SubIndex, SubElem in enumerate(SubElements):
             ComponentName, Separator, SourceEntityId = str(SubElem).partition(".")
             if not Separator:
                 SourceEntityId = ComponentName
@@ -3763,8 +3764,8 @@ def NativeMeta(
     Native: NativeArchive,
     AsmValue: AsmData | None,
     ResolvedOuter: Mapping[str, tuple[str, CadDoc]],
-) -> dict[str, AnyValue]:
-    MetaValue: dict[str, AnyValue] = {
+) -> dict[str, object]:
+    MetaValue: dict[str, object] = {
         "schema_version": Native.root.get("SchemaVersion", ""),
         "file_version": Native.root.get("FileVersion", ""),
         "program_version": Native.root.get("ProgramVersion", ""),
@@ -3814,7 +3815,7 @@ def MakeNativeDoc(
     DecodedBrep: BrepModel | None,
     BrepPayloads: tuple[BrepPayload, ...],
     Diagnostics: tuple[DiagValue, ...],
-    MetaValue: Mapping[str, AnyValue],
+    MetaValue: Mapping[str, object],
     AsmValue: AsmData | None,
     HasOuterRefs: bool,
 ) -> CadDoc:
@@ -3931,9 +3932,6 @@ ASSEMBLY_OBJECT_TYPE_PREFIX = AsmObjectTypePrefix
 
 # this binding exists because shared behavior needs one stable value
 ASSEMBLY_ROOT_TYPE_ID = AsmRootTypeId
-
-# this binding exists because shared behavior needs one stable value
-Any = AnyValue
 
 # this binding exists because shared behavior needs one stable value
 ArcEllipseGeometry = ArcEllipseGeom

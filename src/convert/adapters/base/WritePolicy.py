@@ -116,7 +116,7 @@ def GetWriteOptions(OptionsData: WriteOptions) -> tuple[WriteOptions, bool, bool
     OptionValues["require_self_contained"] = NeedSelfContained
     OptionValues["allow_non_native"] = True
     return (
-        ReplaceValue(OptionsData, OptionValues=FreezeMapping(OptionValues)),
+        ReplaceValue(OptionsData, values=FreezeMapping(OptionValues)),
         AllowCarrier,
         NeedSelfContained,
     )
@@ -147,9 +147,9 @@ def NormalizeUsable(ResultData: WriteResult) -> WriteResult:
     MetadataMap["vendor_loadable"] = False
     return ReplaceValue(
         ResultData,
-        MetadataMap=FreezeMapping(MetadataMap),
-        IsAppUsable=False,
-        IsVendorLoadable=False,
+        metadata=FreezeMapping(MetadataMap),
+        application_usable=False,
+        vendor_loadable=False,
     )
 
 
