@@ -854,7 +854,7 @@ def EllipseAction(
 # this definition decodes complete and trimmed hyperbola geometry records
 def HyperbolaAction(
     NodeValue: XmlTree.Element, TypeId: str
-) -> tuple[GeomKind, AnyValue] | None:
+) -> tuple[GeomKind, GeometryTypes] | None:
     IsArc = TypeId == "Part::GeomArcOfHyperbola"
     Value = NodeValue.find("./ArcOfHyperbola" if IsArc else "./Hyperbola")
     if Value is None:
@@ -880,7 +880,7 @@ def HyperbolaAction(
 # this definition decodes complete and trimmed parabola geometry records
 def ParabolaAction(
     NodeValue: XmlTree.Element, TypeId: str
-) -> tuple[GeomKind, AnyValue] | None:
+) -> tuple[GeomKind, GeometryTypes] | None:
     IsArc = TypeId == "Part::GeomArcOfParabola"
     Value = NodeValue.find("./ArcOfParabola" if IsArc else "./Parabola")
     if Value is None:
@@ -905,7 +905,7 @@ def ParabolaAction(
 # this definition decodes bezier and spline geometry records
 def SplineAction(
     NodeValue: XmlTree.Element, TypeId: str
-) -> tuple[GeomKind, AnyValue] | None:
+) -> tuple[GeomKind, GeometryTypes] | None:
     Value = NodeValue.find("./BSplineCurve")
     if Value is None:
         Value = NodeValue.find("./BezierCurve")
@@ -945,7 +945,7 @@ def SplineAction(
 
 
 # this definition dispatches each supported geometry record to its focused decoder
-def GeomAction(NodeValue: XmlTree.Element, EntityId: str) -> tuple[GeomKind, AnyValue]:
+def GeomAction(NodeValue: XmlTree.Element, EntityId: str) -> tuple[GeomKind, GeometryTypes]:
     TypeId = NodeValue.get("type", "")
     Result = None
     if TypeId == "Part::GeomLineSegment":
@@ -1609,7 +1609,7 @@ def BuildPlanes(
         else:
             PlaneTransform = SourceTransform
         PlaneTransforms[ObjValue.name] = PlaneTransform
-        Attributes: dict[str, AnyValue] = {"freecad": NativeObjectA(ObjValue)}
+        Attributes: dict[str, object] = {"freecad": NativeObjectA(ObjValue)}
         if Principal and Frame is not None:
             Attributes.update(
                 {"principal_index": Frame[0], "principal_role": ObjValue.name}
@@ -1707,9 +1707,9 @@ def SketchEntities(
 # this definition resolves rule references and preserves native slot metadata
 def RuleRefs(
     NodeValue: XmlTree.Element, Entities: Sequence[SketchEntity]
-) -> tuple[list[RuleRef], list[dict[str, AnyValue]]]:
+) -> tuple[list[RuleRef], list[dict[str, object]]]:
     References: list[RuleRef] = []
-    RefSlots: list[dict[str, AnyValue]] = []
+    RefSlots: list[dict[str, object]] = []
     for SlotIndex, (EntityIndex, PointIndex) in enumerate(RuleElemSlots(NodeValue)):
         Point = RulePointByIndex.get(PointIndex, "")
         EntityId = Entities[EntityIndex].id if 0 <= EntityIndex < len(Entities) else ""
