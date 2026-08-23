@@ -378,6 +378,7 @@ class SessionLife(SessionState):
             SelfRef.Initialized = False
 
     # keeps this focused behavior isolated so regressions remain immediately visible
+    @Override
     def ByrefLong(SelfRef) -> VariantRef:
         return SelfRef.Variant(SelfRef.Pythoncom.VT_BYREF | SelfRef.Pythoncom.VT_I4, 0)
 
