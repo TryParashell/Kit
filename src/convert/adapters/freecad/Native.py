@@ -779,7 +779,7 @@ def PropParamValue(NodeValue: XmlTree.Element) -> ParamValue | None:
 
 
 # this definition decodes one line segment geometry record
-def LineAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
+def LineAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, GeometryTypes] | None:
     Value = NodeValue.find("./LineSegment")
     if Value is None:
         return None
@@ -789,7 +789,7 @@ def LineAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
 
 
 # this definition decodes one circle geometry record
-def CircleAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
+def CircleAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, GeometryTypes] | None:
     Value = NodeValue.find("./Circle")
     if Value is None:
         return None
@@ -798,7 +798,7 @@ def CircleAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None
 
 
 # this definition decodes one circular arc geometry record
-def ArcAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
+def ArcAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, GeometryTypes] | None:
     Value = NodeValue.find("./ArcOfCircle")
     if Value is None:
         return None
@@ -815,7 +815,7 @@ def ArcAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
 
 
 # this definition decodes one point geometry record
-def PointAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
+def PointAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, GeometryTypes] | None:
     Value = NodeValue.find("./GeomPoint")
     if Value is None:
         Value = NodeValue.find("./Point")
@@ -828,7 +828,7 @@ def PointAction(NodeValue: XmlTree.Element) -> tuple[GeomKind, AnyValue] | None:
 # this definition decodes complete and trimmed ellipse geometry records
 def EllipseAction(
     NodeValue: XmlTree.Element, TypeId: str
-) -> tuple[GeomKind, AnyValue] | None:
+) -> tuple[GeomKind, GeometryTypes] | None:
     IsArc = TypeId == "Part::GeomArcOfEllipse"
     Value = NodeValue.find("./ArcOfEllipse" if IsArc else "./Ellipse")
     if Value is None:
