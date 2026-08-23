@@ -2574,7 +2574,7 @@ def LinkedObjectA(ObjValue: NativeObject) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def LinkedObject(ObjValue: NativeObject) -> dict[str, AnyValue]:
+def LinkedObject(ObjValue: NativeObject) -> dict[str, object]:
     PropName = LinkedObjectA(ObjValue)
     return XlinkData(ObjValue, PropName) if PropName else XlinkData(ObjValue, "")
 
