@@ -21,7 +21,6 @@ def parse(
     forbid_entities: bool = ...,
     forbid_external: bool = ...,
 ) -> Element: ...
-
 def iterparse(
     source: str | SupportsRead[str] | SupportsRead[bytes],
     events: Sequence[str] | None = None,
@@ -31,7 +30,6 @@ def iterparse(
     forbid_entities: bool = ...,
     forbid_external: bool = ...,
 ) -> Iterator[tuple[str, Element]]: ...
-
 def fromstring(
     text: str | bytes,
     *,
@@ -39,7 +37,6 @@ def fromstring(
     forbid_entities: bool = ...,
     forbid_external: bool = ...,
 ) -> Element: ...
-
 def XML(
     text: str | bytes,
     *,
