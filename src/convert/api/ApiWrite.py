@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from interchange import CadDocument
@@ -30,7 +29,7 @@ def WriteDocument(
     Overwrite: bool = False,
     ValidateData: bool = True,
     AllowCarrier: bool = True,
-    InputValues: TypeMap[str, AnyValue] | None = None,
+    InputValues: TypeMap[str, object] | None = None,
 ) -> WriteResult:
     WriteOpts = WriteOptions(
         configuration=Configuration,

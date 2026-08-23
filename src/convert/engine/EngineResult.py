@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass as DataClass
 from typing import TypeVar
 
@@ -19,12 +18,12 @@ from convert.adapters.base.TransferContract import CapTransfer as CapabilityTran
 from convert.adapters.base.WriteResult import WriteResult
 
 # reflected getters need their public package owner without replacing concrete descriptors
-GetterType = TypeVar("GetterType", bound=Callable[..., object])
+GetterType = TypeVar("GetterType")
 
 
 # public schema ownership differs from the focused implementation module by design
 def SetResultOwner(GetterValue: GetterType) -> GetterType:
-    GetterValue.__module__ = "convert.engine"
+    setattr(GetterValue, "__module__", "convert.engine")
     return GetterValue
 
 
