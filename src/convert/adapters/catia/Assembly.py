@@ -787,6 +787,11 @@ class SearchState:
     LimitName: str | None
 
 
+# limit reads stay behind one predicate because scan callbacks refresh state each visit
+def HasSearchLimit(State: SearchState) -> bool:
+    return State.LimitName is not None
+
+
 # this definition exists because focused behavior needs one stable owner
 def ComponentRef(
     Label: str, Settings: ReadOptions
@@ -852,7 +857,7 @@ def ScanRootMut(
     State: SearchState,
 ) -> None:
     Pending: list[tuple[FilePath, int]] = [(RootValue, 0)]
-    while Pending and State.LimitName is None:
+    while Pending and not HasSearchLimit(State):
         Folder, Depth = Pending.pop(0)
         Entries, Diagnostic = FolderEntries(Folder)
         if Diagnostic is not None:
@@ -868,7 +873,7 @@ def ScanRootMut(
                 MaxTotalBytes,
                 State,
             )
-            if State.LimitName is not None:
+            if HasSearchLimit(State):
                 break
 
 
