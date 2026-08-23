@@ -3343,7 +3343,7 @@ def IsCircleChain(
                     ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-10
                 )
                 for ActualValue, ExpectedValue in zip(
-                    CircleData[2] or (), ExpectedCircle, strict=True
+                    CircleData[2], ExpectedCircle, strict=True
                 )
             )
         )
