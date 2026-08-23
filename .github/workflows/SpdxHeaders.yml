@@ -389,7 +389,10 @@ jobs:
             --base "$BASE_SHA" \
             --head "$REPAIR_HEAD" \
             --worktree "$SOURCE_ROOT"
-          git -C "$SOURCE_ROOT" status --porcelain | grep -q . && exit 1 || true
+          if [ -n "$(git -C "$SOURCE_ROOT" status --porcelain)" ]; then
+            echo "::error::The repaired worktree is not clean."
+            exit 1
+          fi
 
       - name: Push only if the event head is still current
         env:
