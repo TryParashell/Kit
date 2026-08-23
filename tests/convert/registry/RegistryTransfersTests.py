@@ -172,9 +172,9 @@ class OnlyCarrier(ResultAdapter):
         )
         return ReplaceValue(
             ResultData,
-            Transfers=TransferValues,
-            IsAppUsable=True,
-            IsVendorLoadable=True,
+            transfers=TransferValues,
+            application_usable=True,
+            vendor_loadable=True,
         )
 
 
