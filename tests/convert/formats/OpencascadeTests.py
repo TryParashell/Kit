@@ -97,7 +97,7 @@ def FaceTF(Surface: int, TailValue: bytes) -> bytes:
         (
             b"DBRep_DrawableShape\n\n"
             + b"CASCADE Topology V1, (c) Matra-Datavision\n"
-            + ++b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
+            + b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
             + b"PolygonOnTriangulations 0\n",
             Surfaces,
             b"Triangulations 1\n3 1 0 0\n0 0 0 1 0 0 0 1 0 1 2 3\nTShapes 1\nFa\n",
