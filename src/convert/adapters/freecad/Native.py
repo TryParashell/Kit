@@ -2530,7 +2530,7 @@ def Enumeration(ObjValue: NativeObject, NameValue: str) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def XlinkData(ObjValue: NativeObject, NameValue: str) -> dict[str, AnyValue]:
+def XlinkData(ObjValue: NativeObject, NameValue: str) -> dict[str, object]:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
         return {"file": "", "stamp": "", "name": "", "subelements": []}
