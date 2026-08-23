@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyInfo, Never
+from typing import Never
 
 from interchange import (
     BrepBody,
