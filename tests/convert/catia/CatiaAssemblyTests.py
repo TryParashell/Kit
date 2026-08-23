@@ -601,8 +601,8 @@ def TestCatproduct() -> None:
             Component,
             Replace(
                 Options,
-                StrictMode=False,
-                OptionValues=FrozenMapping(Values),
+                strict=False,
+                values=FrozenMapping(Values),
             ),
         )
         return Replace(DocValue, source=Replace(DocValue.source, sha256="0" * 64))
