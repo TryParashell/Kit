@@ -17,7 +17,7 @@ from typing import get_origin as GetOrigin
 from typing import get_type_hints as GetTypeHints
 
 from interchange.serialization.MigrationRegistry import KMigrationRegistry
-from interchange.serialization.RecordType import DataRecord
+from interchange.serialization.RecordType import DataRecord, RecordCtor
 from interchange.serialization.Wire import ResolveField
 from interchange.serialization.WireData import WireData
 
@@ -47,5 +47,5 @@ def DecodeRecord(
         if isinstance(ArgumentValue, dict) and GetOrigin(FieldHint) is MappingBase:
             MapValue = CastValue(dict[object, object], ArgumentValue)
             Arguments[FieldValue.name] = FrozenMap(MapValue)
-    RecordFactory = CastValue(CallableType[..., object], TargetType)
+    RecordFactory = CastValue(RecordCtor, TargetType)
     return RecordFactory(**Arguments)
