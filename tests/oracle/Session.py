@@ -597,7 +597,7 @@ class OracleSession(
 # keeps this focused behavior isolated so regressions remain immediately visible
 def PartTemplate(CadApp: object) -> str:
     Template = CastValue(ComDispatch, CadApp).GetUserPreferenceStringValue(8)
-    if isinstance(Template, str) and Template:
+    if Template:
         return Template
     raise OracleMissing("no default SOLIDWORKS part template is configured")
 
