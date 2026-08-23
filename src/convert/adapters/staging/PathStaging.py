@@ -197,8 +197,8 @@ def WritePathStaged(
                 StagedTarget,
                 ReplaceValue(
                     OptionsData,
-                    Overwrite=False,
-                    OptionValues=FreezeMapping(OptionValues),
+                    overwrite=False,
+                    values=FreezeMapping(OptionValues),
                 ),
                 AllowCarrier,
                 NeedSelfContained,
@@ -212,4 +212,4 @@ def WritePathStaged(
     except BaseException:
         RemoveCreated(tuple(reversed(CreatedValues)))
         raise
-    return ReplaceValue(ResultData, OutputPath=FinalPath)
+    return ReplaceValue(ResultData, path=FinalPath)

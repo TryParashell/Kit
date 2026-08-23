@@ -178,7 +178,7 @@ def RunCheckedMut(
         )
     TransferValues = CheckTransfers(DocumentData, AdapterData.info, ResultData)
     CheckedResult = NormalizeUsable(
-        ReplaceValue(ResultData, Transfers=TransferValues, DroppedCaps=frozenset())
+        ReplaceValue(ResultData, transfers=TransferValues, dropped=frozenset())
     )
     if NeedSelfContained and CheckedResult.Requirements:
         raise UsabilityError(AdapterData.info.FormatId, CheckedResult)
