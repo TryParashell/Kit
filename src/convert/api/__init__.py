@@ -126,7 +126,7 @@ def write_document(
     overwrite: bool = False,
     validate: bool = True,
     allow_carrier: bool = True,
-    values: Mapping[str, Any] | None = None,
+    values: Mapping[str, object] | None = None,
 ) -> WriteResult:
     return WriteDocument(
         document,
