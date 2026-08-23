@@ -128,21 +128,12 @@ def CheckInfo() -> None:
         == "(self, format_id: 'str', name: 'str', version: 'str', extensions: 'tuple[str, ...]', aliases: 'tuple[str, ...]' = (), capabilities: 'frozenset[Capability]' = frozenset(), media_types: 'tuple[str, ...]' = (), native_capabilities: 'frozenset[Capability]' = frozenset(), part_extensions: 'tuple[str, ...]' = (), assembly_extensions: 'tuple[str, ...]' = ()) -> None"
     )
     assert (
-        str(
-            Inspect.signature(
-                Typing.cast("Typing.Callable[..., object]", AdapterInfo.extensions_for)
-            )
-        )
+        str(Inspect.signature(AdapterInfo.extensions_for))
         == "(self, *, assembly: 'bool') -> 'tuple[str, ...]'"
     )
+    assert getattr(AdapterInfo.extensions_for, "__name__") == "extensions_for"
     assert (
-        Typing.cast("Typing.Callable[..., object]", AdapterInfo.extensions_for).__name__
-        == "extensions_for"
-    )
-    assert (
-        Typing.cast(
-            "Typing.Callable[..., object]", AdapterInfo.extensions_for
-        ).__module__
+        getattr(AdapterInfo.extensions_for, "__module__")
         == "convert.adapters.base"
     )
     assert InfoData.extensions_for(assembly=False) == ()
