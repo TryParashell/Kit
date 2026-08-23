@@ -108,6 +108,11 @@ class AssemblyData(ModelBase):
 
 
 # embedded document imports stay at the bottom so the recursive assembly and
-# document graph resolves completely no matter which module is imported first
-from interchange.assembly.ComponentDocument import ComponentDoc  # noqa: E402
-from interchange.document.models.DocumentModel import CadDocument  # noqa: E402
+# document graph resolves completely no matter which module is imported first;
+# runtime hint resolution requires these names while the graph stays recursive
+from interchange.assembly.ComponentDocument import (  # lgtm[py/cyclic-import]
+    ComponentDoc,
+)
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
+    CadDocument,
+)

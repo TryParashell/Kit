@@ -28,5 +28,8 @@ class ComponentDoc(ModelBase):
 
 
 # the linked document type binds at the bottom so the recursive assembly and
-# document graph resolves completely no matter which module is imported first
-from interchange.document.models.DocumentModel import CadDocument  # noqa: E402
+# document graph resolves completely no matter which module is imported first;
+# runtime hint resolution requires this name while the graph stays recursive
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
+    CadDocument,
+)
