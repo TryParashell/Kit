@@ -68,7 +68,7 @@ def RequireOwned(
 
 
 # record maps stay data driven because every topology family follows the same identifier contract
-def SetMapsMut(Instance: AnyInfo, Model: BrepModel) -> None:
+def SetMapsMut(Instance: ModelGraph, Model: BrepModel) -> None:
     MapNames = (
         "vertices",
         "curves",
@@ -91,7 +91,7 @@ def SetMapsMut(Instance: AnyInfo, Model: BrepModel) -> None:
 
 
 # ownership maps start independently because each topology relation has a distinct validation rule
-def SetOwnersMut(Instance: AnyInfo, Model: BrepModel) -> None:
+def SetOwnersMut(Instance: ModelGraph, Model: BrepModel) -> None:
     setattr(Instance, "coedge_owner", {})
     setattr(Instance, "loop_face", {})
     setattr(
@@ -109,7 +109,7 @@ def SetOwnersMut(Instance: AnyInfo, Model: BrepModel) -> None:
 
 
 # coedge ownership stays isolated because loops and wires are mutually exclusive parent families
-def BindCoedgesMut(Instance: AnyInfo, Model: BrepModel) -> None:
+def BindCoedgesMut(Instance: ModelGraph, Model: BrepModel) -> None:
     for LoopValue in Model.loops:
         for CoedgeId in LoopValue.coedge_ids:
             Instance._bind_coedge(CoedgeId, "loop", LoopValue.id)
@@ -119,7 +119,7 @@ def BindCoedgesMut(Instance: AnyInfo, Model: BrepModel) -> None:
 
 
 # face ownership stays isolated because loops and face uses validate separate hierarchy edges
-def BindFacesMut(Instance: AnyInfo, Model: BrepModel) -> dict[str, str]:
+def BindFacesMut(Instance: ModelGraph, Model: BrepModel) -> dict[str, str]:
     for FaceValue in Model.faces:
         for LoopId in FaceValue.loop_ids:
             BindOnceMut(Instance.loop_face, LoopId, FaceValue.id, "loop", "face")
@@ -135,7 +135,7 @@ def BindFacesMut(Instance: AnyInfo, Model: BrepModel) -> dict[str, str]:
 
 
 # region ownership stays isolated because shells regions and bodies form the outer hierarchy
-def BindRegionsMut(Instance: AnyInfo, Model: BrepModel) -> dict[str, str]:
+def BindRegionsMut(Instance: ModelGraph, Model: BrepModel) -> dict[str, str]:
     ShellOwners: dict[str, str] = {}
     for RegionValue in Model.regions:
         for ShellUseId in RegionValue.shell_use_ids:
@@ -150,7 +150,7 @@ def BindRegionsMut(Instance: AnyInfo, Model: BrepModel) -> dict[str, str]:
 
 # orphan checks stay grouped because every graph layer must have exactly one structural owner
 def CheckOwners(
-    Instance: AnyInfo,
+    Instance: ModelGraph,
     FaceOwners: Mapping[str, object],
     ShellOwners: Mapping[str, object],
 ) -> None:
@@ -163,7 +163,7 @@ def CheckOwners(
 
 
 # unreferenced face checks stay explicit because native topology cannot serialize orphan surfaces
-def CheckFaces(Instance: AnyInfo, Model: BrepModel) -> None:
+def CheckFaces(Instance: ModelGraph, Model: BrepModel) -> None:
     UsedFaces = {FaceUse.face_id for FaceUse in Model.face_uses}
     MissingFace = next(
         (FaceId for FaceId in Instance.faces if FaceId not in UsedFaces), None
@@ -179,7 +179,7 @@ def CheckFaces(Instance: AnyInfo, Model: BrepModel) -> None:
 
 
 # edge incidence stays isolated because native output only supports manifold edge ownership
-def IndexEdgesMut(Instance: AnyInfo, Model: BrepModel) -> None:
+def IndexEdgesMut(Instance: ModelGraph, Model: BrepModel) -> None:
     for CoedgeValue in Model.coedges:
         Instance.edge_uses[CoedgeValue.edge_id].append(CoedgeValue.id)
     for EdgeId, UsesValue in Instance.edge_uses.items():
@@ -190,7 +190,7 @@ def IndexEdgesMut(Instance: AnyInfo, Model: BrepModel) -> None:
 
 
 # graph construction composes focused phases because each topology relation validates independently
-def InitGraph(Instance: AnyInfo, Model: BrepModel) -> None:
+def InitGraph(Instance: ModelGraph, Model: BrepModel) -> None:
     SetMapsMut(Instance, Model)
     SetOwnersMut(Instance, Model)
     BindCoedgesMut(Instance, Model)
@@ -202,7 +202,7 @@ def InitGraph(Instance: AnyInfo, Model: BrepModel) -> None:
 
 
 # coedge binding remains a graph method because later queries consume its parent identity directly
-def BindCoedge(Instance: AnyInfo, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
+def BindCoedge(Instance: ModelGraph, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
     OwnerMap = Instance.coedge_owner
     if CoedgeId in OwnerMap:
         Unsupported(f"B-rep coedge {CoedgeId} belongs to multiple loop or wire values")
