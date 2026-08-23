@@ -186,8 +186,8 @@ class LoadableAdapter(ResultAdapter):
     ) -> WriteResult:
         return ReplaceValue(
             super().write(document, destination, options),
-            IsAppUsable=False,
-            IsVendorLoadable=True,
+            application_usable=False,
+            vendor_loadable=True,
         )
 
 
