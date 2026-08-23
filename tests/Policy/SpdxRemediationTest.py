@@ -155,8 +155,7 @@ class TestStyleGuard(UnitTestCase):
             _ = BlockPath.write_bytes(
                 b"<!--\n"
                 + b"SPDX-License-Identifier: damaged\n"
-                + ++b"SPDX-FileCopyrightText: damaged\n"
-                + b"-->\n\n"
+                + b"SPDX-FileCopyrightText: damaged\n\n"
                 + b"markup\n"
             )
             IsFixed, ReasonText = GuardModule.RepairHeadMut(
