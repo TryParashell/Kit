@@ -29,32 +29,36 @@ from interchange.brep.topology.BrepTopology import (
 # the validation view decouples topology storage from independent diagnostic passes
 class BrepView(TypeProtocol):
     @property
-    def curves(self) -> tuple[BrepCurve, ...]: ...
+    def curves(self) -> tuple[BrepCurve, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def pcurves(self) -> tuple[BrepPcurve, ...]: ...
+    def pcurves(self) -> tuple[BrepPcurve, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def surfaces(self) -> tuple[BrepSurface, ...]: ...
+    def surfaces(self) -> tuple[BrepSurface, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def vertices(self) -> tuple[BrepVertex, ...]: ...
+    def vertices(self) -> tuple[BrepVertex, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def edges(self) -> tuple[BrepEdge, ...]: ...
+    def edges(self) -> tuple[BrepEdge, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def coedges(self) -> tuple[BrepCoedge, ...]: ...
+    def coedges(self) -> tuple[BrepCoedge, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def loops(self) -> tuple[BrepLoop, ...]: ...
+    def loops(self) -> tuple[BrepLoop, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def wires(self) -> tuple[BrepWire, ...]: ...
+    def wires(self) -> tuple[BrepWire, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def faces(self) -> tuple[BrepFace, ...]: ...
+    def faces(self) -> tuple[BrepFace, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def face_uses(self) -> tuple[BrepFaceUse, ...]: ...
+    def face_uses(
+        self,
+    ) -> tuple[BrepFaceUse, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def shells(self) -> tuple[BrepShell, ...]: ...
+    def shells(self) -> tuple[BrepShell, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def shell_uses(self) -> tuple[BrepShellUse, ...]: ...
+    def shell_uses(
+        self,
+    ) -> tuple[BrepShellUse, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def regions(self) -> tuple[BrepRegion, ...]: ...
+    def regions(self) -> tuple[BrepRegion, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def bodies(self) -> tuple[BrepBody, ...]: ...
+    def bodies(self) -> tuple[BrepBody, ...]: ...  # lgtm[py/ineffectual-statement]
     @property
-    def schema_version(self) -> str: ...
+    def schema_version(self) -> str: ...  # lgtm[py/ineffectual-statement]

@@ -142,5 +142,6 @@ class CadDocument(DocumentRoot, DocumentApi, ModelBase):
 
 
 # the assembly graph type binds at the bottom so the recursive assembly and
-# document graph resolves completely no matter which module is imported first
-from interchange.assembly.AssemblyData import AssemblyData  # noqa: E402
+# document graph resolves completely no matter which module is imported first;
+# runtime hint resolution requires this name while the graph stays recursive
+from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
