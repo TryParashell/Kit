@@ -120,7 +120,7 @@ class WriteApi(WriteLookup):
         )
         SelectedOpts = OptionsData or WriteOptions()
         if FormatId is not None:
-            SelectedOpts = ReplaceValue(SelectedOpts, TargetFormat=FormatId)
+            SelectedOpts = ReplaceValue(SelectedOpts, destination_format=FormatId)
         SelectedOpts, AllowCarrier, NeedSelfContained = GetWriteOptions(SelectedOpts)
         if not AdapterData.supports(DocumentData, TargetData):
             raise NotFoundError(
