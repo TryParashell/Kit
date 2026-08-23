@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from pathlib import Path as FilePath
 import re as Regex
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from interchange import CadDocument as KCadDocument
@@ -64,7 +63,7 @@ def convert(
     strict: bool = True,
     overwrite: bool = False,
     allow_carrier: bool = True,
-    write_values: Mapping[str, Any] | None = None,
+    write_values: Mapping[str, object] | None = None,
 ) -> ConversionResult:
     return ConvertFile(
         source,
