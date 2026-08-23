@@ -14,3 +14,8 @@ from typing import Protocol
 # reflection needs a narrow dataclass contract without weakening constructors to arbitrary values
 class DataRecord(Protocol):
     __dataclass_fields__: ClassVar[dict[str, Field[object]]]
+
+
+# record reconstruction calls record constructors with decoded field keyword values
+class RecordCtor(Protocol):
+    def __call__(self, **FieldValues: object) -> object: ...

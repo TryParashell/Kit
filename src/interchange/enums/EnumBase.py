@@ -9,12 +9,15 @@
 from enum import StrEnum as StringEnum
 from typing import cast as CastValue
 
+from typing_extensions import override as Override
+
 
 # shared enum behavior keeps compatibility handling consistent across every model category
 class WireEnum(StringEnum):
     locals()["__slots__"] = ()
 
     # canonical aliases stay statically typed without appearing as duplicate public members
+    @Override
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
         RawMemberMap: object = type.__getattribute__(cls, "_member_map_")
