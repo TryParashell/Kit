@@ -44,13 +44,11 @@ def GetMeshErrors(DocumentValue: CadDocument) -> tuple[str, ...]:
         ):
             ErrorValues.append(f"mesh {MeshValue.id} contains a non-finite normal")
         for TriangleValue in MeshValue.triangles:
-            if (
-                len(TriangleValue) != 3
-                or any(type(IndexValue) is not int for IndexValue in TriangleValue)
-                or any(
-                    IndexValue < 0 or IndexValue >= len(MeshValue.vertices)
-                    for IndexValue in TriangleValue
-                )
+            if any(
+                type(IndexValue) is not int for IndexValue in TriangleValue
+            ) or any(
+                IndexValue < 0 or IndexValue >= len(MeshValue.vertices)
+                for IndexValue in TriangleValue
             ):
                 ErrorValues.append(f"mesh {MeshValue.id} contains an invalid triangle")
                 break

@@ -4526,7 +4526,7 @@ def ScanRecordMut(
     ScanSurfMut(BodyData, OffsetData, KindValueData, Records, Ambiguous)
     ScanCurveMut(BodyData, OffsetData, KindValueData, Records, Ambiguous)
     ScanArrayMut(BodyData, OffsetData, KindValueData, Records, Ambiguous, Budget)
-    if Budget.KIsValid and not HasScanCapacity(Tables, Records):
+    if not HasScanCapacity(Tables, Records):
         Budget.KIsValid = False
 
 

@@ -13,6 +13,8 @@ from pathlib import Path as FilePath
 from typing import Callable, Iterator, Protocol, Sequence, cast as CastValue
 import warnings as WarningApi
 
+from typing_extensions import override as Override
+
 # centralizes shared evidence so every related assertion uses one value
 KPartInfo = 1
 
