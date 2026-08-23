@@ -15,7 +15,7 @@ import math as MathValue
 from pathlib import Path as FilePath, PurePosixPath
 import re as RegexLib
 import struct as Struct
-from typing import Any as AnyValue, cast as Cast
+from typing import cast as Cast
 
 # annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
@@ -281,7 +281,7 @@ def ParseDataMap(DataNode: XmlTree.Element) -> dict[str, XmlTree.Element]:
 
 # this definition validates native object dependency relationships
 def ParseDeps(
-    ObjectsNode: XmlTree.Element, DeclByName: Mapping[str, AnyValue]
+    ObjectsNode: XmlTree.Element, DeclByName: Mapping[str, object]
 ) -> dict[str, tuple[str, ...]]:
     Dependencies: dict[str, tuple[str, ...]] = {}
     for NodeValue in ObjectsNode.findall("./ObjectDeps"):
@@ -425,8 +425,8 @@ def ProbeNative(DataValue: bytes) -> tuple[float, str]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ElemData(NodeValue: XmlTree.Element) -> dict[str, AnyValue]:
-    Result: dict[str, AnyValue] = {
+def ElemData(NodeValue: XmlTree.Element) -> dict[str, object]:
+    Result: dict[str, object] = {
         "tag": NodeValue.tag,
         "attributes": dict(sorted(NodeValue.attrib.items())),
     }
@@ -440,7 +440,7 @@ def ElemData(NodeValue: XmlTree.Element) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeObjectA(ObjValue: NativeObject) -> dict[str, AnyValue]:
+def NativeObjectA(ObjValue: NativeObject) -> dict[str, object]:
     return {
         "name": ObjValue.name,
         "type_id": ObjValue.type_id,
@@ -461,13 +461,13 @@ def NativeObjectA(ObjValue: NativeObject) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ReadStringHash(Native: NativeArchive) -> dict[str, AnyValue] | None:
+def ReadStringHash(Native: NativeArchive) -> dict[str, object] | None:
     Nodes = [
         ElemData(NodeValue)
         for NodeValue in Native.root
         if NodeValue.tag in StringHasherTags
     ]
-    Entries: list[dict[str, AnyValue]] = []
+    Entries: list[dict[str, object]] = []
     for NodeValue in Native.root:
         if NodeValue.tag not in StringHasherTags:
             continue
@@ -484,7 +484,7 @@ def ReadStringHash(Native: NativeArchive) -> dict[str, AnyValue] | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OtherEntryData(Native: NativeArchive) -> list[dict[str, AnyValue]]:
+def OtherEntryData(Native: NativeArchive) -> list[dict[str, object]]:
     Represented: set[str] = set()
     for ObjValue in Native.objects:
         for NodeValue in ObjValue.properties.values():

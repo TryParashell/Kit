@@ -112,10 +112,10 @@ def SetOwnersMut(Instance: ModelGraph, Model: BrepModel) -> None:
 def BindCoedgesMut(Instance: ModelGraph, Model: BrepModel) -> None:
     for LoopValue in Model.loops:
         for CoedgeId in LoopValue.coedge_ids:
-            Instance._bind_coedge(CoedgeId, "loop", LoopValue.id)
+            BindCoedge(Instance, CoedgeId, "loop", LoopValue.id)
     for WireValue in Model.wires:
         for CoedgeId in WireValue.coedge_ids:
-            Instance._bind_coedge(CoedgeId, "wire", WireValue.id)
+            BindCoedge(Instance, CoedgeId, "wire", WireValue.id)
 
 
 # face ownership stays isolated because loops and face uses validate separate hierarchy edges
@@ -286,10 +286,6 @@ class ModelGraph:
         self.wire_body = {}
         self.wires = {}
         InitGraph(self, Model)
-
-    # graph construction keeps this binding private so parent ownership cannot diverge
-    def _bind_coedge(self, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
-        BindCoedge(self, CoedgeId, KindValue, OwnerId)
 
     # topology emitters need one typed route from coedges back to faces
     def face_for_coedge(self, CoedgeId: str) -> BrepFace | None:
