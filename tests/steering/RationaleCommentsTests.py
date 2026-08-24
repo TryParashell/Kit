@@ -44,8 +44,10 @@ def RunModule(
         "--root",
         str(RootPath),
     ]
-    if BaseRef is not None and HeadRef is not None:
-        ArgItems.extend(["--base", BaseRef, "--head", HeadRef])
+    if BaseRef is not None:
+        ArgItems.extend(["--base", BaseRef])
+    if HeadRef is not None:
+        ArgItems.extend(["--head", HeadRef])
     return Subprocess.run(
         ArgItems,
         cwd=WorkPath,

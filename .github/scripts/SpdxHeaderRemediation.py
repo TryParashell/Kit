@@ -90,11 +90,12 @@ def GetLineEnd(
     return len(SourceLines) if MarkerFound else None
 
 
-# block notice bounds require a closing delimiter so malformed markup cannot swallow source content
+# block notice bounds stay fail closed because only proven spdx runs may be replaced
 def GetBlockEnd(SourceLines: list[bytes], HeaderSize: int) -> int | None:
     if not SourceLines or SourceLines[0].strip() != b"<!--":
         return None
     MarkerFound = False
+    BlankIndex: int | None = None
     MaxIndex = min(len(SourceLines), HeaderSize + 2)
     for LineIndex in range(1, MaxIndex):
         StrippedLine = SourceLines[LineIndex].strip()
@@ -103,10 +104,15 @@ def GetBlockEnd(SourceLines: list[bytes], HeaderSize: int) -> int | None:
             if EndIndex < len(SourceLines) and not SourceLines[EndIndex].strip():
                 EndIndex += 1
             return EndIndex if MarkerFound else None
+        if not StrippedLine:
+            BlankIndex = LineIndex
+            continue
         if not IsHeaderPart(StrippedLine):
-            return None
+            break
         MarkerFound = MarkerFound or StrippedLine.startswith(KHeaderStarts[:2])
-    return None
+    if BlankIndex is None or not MarkerFound:
+        return None
+    return BlankIndex + 1
 
 
 # guarded replacement repairs only a bounded leading notice proven to contain an spdx marker
