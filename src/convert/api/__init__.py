@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from pathlib import Path as FilePath
 import re as Regex
+import sys as SystemLib
 from typing import Mapping as TypeMap
 
 from interchange import CadDocument as KCadDocument
 from interchange import PayloadRole as KPayloadRole
 from interchange import frozen_mapping as FreezeMapping
+from interchange.compatibility.PythonCompat import BindTypeGlobals
 
 from convert.adapters.base.AdapterInfo import AdapterInfo as KAdapterInfo
 from convert.adapters.base.ContractTypes import (
@@ -140,6 +142,23 @@ def write_document(
     )
 
 
+# public wire annotations keep the historical any spelling because schema tools resolve annotation text
+def ApplyWireAnnots() -> None:
+    setattr(
+        convert,
+        "__annotations__",
+        {**convert.__annotations__, "write_values": "Mapping[str, Any] | None"},
+    )
+    setattr(
+        write_document,
+        "__annotations__",
+        {**write_document.__annotations__, "values": "Mapping[str, Any] | None"},
+    )
+
+
+ApplyWireAnnots()
+
+
 # private construction remains available for integrations that own their own registry lifecycle
 def _build_registry() -> AdapterRegistry:
     return GetRegistry()
@@ -152,5 +171,8 @@ Mapping = TypeMap
 Path = FilePath
 PayloadRole = KPayloadRole
 frozen_mapping = FreezeMapping
+
+BindTypeGlobals((SystemLib.modules[__name__],), ())
+
 is_windows_device_name = IsDeviceName
 re = Regex

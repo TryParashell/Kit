@@ -51,7 +51,7 @@ class WriteOptions(ContractBase):
     def OptionValues(self) -> TypeMap[str, object]:
         return self.values
 
-    # explicit construction keeps canonical storage and historical keywords visible to static callers
+    # explicit construction keeps canonical storage and historical keywords visible while avoiding slotted rebuild super binding failures
     def __init__(
         self,
         configuration: str | None = None,
@@ -66,7 +66,7 @@ class WriteOptions(ContractBase):
         TargetFormat: str | None = None,
         OptionValues: TypeMap[str, object] | None = None,
     ) -> None:
-        super().__init__()
+        object.__init__(self)
         object.__setattr__(
             self,
             "configuration",

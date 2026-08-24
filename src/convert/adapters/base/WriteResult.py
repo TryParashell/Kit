@@ -61,6 +61,7 @@ class WriteResult(ResultOutputs, ResultPolicy, CapabilityView, ContractBase):
         CheckResult(self)
 
     near_lossless = CapabilityView.IsNearLossless
+    roundtrip_safe = CapabilityView.IsRoundtripSafe
 
     # legacy callers need the full transferred capability set without reflection
     @property

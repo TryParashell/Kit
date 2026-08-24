@@ -115,6 +115,7 @@ setattr(AdapterInfo, "__setstate__", SetPickleState)
 
 # reflected signatures keep the historical keyword only assembly contract introspectable
 def ApplySignatures() -> None:
+    setattr(AdapterInfo.extensions_for, "__module__", "convert.adapters.base")
     setattr(
         AdapterInfo.extensions_for,
         "__annotations__",
