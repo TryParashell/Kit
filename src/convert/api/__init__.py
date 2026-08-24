@@ -145,6 +145,7 @@ def _build_registry() -> AdapterRegistry:
     return GetRegistry()
 
 
+# module import must expose one ready registry because adapters historically imported it directly
 registry = _build_registry()
 
 Mapping = TypeMap

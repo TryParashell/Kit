@@ -7,13 +7,7 @@
 # to you under it immediately and permanently.
 re/tooling/ProgramDecomposition/ProgramRenderer.py	SPL001	declaration 'RenderRegistry' has 31 logical lines and must be split at 30
 src/convert/adapters/base/AdapterInfo.py	SPL001	declaration 'AdapterInfo' has 60 logical lines and must be split at 30
-src/convert/adapters/base/AdapterProtocols.py	RAT001	module binding needs one immediate rationale comment
-src/convert/adapters/base/AdapterProtocols.py	RAT001	module binding needs one immediate rationale comment
-src/convert/adapters/base/AdapterProtocols.py	RAT001	module binding needs one immediate rationale comment
-src/convert/adapters/base/AdapterProtocols.py	RAT001	module binding needs one immediate rationale comment
-src/convert/adapters/base/AdapterProtocols.py	RAT001	module binding needs one immediate rationale comment
 src/convert/adapters/base/ContractCompat.py	CON001	constant 'ContractValue' must start with K
-src/convert/adapters/base/ContractCompat.py	RAT003	rationale must use lowercase text only
 src/convert/adapters/base/ReadOptions.py	MRK001	boolean function 'include_brep' must start with Is Has or Can
 src/convert/adapters/base/ReadOptions.py	MRK001	boolean function 'include_tessellation' must start with Is Has or Can
 src/convert/adapters/base/ReadOptions.py	MRK001	boolean function 'strict' must start with Is Has or Can
@@ -34,7 +28,6 @@ src/convert/adapters/base/WriteResult.py	MRK001	boolean function 'roundtrip_safe
 src/convert/adapters/base/WriteResult.py	MRK001	boolean function 'application_usable' must start with Is Has or Can
 src/convert/adapters/base/WriteResult.py	MRK001	boolean function 'vendor_loadable' must start with Is Has or Can
 src/convert/adapters/base/WriteResult.py	MRK001	boolean function 'near_lossless' must start with Is Has or Can
-src/convert/adapters/catia/__init__.py	RAT003	rationale must use lowercase text only
 src/convert/adapters/catia/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Adapter.py	MRK001	boolean function 'supports' must start with Is Has or Can
@@ -130,10 +123,6 @@ src/convert/adapters/registry/AdapterDiscovery.py	CMT001	code comment is not an 
 src/convert/adapters/registry/AdapterDiscovery.py	CMT001	code comment is not an allowed rationale license line or type pragma
 src/convert/adapters/registry/AdapterDiscovery.py	CMT001	code comment is not an allowed rationale license line or type pragma
 src/convert/adapters/registry/RegistryDiscover.py	NAM001	function identifier 'ValidateAdapterInfo' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/registry/RegistryDiscoveryApi.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/convert/adapters/registry/RegistryDiscoveryApi.py	RAT002	rationale comment needs a blank line immediately before it
-src/convert/adapters/registry/RegistryDiscoveryApi.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/convert/adapters/registry/RegistryDiscoveryApi.py	RAT002	rationale comment needs a blank line immediately before it
 src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'format_id' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'dropped' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryState.py	NAM001	attribute identifier 'reader' must be PascalCase ASCII letters with length 5 through 25
@@ -156,10 +145,8 @@ src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'Is
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'IsOptionalStamps' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	variable identifier 'Item' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Container.py	SPL001	declaration 'SldprtArchive' has 35 logical lines and must be split at 30
-src/convert/adapters/solidworks/container/Container.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/container/Container.py	NAM001	function identifier 'open' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Container.py	NAM001	function identifier 'get' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Container.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/container/Container.py	SPL001	declaration 'BuildSldprt' has 40 logical lines and must be split at 30
 src/convert/adapters/solidworks/container/Definition.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Definition.py	SPL001	declaration 'ArchiveWriter' has 35 logical lines and must be split at 30
@@ -167,16 +154,11 @@ src/convert/adapters/solidworks/container/Definition.py	NAM001	variable identifi
 src/convert/adapters/solidworks/container/Parasolid.py	NAM001	argument identifier 'partition' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Parasolid.py	NAM001	argument identifier 'solidworks_feature_ids' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Parasolid.py	MRK001	boolean function 'ContainsPayload' must start with Is Has or Can
-src/convert/adapters/solidworks/core/Adapter.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/core/Adapter.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/core/Adapter.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/core/Adapter.py	MRK001	boolean function 'supports' must start with Is Has or Can
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/core/Adapter.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/core/Adapter.py	RAT001	declaration needs one immediate rationale comment
 src/convert/adapters/solidworks/core/Adapter.py	MRK001	boolean function 'BooleanValue' must start with Is Has or Can
 src/convert/adapters/solidworks/core/Display.py	CON001	constant 'Positions' must start with K
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'EncodeNative' has 32 logical lines and must be split at 30
@@ -201,11 +183,8 @@ src/convert/adapters/solidworks/programs/Common/ProgramContract.py	CON001	consta
 src/convert/adapters/solidworks/programs/Common/ProgramContract.py	CON001	constant 'StreamPrograms' must start with K
 src/convert/adapters/solidworks/programs/Common/ProgramContract.py	CON001	constant 'FieldOverrides' must start with K
 src/convert/adapters/solidworks/programs/configuration/default/Program.py	NAM001	variable identifier '_OwnerIndex' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/resolved/Core.py	SPL001	declaration 'ArcGeometry' has 47 logical lines and must be split at 30
 src/convert/adapters/solidworks/resolved/Core.py	MRK001	boolean function 'consistent' must start with Is Has or Can
 src/convert/adapters/solidworks/resolved/Core.py	NAM001	function identifier 'sweep_angle_degrees' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/resolved/Core.py	RAT001	declaration needs one immediate rationale comment
-src/convert/adapters/solidworks/resolved/Core.py	SPL001	declaration 'LayoutMath' has 31 logical lines and must be split at 30
 src/convert/api/__init__.py	NAM001	function identifier 'available_adapters' must be PascalCase ASCII letters with length 5 through 15
 src/convert/api/__init__.py	NAM001	function identifier 'convert' must be PascalCase ASCII letters with length 5 through 15
 src/convert/api/__init__.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
@@ -243,7 +222,6 @@ src/convert/api/__init__.py	NAM001	argument identifier 'values' must be PascalCa
 src/convert/api/__init__.py	NAM001	function identifier '_build_registry' must be PascalCase ASCII letters with length 5 through 15
 src/convert/api/__init__.py	CON001	constant 'registry' must start with K
 src/convert/api/__init__.py	NAM001	variable identifier 'registry' must be PascalCase ASCII letters with length 5 through 25
-src/convert/api/__init__.py	RAT001	module binding needs one immediate rationale comment
 src/convert/engine/__init__.py	NAM001	class identifier 'ConversionEngine' must be PascalCase ASCII letters with length 5 through 15
 src/convert/engine/__init__.py	NAM001	argument identifier 'registry' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
@@ -265,7 +243,6 @@ src/convert/engine/__init__.py	NAM001	argument identifier 'write_options' must b
 src/convert/engine/__init__.py	NAM001	variable identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	variable identifier 'reader' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	variable identifier 'output' must be PascalCase ASCII letters with length 5 through 25
-src/convert/engine/__init__.py	RAT001	module binding needs one immediate rationale comment
 src/convert/engine/EngineInit.py	NAM001	attribute identifier 'registry' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/EngineResult.py	CON001	constant 'GetterType' must start with K
 src/convert/engine/EngineResult.py	MRK002	function 'SetResultOwner' mutates argument GetterValue and must end with Mut
@@ -275,7 +252,6 @@ src/convert/engine/EngineResult.py	MRK001	boolean function 'application_usable' 
 src/convert/engine/EngineResult.py	MRK001	boolean function 'vendor_loadable' must start with Is Has or Can
 src/convert/engine/EngineResult.py	MRK001	boolean function 'roundtrip_safe' must start with Is Has or Can
 src/convert/engine/EngineResult.py	MRK001	boolean function 'near_lossless' must start with Is Has or Can
-src/convert/engine/EngineResult.py	RAT001	module binding needs one immediate rationale comment
 src/convert/geometry/Opencascade.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/geometry/Opencascade.py	SPL001	declaration 'ModelLocations' has 31 logical lines and must be split at 30
 src/convert/geometry/Parasolid.py	CON001	constant 'ParaSurface' must start with K
@@ -431,7 +407,6 @@ tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	NAM001	function 
 tests/convert/solidworks/core/SolidworksWriterTests.py	SPL001	declaration 'TestFPGWENRC' has 31 logical lines and must be split at 30
 tests/convert/solidworks/core/SolidworksWriterTests.py	SPL001	declaration 'TestFPTPWFENF' has 32 logical lines and must be split at 30
 tests/interchange/compatibility/PythonCompatibilityTests.py	CON001	constant 'CompatType' must start with K
-tests/interchange/compatibility/PythonCompatibilityTests.py	RAT001	declaration needs one immediate rationale comment
 tests/ProgramDecomposition/ProgramDecompositionTest.py	CON001	constant 'DigestStat' must start with K
 tests/ProgramDecomposition/ProgramDecompositionTest.py	CON001	constant 'ProgramStat' must start with K
 tools/audit/FcstdCompat.py	CMT001	code comment is not an allowed rationale license line or type pragma

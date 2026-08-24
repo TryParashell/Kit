@@ -27,7 +27,7 @@ from convert.adapters.catia.Container import (
     build_declaration as BuildDecl,
 )
 
-# explicit exports keep the CATIA compatibility boundary visible to static analysis
+# explicit exports keep the catia compatibility boundary visible to static analysis
 __all__ = (
     "CatiaAdapter",
     "CatiaAdapterError",

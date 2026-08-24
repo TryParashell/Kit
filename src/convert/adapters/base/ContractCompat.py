@@ -29,7 +29,7 @@ def IsObjectDict(FieldValue: object) -> TypeGuard[dict[object, object]]:
     return isinstance(FieldValue, dict)
 
 
-# metaclass instances require runtime narrowing before ordinary class reflection APIs accept them
+# metaclass instances require runtime narrowing before ordinary class reflection helpers accept them
 def GetClassType(ClassValue: object) -> type[object]:
     if not isinstance(ClassValue, type):
         raise TypeError("contract metadata requires a class")

@@ -78,4 +78,5 @@ class ConversionResult:
         return self.output.IsNearLossless
 
 
+# result attribution points at the public engine module so reflection sees one contract
 ConversionResult.__module__ = "convert.engine"

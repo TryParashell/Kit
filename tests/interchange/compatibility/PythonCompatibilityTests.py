@@ -82,6 +82,7 @@ class CompatDataclass(Protocol):
 @runtime_checkable
 class MethodDescriptor(Protocol):
 
+    # wrapped descriptors expose their underlying function so runtime checks can inspect binding behavior
     @property
     def __func__(self) -> FuncType: ...  # lgtm[py/ineffectual-statement]
 

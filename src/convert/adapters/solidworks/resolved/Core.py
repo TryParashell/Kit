@@ -474,6 +474,7 @@ class SweptArc:
             SpanValue -= KFullCircleDegrees
         return SpanValue
 
+    # this definition exists because compatibility callers retain the original property spelling
     def sweep_angle_degrees(self, Counterclockwise: bool) -> float:
         return self.SweepAngle(Counterclockwise)
 

@@ -25,8 +25,7 @@ Iterable = TypeIterable
 KDefaultPackage = "convert.adapters"
 
 
-# discovery api ownership isolates package introspection from ordinary registry operations
-# discovery composition needs only the typed bulk registration boundary
+# discovery api ownership isolates package introspection from ordinary registry operations behind one typed bulk boundary
 class DiscoveryHost(Protocol):
 
     # package discovery delegates mutation so transaction policy remains centralized
@@ -59,8 +58,7 @@ class DiscoveryApi(DiscoveryHost):
         )
 
 
-# bulk api ownership isolates all or nothing extension from single adapter registration
-# bulk composition needs typed state plus the single adapter registration boundary
+# bulk api ownership isolates all or nothing extension from single adapter registration while composition stays typed
 class ExtendHost(RegistryHost, Protocol):
 
     # bulk registration delegates each validated item through one transactional operation

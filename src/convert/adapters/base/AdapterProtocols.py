@@ -81,10 +81,19 @@ class CadAdapter(CadReaderAdapter, CadWriterAdapter, Protocol):
     __slots__ = ()
 
 
+# reader protocols expose a stable public module so runtime introspection and generated docs agree
 CadReaderAdapter.__module__ = "convert.adapters.base"
+
+# writer protocols need matching module attribution so structural checks treat both directions as one contract
 CadWriterAdapter.__module__ = "convert.adapters.base"
+
+# combined protocol keeps public attribution so callers reflecting the union see the contract package
 CadAdapter.__module__ = "convert.adapters.base"
+
+# string annotations resolve against the public module because runtime signatures carry names not imports
 CadReaderAdapter.read.__module__ = "convert.adapters.base"
+
+# signature metadata must live in the public module so compatibility callers resolve annotations identically
 CadWriterAdapter.write.__module__ = "convert.adapters.base"
 
 setattr(

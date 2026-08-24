@@ -273,6 +273,7 @@ KNoMixedCaps: frozenset[Capability] = frozenset()
 KNoRewritable: frozenset[str] = frozenset()
 
 
+# export payloads bundle every generated artifact so writers consume one immutable result
 @DataClass(frozen=True, slots=True)
 class Generated:
     streams: dict[str, bytes]
@@ -322,16 +323,20 @@ KWrapperMetaKeys = KSourceKeys | frozenset(
 class SldprtAdapter:
     __slots__ = ()
 
+    # adapter discovery needs metadata before callers probe or convert source documents
     @property
     def info(self) -> AdapterInfo:
         return InfoAction(self)
 
+    # source assessment stays non destructive because probing precedes any conversion commitment
     def probe(self, SourceValue: Source) -> ProbeResult:
         return Probe(self, SourceValue)
 
+    # conversion needs one neutral document result across solidworks reader implementations
     def read(self, SourceValue: Source, Options: ReadOptions | None = None) -> CadDoc:
         return ReadAction(self, SourceValue, Options)
 
+    # destination assessment stays read only because support checks must never mutate inputs
     def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
         return IsSupports(self, DocValue, TargetValue)
 

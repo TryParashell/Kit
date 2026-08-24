@@ -99,4 +99,6 @@ setattr(
         )
     ),
 )
+
+# constructor annotations stay textual because deferred evaluation avoids importing heavy model types
 ConversionEngine.__init__.__annotations__ = {"registry": "AdapterRegistry"}

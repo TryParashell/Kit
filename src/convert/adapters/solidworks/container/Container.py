@@ -137,6 +137,7 @@ class SldprtArchive:
             raise SldprtFormat(f"required stream is missing: {NameValue}")
         return DataValue
 
+    # byte level construction stays available because compatibility callers expect the conventional spelling
     @classmethod
     def from_bytes(
         cls: type[SldprtArchive],
@@ -158,6 +159,7 @@ class SldprtArchive:
     def require(self, NameValue: str) -> bytes:
         return self.Require(NameValue)
 
+    # stream inspection stays dictionary based because compatibility callers expect the plain mapping view
     @property
     def streams(self) -> dict[str, bytes]:
         return self.Streams
