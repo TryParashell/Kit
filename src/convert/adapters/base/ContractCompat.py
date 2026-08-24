@@ -18,8 +18,6 @@ from typing import TypeVar
 from typing import cast as CastValue
 from convert.adapters.base.FieldAliases import KFieldAliases
 
-from typing import override as Override
-
 # generic construction preserves each dataclass result type through the compatibility metaclass
 ContractValue = TypeVar("ContractValue")
 
@@ -101,8 +99,7 @@ class ContractMeta(type):
         return CallSignature(ParamValues, return_annotation=None)
 
     # callers can upgrade independently because old keyword names still reach compliant fields
-    @Override
-    def __call__(
+    def BuildInstance(
         self: type[ContractValue],
         *ArgValues: object,
         **NamedValues: object,
@@ -118,6 +115,8 @@ class ContractMeta(type):
                 )
         ResultValue = type.__call__(self, *ArgValues, **TranslatedValues)
         return CastValue(ContractValue, ResultValue)
+
+    __call__ = BuildInstance
 
     # class level legacy fields keep introspection and descriptor access compatible for external adapters
     def __getattr__(self, FieldName: str) -> object:

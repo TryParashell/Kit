@@ -19,8 +19,6 @@ from typing import overload as TypeOverload
 from typing import dataclass_transform as ModelTransform
 from typing import TypeVar
 
-from typing import override as Override
-
 from interchange.core.Reflection import GetFieldMap
 from interchange.serialization.RecordType import DataRecord
 from interchange.serialization.Wire import ResolveField
@@ -43,8 +41,7 @@ def GetRecordType(ClassType: type[object]) -> type[DataRecord]:
 class ModelMeta(type):
 
     # old constructor keywords remain accepted because adapters may upgrade independently
-    @Override
-    def __call__(
+    def ConstructModel(
         self: type[ModelValue],
         *ArgValues: object,
         **NamedValues: object,
@@ -64,6 +61,8 @@ class ModelMeta(type):
             TranslatedValues[ModelName] = FieldValue
         ResultValue: object = type.__call__(self, *ArgValues, **TranslatedValues)
         return CastValue(ModelValue, ResultValue)
+
+    __call__ = ConstructModel
 
 
 # shared alias behavior keeps compatibility logic out of every immutable model record
