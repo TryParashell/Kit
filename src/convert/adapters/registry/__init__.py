@@ -39,6 +39,8 @@ from convert.adapters.base.UsabilityError import ApplicationUsabilityError
 from convert.adapters.base.WriteOptions import WriteOptions as KWriteOptions
 from convert.adapters.base.WriteResult import WriteResult as KWriteResult
 
+from typing_extensions import override as Override
+
 # historical reader annotations need resolution after bindings move behind this compatibility facade
 CadReaderAdapter = KCadReaderAdapter
 
@@ -67,10 +69,50 @@ CadDocument = KCadDocument
 Iterable = TypeIterable
 
 
+# facade local registration surface keeps historical spellings attributed to this public module
+class RegisterFacade(BindingApi):
+
+    # pascal binding entry keeps reader registration reviewable beside its historical compatibility spelling
+    @Override
+    def RegisterReader(
+        self,
+        AdapterData: CadReaderAdapter,
+        **NamedValues: object,
+    ) -> None:
+        super().RegisterReader(AdapterData, **NamedValues)
+
+    # pascal writer binding stays paired with its compatibility spelling inside one composed facade
+    @Override
+    def RegisterWriter(
+        self,
+        AdapterData: CadWriterAdapter,
+        **NamedValues: object,
+    ) -> None:
+        super().RegisterWriter(AdapterData, **NamedValues)
+
+    # public reader registration keeps its established spelling while delegating validation to the shared helper
+    def register_reader(
+        self,
+        adapter: CadReaderAdapter,
+        *,
+        replace: bool = False,
+    ) -> None:
+        self.RegisterReader(adapter, ReplaceFlag=replace)
+
+    # public writer registration keeps its established spelling while delegating staging to the shared helper
+    def register_writer(
+        self,
+        adapter: CadWriterAdapter,
+        *,
+        replace: bool = False,
+    ) -> None:
+        self.RegisterWriter(adapter, ReplaceFlag=replace)
+
+
 # registry composition keeps each independent responsibility in one focused mixin module
 class AdapterRegistry(
     RegistrySeed,
-    BindingApi,
+    RegisterFacade,
     RegisterApi,
     ExtendApi,
     DiscoveryApi,

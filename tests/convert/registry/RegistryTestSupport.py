@@ -80,12 +80,13 @@ class ResultAdapter(JsonAdapter):
 class CarrierAdapter(ResultAdapter):
 
     # path restriction forces registry staging through its transactional filesystem branch
+    @Override
     def CanSupport(
         self,
-        document: CadDocument,
-        destination: Destination,
+        DocValue: CadDocument,
+        Target: Destination,
     ) -> bool:
-        return isinstance(destination, (str, FilePath))
+        return isinstance(Target, (str, FilePath))
 
     supports = CanSupport
 

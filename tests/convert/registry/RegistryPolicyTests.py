@@ -103,12 +103,13 @@ def CheckStream() -> None:
 class BundleAdapter(ResultAdapter):
 
     # path restriction forces bundle rollback through transactional filesystem staging
+    @Override
     def CanSupport(
         self,
-        document: CadDocument,
-        destination: Destination,
+        DocValue: CadDocument,
+        Target: Destination,
     ) -> bool:
-        return isinstance(destination, (str, FilePath))
+        return isinstance(Target, (str, FilePath))
 
     supports = CanSupport
 
