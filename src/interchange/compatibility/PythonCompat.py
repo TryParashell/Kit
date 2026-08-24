@@ -16,7 +16,11 @@ from types import ModuleType
 import typing as TypingTypes
 from typing import Mapping as TypeMap
 
-from interchange.compatibility.PythonCompatData import KLegacyAnnots, KLegacyModels
+from interchange.compatibility.PythonCompatData import (
+    KLeadingMetadataModels,
+    KLegacyAnnots,
+    KLegacyModels,
+)
 from interchange.core.Reflection import (
     DataField,
     GetCanonicalName,
@@ -66,11 +70,27 @@ def GetLegacyAnnot(FieldValue: DataField) -> str:
     return FieldType
 
 
+# shared metadata stays ahead of specific fields because historical entities inherited it first
+def OrderLeadNames(
+    ClassType: type[object], FieldNames: tuple[str, ...]
+) -> tuple[str, ...]:
+    if GetCanonicalName(ClassType) not in KLeadingMetadataModels:
+        return FieldNames
+    SharedNames = ("id", "provenance", "attributes")
+    LeadNames = tuple(NameText for NameText in FieldNames if NameText in SharedNames)
+    TailNames = tuple(
+        NameText for NameText in FieldNames if NameText not in SharedNames
+    )
+    return LeadNames + TailNames
+
+
 # copied field metadata lets standard dataclass reflection expose historical names safely
 def GetLegacyFields(ClassType: type[object]) -> dict[str, DataField]:
-    FieldMap: dict[str, DataField] = {}
-    for FieldValue in GetDataFields(ClassType):
-        LegacyName = GetWireField(FieldValue.name, ClassType)
+    SourceMap = {FieldValue.name: FieldValue for FieldValue in GetDataFields(ClassType)}
+    ResultFields: dict[str, DataField] = {}
+    for ModelName in OrderLeadNames(ClassType, tuple(SourceMap)):
+        FieldValue = SourceMap[ModelName]
+        LegacyName = GetWireField(ModelName, ClassType)
         LegacyField = CopyValue(FieldValue)
         setattr(LegacyField, "name", LegacyName)
         setattr(
@@ -81,8 +101,8 @@ def GetLegacyFields(ClassType: type[object]) -> dict[str, DataField]:
                 GetLegacyAnnot(FieldValue),
             ),
         )
-        FieldMap[LegacyName] = LegacyField
-    return FieldMap
+        ResultFields[LegacyName] = LegacyField
+    return ResultFields
 
 
 # reflected and canonical field maps both need one storage name lookup path
@@ -179,11 +199,18 @@ def BindCompatMut(
             ModelName,
             tuple(GetWireField(FieldName, ClassType) for FieldName in LocalFields),
         )
+        FieldIndexMap = {
+            FieldName: IndexValue for IndexValue, FieldName in enumerate(LocalFields)
+        }
+        OrderedPairs = tuple(
+            (FieldName, LegacyFieldsList[FieldIndexMap[FieldName]])
+            for FieldName in OrderLeadNames(ClassType, LocalFields)
+        )
         LegacyAnnots = {
             LegacyField: GetLegacyAnnot(GetStoredField(ClassType, ModelField))
-            for ModelField, LegacyField in zip(LocalFields, LegacyFieldsList)
+            for ModelField, LegacyField in OrderedPairs
         }
-        for ModelField, LegacyField in zip(LocalFields, LegacyFieldsList):
+        for ModelField, LegacyField in OrderedPairs:
             BindFieldMut(ClassType, ModelField, LegacyField)
             BindFieldMut(
                 ClassType,
@@ -191,10 +218,15 @@ def BindCompatMut(
                 GetModelField(LegacyField, ClassType),
             )
         setattr(ClassType, "__annotations__", LegacyAnnots)
-        MatchArgs = tuple(
-            GetWireField(FieldValue.name, ClassType)
+        KwOnlyNames = {
+            FieldValue.name
             for FieldValue in GetDataFields(ClassType)
-            if not FieldValue.kw_only
+            if FieldValue.kw_only
+        }
+        MatchArgs = tuple(
+            LegacyField
+            for ModelField, LegacyField in OrderedPairs
+            if ModelField not in KwOnlyNames
         )
         setattr(ClassType, "__match_args__", MatchArgs)
         setattr(ClassType, "__signature__", GetLegacySig(ClassType))

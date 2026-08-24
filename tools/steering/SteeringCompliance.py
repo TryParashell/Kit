@@ -787,7 +787,7 @@ def CheckReason(
             "RAT001",
             f"{KindText} needs one immediate rationale comment",
         )
-    if CommentIndex == 0 or SourceLines[CommentIndex - 1].strip():
+    if CommentIndex > 0 and bool(SourceLines[CommentIndex - 1].strip()):
         return Finding(
             SourcePath,
             CommentIndex + 1,

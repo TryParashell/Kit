@@ -15,5 +15,4 @@ from interchange.brep.validation.TopologyAccess import TopologyAccess
 
 
 # the validation view decouples topology storage from independent diagnostic passes
-class BrepView(GeometryAccess, TopologyAccess, TypeProtocol):
-    pass
+class BrepView(GeometryAccess, TopologyAccess, TypeProtocol): ...

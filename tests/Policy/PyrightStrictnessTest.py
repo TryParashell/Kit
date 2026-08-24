@@ -68,12 +68,22 @@ def TestRulePinned(RuleName: str) -> None:
     assert Config.get(RuleName) == "error", RuleName
 
 
+# hash marker stays isolated because probe text must assemble without literal adjacency
+KHashMarker = "#"
+
+# probe fragments stay split because literal pragmas would flag this scanner itself
+KIgnoreProbeText = KHashMarker + " type" + ": ignore"
+
+# pyright probes stay split because literal pragmas would flag this scanner itself
+KPyrightProbeText = KHashMarker + " pyright" + ":"
+
+
 # suppression scans keep diagnostics honest by banning inline escapes
 def TestBansEscapes() -> None:
     Offenders: list[str] = []
     for AreaName in ("src", "tests", "tools"):
         for PathInfo in (KRootPath / AreaName).rglob("*.py"):
             FileText = PathInfo.read_text(encoding="utf-8", errors="ignore")
-            if "# type: ignore" in FileText or "# pyright:" in FileText:
+            if KIgnoreProbeText in FileText or KPyrightProbeText in FileText:
                 Offenders.append(str(PathInfo))
     assert Offenders == []
