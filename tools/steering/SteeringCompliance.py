@@ -518,6 +518,10 @@ def IsFixedWrite(
     return isinstance(ParentNode, AstLib.AnnAssign) and ParentNode.value is not None
 
 
+# decorator suffixes stay centralized because dataclass transforms turn annotated defaults into instance fields
+KFieldSuffixes = ("dataclass", "datamut")
+
+
 # field container recognition prevents instance schema members from masquerading as class constants
 def IsFieldClass(ClassNode: AstLib.ClassDef) -> bool:
     if any(GetSyntaxName(BaseNode) == "NamedTuple" for BaseNode in ClassNode.bases):
@@ -529,7 +533,7 @@ def IsFieldClass(ClassNode: AstLib.ClassDef) -> bool:
             else DecoratorNode
         )
         TargetName = GetSyntaxName(TargetNode)
-        if TargetName is not None and TargetName.casefold().endswith("dataclass"):
+        if TargetName is not None and TargetName.casefold().endswith(KFieldSuffixes):
             return True
     return False
 

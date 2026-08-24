@@ -350,6 +350,38 @@ class TupleRecord(NamedTuple):
         CaseSelf.assertEqual(ConstantNames, {"SharedLimit"})
 
 
+# model transform fixtures stay separate because framework decorated fields need independent regression coverage
+class TestModelFields(Unittest.TestCase):
+
+    # transform decorated models carry instance fields because dataclass semantics apply through the framework
+    @staticmethod
+    def CheckModelFields() -> None:
+        CaseSelf = KAssertions
+        BodyText = """# model transforms stand in for the repository decorator because fixtures stay dependency free
+def ModelDataMut(ClassType):
+    return ClassType
+
+# bare decoration keeps lowercase wire names because runtime contracts depend on them
+@ModelDataMut
+class BareState:
+    field_value: int = 1
+
+# call decoration reaches the same transformation because configured models pass default maps
+@ModelDataMut()
+class CalledState:
+    other_value: int = 2
+"""
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            SourcePath = WriteSample(FilePath(TmpPath), MakeSource(BodyText))
+            FindingList = CheckPaths([SourcePath])
+        NamingCodes = {
+            FindingInfo.RuleCode
+            for FindingInfo in FindingList
+            if FindingInfo.RuleCode in {"NAM001", "CON001"}
+        }
+        CaseSelf.assertEqual(NamingCodes, set())
+
+
 # rationale fixtures stay focused because structural wording and purpose failures need independent evidence
 class TestReasons(Unittest.TestCase):
 
