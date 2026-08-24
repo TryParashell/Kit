@@ -46,6 +46,7 @@ class BrepEntity(ModelBase):
 
 
 # curve identity checks reject malformed records before topology validation
+@ModelDataMut
 class BrepCurve(BrepEntity):
     id: str
 

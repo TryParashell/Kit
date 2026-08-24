@@ -73,7 +73,7 @@ def TestRulePinnedAtError(RuleName: str) -> None:
 
 # suppression scans keep diagnostics honest by banning inline escapes
 def TestNoSuppressionEscapes() -> None:
-    Offenders = []
+    Offenders: list[str] = []
     for Root in ("src", "tests", "tools"):
         for PathInfo in (KRootPath / Root).rglob("*.py"):
             Text = PathInfo.read_text(encoding="utf-8", errors="ignore")
