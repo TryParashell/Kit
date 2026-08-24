@@ -11,14 +11,16 @@ from __future__ import annotations
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
+from interchange.assembly.MateGroupView import MateGroupView
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelExtras import ModelExtras
 from interchange.records.RecordProvenance import Provenance
 
 
 # mate groups retain source ordering and hierarchy for editable organization
 @ModelDataMut
-class MateGroup(ModelBase):
+class MateGroup(MateGroupView, ModelExtras, ModelBase):
     id: str
     name: str
     owner_definition_id: str
@@ -27,43 +29,3 @@ class MateGroup(ModelBase):
     order: int = 0
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-
-    # stable identity lets records reference each other without holding full objects
-    @property
-    def EntityId(self) -> str:
-        return self.id
-
-    # human readable label keeps diagnostics and diffs meaningful for reviewers
-    @property
-    def EntityName(self) -> str:
-        return self.name
-
-    # owner link keeps nested placement resolvable during assembly walks
-    @property
-    def OwnerDefinitionId(self) -> str:
-        return self.owner_definition_id
-
-    # member ids keep grouped constraints enumerable without reverse lookups
-    @property
-    def MateIds(self) -> tuple[str, ...]:
-        return self.mate_ids
-
-    # parent link keeps group nesting reconstructable for hierarchical writers
-    @property
-    def ParentGroupId(self) -> str:
-        return self.parent_group_id
-
-    # explicit order keeps sibling sequencing stable across adapter round trips
-    @property
-    def Order(self) -> int:
-        return self.order
-
-    # origin details stay optional so synthesized records can omit source facts safely
-    @property
-    def Provenance(self) -> Provenance | None:
-        return self.provenance
-
-    # open attribute bag preserves vendor extras that typed fields cannot express yet
-    @property
-    def Attributes(self) -> TypeMap[str, object]:
-        return self.attributes
