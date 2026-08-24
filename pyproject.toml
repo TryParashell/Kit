@@ -156,9 +156,7 @@ reportUnusedImport = "error"
 reportUnusedVariable = "error"
 
 [tool.uv]
-# these floors exist because vulnerable locked releases stay pinned by declared caps of
-# security tooling (semgrep caps click, opentelemetry-proto caps protobuf), so the override
-# lifts the floor while staying inside the majors those tools are expected to tolerate
+exclude-newer = "7 days"
 override-dependencies = [
     "click>=8.3.3,<8.5",
     "protobuf>=5.29.6,<6",
