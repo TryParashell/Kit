@@ -62,7 +62,7 @@ class CadWriterAdapter(Protocol):
         raise TypeError("writer info requires a concrete implementation")
 
     # selection needs a non mutating destination compatibility assessment
-    def supports(self, document: CadDocument, destination: Destination) -> bool:
+    def supports(self, DocValue: CadDocument, Target: Destination) -> bool:
         raise TypeError("writer support requires a concrete implementation")
 
     # conversion needs structured preservation evidence from every writer
@@ -131,12 +131,12 @@ setattr(
         (
             SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
             SigParam(
-                "document",
+                "DocValue",
                 SigParam.POSITIONAL_OR_KEYWORD,
                 annotation="CadDocument",
             ),
             SigParam(
-                "destination",
+                "Target",
                 SigParam.POSITIONAL_OR_KEYWORD,
                 annotation="Destination",
             ),

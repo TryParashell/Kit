@@ -118,24 +118,6 @@ class BindingApi(RegistryHost):
             False,
         )
 
-    # public registration keeps the historical reader spelling statically visible
-    def register_reader(
-        self,
-        adapter: CadReaderAdapter,
-        *,
-        replace: bool = False,
-    ) -> None:
-        self.RegisterReader(adapter, ReplaceFlag=replace)
-
-    # public registration keeps the historical writer spelling statically visible
-    def register_writer(
-        self,
-        adapter: CadWriterAdapter,
-        *,
-        replace: bool = False,
-    ) -> None:
-        self.RegisterWriter(adapter, ReplaceFlag=replace)
-
 
 # dual protocol registration owns transaction coordination without growing the registry facade
 class RegisterApi(RegistryHost):
