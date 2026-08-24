@@ -32,12 +32,12 @@ class BrepEntity(ModelBase):
     def EntityId(self) -> str:
         return CastValue(str, object.__getattribute__(self, "id"))
 
-     # origin details stay optional so synthesized records can omit source facts safely
+    # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return CastValue(Provenance | None, object.__getattribute__(self, "provenance"))
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return CastValue(
@@ -63,12 +63,12 @@ class LineCurve(BrepCurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # anchor point keeps curve placement absolute without extra context
+    # anchor point keeps curve placement absolute without extra context
     @property
     def Origin(self) -> SpaceVector:
         return self.origin
 
-     # unit heading keeps linear geometry orientation explicit for writers
+    # unit heading keeps linear geometry orientation explicit for writers
     @property
     def Direction(self) -> SpaceVector:
         return self.direction
@@ -85,22 +85,22 @@ class CircleCurve(BrepCurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> SpaceVector:
         return self.center
 
-     # axis direction keeps rotational geometry oriented consistently across formats
+    # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> SpaceVector:
         return self.axis
 
-     # reference direction fixes parametrization start so rotations stay reproducible
+    # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
 
-     # radius keeps circles arcs and cylinders sized without sampling geometry
+    # radius keeps circles arcs and cylinders sized without sampling geometry
     @property
     def Radius(self) -> float:
         return self.radius
@@ -118,27 +118,27 @@ class EllipseCurve(BrepCurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> SpaceVector:
         return self.center
 
-     # axis direction keeps rotational geometry oriented consistently across formats
+    # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> SpaceVector:
         return self.axis
 
-     # reference direction fixes parametrization start so rotations stay reproducible
+    # reference direction fixes parametrization start so rotations stay reproducible
     @property
     def RefDirection(self) -> SpaceVector:
         return self.reference_direction
 
-     # major extent keeps ellipse sizing exact without control point inference
+    # major extent keeps ellipse sizing exact without control point inference
     @property
     def MajorRadius(self) -> float:
         return self.major_radius
 
-     # minor extent completes ellipse shape so reconstruction never guesses
+    # minor extent completes ellipse shape so reconstruction never guesses
     @property
     def MinorRadius(self) -> float:
         return self.minor_radius
@@ -157,32 +157,32 @@ class NurbsCurve(BrepCurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # spline degree controls smoothness and must survive round trips intact
+    # spline degree controls smoothness and must survive round trips intact
     @property
     def Degree(self) -> int:
         return self.degree
 
-     # hull points define spline shape so evaluation never needs vendor kernels
+    # hull points define spline shape so evaluation never needs vendor kernels
     @property
     def ControlPoints(self) -> tuple[SpaceVector, ...]:
         return self.control_points
 
-     # knot vector defines segment joins so splines evaluate identically everywhere
+    # knot vector defines segment joins so splines evaluate identically everywhere
     @property
     def KnotValues(self) -> tuple[float, ...]:
         return self.knots
 
-     # knot multiplicities preserve continuity breaks that plain knots cannot encode
+    # knot multiplicities preserve continuity breaks that plain knots cannot encode
     @property
     def Multiplicities(self) -> tuple[int, ...]:
         return self.multiplicities
 
-     # rational weights keep conic splines representable exactly rather than approximately
+    # rational weights keep conic splines representable exactly rather than approximately
     @property
     def Weights(self) -> tuple[float, ...]:
         return self.weights
 
-     # periodicity tells evaluators whether seam continuity can be assumed safely
+    # periodicity tells evaluators whether seam continuity can be assumed safely
     @property
     def IsPeriodic(self) -> bool:
         return self.periodic
@@ -199,22 +199,22 @@ class IntersectCurve(BrepCurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # first surface link keeps intersection curves anchored to real faces
+    # first surface link keeps intersection curves anchored to real faces
     @property
     def FirstSurfaceId(self) -> str:
         return self.first_surface_id
 
-     # second surface link completes the intersection pairing for validation
+    # second surface link completes the intersection pairing for validation
     @property
     def SecondSurfaceId(self) -> str:
         return self.second_surface_id
 
-     # sampled points keep intersection curves verifiable without implicit evaluation
+    # sampled points keep intersection curves verifiable without implicit evaluation
     @property
     def Samples(self) -> tuple[SpaceVector, ...]:
         return self.samples
 
-     # tolerance bounds approximation error so consumers can trust comparisons
+    # tolerance bounds approximation error so consumers can trust comparisons
     @property
     def Tolerance(self) -> float:
         return self.tolerance
@@ -230,17 +230,17 @@ class NativeCurve(BrepCurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # format id keeps payload interpretation tied to its producing dialect
+    # format id keeps payload interpretation tied to its producing dialect
     @property
     def FormatId(self) -> str:
         return self.format_id
 
-     # native type string preserves vendor vocabulary that enums cannot fully cover
+    # native type string preserves vendor vocabulary that enums cannot fully cover
     @property
     def EntityType(self) -> str:
         return self.entity_type
 
-     # raw bytes keep vendor specifics recoverable even when schema parsing fails
+    # raw bytes keep vendor specifics recoverable even when schema parsing fails
     @property
     def PayloadData(self) -> TypeMap[str, object]:
         return self.data

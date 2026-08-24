@@ -23,22 +23,22 @@ class ProvenanceSpan(ModelBase):
     length: int
     record_kind: str = ""
 
-     # stream name locates the originating section inside containers
+    # stream name locates the originating section inside containers
     @property
     def Stream(self) -> str:
         return self.stream
 
-     # start offset lets extrudes begin away from the sketch plane
+    # start offset lets extrudes begin away from the sketch plane
     @property
     def Offset(self) -> int:
         return self.offset
 
-     # extrusion length defines prism height without evaluating geometry
+    # extrusion length defines prism height without evaluating geometry
     @property
     def Length(self) -> int:
         return self.length
 
-     # kind label tells consumers which parser owns this span
+    # kind label tells consumers which parser owns this span
     @property
     def RecordKind(self) -> str:
         return self.record_kind
@@ -53,27 +53,27 @@ class Provenance(ModelBase):
     spans: tuple[ProvenanceSpan, ...] = ()
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # adapter name credits the reader that produced this record
+    # adapter name credits the reader that produced this record
     @property
     def Adapter(self) -> str:
         return self.adapter
 
-     # native id links records back to vendor identifiers faithfully
+    # native id links records back to vendor identifiers faithfully
     @property
     def NativeId(self) -> str:
         return self.native_id
 
-     # confidence score lets callers weigh lossy reconstructions appropriately
+    # confidence score lets callers weigh lossy reconstructions appropriately
     @property
     def Confidence(self) -> float:
         return self.confidence
 
-     # span collection keeps multi location provenance compact and ordered
+    # span collection keeps multi location provenance compact and ordered
     @property
     def Spans(self) -> tuple[ProvenanceSpan, ...]:
         return self.spans
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

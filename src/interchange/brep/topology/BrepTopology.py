@@ -28,12 +28,12 @@ class BrepVertex(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # stored position keeps vertices self contained without coordinate lookups
+    # stored position keeps vertices self contained without coordinate lookups
     @property
     def Point(self) -> SpaceVector:
         return self.point
 
-     # tolerance bounds approximation error so consumers can trust comparisons
+    # tolerance bounds approximation error so consumers can trust comparisons
     @property
     def Tolerance(self) -> float:
         return self.tolerance
@@ -53,37 +53,37 @@ class BrepEdge(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # endpoint links keep edge traversal possible without geometric matching
+    # endpoint links keep edge traversal possible without geometric matching
     @property
     def StartVertexId(self) -> str:
         return self.start_vertex_id
 
-     # closing endpoint keeps edge ranges complete without geometric matching
+    # closing endpoint keeps edge ranges complete without geometric matching
     @property
     def EndVertexId(self) -> str:
         return self.end_vertex_id
 
-     # curve link keeps edges defined once and shared across faces
+    # curve link keeps edges defined once and shared across faces
     @property
     def CurveId(self) -> str:
         return self.curve_id
 
-     # trim range bounds the used portion so shared curves stay reusable
+    # trim range bounds the used portion so shared curves stay reusable
     @property
     def StartParameter(self) -> float:
         return self.start_parameter
 
-     # trim end completes the range so trimming needs no heuristics
+    # trim end completes the range so trimming needs no heuristics
     @property
     def EndParameter(self) -> float:
         return self.end_parameter
 
-     # tolerance bounds approximation error so consumers can trust comparisons
+    # tolerance bounds approximation error so consumers can trust comparisons
     @property
     def Tolerance(self) -> float:
         return self.tolerance
 
-     # degeneracy flag protects downstream math from zero length edges
+    # degeneracy flag protects downstream math from zero length edges
     @property
     def IsDegenerate(self) -> bool:
         return self.degenerate
@@ -99,17 +99,17 @@ class BrepCoedge(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # owning edge keeps pcurves attached to their carrier topology
+    # owning edge keeps pcurves attached to their carrier topology
     @property
     def EdgeId(self) -> str:
         return self.edge_id
 
-     # pcurve link ties each surface side to its own parametric curve
+    # pcurve link ties each surface side to its own parametric curve
     @property
     def PcurveId(self) -> str:
         return self.pcurve_id
 
-     # orientation flag preserves which side of the topology is used
+    # orientation flag preserves which side of the topology is used
     @property
     def IsReversed(self) -> bool:
         return self.reversed
@@ -124,12 +124,12 @@ class BrepLoop(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # coedge ordering keeps loop traversal deterministic for validation passes
+    # coedge ordering keeps loop traversal deterministic for validation passes
     @property
     def CoedgeIds(self) -> tuple[str, ...]:
         return self.coedge_ids
 
-     # outer flag distinguishes material boundaries from holes during face classification
+    # outer flag distinguishes material boundaries from holes during face classification
     @property
     def IsOuter(self) -> bool:
         return self.outer
@@ -144,12 +144,12 @@ class BrepWire(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # coedge ordering keeps loop traversal deterministic for validation passes
+    # coedge ordering keeps loop traversal deterministic for validation passes
     @property
     def CoedgeIds(self) -> tuple[str, ...]:
         return self.coedge_ids
 
-     # closure flag tells solids apart from open shells without searching
+    # closure flag tells solids apart from open shells without searching
     @property
     def IsClosed(self) -> bool:
         return self.closed
@@ -166,22 +166,22 @@ class BrepFace(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # surface link attaches faces to their geometry without duplication
+    # surface link attaches faces to their geometry without duplication
     @property
     def SurfaceId(self) -> str:
         return self.surface_id
 
-     # loop list keeps face boundaries enumerable in stable order
+    # loop list keeps face boundaries enumerable in stable order
     @property
     def LoopIds(self) -> tuple[str, ...]:
         return self.loop_ids
 
-     # sense agreement keeps normal orientation consistent between face and surface
+    # sense agreement keeps normal orientation consistent between face and surface
     @property
     def HasSameSense(self) -> bool:
         return self.same_sense
 
-     # tolerance bounds approximation error so consumers can trust comparisons
+    # tolerance bounds approximation error so consumers can trust comparisons
     @property
     def Tolerance(self) -> float:
         return self.tolerance
@@ -196,12 +196,12 @@ class BrepFaceUse(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # face link anchors shell uses to concrete boundary elements
+    # face link anchors shell uses to concrete boundary elements
     @property
     def FaceId(self) -> str:
         return self.face_id
 
-     # orientation flag preserves which side of the topology is used
+    # orientation flag preserves which side of the topology is used
     @property
     def IsReversed(self) -> bool:
         return self.reversed
@@ -216,12 +216,12 @@ class BrepShell(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # face use list keeps shell composition explicit and ordered
+    # face use list keeps shell composition explicit and ordered
     @property
     def FaceUseIds(self) -> tuple[str, ...]:
         return self.face_use_ids
 
-     # closure flag tells solids apart from open shells without searching
+    # closure flag tells solids apart from open shells without searching
     @property
     def IsClosed(self) -> bool:
         return self.closed
@@ -236,12 +236,12 @@ class BrepShellUse(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # shell link keeps lump composition explicit for solid classification
+    # shell link keeps lump composition explicit for solid classification
     @property
     def ShellId(self) -> str:
         return self.shell_id
 
-     # orientation flag preserves which side of the topology is used
+    # orientation flag preserves which side of the topology is used
     @property
     def IsReversed(self) -> bool:
         return self.reversed
@@ -256,12 +256,12 @@ class BrepRegion(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # shell use list keeps region composition explicit and ordered
+    # shell use list keeps region composition explicit and ordered
     @property
     def ShellUseIds(self) -> tuple[str, ...]:
         return self.shell_use_ids
 
-     # solidity flag separates watertight lumps from open shells quickly
+    # solidity flag separates watertight lumps from open shells quickly
     @property
     def IsSolid(self) -> bool:
         return self.solid
@@ -279,27 +279,27 @@ class BrepBody(BrepEntity):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # region list keeps disjoint lumps enumerable within one body
+    # region list keeps disjoint lumps enumerable within one body
     @property
     def RegionIds(self) -> tuple[str, ...]:
         return self.region_ids
 
-     # local transform keeps world placement composable through parent chains
+    # local transform keeps world placement composable through parent chains
     @property
     def Transform(self) -> Transform:
         return self.transform
 
-     # design body link connects analytic brep back to consumer models
+    # design body link connects analytic brep back to consumer models
     @property
     def DesignBodyId(self) -> str:
         return self.design_body_id
 
-     # wire list keeps free edges visible outside face boundaries
+    # wire list keeps free edges visible outside face boundaries
     @property
     def WireIds(self) -> tuple[str, ...]:
         return self.wire_ids
 
-     # vertex list keeps isolated points addressable inside bodies
+    # vertex list keeps isolated points addressable inside bodies
     @property
     def VertexIds(self) -> tuple[str, ...]:
         return self.vertex_ids

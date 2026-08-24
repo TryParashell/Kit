@@ -2676,7 +2676,7 @@ def TestNeutralTrip() -> None:
 def TestUnbounded() -> None:
     Source = NeutralDoc()
     AxisValue = VectorTwo(0.6, 0.8)
-    Values = (
+    Values: tuple[tuple[GeomKind, GeometryTypes], ...] = (
         (GeomKind.HYPERBOLA, HyperbolaGeom(VectorTwo(3.0, 4.0), AxisValue, 10.0, 5.0)),
         (GeomKind.PARABOLA, ParabolaGeom(VectorTwo(5.0, 6.0), AxisValue, 7.0)),
     )

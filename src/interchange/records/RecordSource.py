@@ -25,32 +25,32 @@ class CadSource(ModelBase):
     application_version: str = ""
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # format id keeps payload interpretation tied to its producing dialect
+    # format id keeps payload interpretation tied to its producing dialect
     @property
     def FormatId(self) -> str:
         return self.format_id
 
-     # original path keeps audits able to reopen the exact input
+    # original path keeps audits able to reopen the exact input
     @property
     def FilePath(self) -> str:
         return self.path
 
-     # digest lets consumers detect source drift without rereading containers
+    # digest lets consumers detect source drift without rereading containers
     @property
     def SourceDigest(self) -> str:
         return self.sha256
 
-     # container version guards against misreading older file layouts
+    # container version guards against misreading older file layouts
     @property
     def ContainerVersion(self) -> str:
         return self.container_version
 
-     # application version explains feature availability differences across releases
+    # application version explains feature availability differences across releases
     @property
     def ApplicationVersion(self) -> str:
         return self.application_version
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

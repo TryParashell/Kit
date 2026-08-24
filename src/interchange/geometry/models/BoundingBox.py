@@ -17,12 +17,12 @@ class BoundingBox(ModelBase):
     minimum: SpaceVector
     maximum: SpaceVector
 
-     # lower corner keeps box tests allocation free and branch simple
+    # lower corner keeps box tests allocation free and branch simple
     @property
     def Minimum(self) -> SpaceVector:
         return self.minimum
 
-     # upper corner completes the extent so containment tests stay trivial
+    # upper corner completes the extent so containment tests stay trivial
     @property
     def Maximum(self) -> SpaceVector:
         return self.maximum

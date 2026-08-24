@@ -24,32 +24,32 @@ class PayloadRule(ModelBase):
     schemas: frozenset[str] = KEmptyKindSets
     source_suffixes: frozenset[str] = KEmptyKindSets
 
-     # role tags separate driven driving and reference usages cleanly
+    # role tags separate driven driving and reference usages cleanly
     @property
     def ValueRole(self) -> PayloadRole:
         return self.role
 
-     # extension hint keeps extracted files recognizable on disk immediately
+    # extension hint keeps extracted files recognizable on disk immediately
     @property
     def FileExtension(self) -> str:
         return self.file_extension
 
-     # format scoping prevents rules from firing on unrelated inputs
+    # format scoping prevents rules from firing on unrelated inputs
     @property
     def FormatIds(self) -> frozenset[str]:
         return self.format_ids
 
-     # kind scoping narrows rule application to relevant entity types
+    # kind scoping narrows rule application to relevant entity types
     @property
     def Kinds(self) -> frozenset[str]:
         return self.kinds
 
-     # schema scoping keeps strict rules away from legacy payloads
+    # schema scoping keeps strict rules away from legacy payloads
     @property
     def Schemas(self) -> frozenset[str]:
         return self.schemas
 
-     # suffix matching catches sources that omit reliable format metadata
+    # suffix matching catches sources that omit reliable format metadata
     @property
     def SourceSuffixes(self) -> frozenset[str]:
         return self.source_suffixes

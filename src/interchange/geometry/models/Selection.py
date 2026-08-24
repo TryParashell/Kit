@@ -24,17 +24,17 @@ class SelectPathElem(ModelBase):
     entity_id: str
     subelement: str = ""
 
-     # kind tag lets consumers branch on semantics without importing concrete classes
+    # kind tag lets consumers branch on semantics without importing concrete classes
     @property
     def EntityKind(self) -> str:
         return self.entity_kind
 
-     # stable identity lets records reference each other without holding full objects
+    # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.entity_id
 
-     # subelement token addresses faces and edges inside one entity pick
+    # subelement token addresses faces and edges inside one entity pick
     @property
     def Subelement(self) -> str:
         return self.subelement
@@ -51,37 +51,37 @@ class Selection(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # stable identity lets records reference each other without holding full objects
+    # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
-     # human readable label keeps diagnostics and diffs meaningful for reviewers
+    # human readable label keeps diagnostics and diffs meaningful for reviewers
     @property
     def EntityName(self) -> str:
         return self.name
 
-     # path segments disambiguate nested hits inside assemblies reliably
+    # path segments disambiguate nested hits inside assemblies reliably
     @property
     def SelectionPath(self) -> tuple[SelectPathElem, ...]:
         return self.path
 
-     # structured query keeps filters serializable and diff friendly
+    # structured query keeps filters serializable and diff friendly
     @property
     def Query(self) -> TypeMap[str, object]:
         return self.query
 
-     # stored position keeps vertices self contained without coordinate lookups
+    # stored position keeps vertices self contained without coordinate lookups
     @property
     def Point(self) -> SpaceVector | None:
         return self.point
 
-     # origin details stay optional so synthesized records can omit source facts safely
+    # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

@@ -16,12 +16,12 @@ class PlaneVector(ModelBase):
     x: float
     y: float
 
-     # component access keeps vector math readable without tuple indexing
+    # component access keeps vector math readable without tuple indexing
     @property
     def XCoord(self) -> float:
         return self.x
 
-     # component access keeps vector math readable without tuple indexing
+    # component access keeps vector math readable without tuple indexing
     @property
     def YCoord(self) -> float:
         return self.y

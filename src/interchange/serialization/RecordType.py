@@ -19,5 +19,5 @@ class DataRecord(Protocol):
 # record reconstruction calls record constructors with decoded field keyword values
 class RecordCtor(Protocol):
 
-     # callable contract lets decoders accept record constructors without type coupling
+    # callable contract lets decoders accept record constructors without type coupling
     def __call__(self, **FieldValues: object) -> object: ...

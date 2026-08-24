@@ -13,6 +13,7 @@ import hashlib as Hashlib
 import json as JsonLib
 from pathlib import Path as FilePath, PureWindowsPath
 import struct as StructLib
+from typing import cast as CastValue
 import xml.etree.ElementTree as EtInfo
 import pytest as PytestLib
 from convert import (
@@ -2946,13 +2947,11 @@ def TestGCPDSC(SourceDoc: CadDocument) -> None:
             (
                 ItemValue.document.capabilities
                 for ItemValue in Restored.assembly.documents
-                if ItemValue.document is not None
             )
         ) == tuple(
             (
                 ItemValue.document.capabilities
                 for ItemValue in SourceDoc.assembly.documents
-                if ItemValue.document is not None
             )
         )
 
@@ -2998,7 +2997,16 @@ def TestFDPMIOR(PayloadIndex: int, Changes: dict[str, bytes | str]) -> None:
     Original = Carrier.getvalue()
     Restored = ReadSldprt(Original)
     Payloads = list(Restored.brep_payloads)
-    Payloads[PayloadIndex] = ReplaceData(Payloads[PayloadIndex], **Changes)
+    if "id" in Changes:
+        Payloads[PayloadIndex] = ReplaceData(
+            Payloads[PayloadIndex],
+            id=CastValue(str, Changes["id"]),
+        )
+    else:
+        Payloads[PayloadIndex] = ReplaceData(
+            Payloads[PayloadIndex],
+            data=CastValue(bytes, Changes["data"]),
+        )
     Mutated = ReplaceData(Restored, brep_payloads=tuple(Payloads))
     Output = BytesIO()
     ResultInfo = WriteSldprt(Mutated, Output)

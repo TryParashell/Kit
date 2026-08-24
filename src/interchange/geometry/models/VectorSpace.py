@@ -17,17 +17,17 @@ class SpaceVector(ModelBase):
     y: float
     z: float
 
-     # component access keeps vector math readable without tuple indexing
+    # component access keeps vector math readable without tuple indexing
     @property
     def XCoord(self) -> float:
         return self.x
 
-     # component access keeps vector math readable without tuple indexing
+    # component access keeps vector math readable without tuple indexing
     @property
     def YCoord(self) -> float:
         return self.y
 
-     # component access keeps vector math readable without tuple indexing
+    # component access keeps vector math readable without tuple indexing
     @property
     def ZCoord(self) -> float:
         return self.z

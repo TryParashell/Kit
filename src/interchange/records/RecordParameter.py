@@ -24,17 +24,17 @@ class ParameterValue(ModelBase):
     kind: ValueKind = ValueKind.KNumber
     unit: str = ""
 
-     # typed value keeps configuration usable without parsing conventions
+    # typed value keeps configuration usable without parsing conventions
     @property
     def Value(self) -> str | int | float | bool:
         return self.value
 
-     # kind tag lets consumers branch on semantics without importing concrete classes
+    # kind tag lets consumers branch on semantics without importing concrete classes
     @property
     def EntityKind(self) -> ValueKind:
         return self.kind
 
-     # unit spelling keeps quantities unambiguous across metric and imperial sources
+    # unit spelling keeps quantities unambiguous across metric and imperial sources
     @property
     def UnitName(self) -> str:
         return self.unit
@@ -47,17 +47,17 @@ class Expression(ModelBase):
     parameter_ids: tuple[str, ...] = ()
     language: str = "kit"
 
-     # original text keeps expressions debuggable without reformatting
+    # original text keeps expressions debuggable without reformatting
     @property
     def Source(self) -> str:
         return self.source
 
-     # parameter links keep mate values driven by configurable expressions
+    # parameter links keep mate values driven by configurable expressions
     @property
     def ParameterIds(self) -> tuple[str, ...]:
         return self.parameter_ids
 
-     # language tag routes expression evaluation to matching syntax rules
+    # language tag routes expression evaluation to matching syntax rules
     @property
     def Language(self) -> str:
         return self.language
@@ -75,42 +75,42 @@ class Parameter(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # stable identity lets records reference each other without holding full objects
+    # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
-     # human readable label keeps diagnostics and diffs meaningful for reviewers
+    # human readable label keeps diagnostics and diffs meaningful for reviewers
     @property
     def EntityName(self) -> str:
         return self.name
 
-     # typed value keeps configuration usable without parsing conventions
+    # typed value keeps configuration usable without parsing conventions
     @property
     def Value(self) -> ParameterValue:
         return self.value
 
-     # role tags separate driven driving and reference usages cleanly
+    # role tags separate driven driving and reference usages cleanly
     @property
     def ValueRole(self) -> ParameterRole:
         return self.role
 
-     # optional formula keeps derived values live instead of frozen snapshots
+    # optional formula keeps derived values live instead of frozen snapshots
     @property
     def Expression(self) -> Expression | None:
         return self.expression
 
-     # owner link ties parameters to features without back references
+    # owner link ties parameters to features without back references
     @property
     def OwnerId(self) -> str:
         return self.owner_id
 
-     # origin details stay optional so synthesized records can omit source facts safely
+    # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

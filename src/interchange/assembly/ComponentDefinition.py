@@ -36,72 +36,72 @@ class ComponentDef(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # stable identity lets records reference each other without holding full objects
+    # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
-     # human readable label keeps diagnostics and diffs meaningful for reviewers
+    # human readable label keeps diagnostics and diffs meaningful for reviewers
     @property
     def EntityName(self) -> str:
         return self.name
 
-     # kind tag lets consumers branch on semantics without importing concrete classes
+    # kind tag lets consumers branch on semantics without importing concrete classes
     @property
     def EntityKind(self) -> ComponentKind | str:
         return self.kind
 
-     # owning document id keeps definitions linkable across container boundaries
+    # owning document id keeps definitions linkable across container boundaries
     @property
     def DocumentId(self) -> str:
         return self.document_id
 
-     # configuration label keeps variant identity visible without resolving parameters
+    # configuration label keeps variant identity visible without resolving parameters
     @property
     def ConfigurationName(self) -> str:
         return self.configuration_name
 
-     # configuration id keeps variant references stable across renames
+    # configuration id keeps variant references stable across renames
     @property
     def ConfigurationId(self) -> str:
         return self.configuration_id
 
-     # cached bounds keep spatial filtering cheap for large assemblies
+    # cached bounds keep spatial filtering cheap for large assemblies
     @property
     def BoundingBox(self) -> BoundingBox | None:
         return self.bounding_box
 
-     # body references keep solid topology reachable without embedding geometry
+    # body references keep solid topology reachable without embedding geometry
     @property
     def BodyIds(self) -> tuple[str, ...]:
         return self.body_ids
 
-     # mesh references keep tessellation reachable without duplicating payloads
+    # mesh references keep tessellation reachable without duplicating payloads
     @property
     def MeshIds(self) -> tuple[str, ...]:
         return self.mesh_ids
 
-     # original path keeps provenance traceable back to the source container
+    # original path keeps provenance traceable back to the source container
     @property
     def SourcePath(self) -> str:
         return self.source_path
 
-     # format id keeps multi format routing decisions possible downstream
+    # format id keeps multi format routing decisions possible downstream
     @property
     def SourceFormatId(self) -> str:
         return self.source_format_id
 
-     # digest lets consumers detect source drift without rereading containers
+    # digest lets consumers detect source drift without rereading containers
     @property
     def SourceDigest(self) -> str:
         return self.source_sha256
 
-     # origin details stay optional so synthesized records can omit source facts safely
+    # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

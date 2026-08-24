@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
- # repo root derivation keeps tests runnable from any working directory
+# repo root derivation keeps tests runnable from any working directory
 KRootPath = Path(__file__).resolve().parents[2]
 
 # every diagnostic the strictest pylance surface can express stays pinned at error because repository pyright lags behind editors
@@ -45,18 +45,18 @@ KRequiredRules = (
 )
 
 
- # config loading stays centralized so every assertion sees identical settings
+# config loading stays centralized so every assertion sees identical settings
 def LoadPyrightConfig() -> dict[str, object]:
     Metadata = tomllib.loads((KRootPath / "pyproject.toml").read_text(encoding="utf-8"))
     return CastValue(dict[str, object], Metadata["tool"]["pyright"])
 
 
- # strict mode is the baseline the whole policy depends on
+# strict mode is the baseline the whole policy depends on
 def TestStrictMode() -> None:
     assert LoadPyrightConfig()["typeCheckingMode"] == "strict"
 
 
- # scope assertions stop silent exclusions from weakening future checks
+# scope assertions stop silent exclusions from weakening future checks
 def TestScopeCoversWholeTree() -> None:
     Config = LoadPyrightConfig()
     IncludeValue = CastValue(list[str], Config["include"])
@@ -64,14 +64,14 @@ def TestScopeCoversWholeTree() -> None:
     assert Config["pythonVersion"] == "3.11"
 
 
- # pinning severity keeps regressions loud instead of advisory whispers
+# pinning severity keeps regressions loud instead of advisory whispers
 @pytest.mark.parametrize("RuleName", KRequiredRules)
 def TestRulePinnedAtError(RuleName: str) -> None:
     Config = LoadPyrightConfig()
     assert Config.get(RuleName) == "error", RuleName
 
 
- # suppression scans keep diagnostics honest by banning inline escapes
+# suppression scans keep diagnostics honest by banning inline escapes
 def TestNoSuppressionEscapes() -> None:
     Offenders = []
     for Root in ("src", "tests", "tools"):

@@ -13,13 +13,13 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 # shared frame defaults stay precomputed constants so parameter defaults never call constructors
 KOriginZero: SpaceVector = SpaceVector(0.0, 0.0, 0.0)
 
- # world x direction stays precomputed so transform defaults never construct vectors
+# world x direction stays precomputed so transform defaults never construct vectors
 KAxisX: SpaceVector = SpaceVector(1.0, 0.0, 0.0)
 
- # world y direction stays precomputed so transform defaults never construct vectors
+# world y direction stays precomputed so transform defaults never construct vectors
 KAxisY: SpaceVector = SpaceVector(0.0, 1.0, 0.0)
 
- # world z direction stays precomputed so transform defaults never construct vectors
+# world z direction stays precomputed so transform defaults never construct vectors
 KAxisZ: SpaceVector = SpaceVector(0.0, 0.0, 1.0)
 
 
@@ -31,22 +31,22 @@ class Transform(ModelBase):
     y_axis: SpaceVector = KAxisY
     z_axis: SpaceVector = KAxisZ
 
-     # anchor point keeps curve placement absolute without extra context
+    # anchor point keeps curve placement absolute without extra context
     @property
     def Origin(self) -> SpaceVector:
         return self.origin
 
-     # basis column keeps frame math explicit for rotation sensitive code
+    # basis column keeps frame math explicit for rotation sensitive code
     @property
     def XAxis(self) -> SpaceVector:
         return self.x_axis
 
-     # basis column keeps frame math explicit for rotation sensitive code
+    # basis column keeps frame math explicit for rotation sensitive code
     @property
     def YAxis(self) -> SpaceVector:
         return self.y_axis
 
-     # basis column keeps frame math explicit for rotation sensitive code
+    # basis column keeps frame math explicit for rotation sensitive code
     @property
     def ZAxis(self) -> SpaceVector:
         return self.z_axis

@@ -75,7 +75,7 @@ KGeomValue = tuple[
 KNoActiveFormats: frozenset[str] = frozenset()
 
 
- # structural point access lets geometry readers accept vendor vectors without imports
+# structural point access lets geometry readers accept vendor vectors without imports
 @runtime_checkable
 class PointSource(Protocol):
     x: SupportsFloat

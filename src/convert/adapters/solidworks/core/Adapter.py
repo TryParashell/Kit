@@ -336,7 +336,7 @@ class SldprtAdapter:
     def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
         return IsSupports(self, DocValue, TargetValue)
 
-     # writer entrypoint stays thin so action modules own actual export behavior
+    # writer entrypoint stays thin so action modules own actual export behavior
     def write(
         self,
         DocValue: CadDocument,

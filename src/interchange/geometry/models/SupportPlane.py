@@ -28,37 +28,37 @@ class SupportPlane(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # stable identity lets records reference each other without holding full objects
+    # stable identity lets records reference each other without holding full objects
     @property
     def EntityId(self) -> str:
         return self.id
 
-     # human readable label keeps diagnostics and diffs meaningful for reviewers
+    # human readable label keeps diagnostics and diffs meaningful for reviewers
     @property
     def EntityName(self) -> str:
         return self.name
 
-     # local transform keeps world placement composable through parent chains
+    # local transform keeps world placement composable through parent chains
     @property
     def Transform(self) -> Transform:
         return self.transform
 
-     # optional support link keeps attached datums synced with faces
+    # optional support link keeps attached datums synced with faces
     @property
     def SupportSelectionId(self) -> str | None:
         return self.support_selection_id
 
-     # offset link keeps plane distances parametrically adjustable
+    # offset link keeps plane distances parametrically adjustable
     @property
     def OffsetParameterId(self) -> str | None:
         return self.offset_parameter_id
 
-     # origin details stay optional so synthesized records can omit source facts safely
+    # origin details stay optional so synthesized records can omit source facts safely
     @property
     def Provenance(self) -> Provenance | None:
         return self.provenance
 
-     # open attribute bag preserves vendor extras that typed fields cannot express yet
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
     @property
     def Attributes(self) -> TypeMap[str, object]:
         return self.attributes

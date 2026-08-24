@@ -110,7 +110,7 @@ from convert.adapters.freecad.Protocol import (
 KNoNativeBreps: frozenset[NativeBrepKey] = frozenset()
 
 
- # mapping payload checks need a shared guard so archive readers narrow safely
+# mapping payload checks need a shared guard so archive readers narrow safely
 def IsPayloadMap(Value: object) -> TypeGuard[Mapping[str, object]]:
     return isinstance(Value, Mapping)
 

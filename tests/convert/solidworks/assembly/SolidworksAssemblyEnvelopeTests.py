@@ -87,7 +87,12 @@ KMateInfoA = "moPlaneSurfIdRep_c,3,4, "
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def PersistentMD(**MateOverrides: object) -> CadDocument:
+def PersistentMD(
+    *,
+    kind: MateKind | str | None = None,
+    value: ParameterValue | None = None,
+    parameter_ids: tuple[str, ...] | None = None,
+) -> CadDocument:
     SourceDoc = AssemblyDocument()
     Assembly = SourceDoc.assembly
     assert Assembly is not None
@@ -104,10 +109,15 @@ def PersistentMD(**MateOverrides: object) -> CadDocument:
     )
     MateInfo = ReplaceData(
         Assembly.mates[0],
-        EntityIds=(ComponentEntity.EntityId, RootEntity.EntityId),
+        entity_ids=(ComponentEntity.EntityId, RootEntity.EntityId),
         alignment=MateAlignment.ALIGNED,
-        **MateOverrides,
     )
+    if kind is not None:
+        MateInfo = ReplaceData(MateInfo, kind=kind)
+    if value is not None:
+        MateInfo = ReplaceData(MateInfo, value=value)
+    if parameter_ids is not None:
+        MateInfo = ReplaceData(MateInfo, parameter_ids=parameter_ids)
     return ReplaceData(
         SourceDoc,
         assembly=ReplaceData(

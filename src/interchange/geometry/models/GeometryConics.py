@@ -19,22 +19,22 @@ class EllipseGeometry(ModelBase):
     major_radius: float
     minor_radius: float
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # major axis direction keeps ellipse orientation fixed without inference
+    # major axis direction keeps ellipse orientation fixed without inference
     @property
     def MajorAxis(self) -> PlaneVector:
         return self.major_axis
 
-     # major extent keeps ellipse sizing exact without control point inference
+    # major extent keeps ellipse sizing exact without control point inference
     @property
     def MajorRadius(self) -> float:
         return self.major_radius
 
-     # minor extent completes ellipse shape so reconstruction never guesses
+    # minor extent completes ellipse shape so reconstruction never guesses
     @property
     def MinorRadius(self) -> float:
         return self.minor_radius
@@ -50,32 +50,32 @@ class ArcEllipseGeom(ModelBase):
     start_angle: float
     end_angle: float
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # major axis direction keeps ellipse orientation fixed without inference
+    # major axis direction keeps ellipse orientation fixed without inference
     @property
     def MajorAxis(self) -> PlaneVector:
         return self.major_axis
 
-     # major extent keeps ellipse sizing exact without control point inference
+    # major extent keeps ellipse sizing exact without control point inference
     @property
     def MajorRadius(self) -> float:
         return self.major_radius
 
-     # minor extent completes ellipse shape so reconstruction never guesses
+    # minor extent completes ellipse shape so reconstruction never guesses
     @property
     def MinorRadius(self) -> float:
         return self.minor_radius
 
-     # angular start keeps arc extents exact without sampling geometry
+    # angular start keeps arc extents exact without sampling geometry
     @property
     def StartAngle(self) -> float:
         return self.start_angle
 
-     # angular end completes arc extents without sampling geometry
+    # angular end completes arc extents without sampling geometry
     @property
     def EndAngle(self) -> float:
         return self.end_angle
@@ -89,22 +89,22 @@ class HyperbolaGeom(ModelBase):
     major_radius: float
     minor_radius: float
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # major axis direction keeps ellipse orientation fixed without inference
+    # major axis direction keeps ellipse orientation fixed without inference
     @property
     def MajorAxis(self) -> PlaneVector:
         return self.major_axis
 
-     # major extent keeps ellipse sizing exact without control point inference
+    # major extent keeps ellipse sizing exact without control point inference
     @property
     def MajorRadius(self) -> float:
         return self.major_radius
 
-     # minor extent completes ellipse shape so reconstruction never guesses
+    # minor extent completes ellipse shape so reconstruction never guesses
     @property
     def MinorRadius(self) -> float:
         return self.minor_radius
@@ -120,32 +120,32 @@ class ArcHyperGeom(ModelBase):
     start_angle: float
     end_angle: float
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # major axis direction keeps ellipse orientation fixed without inference
+    # major axis direction keeps ellipse orientation fixed without inference
     @property
     def MajorAxis(self) -> PlaneVector:
         return self.major_axis
 
-     # major extent keeps ellipse sizing exact without control point inference
+    # major extent keeps ellipse sizing exact without control point inference
     @property
     def MajorRadius(self) -> float:
         return self.major_radius
 
-     # minor extent completes ellipse shape so reconstruction never guesses
+    # minor extent completes ellipse shape so reconstruction never guesses
     @property
     def MinorRadius(self) -> float:
         return self.minor_radius
 
-     # angular start keeps arc extents exact without sampling geometry
+    # angular start keeps arc extents exact without sampling geometry
     @property
     def StartAngle(self) -> float:
         return self.start_angle
 
-     # angular end completes arc extents without sampling geometry
+    # angular end completes arc extents without sampling geometry
     @property
     def EndAngle(self) -> float:
         return self.end_angle
@@ -158,17 +158,17 @@ class ParabolaGeom(ModelBase):
     axis: PlaneVector
     focal_length: float
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # axis direction keeps rotational geometry oriented consistently across formats
+    # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> PlaneVector:
         return self.axis
 
-     # focal length keeps parabola shape exact without control structures
+    # focal length keeps parabola shape exact without control structures
     @property
     def FocalLength(self) -> float:
         return self.focal_length
@@ -183,27 +183,27 @@ class ArcParabGeom(ModelBase):
     start_angle: float
     end_angle: float
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # axis direction keeps rotational geometry oriented consistently across formats
+    # axis direction keeps rotational geometry oriented consistently across formats
     @property
     def AxisVector(self) -> PlaneVector:
         return self.axis
 
-     # focal length keeps parabola shape exact without control structures
+    # focal length keeps parabola shape exact without control structures
     @property
     def FocalLength(self) -> float:
         return self.focal_length
 
-     # angular start keeps arc extents exact without sampling geometry
+    # angular start keeps arc extents exact without sampling geometry
     @property
     def StartAngle(self) -> float:
         return self.start_angle
 
-     # angular end completes arc extents without sampling geometry
+    # angular end completes arc extents without sampling geometry
     @property
     def EndAngle(self) -> float:
         return self.end_angle

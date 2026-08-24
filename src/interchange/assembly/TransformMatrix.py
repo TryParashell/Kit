@@ -36,7 +36,7 @@ KIdentityValues: tuple[float, ...] = (
 class TransformMatrix(ModelBase):
     values: tuple[float, ...] = KIdentityValues
 
-     # flat row major values keep matrices cheap to serialize and compare
+    # flat row major values keep matrices cheap to serialize and compare
     @property
     def Values(self) -> tuple[float, ...]:
         return self.values

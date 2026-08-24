@@ -37,12 +37,12 @@ class LinePcurve(BrepPcurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # anchor point keeps curve placement absolute without extra context
+    # anchor point keeps curve placement absolute without extra context
     @property
     def Origin(self) -> PlaneVector:
         return self.origin
 
-     # unit heading keeps linear geometry orientation explicit for writers
+    # unit heading keeps linear geometry orientation explicit for writers
     @property
     def Direction(self) -> PlaneVector:
         return self.direction
@@ -57,12 +57,12 @@ class CirclePcurve(BrepPcurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # center point keeps circular geometry positioned without deriving it repeatedly
+    # center point keeps circular geometry positioned without deriving it repeatedly
     @property
     def Center(self) -> PlaneVector:
         return self.center
 
-     # radius keeps circles arcs and cylinders sized without sampling geometry
+    # radius keeps circles arcs and cylinders sized without sampling geometry
     @property
     def Radius(self) -> float:
         return self.radius
@@ -81,32 +81,32 @@ class NurbsPcurve(BrepPcurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # spline degree controls smoothness and must survive round trips intact
+    # spline degree controls smoothness and must survive round trips intact
     @property
     def Degree(self) -> int:
         return self.degree
 
-     # hull points define spline shape so evaluation never needs vendor kernels
+    # hull points define spline shape so evaluation never needs vendor kernels
     @property
     def ControlPoints(self) -> tuple[PlaneVector, ...]:
         return self.control_points
 
-     # knot vector defines segment joins so splines evaluate identically everywhere
+    # knot vector defines segment joins so splines evaluate identically everywhere
     @property
     def KnotValues(self) -> tuple[float, ...]:
         return self.knots
 
-     # knot multiplicities preserve continuity breaks that plain knots cannot encode
+    # knot multiplicities preserve continuity breaks that plain knots cannot encode
     @property
     def Multiplicities(self) -> tuple[int, ...]:
         return self.multiplicities
 
-     # rational weights keep conic splines representable exactly rather than approximately
+    # rational weights keep conic splines representable exactly rather than approximately
     @property
     def Weights(self) -> tuple[float, ...]:
         return self.weights
 
-     # periodicity tells evaluators whether seam continuity can be assumed safely
+    # periodicity tells evaluators whether seam continuity can be assumed safely
     @property
     def IsPeriodic(self) -> bool:
         return self.periodic
@@ -122,17 +122,17 @@ class NativePcurve(BrepPcurve):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-     # format id keeps payload interpretation tied to its producing dialect
+    # format id keeps payload interpretation tied to its producing dialect
     @property
     def FormatId(self) -> str:
         return self.format_id
 
-     # native type string preserves vendor vocabulary that enums cannot fully cover
+    # native type string preserves vendor vocabulary that enums cannot fully cover
     @property
     def EntityType(self) -> str:
         return self.entity_type
 
-     # raw bytes keep vendor specifics recoverable even when schema parsing fails
+    # raw bytes keep vendor specifics recoverable even when schema parsing fails
     @property
     def PayloadData(self) -> TypeMap[str, object]:
         return self.data

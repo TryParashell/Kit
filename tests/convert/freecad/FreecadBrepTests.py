@@ -13,6 +13,7 @@ import io as IoStream
 import os as OsModule
 from pathlib import Path as FilePath
 import subprocess as Subprocess
+from typing import cast as CastValue
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import pytest as Pytest
@@ -85,6 +86,17 @@ KOracle = GetFreecadPath()
 
 # this binding exists because shared behavior needs one stable value
 KRootValue = FilePath(__file__).parents[3]
+
+
+# parametrized collection growth needs reflected invocation while models stay immutable
+def CallCompat(
+    TargetValue: object,
+    *ArgValues: object,
+    **NamedValues: object,
+) -> object:
+    if not callable(TargetValue):
+        raise TypeError("compatibility target must be callable")
+    return TargetValue(*ArgValues, **NamedValues)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -438,7 +450,12 @@ def TestSuppliedThe() -> None:
 )
 def TestOpenCascade(Collection: str, Entity: object) -> None:
     Model = TriangleBrep()
-    Narrowed = Replace(Model, **{Collection: (*getattr(Model, Collection), Entity)})
+    Narrowed = CastValue(
+        BrepModel,
+        CallCompat(
+            Replace, Model, **{Collection: (*getattr(Model, Collection), Entity)}
+        ),
+    )
     Encoded = BrepModelBrep(Narrowed)
     assert IsStructurallyValidAscii(Encoded)
 
