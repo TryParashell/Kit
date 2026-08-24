@@ -22,7 +22,6 @@ import tempfile as Tempfile
 from types import MappingProxyType
 from typing import Mapping, Sequence, TypeGuard, cast as CastValue
 
-# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 from convert.adapters.base import (
     AdapterInfo,

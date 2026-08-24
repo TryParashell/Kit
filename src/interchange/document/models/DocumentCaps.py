@@ -152,6 +152,4 @@ def GetRetainedCaps(
     return frozenset(RetainedCaps)
 
 
-# the document type binds at the bottom so the recursive assembly and
-# document graph resolves completely no matter which module is imported first
 from interchange.document.models.DocumentModel import CadDocument  # noqa: E402

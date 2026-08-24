@@ -22,7 +22,6 @@ import re as RegexLib
 import tempfile as Tempfile
 from typing import TypeGuard
 
-# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 import zipfile as Zipfile
 from convert.adapters.base import (

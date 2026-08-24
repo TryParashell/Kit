@@ -115,9 +115,6 @@ class AssemblyData(ModelBase):
         return self.GetChildren(definition_id)
 
 
-# embedded document imports stay at the bottom so the recursive assembly and
-# document graph resolves completely no matter which module is imported first;
-# runtime hint resolution requires these names while the graph stays recursive
 from interchange.assembly.ComponentDocument import (  # lgtm[py/cyclic-import]
     ComponentDoc,
 )

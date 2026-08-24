@@ -20,7 +20,6 @@ import re as RegexLib
 import struct as Struct
 import uuid as UuidValue
 
-# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 import zipfile as Zipfile
 import zlib as ZlibValue

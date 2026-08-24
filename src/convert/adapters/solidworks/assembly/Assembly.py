@@ -16,7 +16,6 @@ import struct as Struct
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Sequence, cast as CastValue
 
-# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 from interchange import (
     AssemblyData as AsmData,

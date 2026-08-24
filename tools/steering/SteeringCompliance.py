@@ -132,6 +132,7 @@ KPurposeWords = frozenset(
 KPragmaPrefixes = (
     "lgtm[",
     "mypy:",
+    "noqa:",
     "pyre-ignore",
     "pyright:",
     "type:",

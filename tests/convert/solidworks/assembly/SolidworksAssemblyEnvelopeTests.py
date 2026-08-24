@@ -89,9 +89,9 @@ KMateInfoA = "moPlaneSurfIdRep_c,3,4, "
 # keeps this focused behavior isolated so regressions remain immediately visible
 def PersistentMD(
     *,
-    kind: MateKind | str | None = None,
-    value: ParameterValue | None = None,
-    parameter_ids: tuple[str, ...] | None = None,
+    KindValue: MateKind | str | None = None,
+    ValueData: ParameterValue | None = None,
+    ParamIds: tuple[str, ...] | None = None,
 ) -> CadDocument:
     SourceDoc = AssemblyDocument()
     Assembly = SourceDoc.assembly
@@ -112,12 +112,12 @@ def PersistentMD(
         entity_ids=(ComponentEntity.EntityId, RootEntity.EntityId),
         alignment=MateAlignment.ALIGNED,
     )
-    if kind is not None:
-        MateInfo = ReplaceData(MateInfo, kind=kind)
-    if value is not None:
-        MateInfo = ReplaceData(MateInfo, value=value)
-    if parameter_ids is not None:
-        MateInfo = ReplaceData(MateInfo, parameter_ids=parameter_ids)
+    if KindValue is not None:
+        MateInfo = ReplaceData(MateInfo, kind=KindValue)
+    if ValueData is not None:
+        MateInfo = ReplaceData(MateInfo, value=ValueData)
+    if ParamIds is not None:
+        MateInfo = ReplaceData(MateInfo, parameter_ids=ParamIds)
     return ReplaceData(
         SourceDoc,
         assembly=ReplaceData(
@@ -586,7 +586,7 @@ def TestAMLDNVTNMR() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestBMVLVTNMR() -> None:
-    Blocked = PersistentMD(kind=MateKind.DISTANCE, value=None)
+    Blocked = PersistentMD(KindValue=MateKind.DISTANCE, ValueData=None)
     Encoding = Encode(Blocked)
     ReasonsD = {
         Reason
@@ -604,9 +604,9 @@ def TestBMVLVTNMR() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestREVIWITND() -> None:
     Driven = PersistentMD(
-        kind=MateKind.DISTANCE,
-        value=ParameterValue(12.5, ValueKind.LENGTH, "mm"),
-        parameter_ids=("parameter:offset",),
+        KindValue=MateKind.DISTANCE,
+        ValueData=ParameterValue(12.5, ValueKind.LENGTH, "mm"),
+        ParamIds=("parameter:offset",),
     )
     Encoding = Encode(Driven)
     assert Encoding.mates_complete is True

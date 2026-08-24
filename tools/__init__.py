@@ -6,5 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-# first-party tools package stays regular so dependency distributions
-# shipping their own top-level tools module can never shadow repository tooling
+"""First-party tools package stays regular.
+
+Dependency distributions shipping their own top-level ``tools`` module can
+never shadow repository tooling.
+"""

@@ -3667,8 +3667,7 @@ def PrincipalPlaneB(Planes: tuple[SupportPlane, ...]) -> dict[str, int]:
     return Result
 
 
-# this definition exists because focused behavior needs one stable owner
-# vendor metadata needs string keys before nested values can cross the parser boundary
+# focused owner exists because vendor metadata needs string keys before nested values can cross the parser boundary
 def IsObjectMap(Value: object) -> TypeGuard[Mapping[object, object]]:
     return isinstance(Value, Mapping)
 

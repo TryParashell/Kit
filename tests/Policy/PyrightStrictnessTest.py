@@ -46,19 +46,19 @@ KRequiredRules = (
 
 
 # config loading stays centralized so every assertion sees identical settings
-def LoadPyrightConfig() -> dict[str, object]:
+def LoadPyConfig() -> dict[str, object]:
     Metadata = tomllib.loads((KRootPath / "pyproject.toml").read_text(encoding="utf-8"))
     return CastValue(dict[str, object], Metadata["tool"]["pyright"])
 
 
 # strict mode is the baseline the whole policy depends on
 def TestStrictMode() -> None:
-    assert LoadPyrightConfig()["typeCheckingMode"] == "strict"
+    assert LoadPyConfig()["typeCheckingMode"] == "strict"
 
 
 # scope assertions stop silent exclusions from weakening future checks
-def TestScopeCoversWholeTree() -> None:
-    Config = LoadPyrightConfig()
+def TestPyrightScope() -> None:
+    Config = LoadPyConfig()
     IncludeValue = CastValue(list[str], Config["include"])
     assert set(IncludeValue) == {"src", "tests", "tools"}
     assert Config["pythonVersion"] == "3.11"
@@ -66,17 +66,17 @@ def TestScopeCoversWholeTree() -> None:
 
 # pinning severity keeps regressions loud instead of advisory whispers
 @pytest.mark.parametrize("RuleName", KRequiredRules)
-def TestRulePinnedAtError(RuleName: str) -> None:
-    Config = LoadPyrightConfig()
+def TestRulePinned(RuleName: str) -> None:
+    Config = LoadPyConfig()
     assert Config.get(RuleName) == "error", RuleName
 
 
 # suppression scans keep diagnostics honest by banning inline escapes
-def TestNoSuppressionEscapes() -> None:
+def TestBansEscapes() -> None:
     Offenders: list[str] = []
-    for Root in ("src", "tests", "tools"):
-        for PathInfo in (KRootPath / Root).rglob("*.py"):
-            Text = PathInfo.read_text(encoding="utf-8", errors="ignore")
-            if "# type: ignore" in Text or "# pyright:" in Text:
+    for AreaName in ("src", "tests", "tools"):
+        for PathInfo in (KRootPath / AreaName).rglob("*.py"):
+            FileText = PathInfo.read_text(encoding="utf-8", errors="ignore")
+            if "# type: ignore" in FileText or "# pyright:" in FileText:
                 Offenders.append(str(PathInfo))
     assert Offenders == []
