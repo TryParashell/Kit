@@ -15,4 +15,5 @@ from interchange.brep.validation.TopologyAccess import TopologyAccess
 
 
 # the validation view decouples topology storage from independent diagnostic passes
-class BrepView(GeometryAccess, TopologyAccess, TypeProtocol): ...
+class BrepView(GeometryAccess, TopologyAccess, TypeProtocol):
+    """combined diagnostic surface sharing one immutable topology snapshot"""

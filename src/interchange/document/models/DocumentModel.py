@@ -11,27 +11,33 @@ from __future__ import annotations
 from dataclasses import dataclass as MakeDataClass
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
+from typing import cast as CastValue
 
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.GraphView import GraphView
+from interchange.assembly.MateConstraint import MateConstraint
+from interchange.assembly.MateEntity import MateEntity
+from interchange.assembly.MateGroup import MateGroup
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.core.Common import FreezeMapping
-from interchange.document.behavior.DocumentBehavior import (  # lgtm[py/cyclic-import]
-    DocumentApi,
-)
+from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelExtras import ModelExtras
+from interchange.document.behavior.DocumentBehavior import DocumentApi
 from interchange.document.models.DocumentRoot import DocumentRoot
 from interchange.enums.EnumDocument import Capability
 from interchange.enums.EnumUnits import UnitSystem
 from interchange.features.FeatureBody import DesignBody
-from interchange.mesh.SurfaceMesh import SurfaceMesh
-from interchange.core.ModelBase import ModelBase
-from interchange.payloads.PayloadRecord import BrepPayload
-from interchange.records.RecordConfig import Configuration
-from interchange.records.RecordDiagnostic import Diagnostic
-from interchange.records.RecordSource import CadSource
+from interchange.features.FeatureStep import FeatureStep
 from interchange.geometry.models.Selection import Selection
 from interchange.geometry.models.Sketch import Sketch
 from interchange.geometry.models.SupportPlane import SupportPlane
-from interchange.features.FeatureStep import FeatureStep
+from interchange.mesh.SurfaceMesh import SurfaceMesh
+from interchange.payloads.PayloadRecord import BrepPayload
+from interchange.records.RecordConfig import Configuration
+from interchange.records.RecordDiagnostic import Diagnostic
 from interchange.records.RecordParameter import Parameter
+from interchange.records.RecordSource import CadSource
 
 
 # portable cad exchange needs one immutable root connecting every neutral model domain
@@ -141,6 +147,92 @@ class CadDocument(DocumentRoot, DocumentApi, ModelBase):
         return self.brep
 
 
-from interchange.assembly.AssemblyData import (
-    AssemblyData,  # lgtm[py/unsafe-cyclic-import]
-)
+# component documents embed linked portable documents without weakening graph typing
+@ModelDataMut
+class ComponentDoc(ModelBase):
+    id: str
+    document: CadDocument
+
+    # stable identity lets records reference each other without holding full objects
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    # underlying document access keeps assembly views decoupled from storage internals
+    @property
+    def Document(self) -> CadDocument:
+        return self.document
+
+
+# assembly definition lookups stay separable because graph views compose without owning storage
+class DefLookupView(GraphView):
+    locals()["__slots__"] = ()
+
+    # definition lookup gives callers one consistent missing identifier failure mode
+    def GetDefinition(self, EntityId: str) -> ComponentDef:
+        StoredDefinitions = CastValue(
+            tuple[ComponentDef, ...],
+            getattr(self, "definitions"),
+        )
+        for DefinitionValue in StoredDefinitions:
+            if DefinitionValue.id == EntityId:
+                return DefinitionValue
+        raise KeyError(f"unknown component definition id {EntityId!r}")
+
+    # pascal lookup keeps one canonical spelling because compatibility wrappers need twins
+    def Definition(self, EntityId: str) -> ComponentDef:
+        return self.GetDefinition(EntityId)
+
+    # lowercase lookup stays concrete because static consumers cannot observe runtime aliases
+    def definition(self, entity_id: str) -> ComponentDef:
+        return self.GetDefinition(entity_id)
+
+    # pascal child ordering keeps one canonical spelling because compatibility wrappers need twins
+    def Children(self, DefinitionId: str) -> tuple[ComponentInst, ...]:
+        return self.GetChildren(DefinitionId)
+
+    # lowercase child ordering stays concrete because static consumers cannot observe runtime aliases
+    def children(self, definition_id: str) -> tuple[ComponentInst, ...]:
+        return self.GetChildren(definition_id)
+
+
+# assembly document lookups stay separable because linked records resolve without storage coupling
+class DocLookupView:
+    locals()["__slots__"] = ()
+
+    # document list keeps external references inspectable without reopening files
+    @property
+    def Documents(self) -> "tuple[ComponentDoc, ...]":
+        return CastValue("tuple[ComponentDoc, ...]", getattr(self, "documents"))
+
+    # embedded document lookup avoids exposing storage details to assembly consumers
+    def GetDocument(self, EntityId: str) -> CadDocument:
+        StoredDocuments = CastValue(
+            tuple[ComponentDoc, ...],
+            getattr(self, "documents"),
+        )
+        for DocumentValue in StoredDocuments:
+            if DocumentValue.id == EntityId:
+                return DocumentValue.document
+        raise KeyError(f"unknown component document id {EntityId!r}")
+
+    # pascal lookup keeps one canonical spelling because compatibility wrappers need twins
+    def Document(self, EntityId: str) -> CadDocument:
+        return self.GetDocument(EntityId)
+
+    # lowercase lookup stays concrete because linked document consumers need its exact return type
+    def document(self, entity_id: str) -> CadDocument:
+        return self.GetDocument(entity_id)
+
+
+# assembly data composes occurrences documents and mates into one portable graph
+@ModelDataMut
+class AssemblyData(DefLookupView, DocLookupView, ModelExtras, ModelBase):
+    root_definition_id: str
+    definitions: tuple[ComponentDef, ...]
+    instances: tuple[ComponentInst, ...]
+    documents: tuple[ComponentDoc, ...] = ()
+    mate_entities: tuple[MateEntity, ...] = ()
+    mates: tuple[MateConstraint, ...] = ()
+    mate_groups: tuple[MateGroup, ...] = ()
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
