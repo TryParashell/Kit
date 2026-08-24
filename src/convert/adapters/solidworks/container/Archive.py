@@ -661,7 +661,7 @@ def GetRunKey(SelfData: ClassLayout, SlotValue: int) -> str:
 def GetRunKeys(SelfData: ClassLayout) -> tuple[str, ...]:
     if SelfData.walks_groups:
         if KTailRun in SelfData.constant_run_keys or KTailRun in SelfData.variable_runs:
-            return (KTailRun, KLeadRun)
+            return (KLeadRun, KTailRun)
         return (KLeadRun,)
     if not SelfData.child_slots:
         return (KLeafRun,)
