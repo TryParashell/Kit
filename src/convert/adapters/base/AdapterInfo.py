@@ -66,7 +66,7 @@ class AdapterInfo(AdapterInfoView, ContractBase):
         return self.extensions
 
     # document kind lookup belongs here so clients need no format specific branching
-    def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
+    def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
         return self.assembly_extensions if Assembly else self.part_extensions
 
@@ -109,18 +109,14 @@ setattr(AdapterInfo, "__getstate__", GetPickleState)
 setattr(AdapterInfo, "__setstate__", SetPickleState)
 
 
-setattr(AdapterInfo, "extensions_for", AdapterInfo.GetExtensions)
-
-setattr(AdapterInfo.GetExtensions, "__module__", "convert.adapters.base")
-setattr(AdapterInfo.GetExtensions, "__name__", "extensions_for")
-setattr(AdapterInfo.GetExtensions, "__qualname__", "AdapterInfo.extensions_for")
+# reflected signatures keep the historical keyword only assembly contract introspectable
 setattr(
-    AdapterInfo.GetExtensions,
+    AdapterInfo.extensions_for,
     "__annotations__",
     {"assembly": "bool", "return": "tuple[str, ...]"},
 )
 setattr(
-    AdapterInfo.GetExtensions,
+    AdapterInfo.extensions_for,
     "__signature__",
     CallSignature(
         (

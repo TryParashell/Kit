@@ -15,15 +15,13 @@ import pytest
 # repo root derivation keeps tests runnable from any working directory
 KRootPath = Path(__file__).resolve().parents[2]
 
-# every diagnostic the strictest pylance surface can express stays pinned at error because repository pyright lags behind editors
+# every diagnostic the strictest pyright surface can express stays pinned at error because repository rules must stay recognized by the pinned cli
 KRequiredRules = (
     "reportAssertTypeFailure",
     "reportCallInDefaultInitializer",
     "reportDeprecated",
-    "reportImplicitAbstractClass",
     "reportImplicitOverride",
     "reportImplicitStringConcatenation",
-    "reportIncompleteStubValue",
     "reportInvalidStubStatement",
     "reportMatchNotExhaustive",
     "reportMissingSuperCall",
@@ -36,7 +34,6 @@ KRequiredRules = (
     "reportUnnecessaryContains",
     "reportUnnecessaryIsInstance",
     "reportUnnecessaryTypeIgnoreComment",
-    "reportUnsafeMultipleInheritance",
     "reportUnsupportedDunderAll",
     "reportUnusedCallResult",
     "reportUnusedExpression",

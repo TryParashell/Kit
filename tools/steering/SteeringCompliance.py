@@ -133,6 +133,7 @@ KPragmaPrefixes = (
     "lgtm[",
     "mypy:",
     "noqa:",
+    "nosemgrep:",
     "pyre-ignore",
     "pyright:",
     "type:",

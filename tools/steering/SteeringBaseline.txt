@@ -99,9 +99,6 @@ src/convert/adapters/registry/__init__.py	NAM001	argument identifier 'options' m
 src/convert/adapters/registry/__init__.py	NAM001	function identifier 'format_ids' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/registry/__init__.py	NAM001	function identifier 'extend' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/registry/__init__.py	NAM001	argument identifier 'adapters' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/registry/AdapterDiscovery.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/convert/adapters/registry/AdapterDiscovery.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/convert/adapters/registry/AdapterDiscovery.py	CMT001	code comment is not an allowed rationale license line or type pragma
 src/convert/adapters/registry/RegistryDiscover.py	NAM001	function identifier 'ValidateAdapterInfo' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'format_id' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'dropped' must be PascalCase ASCII letters with length 5 through 25
@@ -139,7 +136,6 @@ src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'writ
 src/convert/adapters/solidworks/core/Adapter.py	MRK001	boolean function 'BooleanValue' must start with Is Has or Can
 src/convert/adapters/solidworks/core/Display.py	CON001	constant 'Positions' must start with K
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'EncodeNative' has 32 logical lines and must be split at 30
-src/convert/adapters/solidworks/core/Native.py	CMT001	code comment is not an allowed rationale license line or type pragma
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'ReadHeaderObjs' has 37 logical lines and must be split at 30
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'DecodeNative' has 36 logical lines and must be split at 30
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'CircleSet' has 34 logical lines and must be split at 30
@@ -244,12 +240,6 @@ src/convert/geometry/Parasolid.py	CON001	constant 'RecordValue' must start with 
 src/convert/geometry/Parasolid.py	SPL001	declaration 'ParseBridge' has 36 logical lines and must be split at 30
 src/convert/geometry/Parasolid.py	NAM001	function identifier 'StringIntMapping' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/__init__.py	SPL001	declaration '__all__' has 134 logical lines and must be split at 30
-src/interchange/__init__.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/interchange/__init__.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/interchange/__init__.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/interchange/__init__.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/interchange/__init__.py	CMT001	code comment is not an allowed rationale license line or type pragma
-src/interchange/__init__.py	CMT001	code comment is not an allowed rationale license line or type pragma
 src/interchange/assembly/AssemblyData.py	NAM001	function identifier 'definition' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/assembly/AssemblyData.py	NAM001	argument identifier 'entity_id' must be PascalCase ASCII letters with length 5 through 25
 src/interchange/assembly/AssemblyData.py	NAM001	function identifier 'document' must be PascalCase ASCII letters with length 5 through 15
@@ -377,8 +367,6 @@ tests/convert/solidworks/core/SolidworksWriterTests.py	SPL001	declaration 'TestF
 tests/interchange/compatibility/PythonCompatibilityTests.py	CON001	constant 'CompatType' must start with K
 tests/ProgramDecomposition/ProgramDecompositionTest.py	CON001	constant 'DigestStat' must start with K
 tests/ProgramDecomposition/ProgramDecompositionTest.py	CON001	constant 'ProgramStat' must start with K
-tools/audit/FcstdCompat.py	CMT001	code comment is not an allowed rationale license line or type pragma
 tools/audit/FcstdFeatures.py	NAM001	function identifier 'IsStringKeyedMapping' must be PascalCase ASCII letters with length 5 through 15
 tools/audit/FcstdResult.py	NAM001	function identifier 'ParseAuditRecord' must be PascalCase ASCII letters with length 5 through 15
 tools/audit/FcstdResult.py	SPL001	declaration 'ParseAuditRecord' has 34 logical lines and must be split at 30
-tools/skills/SkillCompat.py	CMT001	code comment is not an allowed rationale license line or type pragma

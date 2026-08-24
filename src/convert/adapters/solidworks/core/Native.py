@@ -17,7 +17,6 @@ import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
 from typing import Mapping, Sequence, TypeGuard
-# annotation-only alias stays because element types document parser outputs while parsing happens in hardened callers
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 from interchange import (
     BooleanOperation as BoolOperation,
