@@ -19,7 +19,7 @@ from typing import overload as TypeOverload
 from typing import dataclass_transform as ModelTransform
 from typing import TypeVar
 
-from typing_extensions import override as Override
+from typing import override as Override
 
 from interchange.core.Reflection import GetFieldMap
 from interchange.serialization.RecordType import DataRecord

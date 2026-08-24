@@ -19,7 +19,7 @@ from convert.adapters.registry.RegistrySelect import SelectReader
 from convert.adapters.staging.SourceReplay import GetReplayMut
 from convert.adapters.staging.SourceReplay import ReplaySource as SeekableSource
 
-from typing_extensions import override as Override
+from typing import override as Override
 
 # historical source annotations need local resolution after public methods move to the registry facade
 Source = KSourceType

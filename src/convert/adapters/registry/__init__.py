@@ -39,7 +39,7 @@ from convert.adapters.base.UsabilityError import ApplicationUsabilityError
 from convert.adapters.base.WriteOptions import WriteOptions as KWriteOptions
 from convert.adapters.base.WriteResult import WriteResult as KWriteResult
 
-from typing_extensions import override as Override
+from typing import override as Override
 
 # historical reader annotations need resolution after bindings move behind this compatibility facade
 CadReaderAdapter = KCadReaderAdapter

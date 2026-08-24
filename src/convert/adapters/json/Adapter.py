@@ -17,7 +17,7 @@ from convert.adapters.json.Reader import JsonReader
 from convert.adapters.json.Writer import JsonWriter
 from interchange.document.models.DocumentModel import CadDocument
 
-from typing_extensions import override as Override
+from typing import override as Override
 
 
 # this adapter composes focused reading writing and metadata responsibilities

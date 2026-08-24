@@ -17,7 +17,7 @@ from interchange import Capability
 from convert.adapters.base.AdapterInfoView import AdapterInfoView
 from convert.adapters.base.ContractCompat import ContractBase
 
-from typing_extensions import override as Override
+from typing import override as Override
 
 
 # legacy extension keywords need one strict translation point before document kind lookup

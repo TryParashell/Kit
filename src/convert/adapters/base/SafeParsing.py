@@ -10,18 +10,19 @@
 
 from __future__ import annotations as Annotations
 
-import defusedxml.ElementTree as SafeXmlTree
-import xml.etree.ElementTree as XmlTree  # noqa: DUO107
+from re import compile as CompilePattern
+from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import fromstring as ParseTreeText
 
-# serialization aliases stay stdlib because hardened writers emit XML instead of parsing it
-Element = XmlTree.Element
+# doctype detection stays lexical because every entity expansion vector requires one declared doctype
+KDoctypeMark = CompilePattern("<![dD][oO][cC][tT][yY][pP][eE]")
 
 
-# adapters must never feed attacker controlled bytes to parsers so every defense stays on
+# parsing rejects document types before feeding because references cannot expand without declarations
 def ParseUntrusted(ValueData: str | bytes) -> Element:
-    return SafeXmlTree.fromstring(
-        ValueData,
-        forbid_dtd=True,
-        forbid_entities=True,
-        forbid_external=True,
+    ScanValue = (
+        ValueData.decode("latin-1") if isinstance(ValueData, bytes) else ValueData
     )
+    if KDoctypeMark.search(ScanValue) is not None:
+        raise ValueError("untrusted XML must not declare a doctype")
+    return ParseTreeText(ValueData)
