@@ -10,13 +10,14 @@ from __future__ import annotations
 
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
+from typing import cast as CastValue
 
-from interchange.assembly.AssemblyView import AssemblyView  # lgtm[py/cyclic-import]
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.ComponentInstance import ComponentInst
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.core.ModelExtras import ModelExtras
+from interchange.assembly.GraphView import GraphView
 from interchange.assembly.MateConstraint import MateConstraint
 from interchange.assembly.MateEntity import MateEntity
 from interchange.assembly.MateGroup import MateGroup
@@ -24,7 +25,7 @@ from interchange.assembly.MateGroup import MateGroup
 
 # assembly data composes occurrences documents and mates into one portable graph
 @ModelDataMut
-class AssemblyData(AssemblyView, ModelExtras, ModelBase):
+class AssemblyData(GraphView, ModelExtras, ModelBase):
     root_definition_id: str
     definitions: tuple[ComponentDef, ...]
     instances: tuple[ComponentInst, ...]
@@ -33,6 +34,11 @@ class AssemblyData(AssemblyView, ModelExtras, ModelBase):
     mates: tuple[MateConstraint, ...] = ()
     mate_groups: tuple[MateGroup, ...] = ()
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # document list keeps external references inspectable without reopening files
+    @property
+    def Documents(self) -> "tuple[ComponentDoc, ...]":
+        return CastValue("tuple[ComponentDoc, ...]", getattr(self, "documents"))
 
     # definition lookup gives callers one consistent missing identifier failure mode
     def GetDefinition(self, EntityId: str) -> ComponentDef:
@@ -55,22 +61,6 @@ class AssemblyData(AssemblyView, ModelExtras, ModelBase):
     # lowercase lookup stays concrete because linked document consumers need its exact return type
     def document(self, entity_id: str) -> CadDocument:
         return self.GetDocument(entity_id)
-
-    # child ordering stays deterministic when source order values contain ties
-    def GetChildren(self, DefinitionId: str) -> tuple[ComponentInst, ...]:
-        ChildValues = (
-            InstanceValue
-            for InstanceValue in self.instances
-            if InstanceValue.owner_definition_id == DefinitionId
-        )
-
-        # stable tie ordering preserves reproducible assembly output across adapters
-        return tuple(
-            sorted(
-                ChildValues,
-                key=lambda InstanceValue: (InstanceValue.order, InstanceValue.id),
-            )
-        )
 
     # lowercase lookup stays concrete because static consumers cannot observe runtime aliases
     def children(self, definition_id: str) -> tuple[ComponentInst, ...]:
