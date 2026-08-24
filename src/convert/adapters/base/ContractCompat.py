@@ -63,6 +63,12 @@ def GetCtorValues(
         if ModelName in TranslatedValues:
             if not IsStrictAliases and PublicValues[ModelName] != ModelName:
                 continue
+            if (
+                IsStrictAliases
+                and PublicValues[ModelName] != ModelName
+                and TranslatedValues[ModelName] != FieldValue
+            ):
+                continue
             raise TypeError(f"got multiple values for field {ModelName!r}")
         TranslatedValues[ModelName] = FieldValue
         PublicValues[ModelName] = FieldName
