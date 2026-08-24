@@ -21,9 +21,9 @@ class EngineWrite:
     registry: AdapterRegistry
 
     # direct initialization keeps each engine half usable in isolation
-    def __init__(self, registry: AdapterRegistry) -> None:
+    def __init__(self, Registry: AdapterRegistry) -> None:
         super().__init__()
-        self.registry = registry
+        self.registry = Registry
 
     # registry delegation preserves one validation path for every public document write
     def WriteTarget(

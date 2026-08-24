@@ -412,6 +412,24 @@ class ArchiveValues:
         self.chunks.append(EncodeString(TextValue))
 
 
+# class headers need one writer because repeated names become back references instead of copies
+def WriteClassMut(SelfData: ArchiveWriter, NameValue: str, Schema: int) -> None:
+    Index = SelfData.classes.get(NameValue)
+    NextIndex = SelfData.next_index
+    if Index is None:
+        Encoded = NameValue.encode("ascii")
+        SelfData.u16(KNewClassToken)
+        SelfData.u16(Schema)
+        SelfData.u16(len(Encoded))
+        SelfData.raw(Encoded)
+        SelfData.classes[NameValue] = NextIndex
+        NextIndex += 1
+    else:
+        SelfData.u16(KBackRefToken | Index)
+    NextIndex += 1
+    SelfData.SetNextIndex(NextIndex)
+
+
 # this definition exists because archive object state is separate from primitive value packing
 class ArchiveWriter(ArchiveValues):
     chunks: list[bytes]
@@ -427,18 +445,11 @@ class ArchiveWriter(ArchiveValues):
 
     # this definition exists because focused behavior needs one stable owner
     def BeginObject(self, NameValue: str, Schema: int) -> None:
-        Index = self.classes.get(NameValue)
-        if Index is None:
-            Encoded = NameValue.encode("ascii")
-            self.u16(KNewClassToken)
-            self.u16(Schema)
-            self.u16(len(Encoded))
-            self.raw(Encoded)
-            self.classes[NameValue] = self.next_index
-            self.next_index += 1
-        else:
-            self.u16(KBackRefToken | Index)
-        self.next_index += 1
+        WriteClassMut(self, NameValue, Schema)
+
+    # this definition exists because focused behavior needs one stable owner
+    def SetNextIndex(self, Value: int) -> None:
+        self.next_index = Value
 
     # this definition exists because focused behavior needs one stable owner
     def Build(self) -> bytes:

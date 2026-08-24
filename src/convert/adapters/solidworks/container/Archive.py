@@ -14,6 +14,7 @@ from pathlib import Path as PathValue
 import struct as Struct
 from typing import TypeAlias, TypeGuard, TypedDict, TypeVar
 from convert.adapters.solidworks.container.Container import SldprtFormatError
+from convert.adapters.solidworks.container.LayoutQueries import LayoutQueries
 
 # this contract exists because decoded layouts need recursively concrete json values
 LayoutValue: TypeAlias = (
@@ -664,7 +665,7 @@ class RunGroup:
 
 # this definition exists because class layout storage composes state and run selection behavior
 @Dataclass(frozen=True, slots=True)
-class ClassLayout:
+class ClassLayout(LayoutQueries):
     name: str
     child_slots: tuple[str, ...]
     runs: Mapping[str, int]
@@ -686,82 +687,63 @@ class ClassLayout:
     groups: tuple[RunGroup, ...] = ()
 
     # this definition exists because focused behavior needs one stable owner
-    @property
-    def IsWalksGroups(self) -> bool:
-        return bool(self.groups)
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def IsRepeats(self) -> bool:
-        return self.repeat_unresolved and self.repeat_prefix <= 0
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def IsWalksAPrefix(self) -> bool:
-        return self.repeat_unresolved and self.repeat_prefix > 0
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def ConstantRunKeys(self) -> frozenset[str]:
-        return frozenset(
-            set(self.runs) | set(self.runs_by_version) | set(self.RunsByChildClass)
-        )
-
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def TemplateSlot(self) -> int:
-        return len(self.child_slots) - 2
-
-    constant_run_keys = ConstantRunKeys
-    repeats = IsRepeats
-    template_slot = TemplateSlot
-    walks_a_prefix = IsWalksAPrefix
-    walks_groups = IsWalksGroups
-    Repeats = IsRepeats
-    WalksAPrefix = IsWalksAPrefix
-    WalksGroups = IsWalksGroups
-
-    # this definition exists because focused behavior needs one stable owner
     def ConstantRun(self, KeyValue: str, MoVersion: int | None) -> int | None:
-        Gated = self.runs_by_version.get(KeyValue)
-        if Gated is not None and MoVersion is not None:
-            Length = Gated.get(MoVersion)
-            if Length is not None:
-                return Length
-        return self.runs.get(KeyValue)
+        return GetConstantRun(self, KeyValue, MoVersion)
 
     # this definition exists because focused behavior needs one stable owner
     def RunKey(self, SlotValue: int) -> str:
-        if self.walks_a_prefix and SlotValue >= self.repeat_prefix - 1:
-            return KTailRun
-        if self.repeat_count is not None and SlotValue >= self.template_slot:
-            return str(self.template_slot)
-        return str(SlotValue)
+        return GetRunKey(self, SlotValue)
 
     # this definition exists because focused behavior needs one stable owner
     def RunKeys(self) -> tuple[str, ...]:
-        if self.groups:
-            if KTailRun in self.constant_run_keys or KTailRun in self.variable_runs:
-                return (KLeadRun, KTailRun)
-            return (KLeadRun,)
-        if not self.child_slots:
-            return (KLeafRun,)
-        if self.walks_a_prefix:
-            return (
-                (KLeadRun,)
-                + tuple((str(SlotValue) for SlotValue in range(self.repeat_prefix - 1)))
-                + (KTailRun,)
-            )
-        SpanValue = (
-            self.template_slot + 1
-            if self.repeat_count is not None
-            else len(self.child_slots)
-        )
-        return (KLeadRun,) + tuple((str(SlotValue) for SlotValue in range(SpanValue)))
+        return GetRunKeys(self)
 
     constant_run = ConstantRun
     run_key = RunKey
     run_keys = RunKeys
+
+
+# this function exists because constant run selection needs version gating without state
+def GetConstantRun(
+    SelfData: ClassLayout, KeyValue: str, MoVersion: int | None
+) -> int | None:
+    Gated = SelfData.runs_by_version.get(KeyValue)
+    if Gated is not None and MoVersion is not None:
+        Length = Gated.get(MoVersion)
+        if Length is not None:
+            return Length
+    return SelfData.runs.get(KeyValue)
+
+
+# this function exists because run naming needs prefix and trailer rules without duplication
+def GetRunKey(SelfData: ClassLayout, SlotValue: int) -> str:
+    if SelfData.walks_a_prefix and SlotValue >= SelfData.repeat_prefix - 1:
+        return KTailRun
+    if SelfData.repeat_count is not None and SlotValue >= SelfData.template_slot:
+        return str(SelfData.template_slot)
+    return str(SlotValue)
+
+
+# this function exists because run ordering stays deterministic for every layout shape
+def GetRunKeys(SelfData: ClassLayout) -> tuple[str, ...]:
+    if SelfData.walks_groups:
+        if KTailRun in SelfData.constant_run_keys or KTailRun in SelfData.variable_runs:
+            return (KTailRun, KLeadRun)
+        return (KLeadRun,)
+    if not SelfData.child_slots:
+        return (KLeafRun,)
+    if SelfData.walks_a_prefix:
+        return (
+            (KLeadRun,)
+            + tuple((str(SlotValue) for SlotValue in range(SelfData.repeat_prefix - 1)))
+            + (KTailRun,)
+        )
+    SpanValue = (
+        SelfData.template_slot + 1
+        if SelfData.repeat_count is not None
+        else len(SelfData.child_slots)
+    )
+    return (KLeadRun,) + tuple((str(SlotValue) for SlotValue in range(SpanValue)))
 
 
 # this definition exists because focused behavior needs one stable owner

@@ -12,9 +12,12 @@ from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
+from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelExtras import ModelExtras
 from interchange.enums.EnumGeometry import GeometryKind
 from interchange.geometry.models.GeometryTypes import KGeometryTypes
-from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.geometry.models.RelationView import RelationView
+from interchange.geometry.models.SketchView import SketchView
 from interchange.records.RecordProvenance import Provenance
 
 
@@ -84,7 +87,7 @@ class ConstraintRef(ModelBase):
 
 # sketch relations retain solver intent and parameter bindings across formats
 @ModelDataMut
-class SketchRelation(ModelBase):
+class SketchRelation(RelationView, ModelExtras, ModelBase):
     id: str
     kind: str
     references: tuple[ConstraintRef, ...]
@@ -94,50 +97,10 @@ class SketchRelation(ModelBase):
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
-    # stable identity lets records reference each other without holding full objects
-    @property
-    def EntityId(self) -> str:
-        return self.id
-
-    # kind tag lets consumers branch on semantics without importing concrete classes
-    @property
-    def EntityKind(self) -> str:
-        return self.kind
-
-    # reference list ties each relation to the entities it constrains
-    @property
-    def References(self) -> tuple[ConstraintRef, ...]:
-        return self.references
-
-    # optional parameter link makes dimensions editable through records
-    @property
-    def ParameterId(self) -> str | None:
-        return self.parameter_id
-
-    # driving flag splits real constraints from reference measurements
-    @property
-    def IsDriving(self) -> bool:
-        return self.driving
-
-    # suppression state keeps feature trees honest about what contributes geometry
-    @property
-    def IsSuppressed(self) -> bool:
-        return self.suppressed
-
-    # origin details stay optional so synthesized records can omit source facts safely
-    @property
-    def Provenance(self) -> Provenance | None:
-        return self.provenance
-
-    # open attribute bag preserves vendor extras that typed fields cannot express yet
-    @property
-    def Attributes(self) -> TypeMap[str, object]:
-        return self.attributes
-
 
 # sketches group geometry relations and profile identity into editable inputs
 @ModelDataMut
-class Sketch(ModelBase):
+class Sketch(SketchView, ModelExtras, ModelBase):
     id: str
     name: str
     support_plane_id: str
@@ -148,53 +111,3 @@ class Sketch(ModelBase):
     suppressed: bool = False
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-
-    # stable identity lets records reference each other without holding full objects
-    @property
-    def EntityId(self) -> str:
-        return self.id
-
-    # human readable label keeps diagnostics and diffs meaningful for reviewers
-    @property
-    def EntityName(self) -> str:
-        return self.name
-
-    # plane anchor locates the sketch in space without embedding transforms
-    @property
-    def SupportPlaneId(self) -> str:
-        return self.support_plane_id
-
-    # element list keeps sketch contents enumerable in draw order
-    @property
-    def Entities(self) -> tuple[SketchEntity, ...]:
-        return self.entities
-
-    # relation list keeps sketch intent inspectable without solving
-    @property
-    def Constraints(self) -> tuple[SketchRelation, ...]:
-        return self.constraints
-
-    # parameter links keep mate values driven by configurable expressions
-    @property
-    def ParameterIds(self) -> tuple[str, ...]:
-        return self.parameter_ids
-
-    # loop groups identify closed profiles so features can consume sketches directly
-    @property
-    def ClosedProfileEntityIds(self) -> tuple[tuple[str, ...], ...]:
-        return self.closed_profile_entity_ids
-
-    # suppression state keeps feature trees honest about what contributes geometry
-    @property
-    def IsSuppressed(self) -> bool:
-        return self.suppressed
-
-    # origin details stay optional so synthesized records can omit source facts safely
-    @property
-    def Provenance(self) -> Provenance | None:
-        return self.provenance
-
-    # open attribute bag preserves vendor extras that typed fields cannot express yet
-    @property
-    def Attributes(self) -> TypeMap[str, object]:
-        return self.attributes

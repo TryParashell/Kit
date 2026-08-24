@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass as MakeDataClass
 
 from interchange.enums.EnumBase import WireEnum
+from interchange.features.ExtrudeSecond import ExtrudeSecond
 from interchange.features.FeatureContract import FeatureDef
+from interchange.features.ExtrudeShape import ExtrudeShape
 from interchange.records.RecordParameter import ParameterValue
 from interchange.geometry.models.VectorSpace import SpaceVector
 
@@ -44,7 +46,7 @@ class ExtrudeEnd(WireEnum):
 
 # extrusions retain directional and termination choices needed for reconstruction
 @MakeDataClass(frozen=True, slots=True)
-class ExtrudeFeature(FeatureDef):
+class ExtrudeFeature(ExtrudeShape, ExtrudeSecond, FeatureDef):
     length: ParameterValue
     end_condition: ExtrudeEnd | str = ExtrudeEnd.KBlind
     reversed: bool = False
@@ -58,68 +60,3 @@ class ExtrudeFeature(FeatureDef):
     second_draft_angle: ParameterValue | None = None
     up_to_reference: str = ""
     second_up_to_reference: str = ""
-
-    # extrusion length defines prism height without evaluating geometry
-    @property
-    def Length(self) -> ParameterValue:
-        return self.length
-
-    # end condition captures blind through all and up to semantics in one field
-    @property
-    def EndCondition(self) -> ExtrudeEnd | str:
-        return self.end_condition
-
-    # orientation flag preserves which side of the topology is used
-    @property
-    def IsReversed(self) -> bool:
-        return self.reversed
-
-    # symmetric mode doubles length automatically so writers need no second value
-    @property
-    def IsSymmetric(self) -> bool:
-        return self.symmetric
-
-    # unit heading keeps linear geometry orientation explicit for writers
-    @property
-    def Direction(self) -> SpaceVector | None:
-        return self.direction
-
-    # second length supports two sided extrudes without synthetic features
-    @property
-    def SecondLength(self) -> ParameterValue | None:
-        return self.second_length
-
-    # second end condition keeps asymmetric caps expressible in one step
-    @property
-    def SecondEndCondition(self) -> ExtrudeEnd | str | None:
-        return self.second_end_condition
-
-    # start offset lets extrudes begin away from the sketch plane
-    @property
-    def Offset(self) -> ParameterValue | None:
-        return self.offset
-
-    # second offset keeps two sided starts independently controllable
-    @property
-    def SecondOffset(self) -> ParameterValue | None:
-        return self.second_offset
-
-    # draft angle encodes mold pull so solids survive manufacturing review
-    @property
-    def DraftAngle(self) -> ParameterValue | None:
-        return self.draft_angle
-
-    # second draft angle keeps tapered two sided walls expressible
-    @property
-    def SecondDraftAngle(self) -> ParameterValue | None:
-        return self.second_draft_angle
-
-    # target reference makes length follow existing geometry instead of magic numbers
-    @property
-    def UpToReference(self) -> str:
-        return self.up_to_reference
-
-    # second target keeps two sided up to extrudes symmetric in capability
-    @property
-    def SecondUpToRef(self) -> str:
-        return self.second_up_to_reference

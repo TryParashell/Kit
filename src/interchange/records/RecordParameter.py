@@ -12,8 +12,10 @@ from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
-from interchange.enums.EnumValues import ParameterRole, ValueKind
 from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelExtras import ModelExtras
+from interchange.enums.EnumValues import ParameterRole, ValueKind
+from interchange.records.ParameterView import ParameterView
 from interchange.records.RecordProvenance import Provenance
 
 
@@ -65,7 +67,7 @@ class Expression(ModelBase):
 
 # parameters retain editable values ownership and source evidence across format boundaries
 @ModelDataMut
-class Parameter(ModelBase):
+class Parameter(ParameterView, ModelExtras, ModelBase):
     id: str
     name: str
     value: ParameterValue
@@ -74,43 +76,3 @@ class Parameter(ModelBase):
     owner_id: str = ""
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-
-    # stable identity lets records reference each other without holding full objects
-    @property
-    def EntityId(self) -> str:
-        return self.id
-
-    # human readable label keeps diagnostics and diffs meaningful for reviewers
-    @property
-    def EntityName(self) -> str:
-        return self.name
-
-    # typed value keeps configuration usable without parsing conventions
-    @property
-    def Value(self) -> ParameterValue:
-        return self.value
-
-    # role tags separate driven driving and reference usages cleanly
-    @property
-    def ValueRole(self) -> ParameterRole:
-        return self.role
-
-    # optional formula keeps derived values live instead of frozen snapshots
-    @property
-    def Expression(self) -> Expression | None:
-        return self.expression
-
-    # owner link ties parameters to features without back references
-    @property
-    def OwnerId(self) -> str:
-        return self.owner_id
-
-    # origin details stay optional so synthesized records can omit source facts safely
-    @property
-    def Provenance(self) -> Provenance | None:
-        return self.provenance
-
-    # open attribute bag preserves vendor extras that typed fields cannot express yet
-    @property
-    def Attributes(self) -> TypeMap[str, object]:
-        return self.attributes

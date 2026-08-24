@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import field as MakeDataField
 
 from interchange.brep.curves.BrepCurves import BrepEntity
+from interchange.brep.topology.EdgeView import EdgeView
 from interchange.records.RecordProvenance import Provenance
 from typing import Mapping as TypeMap
 from interchange.core.Common import FreezeMapping
@@ -41,7 +42,7 @@ class BrepVertex(BrepEntity):
 
 # edges connect vertices through exact curve parameter intervals
 @ModelDataMut
-class BrepEdge(BrepEntity):
+class BrepEdge(EdgeView, BrepEntity):
     id: str
     start_vertex_id: str
     end_vertex_id: str
@@ -52,41 +53,6 @@ class BrepEdge(BrepEntity):
     degenerate: bool = False
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-
-    # endpoint links keep edge traversal possible without geometric matching
-    @property
-    def StartVertexId(self) -> str:
-        return self.start_vertex_id
-
-    # closing endpoint keeps edge ranges complete without geometric matching
-    @property
-    def EndVertexId(self) -> str:
-        return self.end_vertex_id
-
-    # curve link keeps edges defined once and shared across faces
-    @property
-    def CurveId(self) -> str:
-        return self.curve_id
-
-    # trim range bounds the used portion so shared curves stay reusable
-    @property
-    def StartParameter(self) -> float:
-        return self.start_parameter
-
-    # trim end completes the range so trimming needs no heuristics
-    @property
-    def EndParameter(self) -> float:
-        return self.end_parameter
-
-    # tolerance bounds approximation error so consumers can trust comparisons
-    @property
-    def Tolerance(self) -> float:
-        return self.tolerance
-
-    # degeneracy flag protects downstream math from zero length edges
-    @property
-    def IsDegenerate(self) -> bool:
-        return self.degenerate
 
 
 # coedges preserve oriented edge use and optional parameter curve bindings

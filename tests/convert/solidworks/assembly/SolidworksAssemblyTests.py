@@ -675,11 +675,11 @@ def TestMARDMVAA(Document: CadDocument) -> None:
         assert MateValue.value == PytestLib.approx(FirstValue / SecondValue)
 
 
-# keeps this focused behavior isolated so regressions remain immediately visible
+# keeps rename recovery isolated so regressions remain immediately visible
 @PytestLib.mark.skipif(
     not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
 )
-def TestMTUNCWLFR() -> None:
+def TestMTRNM() -> None:
     Archive = SldprtArchive.open(KConrod)
     RecordInfo = next(
         (
@@ -700,6 +700,21 @@ def TestMTUNCWLFR() -> None:
     assert RenamedList.mates[0].name == "CustomMate1"
     assert RenamedList.mates[0].kind == "concentric"
     assert RenamedList.mates[0].class_name == "moMateConcentric"
+
+
+# keeps unknown class handling isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
+)
+def TestMTUNKCLS() -> None:
+    Archive = SldprtArchive.open(KConrod)
+    RecordInfo = next(
+        (
+            ItemValueA
+            for ItemValueA in Archive.records
+            if ItemValueA.name.endswith("-MatesList")
+        )
+    )
     OldClass = b"moMateConcentric"
     NewClass = b"moMateVendorType"
     OriginalClassOffset = RecordInfo.data.index(OldClass)
@@ -711,8 +726,31 @@ def TestMTUNCWLFR() -> None:
     UnknownClassList = DecodeMateList(UnknownClass, RecordInfo.name, 7)
     assert UnknownClassList.mates[0].name == "Concentric1"
     assert UnknownClassList.mates[0].kind == "native"
-    ClassOffset = Renamed.index(OldClass)
-    Future = Renamed[:ClassOffset] + NewClass + Renamed[ClassOffset + len(OldClass) :]
+
+
+# keeps future class payloads isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KConrod.is_file(), reason="conrod assembly corpus is unavailable"
+)
+def TestMTFUTPAY() -> None:
+    Archive = SldprtArchive.open(KConrod)
+    RecordInfo = next(
+        (
+            ItemValueA
+            for ItemValueA in Archive.records
+            if ItemValueA.name.endswith("-MatesList")
+        )
+    )
+    OldName = "Concentric1".encode("utf-16le")
+    NewName = "CustomMate1".encode("utf-16le")
+    NameOffset = RecordInfo.data.index(OldName)
+    Renamed = (
+        RecordInfo.data[:NameOffset]
+        + NewName
+        + RecordInfo.data[NameOffset + len(OldName) :]
+    )
+    ClassOffset = Renamed.index(b"moMateConcentric")
+    Future = Renamed[:ClassOffset] + b"moMateVendorType" + Renamed[ClassOffset + 16 :]
     FutureList = DecodeMateList(Future, RecordInfo.name, 7)
     MateInfo = FutureList.mates[0]
     assert MateInfo.name == "CustomMate1"

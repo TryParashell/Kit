@@ -44,6 +44,7 @@ from interchange.brep.surfaces.BrepSurfaces import (
     TorusSurface,
 )
 from interchange.brep.topology.BrepModel import BrepModel
+from convert.geometry.TopoMapsView import TopoMapsView
 from interchange.brep.topology.BrepTopology import (
     BrepBody,
     BrepCoedge,
@@ -448,27 +449,7 @@ def VerifyBrepData(Model: BrepModel, PayloadData: bytes) -> None:
 
 
 # this declaration exists because focused behavior needs one stable owner
-class BrepTopology:
-    bodies: dict[str, BrepBody]
-    coedge_loop: dict[str, str]
-    coedges: dict[str, BrepCoedge]
-    edge_coedges: dict[str, list[str]]
-    edges: dict[str, BrepEdge]
-    face_face_use: dict[str, str]
-    face_uses: dict[str, BrepFaceUse]
-    faces: dict[str, BrepFace]
-    loop_face: dict[str, str]
-    loops: dict[str, BrepLoop]
-    region_body: dict[str, str]
-    regions: dict[str, BrepRegion]
-    shell_face_use: dict[str, str]
-    shell_shell_use: dict[str, str]
-    shell_use_region: dict[str, str]
-    shell_uses: dict[str, BrepShellUse]
-    shells: dict[str, BrepShell]
-    surface_by_id: dict[str, ParaSurface]
-    curve_by_id: dict[str, ParaCurve]
-    vertex_by_id: dict[str, BrepVertex]
+class BrepTopology(TopoMapsView):
 
     # topology maps must exist before ownership validation can traverse them
     def __init__(self, Model: BrepModel) -> None:

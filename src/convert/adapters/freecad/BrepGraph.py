@@ -12,22 +12,11 @@ from collections.abc import Mapping
 from typing import Never
 
 from interchange import (
-    BrepBody,
-    BrepCoedge,
-    BrepCurve,
-    BrepEdge,
     BrepFace,
-    BrepFaceUse,
-    BrepLoop,
     BrepModel,
-    BrepPcurve,
-    BrepRegion,
-    BrepShell,
-    BrepShellUse,
-    BrepSurface,
-    BrepVertex,
-    BrepWire,
 )
+
+from convert.adapters.freecad.GraphMapsView import GraphMapsView
 
 
 # writer errors retain one stable reason because adapter fallbacks inspect the public marker
@@ -220,7 +209,7 @@ def GetFace(Instance: ModelGraph, CoedgeId: str) -> BrepFace | None:
 
 
 # graph state stays focused because native topology validation shares one indexed ownership view
-class ModelGraph:
+class ModelGraph(GraphMapsView):
     __slots__ = (
         "bodies",
         "coedge_owner",
@@ -243,26 +232,6 @@ class ModelGraph:
         "wire_body",
         "wires",
     )
-    bodies: dict[str, BrepBody]
-    coedge_owner: dict[str, tuple[str, str]]
-    coedges: dict[str, BrepCoedge]
-    curves: dict[str, BrepCurve]
-    edge_uses: dict[str, list[str]]
-    edges: dict[str, BrepEdge]
-    face_uses: dict[str, BrepFaceUse]
-    faces: dict[str, BrepFace]
-    loop_face: dict[str, str]
-    loops: dict[str, BrepLoop]
-    pcurves: dict[str, BrepPcurve]
-    region_body: dict[str, str]
-    regions: dict[str, BrepRegion]
-    shell_owners: dict[str, list[tuple[str, str]]]
-    shell_uses: dict[str, BrepShellUse]
-    shells: dict[str, BrepShell]
-    surfaces: dict[str, BrepSurface]
-    vertices: dict[str, BrepVertex]
-    wire_body: dict[str, str]
-    wires: dict[str, BrepWire]
 
     # graph consumers need initialized ownership indexes before topology queries begin
     def __init__(self, Model: BrepModel) -> None:

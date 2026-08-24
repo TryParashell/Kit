@@ -121,8 +121,7 @@ class TokenCursor:
         self.DataValueA = DataValue
         self.Iterator = iter(KTokenPattern.finditer(DataValue))
         self.Lookahead: RegexLib.Match[bytes] | None = None
-        self.LastEnd = 0
-        self.Count = 0
+        self.LastEnd = self.Count = 0
 
     # this definition exists because focused parser behavior needs one stable owner
     def TakeToken(self) -> bytes:

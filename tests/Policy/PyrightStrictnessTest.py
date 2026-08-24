@@ -57,7 +57,7 @@ def TestStrictMode() -> None:
 
 
 # scope assertions stop silent exclusions from weakening future checks
-def TestPyrightScope() -> None:
+def TestConfigScope() -> None:
     Config = LoadPyConfig()
     IncludeValue = CastValue(list[str], Config["include"])
     assert set(IncludeValue) == {"src", "tests", "tools"}

@@ -14,6 +14,7 @@ from inspect import Signature as CallSignature
 
 from interchange import Capability
 
+from convert.adapters.base.AdapterInfoView import AdapterInfoView
 from convert.adapters.base.ContractCompat import ContractBase
 
 from typing_extensions import override as Override
@@ -47,7 +48,7 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
 
 # adapter metadata gives discovery and selection one immutable format description
 @DataClass(frozen=True, slots=True)
-class AdapterInfo(ContractBase):
+class AdapterInfo(AdapterInfoView, ContractBase):
     format_id: str
     name: str
     version: str
@@ -59,64 +60,15 @@ class AdapterInfo(ContractBase):
     part_extensions: tuple[str, ...] = ()
     assembly_extensions: tuple[str, ...] = ()
 
-    # canonical format access remains typed because registry internals read this storage field
-    @property
-    def FormatId(self) -> str:
-        return self.format_id
-
-    # canonical display access remains typed because catalogs render this storage field
-    @property
-    def DisplayName(self) -> str:
-        return self.name
-
-    # canonical version access remains typed because plugin diagnostics expose this storage field
-    @property
-    def VersionText(self) -> str:
-        return self.version
-
     # canonical extension access remains typed because selectors consume this storage field
     @property
     def Extensions(self) -> tuple[str, ...]:
         return self.extensions
 
-    # canonical alias access remains typed because registry namespaces consume this storage field
-    @property
-    def AliasNames(self) -> tuple[str, ...]:
-        return self.aliases
-
-    # canonical capability access remains typed because policy callers compare this storage field
-    @property
-    def Capabilities(self) -> frozenset[Capability]:
-        return self.capabilities
-
-    # canonical media access remains typed because discovery consumers inspect this storage field
-    @property
-    def MediaTypes(self) -> tuple[str, ...]:
-        return self.media_types
-
-    # canonical native capability access remains typed because transfer policy consumes this field
-    @property
-    def NativeCaps(self) -> frozenset[Capability]:
-        return self.native_capabilities
-
-    # canonical part extension access remains typed because document routing consumes this field
-    @property
-    def PartExts(self) -> tuple[str, ...]:
-        return self.part_extensions
-
-    # canonical assembly extension access remains typed because document routing consumes this field
-    @property
-    def AssemblyExts(self) -> tuple[str, ...]:
-        return self.assembly_extensions
-
     # document kind lookup belongs here so clients need no format specific branching
     def GetExtensions(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
         return self.assembly_extensions if Assembly else self.part_extensions
-
-    # legacy entry point keeps document routing statically callable before alias binding
-    def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
-        return self.GetExtensions(**NamedValues)
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
     @Override

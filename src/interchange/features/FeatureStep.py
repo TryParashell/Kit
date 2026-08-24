@@ -15,10 +15,11 @@ from typing import Mapping as TypeMap
 from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
 from interchange.features.FeatureContract import FeatureDef
+from interchange.features.FeatureStepView import FeatureStepView
+from interchange.features.StepConfigView import StepConfigView
 from interchange.core.ModelBase import ModelBase
+from interchange.core.ModelExtras import ModelExtras
 from interchange.records.RecordProvenance import Provenance
-
-from typing_extensions import override as Override
 
 
 # runtime construction accepts untrusted values so feature definitions need one checked boundary
@@ -26,16 +27,6 @@ def ValidateFeature(SourceValue: object) -> FeatureDef | None:
     if SourceValue is None or isinstance(SourceValue, FeatureDef):
         return SourceValue
     raise TypeError("feature definition must implement FeatureDefinition")
-
-
-# canonical typing needs an inherited key while public reflection exposes historical fields
-class FeatureHintBase(ModelBase):
-    definition: FeatureDef | None = None
-
-    # linked parameters keep feature configuration editable after creation
-    @property
-    def Definition(self) -> FeatureDef | None:
-        return self.definition
 
 
 # configuration state retains suppression and parameter changes without duplicate features
@@ -63,7 +54,7 @@ class FeatureCfgState(ModelBase):
 
 # feature steps preserve ordered dependencies and definitions for editable translation
 @MakeDataClass(frozen=True, slots=True)
-class FeatureStep(FeatureHintBase):
+class FeatureStep(FeatureStepView, StepConfigView, ModelExtras, ModelBase):
     id: str
     name: str
     kind: FeatureKind | str
@@ -78,78 +69,6 @@ class FeatureStep(FeatureHintBase):
     configuration_states: tuple[FeatureCfgState, ...] = ()
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-
-    # stable identity lets records reference each other without holding full objects
-    @property
-    def EntityId(self) -> str:
-        return self.id
-
-    # human readable label keeps diagnostics and diffs meaningful for reviewers
-    @property
-    def EntityName(self) -> str:
-        return self.name
-
-    # kind tag lets consumers branch on semantics without importing concrete classes
-    @property
-    def EntityKind(self) -> FeatureKind | str:
-        return self.kind
-
-    # explicit order keeps sibling sequencing stable across adapter round trips
-    @property
-    def Order(self) -> int:
-        return self.order
-
-    # input list preserves feature dependency order for rebuilds
-    @property
-    def InputFeatureIds(self) -> tuple[str, ...]:
-        return self.input_feature_ids
-
-    # optional sketch link keeps sketch driven features traceable
-    @property
-    def SketchId(self) -> str | None:
-        return self.sketch_id
-
-    # parameter links keep mate values driven by configurable expressions
-    @property
-    def ParameterIds(self) -> tuple[str, ...]:
-        return self.parameter_ids
-
-    # boolean operation names the combine subtract or keep intent explicitly
-    @property
-    def Operation(self) -> BooleanOp | str | None:
-        return self.operation
-
-    # linked parameters keep feature configuration editable after creation
-    @property
-    @Override
-    @Override
-    def Definition(self) -> FeatureDef | None:
-        return self.definition
-
-    # selection list keeps user picked references replayable on reload
-    @property
-    def SelectionIds(self) -> tuple[str, ...]:
-        return self.selection_ids
-
-    # suppression state keeps feature trees honest about what contributes geometry
-    @property
-    def IsSuppressed(self) -> bool:
-        return self.suppressed
-
-    # per configuration states capture suppression without duplicated features
-    @property
-    def ConfigStates(self) -> tuple[FeatureCfgState, ...]:
-        return self.configuration_states
-
-    # origin details stay optional so synthesized records can omit source facts safely
-    @property
-    def Provenance(self) -> Provenance | None:
-        return self.provenance
-
-    # open attribute bag preserves vendor extras that typed fields cannot express yet
-    @property
-    def Attributes(self) -> TypeMap[str, object]:
-        return self.attributes
 
     # invalid definitions must fail before corrupt feature records propagate
     def __post_init__(self) -> None:

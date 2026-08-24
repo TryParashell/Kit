@@ -12,6 +12,8 @@ from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.brep.curves.BrepCurves import BrepEntity, ValidateBrepId
+from interchange.brep.surfaces.SplineBasisView import SplineBasisView
+from interchange.brep.surfaces.SplineClosure import SplineClosure
 from interchange.records.RecordProvenance import Provenance
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelDataMut
@@ -196,7 +198,7 @@ class TorusSurface(BrepSurface):
 
 # spline surfaces retain complete tensor basis data for exact reconstruction
 @ModelDataMut
-class NurbsSurface(BrepSurface):
+class NurbsSurface(SplineBasisView, SplineClosure, BrepSurface):
     id: str
     degree_u: int
     degree_v: int
@@ -210,56 +212,6 @@ class NurbsSurface(BrepSurface):
     periodic_v: bool = False
     provenance: Provenance | None = None
     attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
-
-    # u degree controls surface smoothness along one parametric direction
-    @property
-    def DegreeU(self) -> int:
-        return self.degree_u
-
-    # v degree completes bidirectional smoothness control for reconstruction
-    @property
-    def DegreeV(self) -> int:
-        return self.degree_v
-
-    # hull points define spline shape so evaluation never needs vendor kernels
-    @property
-    def ControlPoints(self) -> tuple[tuple[SpaceVector, ...], ...]:
-        return self.control_points
-
-    # u knots define segment joins so surfaces evaluate identically everywhere
-    @property
-    def KnotValuesU(self) -> tuple[float, ...]:
-        return self.knots_u
-
-    # v knots define cross direction joins without vendor reevaluation
-    @property
-    def KnotValuesV(self) -> tuple[float, ...]:
-        return self.knots_v
-
-    # u multiplicities preserve continuity breaks across one parametric direction
-    @property
-    def MultiplicitiesU(self) -> tuple[int, ...]:
-        return self.multiplicities_u
-
-    # v multiplicities preserve continuity breaks across the other direction
-    @property
-    def MultiplicitiesV(self) -> tuple[int, ...]:
-        return self.multiplicities_v
-
-    # rational weights keep conic splines representable exactly rather than approximately
-    @property
-    def Weights(self) -> tuple[tuple[float, ...], ...]:
-        return self.weights
-
-    # u periodicity tells evaluators whether seam closure can be assumed
-    @property
-    def IsPeriodicU(self) -> bool:
-        return self.periodic_u
-
-    # v periodicity completes seam handling for closed surfaces
-    @property
-    def IsPeriodicV(self) -> bool:
-        return self.periodic_v
 
 
 # offset surfaces preserve analytic relationships instead of flattening to splines
