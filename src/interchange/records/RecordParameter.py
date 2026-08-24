@@ -15,7 +15,9 @@ from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.core.ModelExtras import ModelExtras
 from interchange.enums.EnumValues import ParameterRole, ValueKind
-from interchange.records.ParameterView import ParameterView
+from interchange.records.ParameterView import (
+    ParameterView,  # lgtm[py/unsafe-cyclic-import]
+)
 from interchange.records.RecordProvenance import Provenance
 
 

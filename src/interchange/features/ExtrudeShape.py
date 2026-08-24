@@ -15,7 +15,9 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 from interchange.records.RecordParameter import ParameterValue
 
 if IsTypeCheck:
-    from interchange.features.FeatureExtrude import ExtrudeEnd
+    from interchange.features.FeatureExtrude import (
+        ExtrudeEnd,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # single sided extrusion consumers read primary direction bounds through one view

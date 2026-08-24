@@ -97,7 +97,7 @@ def IntegerValue(Value: object, Label: str) -> int:
 
 
 # boolean metadata drives explicit feature depth expectations
-def BooleanValue(Value: object, Label: str) -> bool:
+def IsBoolValue(Value: object, Label: str) -> bool:
     assert isinstance(Value, bool), f"{Label} must be a boolean"
     return Value
 
@@ -177,7 +177,7 @@ def StringValues(Value: object, Label: str) -> tuple[str, ...]:
 # depth metadata must align directly with each decoded feature topology
 def BooleanValues(Value: object, Label: str) -> tuple[bool, ...]:
     return tuple(
-        BooleanValue(ItemValue, Label) for ItemValue in ArrayValue(Value, Label)
+        IsBoolValue(ItemValue, Label) for ItemValue in ArrayValue(Value, Label)
     )
 
 
@@ -266,7 +266,7 @@ def LoadDonorMetadata(TargetPath: FilePath) -> DonorMetadata:
         inherited_directions=InheritedDirections(
             FieldValue(RecordInfo, "inherited_directions"), "inherited_directions"
         ),
-        measured=BooleanValue(FieldValue(RecordInfo, "measured"), "measured"),
+        measured=IsBoolValue(FieldValue(RecordInfo, "measured"), "measured"),
         mo_version=IntegerValue(FieldValue(RecordInfo, "mo_version"), "mo_version"),
         point_counts=IntegerValues(
             FieldValue(RecordInfo, "point_counts"), "point_counts"

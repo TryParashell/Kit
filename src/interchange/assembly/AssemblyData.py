@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
-from interchange.assembly.AssemblyView import AssemblyView
+from interchange.assembly.AssemblyView import AssemblyView  # lgtm[py/cyclic-import]
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.ComponentInstance import ComponentInst
 from interchange.core.Common import FreezeMapping

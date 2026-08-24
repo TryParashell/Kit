@@ -7,19 +7,15 @@
 # to you under it immediately and permanently.
 re/tooling/ProgramDecomposition/ProgramRenderer.py	SPL001	declaration 'RenderRegistry' has 31 logical lines and must be split at 30
 src/convert/adapters/base/ContractCompat.py	CON001	constant 'ContractValue' must start with K
-src/convert/adapters/base/UsabilityError.py	SPL001	declaration 'UsabilityError' has 71 logical lines and must be split at 30
-src/convert/adapters/base/UsabilityError.py	MRK001	boolean function 'application_usable' must start with Is Has or Can
-src/convert/adapters/base/UsabilityError.py	MRK001	boolean function 'vendor_loadable' must start with Is Has or Can
+src/convert/adapters/base/UsabilityError.py	SPL001	declaration 'UsabilityError' has 73 logical lines and must be split at 30
 src/convert/adapters/base/UsabilityError.py	NAM001	function identifier 'to_dict' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/base/WriteOptions.py	NAM001	argument identifier 'configuration' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/base/WriteOptions.py	NAM001	argument identifier 'overwrite' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/base/WriteOptions.py	NAM001	argument identifier 'validate' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/base/WriteOptions.py	NAM001	argument identifier 'destination_format' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/base/WriteOptions.py	NAM001	argument identifier 'values' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/base/WriteResult.py	MRK001	boolean function 'near_lossless' must start with Is Has or Can
 src/convert/adapters/catia/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/catia/Adapter.py	MRK001	boolean function 'supports' must start with Is Has or Can
 src/convert/adapters/catia/Adapter.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Adapter.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Container.py	NAM001	function identifier 'stream' must be PascalCase ASCII letters with length 5 through 15
@@ -33,13 +29,11 @@ src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'NativePayloa
 src/convert/adapters/freecad/Adapter.py	SPL001	declaration 'NativeOuter' has 32 logical lines and must be split at 30
 src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/freecad/Adapter.py	MRK001	boolean function 'supports' must start with Is Has or Can
 src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'unique' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'add' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'expression' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/freecad/Archive.py	MRK001	boolean function 'has_source_expression' must start with Is Has or Can
 src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'has_source_expression' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'source_path' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'value' must be PascalCase ASCII letters with length 5 through 15
@@ -58,7 +52,6 @@ src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'source' must be
 src/convert/adapters/json/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/json/Adapter.py	MRK001	boolean function 'supports' must start with Is Has or Can
 src/convert/adapters/json/Adapter.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
@@ -113,7 +106,6 @@ src/convert/adapters/solidworks/container/Archive.py	CON001	constant 'LayoutValu
 src/convert/adapters/solidworks/container/Archive.py	CON001	constant 'LayoutObject' must start with K
 src/convert/adapters/solidworks/container/Archive.py	CON001	constant 'LayoutTableType' must start with K
 src/convert/adapters/solidworks/container/Archive.py	NAM001	function identifier 'IsLayoutSequence' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Archive.py	MRK001	boolean function 'CompatOption' must start with Is Has or Can
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	variable identifier 'Item' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'IsOptionalIntegers' must be PascalCase ASCII letters with length 5 through 15
@@ -127,13 +119,10 @@ src/convert/adapters/solidworks/container/Definition.py	NAM001	import identifier
 src/convert/adapters/solidworks/container/Definition.py	NAM001	variable identifier 'Item' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Parasolid.py	NAM001	argument identifier 'partition' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Parasolid.py	NAM001	argument identifier 'solidworks_feature_ids' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/container/Parasolid.py	MRK001	boolean function 'ContainsPayload' must start with Is Has or Can
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/core/Adapter.py	MRK001	boolean function 'supports' must start with Is Has or Can
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/core/Adapter.py	MRK001	boolean function 'BooleanValue' must start with Is Has or Can
 src/convert/adapters/solidworks/core/Display.py	CON001	constant 'Positions' must start with K
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'EncodeNative' has 32 logical lines and must be split at 30
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'ReadHeaderObjs' has 37 logical lines and must be split at 30
@@ -216,12 +205,8 @@ src/convert/engine/__init__.py	NAM001	variable identifier 'output' must be Pasca
 src/convert/engine/EngineInit.py	NAM001	attribute identifier 'registry' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/EngineResult.py	CON001	constant 'GetterType' must start with K
 src/convert/engine/EngineResult.py	MRK002	function 'SetResultOwner' mutates argument GetterValue and must end with Mut
-src/convert/engine/EngineResult.py	SPL001	declaration 'ConversionResult' has 34 logical lines and must be split at 30
+src/convert/engine/EngineResult.py	SPL001	declaration 'ConversionResult' has 50 logical lines and must be split at 30
 src/convert/engine/EngineResult.py	NAM001	class identifier 'ConversionResult' must be PascalCase ASCII letters with length 5 through 15
-src/convert/engine/EngineResult.py	MRK001	boolean function 'application_usable' must start with Is Has or Can
-src/convert/engine/EngineResult.py	MRK001	boolean function 'vendor_loadable' must start with Is Has or Can
-src/convert/engine/EngineResult.py	MRK001	boolean function 'roundtrip_safe' must start with Is Has or Can
-src/convert/engine/EngineResult.py	MRK001	boolean function 'near_lossless' must start with Is Has or Can
 src/convert/geometry/Opencascade.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/geometry/Opencascade.py	SPL001	declaration 'ModelLocations' has 31 logical lines and must be split at 30
 src/convert/geometry/Parasolid.py	CON001	constant 'ParaSurface' must start with K
@@ -319,7 +304,6 @@ tests/convert/registry/RegistryPolicyTests.py	NAM001	function identifier 'write'
 tests/convert/registry/RegistryPolicyTests.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPolicyTests.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPolicyTests.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-tests/convert/registry/RegistryPolicyTests.py	MRK001	boolean function 'supports' must start with Is Has or Can
 tests/convert/registry/RegistryPolicyTests.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/registry/RegistryPolicyTests.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPolicyTests.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
@@ -333,7 +317,6 @@ tests/convert/registry/RegistryTestSupport.py	NAM001	function identifier 'write'
 tests/convert/registry/RegistryTestSupport.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryTestSupport.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryTestSupport.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-tests/convert/registry/RegistryTestSupport.py	MRK001	boolean function 'supports' must start with Is Has or Can
 tests/convert/registry/RegistryTestSupport.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/registry/RegistryTestSupport.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryTestSupport.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
@@ -355,7 +338,6 @@ tests/convert/registry/RegistryTransfersTests.py	NAM001	argument identifier 'des
 tests/convert/registry/RegistryTransfersTests.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/solidworks/assembly/SolidworksAssemblyTests.py	SPL001	declaration 'TestMARDMVAA' has 50 logical lines and must be split at 30
 tests/convert/solidworks/core/SolidworksAdapterTests.py	SPL001	declaration 'TestARFOAD' has 35 logical lines and must be split at 30
-tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	MRK001	boolean function 'BooleanValue' must start with Is Has or Can
 tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	NAM001	function identifier 'ParseStreamDigest' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	NAM001	function identifier 'ParseDonorRecord' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	NAM001	function identifier 'LoadDonorManifest' must be PascalCase ASCII letters with length 5 through 15

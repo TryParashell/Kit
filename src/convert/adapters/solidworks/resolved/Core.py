@@ -21,23 +21,23 @@ from convert.adapters.solidworks.container.Format import (
 from convert.adapters.solidworks.resolved.LayoutCompat import LayoutCompat
 from convert.adapters.solidworks.resolved.SweepCompat import SweepCompat
 from convert.adapters.solidworks.resolved.ArcMath import (
-    GetCentreMm,
-    GetEndAngle,
-    GetEndMm,
-    GetEndRadiusMm,
-    GetRadiusMm,
-    GetStartAngle,
-    GetStartMm,
-    GetSweepAngle,
-    HasEqualRadii,
-    KFullCircleDegrees,
-    KMinimumRadiusMm,
+    GetCentreMm,  # lgtm[py/unsafe-cyclic-import]
+    GetEndAngle,  # lgtm[py/unsafe-cyclic-import]
+    GetEndMm,  # lgtm[py/unsafe-cyclic-import]
+    GetEndRadiusMm,  # lgtm[py/unsafe-cyclic-import]
+    GetRadiusMm,  # lgtm[py/unsafe-cyclic-import]
+    GetStartAngle,  # lgtm[py/unsafe-cyclic-import]
+    GetStartMm,  # lgtm[py/unsafe-cyclic-import]
+    GetSweepAngle,  # lgtm[py/unsafe-cyclic-import]
+    HasEqualRadii,  # lgtm[py/unsafe-cyclic-import]
+    KFullCircleDegrees,  # lgtm[py/unsafe-cyclic-import]
+    KMinimumRadiusMm,  # lgtm[py/unsafe-cyclic-import]
 )
 from convert.adapters.solidworks.resolved.FeatureMath import (
-    GetAngleDegrees,
-    GetBoundsMm,
-    GetCornersMm,
-    GetRadiiMm,
+    GetAngleDegrees,  # lgtm[py/unsafe-cyclic-import]
+    GetBoundsMm,  # lgtm[py/unsafe-cyclic-import]
+    GetCornersMm,  # lgtm[py/unsafe-cyclic-import]
+    GetRadiiMm,  # lgtm[py/unsafe-cyclic-import]
 )
 
 # this binding exists because shared behavior needs one stable value

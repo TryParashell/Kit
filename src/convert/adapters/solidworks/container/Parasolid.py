@@ -70,7 +70,7 @@ def EncodePartition(DataValue: bytes | bytearray) -> bytes:
 
 
 # this wrapper preserves the typed payload recognition contract for solidworks callers
-def ContainsPayload(DataValue: bytes | bytearray) -> bool:
+def HasPayload(DataValue: bytes | bytearray) -> bool:
     return HasPayloadMut(DataValue)
 
 
@@ -96,7 +96,7 @@ KAllValue = (
 annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-contains_parasolid_payload = ContainsPayload
+contains_parasolid_payload = HasPayload
 
 # this binding exists because shared behavior needs one stable value
 decode_brep_model = DecodeBrep

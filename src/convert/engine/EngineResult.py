@@ -56,26 +56,50 @@ class ConversionResult:
     # usability remains a conversion level predicate because clients consume conversion results
     @property
     @SetResultOwner
-    def application_usable(self) -> bool:
+    def ApplicationUsable(self) -> bool:
         return self.output.IsAppUsable
+
+    # usability remains a conversion level predicate because clients consume conversion results
+    @property
+    @SetResultOwner
+    def application_usable(self) -> bool:
+        return self.ApplicationUsable
+
+    # vendor readability remains separate from broader application usability
+    @property
+    @SetResultOwner
+    def VendorLoadable(self) -> bool:
+        return self.output.IsVendorLoadable
 
     # vendor readability remains separate from broader application usability
     @property
     @SetResultOwner
     def vendor_loadable(self) -> bool:
-        return self.output.IsVendorLoadable
+        return self.VendorLoadable
+
+    # loss status stays explicit because output evidence can be independently inspected
+    @property
+    @SetResultOwner
+    def RoundtripSafe(self) -> bool:
+        return self.output.IsRoundtripSafe
 
     # loss status stays explicit because output evidence can be independently inspected
     @property
     @SetResultOwner
     def roundtrip_safe(self) -> bool:
-        return self.output.IsRoundtripSafe
+        return self.RoundtripSafe
+
+    # near losslessness remains direct because it is a primary conversion guarantee
+    @property
+    @SetResultOwner
+    def NearLossless(self) -> bool:
+        return self.output.IsNearLossless
 
     # near losslessness remains direct because it is a primary conversion guarantee
     @property
     @SetResultOwner
     def near_lossless(self) -> bool:
-        return self.output.IsNearLossless
+        return self.NearLossless
 
 
 # result attribution points at the public engine module so reflection sees one contract

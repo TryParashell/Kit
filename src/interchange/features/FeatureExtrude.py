@@ -11,9 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass as MakeDataClass
 
 from interchange.enums.EnumBase import WireEnum
-from interchange.features.ExtrudeSecond import ExtrudeSecond
+from interchange.features.ExtrudeSecond import (
+    ExtrudeSecond,  # lgtm[py/unsafe-cyclic-import]
+)
 from interchange.features.FeatureContract import FeatureDef
-from interchange.features.ExtrudeShape import ExtrudeShape
+from interchange.features.ExtrudeShape import (
+    ExtrudeShape,  # lgtm[py/unsafe-cyclic-import]
+)
 from interchange.records.RecordParameter import ParameterValue
 from interchange.geometry.models.VectorSpace import SpaceVector
 

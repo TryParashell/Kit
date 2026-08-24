@@ -1024,13 +1024,6 @@ def ParamExpression(
     return Result
 
 
-# this predicate exists because source expressions alter feature carrier behavior
-def HasParamSource(Instance: ParamCatalog, ParamId: str) -> bool:
-    Param = Instance.ByIdentifier.get(ParamId)
-    Expression = Param.get("expression") if Param is not None else None
-    return IsPayloadMap(Expression) and bool(TextAction(Expression.get("source")))
-
-
 # this definition exists because native expression paths survive neutral translation
 def ParamSource(Instance: ParamCatalog, ParamId: str) -> str:
     Param = Instance.ByIdentifier.get(ParamId)
@@ -1241,9 +1234,11 @@ class ParamCatalog:
     def expression(self, ParamId: str, Divisor: float | None = None) -> str | None:
         return ParamExpression(self, ParamId, Divisor)
 
-    # this definition exists because focused behavior needs one stable owner
-    def has_source_expression(self, ParamId: str) -> bool:
-        return HasParamSource(self, ParamId)
+    # this predicate exists because source expressions alter feature carrier behavior
+    def HasParamSource(self, ParamId: str) -> bool:
+        Param = self.ByIdentifier.get(ParamId)
+        Expression = Param.get("expression") if Param is not None else None
+        return IsPayloadMap(Expression) and bool(TextAction(Expression.get("source")))
 
     # this definition exists because focused behavior needs one stable owner
     def source_path(self, ParamId: str) -> str:
@@ -2419,7 +2414,7 @@ def AddRuleExprMut(
 ) -> None:
     Expression = (
         State.Parameters.expression(ParamId)
-        if not NativeRule or State.Parameters.has_source_expression(ParamId)
+        if not NativeRule or State.Parameters.HasParamSource(ParamId)
         else None
     )
     if (

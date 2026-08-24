@@ -8,12 +8,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING as IsTypeCheck
 from typing import Mapping as TypeMap
 from typing import cast as CastValue
 
-if IsTypeCheck:
-    from convert.adapters.solidworks.container.Archive import RunGroup
+from convert.adapters.solidworks.container.RunGroups import RunGroup
 
 
 # layout consumers read repetition state through typed predicates independent of storage
@@ -23,7 +21,7 @@ class LayoutQueries:
     # this definition exists because focused behavior needs one stable owner
     @property
     def IsWalksGroups(self) -> bool:
-        Groups = CastValue("tuple[RunGroup, ...]", getattr(self, "groups"))
+        Groups = CastValue(tuple[RunGroup, ...], getattr(self, "groups"))
         return bool(Groups)
 
     # this definition exists because focused behavior needs one stable owner

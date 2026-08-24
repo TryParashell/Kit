@@ -337,8 +337,10 @@ class SldprtAdapter:
         return ReadAction(self, SourceValue, Options)
 
     # destination assessment stays read only because support checks must never mutate inputs
-    def supports(self, DocValue: CadDocument, TargetValue: Target) -> bool:
+    def CanSupport(self, DocValue: CadDocument, TargetValue: Target) -> bool:
         return IsSupports(self, DocValue, TargetValue)
+
+    supports = CanSupport
 
     # writer entrypoint stays thin so action modules own actual export behavior
     def write(
@@ -714,10 +716,10 @@ def BuildSavedPlan(
         VendorLoadable = True
     elif Attestation is not None:
         Transfers = Attested(Attestation, RequiredCaps)
-        AppUsable = BooleanValue(
+        AppUsable = IsBoolValue(
             Attestation["application_usable"], "application_usable"
         )
-        VendorLoadable = BooleanValue(Attestation["vendor_loadable"], "vendor_loadable")
+        VendorLoadable = IsBoolValue(Attestation["vendor_loadable"], "vendor_loadable")
         NativeBrep = str(Attestation.get("native_brep", "template"))
         NativeContent = "source-preserved"
     else:
@@ -959,7 +961,7 @@ def ReadNativePart(
 
 
 # boolean option validation keeps compatibility keywords aligned with canonical options
-def BooleanValue(Value: object, FieldName: str) -> bool:
+def IsBoolValue(Value: object, FieldName: str) -> bool:
     if not isinstance(Value, bool):
         raise TypeError(f"{FieldName} must be a boolean")
     return Value
@@ -983,14 +985,14 @@ def ReadSldprt(
     **LegacyValues: object,
 ) -> CadDoc:
     Config = OptionalString(LegacyValues.get("configuration", Config), "configuration")
-    IncludeBrep = BooleanValue(
+    IncludeBrep = IsBoolValue(
         LegacyValues.get("include_brep", IncludeBrep), "include_brep"
     )
-    IncludeTessellation = BooleanValue(
+    IncludeTessellation = IsBoolValue(
         LegacyValues.get("include_tessellation", IncludeTessellation),
         "include_tessellation",
     )
-    Strict = BooleanValue(LegacyValues.get("strict", Strict), "strict")
+    Strict = IsBoolValue(LegacyValues.get("strict", Strict), "strict")
     UnknownValues = set(LegacyValues) - {
         "configuration",
         "include_brep",
@@ -1023,7 +1025,7 @@ def WriteSldprt(
     AllowNonNative: bool = True,
     **LegacyValues: object,
 ) -> WriteResult:
-    AllowNonNative = BooleanValue(
+    AllowNonNative = IsBoolValue(
         LegacyValues.get("allow_non_native", AllowNonNative), "allow_non_native"
     )
     UnknownValues = set(LegacyValues) - {"allow_non_native"}

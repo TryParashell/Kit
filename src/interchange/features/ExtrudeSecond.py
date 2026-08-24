@@ -14,7 +14,9 @@ from typing import cast as CastValue
 from interchange.records.RecordParameter import ParameterValue
 
 if IsTypeCheck:
-    from interchange.features.FeatureExtrude import ExtrudeEnd
+    from interchange.features.FeatureExtrude import (
+        ExtrudeEnd,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # two sided extrusion consumers read secondary caps and offsets through one view

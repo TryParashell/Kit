@@ -44,7 +44,7 @@ from interchange.brep.surfaces.BrepSurfaces import (
     TorusSurface,
 )
 from interchange.brep.topology.BrepModel import BrepModel
-from convert.geometry.TopoMapsView import TopoMapsView
+from convert.geometry.TopoMapsView import TopoMapsView  # lgtm[py/unsafe-cyclic-import]
 from interchange.brep.topology.BrepTopology import (
     BrepBody,
     BrepCoedge,

@@ -16,8 +16,12 @@ from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.core.ModelExtras import ModelExtras
 from interchange.enums.EnumGeometry import GeometryKind
 from interchange.geometry.models.GeometryTypes import KGeometryTypes
-from interchange.geometry.models.RelationView import RelationView
-from interchange.geometry.models.SketchView import SketchView
+from interchange.geometry.models.RelationView import (
+    RelationView,  # lgtm[py/unsafe-cyclic-import]
+)
+from interchange.geometry.models.SketchView import (
+    SketchView,  # lgtm[py/unsafe-cyclic-import]
+)
 from interchange.records.RecordProvenance import Provenance
 
 

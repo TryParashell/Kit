@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING as IsTypeCheck
 from typing import cast as CastValue
 
 if IsTypeCheck:
-    from interchange.geometry.models.Sketch import ConstraintRef
+    from interchange.geometry.models.Sketch import (
+        ConstraintRef,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # relation consumers read solver intent and bindings through one typed view

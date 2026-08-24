@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING as IsTypeCheck
 import math as MathValue
 
 if IsTypeCheck:
-    from convert.adapters.solidworks.resolved.Core import SweptArc
+    from convert.adapters.solidworks.resolved.Core import (
+        SweptArc,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 # sweep math needs one full turn constant because arcs wrap across zero degrees
 KFullCircleDegrees = 360.0

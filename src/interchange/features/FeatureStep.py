@@ -16,7 +16,9 @@ from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
 from interchange.features.FeatureContract import FeatureDef
 from interchange.features.FeatureStepView import FeatureStepView
-from interchange.features.StepConfigView import StepConfigView
+from interchange.features.StepConfigView import (
+    StepConfigView,  # lgtm[py/unsafe-cyclic-import]
+)
 from interchange.core.ModelBase import ModelBase
 from interchange.core.ModelExtras import ModelExtras
 from interchange.records.RecordProvenance import Provenance

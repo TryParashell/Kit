@@ -15,6 +15,13 @@ import struct as Struct
 from typing import TypeAlias, TypeGuard, TypedDict, TypeVar
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.container.LayoutQueries import LayoutQueries
+from convert.adapters.solidworks.container.RunGroups import (
+    RunGroup,
+    RunGroupCount,
+    RunGroupCountA,
+    RunGroupTrailer,
+    RunGroupVariant,
+)
 
 # this contract exists because decoded layouts need recursively concrete json values
 LayoutValue: TypeAlias = (
@@ -329,7 +336,7 @@ def EncodeClass(NameValue: str, Schema: int) -> bytes:
 
 # this definition exists because focused behavior needs one stable owner
 def EncodeClassRef(Index: int, *, WideValue: bool = False, **Options: object) -> bytes:
-    WideValue = CompatOption(Options, "wide", WideValue, "EncodeClassRef")
+    WideValue = IsFlagEnabled(Options, "wide", WideValue, "EncodeClassRef")
     if Index < 0:
         raise ArchiveError(f"negative class index {Index}")
     if Index > KMaxMapIndex:
@@ -341,7 +348,7 @@ def EncodeClassRef(Index: int, *, WideValue: bool = False, **Options: object) ->
 
 # this definition exists because focused behavior needs one stable owner
 def EncodeObjectRef(Index: int, *, WideValue: bool = False, **Options: object) -> bytes:
-    WideValue = CompatOption(Options, "wide", WideValue, "EncodeObjectRef")
+    WideValue = IsFlagEnabled(Options, "wide", WideValue, "EncodeObjectRef")
     if Index < 0:
         raise ArchiveError(f"negative object index {Index}")
     if Index > KMaxMapIndex:
@@ -354,7 +361,7 @@ def EncodeObjectRef(Index: int, *, WideValue: bool = False, **Options: object) -
 
 
 # this definition exists because one legacy keyword alias needs consistent unknown option errors
-def CompatOption(
+def IsFlagEnabled(
     Options: Mapping[str, object], KeyValue: str, Current: bool, Caller: str
 ) -> bool:
     Unknown = set(Options) - {KeyValue}
@@ -587,80 +594,6 @@ class RepeatField:
 class ChildCountBy:
     Slot: int
     Counts: Mapping[str, int]
-
-
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class RunGroupCount:
-    At: int
-    Back: int
-    Width: int
-    Lead: int
-
-
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class RunGroupCountA:
-    Versions: tuple[int, ...]
-    PredicateAt: int
-    PredicateWidth: int
-    Values: tuple[int, ...]
-    Count: int
-    Lead: int
-
-
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class RunGroupVariant:
-    Slot: int
-    Last: bool
-    StopGroups: bool
-    Versions: tuple[int, ...]
-    PredicateAt: int
-    PredicateWidth: int
-    Values: tuple[int, ...]
-    ChildClasses: tuple[str, ...]
-    Run: int
-    RunsByVersion: Mapping[int, int]
-    Trailer: int
-
-
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class RunGroupTrailer:
-    Versions: tuple[int, ...]
-    PredicateAt: int
-    PredicateWidth: int
-    Values: tuple[int, ...]
-    Trailer: int
-
-
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class RunGroup:
-    name: str
-    repeat: int
-    count_back: int
-    count_width: int
-    CountByChildClass: Mapping[str, RunGroupCount]
-    CountVariants: tuple[RunGroupCountA, ...]
-    slots: tuple[str, ...]
-    element: tuple[int, ...]
-    element_by_version: Mapping[int, tuple[int, ...]]
-    ElementRunVariants: tuple[RunGroupVariant, ...]
-    trailer: int
-    TrailerVariants: tuple[RunGroupTrailer, ...]
-    note: str
-
-    # this definition exists because focused behavior needs one stable owner
-    def ElemRuns(self, MoVersion: int | None) -> tuple[int, ...]:
-        if MoVersion is not None:
-            Gated = self.element_by_version.get(MoVersion)
-            if Gated is not None:
-                return Gated
-        return self.element
-
-    element_runs = ElemRuns
 
 
 # this definition exists because class layout storage composes state and run selection behavior

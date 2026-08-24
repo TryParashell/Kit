@@ -2621,8 +2621,10 @@ class FreeCadAdapter:
         return ReadSource(Source, Options)
 
     # this definition delegates destination checks to the focused support implementation
-    def supports(self, DocValue: CadDocument, Target: Destination) -> bool:
+    def CanSupport(self, DocValue: CadDocument, Target: Destination) -> bool:
         return CanWriteTarget(Target)
+
+    supports = CanSupport
 
     # this definition delegates archive writing to the focused writer implementation
     def write(

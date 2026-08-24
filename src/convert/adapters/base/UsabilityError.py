@@ -165,8 +165,10 @@ class UsabilityError(RegistryError):
 
     # historical usability access remains typed because api consumers inspect this public error field
     @property
-    def application_usable(self) -> bool:
+    def IsAppUsable(self) -> bool:
         return self.AppUsable
+
+    application_usable = IsAppUsable
 
     # historical carrier access remains typed because api consumers inspect this public error field
     @property
@@ -215,8 +217,10 @@ class UsabilityError(RegistryError):
 
     # historical vendor access remains typed because api consumers inspect this public error field
     @property
-    def vendor_loadable(self) -> bool:
+    def IsVendorLoadable(self) -> bool:
         return self.VendorLoadable
+
+    vendor_loadable = IsVendorLoadable
 
     # historical mapping method remains typed because api consumers serialize this public error contract
     def to_dict(self) -> ErrorPayload:

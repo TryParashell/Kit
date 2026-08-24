@@ -20,4 +20,5 @@ class DataRecord(Protocol):
 class RecordCtor(Protocol):
 
     # callable contract lets decoders accept record constructors without type coupling
-    def __call__(self, **FieldValues: object) -> object: ...
+    def __call__(self, **FieldValues: object) -> object:
+        """Callable contract lets decoders accept record constructors."""

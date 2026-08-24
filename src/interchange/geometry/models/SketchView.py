@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING as IsTypeCheck
 from typing import cast as CastValue
 
 if IsTypeCheck:
-    from interchange.geometry.models.Sketch import SketchEntity, SketchRelation
+    from interchange.geometry.models.Sketch import (
+        SketchEntity,  # lgtm[py/unsafe-cyclic-import]
+        SketchRelation,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # sketch consumers read editable profile inputs through one typed view

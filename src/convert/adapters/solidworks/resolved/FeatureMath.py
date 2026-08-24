@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING as IsTypeCheck
 from math import pi as CirclePi
 
 if IsTypeCheck:
-    from convert.adapters.solidworks.resolved.Core import FeatureLayout
+    from convert.adapters.solidworks.resolved.Core import (
+        FeatureLayout,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 # degree conversion stays centralized because recovered angles arrive in radians
 KRadiansToDegrees = 180.0 / CirclePi

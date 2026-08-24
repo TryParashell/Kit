@@ -25,7 +25,10 @@ from interchange.brep.topology.BrepTopology import (
 )
 
 if IsTypeCheck:
-    from convert.geometry.Parasolid import ParaCurve, ParaSurface
+    from convert.geometry.Parasolid import (
+        ParaCurve,  # lgtm[py/unsafe-cyclic-import]
+        ParaSurface,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # parasolid traversal needs one declared map surface so ownership passes stay typed

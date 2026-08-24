@@ -15,7 +15,9 @@ from interchange.enums.EnumFeatures import BooleanOp
 
 if IsTypeCheck:
     from interchange.features.FeatureContract import FeatureDef
-    from interchange.features.FeatureStep import FeatureCfgState
+    from interchange.features.FeatureStep import (
+        FeatureCfgState,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # rebuild engines read parameters definitions and state through one typed view

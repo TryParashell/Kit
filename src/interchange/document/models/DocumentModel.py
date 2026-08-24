@@ -141,4 +141,6 @@ class CadDocument(DocumentRoot, DocumentApi, ModelBase):
         return self.brep
 
 
-from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
+from interchange.assembly.AssemblyData import (
+    AssemblyData,  # lgtm[py/unsafe-cyclic-import]
+)

@@ -42,12 +42,6 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
     ) -> CadDocument:
         return self.ReadAction(source, options)
 
-    # public support keywords need exact names because structural callers may pass them directly
-    @Override
-    @Override
-    def supports(self, document: CadDocument, destination: Destination) -> bool:
-        return self.CanSupport(document, destination)
-
     # public writing keywords need exact names because structural callers may pass them directly
     @Override
     @Override

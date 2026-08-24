@@ -59,4 +59,6 @@ class AssemblyView:
 
 
 if IsTypeCheck:
-    from interchange.assembly.ComponentDocument import ComponentDoc
+    from interchange.assembly.ComponentDocument import (
+        ComponentDoc,  # lgtm[py/cyclic-import]
+    )

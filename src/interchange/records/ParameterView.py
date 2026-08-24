@@ -14,7 +14,10 @@ from typing import cast as CastValue
 from interchange.enums.EnumValues import ParameterRole
 
 if IsTypeCheck:
-    from interchange.records.RecordParameter import Expression, ParameterValue
+    from interchange.records.RecordParameter import (
+        Expression,  # lgtm[py/unsafe-cyclic-import]
+        ParameterValue,  # lgtm[py/unsafe-cyclic-import]
+    )
 
 
 # parameter consumers read values roles and formulas through one typed view

@@ -66,9 +66,13 @@ class AdapterInfo(AdapterInfoView, ContractBase):
         return self.extensions
 
     # document kind lookup belongs here so clients need no format specific branching
-    def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
+    def ExtensionsFor(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
         return self.assembly_extensions if Assembly else self.part_extensions
+
+    # historical keyword lookup remains typed because api consumers call this public selector
+    def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
+        return self.ExtensionsFor(**NamedValues)
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
     @Override
@@ -110,26 +114,30 @@ setattr(AdapterInfo, "__setstate__", SetPickleState)
 
 
 # reflected signatures keep the historical keyword only assembly contract introspectable
-setattr(
-    AdapterInfo.extensions_for,
-    "__annotations__",
-    {"assembly": "bool", "return": "tuple[str, ...]"},
-)
-setattr(
-    AdapterInfo.extensions_for,
-    "__signature__",
-    CallSignature(
-        (
-            SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
-            SigParam(
-                "assembly",
-                SigParam.KEYWORD_ONLY,
-                annotation="bool",
+def ApplySignatures() -> None:
+    setattr(
+        AdapterInfo.extensions_for,
+        "__annotations__",
+        {"assembly": "bool", "return": "tuple[str, ...]"},
+    )
+    setattr(
+        AdapterInfo.extensions_for,
+        "__signature__",
+        CallSignature(
+            (
+                SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
+                SigParam(
+                    "assembly",
+                    SigParam.KEYWORD_ONLY,
+                    annotation="bool",
+                ),
             ),
+            return_annotation="tuple[str, ...]",
         ),
-        return_annotation="tuple[str, ...]",
-    ),
-)
+    )
+
+
+ApplySignatures()
 
 setattr(
     AdapterInfo,

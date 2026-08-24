@@ -280,11 +280,13 @@ class CatiaReader:
 class CatiaSupport:
 
     # this definition exists because focused behavior needs one stable owner
-    def supports(self, DocValue: CadDocument, Target: Destination) -> bool:
+    def CanSupport(self, DocValue: CadDocument, Target: Destination) -> bool:
         if isinstance(Target, (str, FilePath)):
             Expected = KProductSuffix if DocValue.assembly is not None else KPartSuffix
             return FilePath(Target).suffix.casefold() == Expected
         return IsBinaryTarget(Target)
+
+    supports = CanSupport
 
 
 # this definition exists because focused behavior needs one stable owner

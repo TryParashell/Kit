@@ -60,10 +60,7 @@ class WriteResult(ResultOutputs, ResultPolicy, CapabilityView, ContractBase):
     def __post_init__(self) -> None:
         CheckResult(self)
 
-    # legacy callers need losslessness policy exposed as a typed predicate
-    @property
-    def near_lossless(self) -> bool:
-        return self.IsNearLossless
+    near_lossless = CapabilityView.IsNearLossless
 
     # legacy callers need the full transferred capability set without reflection
     @property
