@@ -369,7 +369,7 @@ class ArchiveValues:
     # chunk storage starts empty because every archive writer appends before encoding
     def __init__(self) -> None:
         super().__init__()
-        self.chunks = []
+        self.chunks: list[bytes] = []
 
     # this definition exists because focused behavior needs one stable owner
     def RawAction(self, Chunk: bytes) -> None:
