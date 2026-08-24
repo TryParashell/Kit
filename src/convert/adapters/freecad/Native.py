@@ -945,7 +945,9 @@ def SplineAction(
 
 
 # this definition dispatches each supported geometry record to its focused decoder
-def GeomAction(NodeValue: XmlTree.Element, EntityId: str) -> tuple[GeomKind, GeometryTypes]:
+def GeomAction(
+    NodeValue: XmlTree.Element, EntityId: str
+) -> tuple[GeomKind, GeometryTypes]:
     TypeId = NodeValue.get("type", "")
     Result = None
     if TypeId == "Part::GeomLineSegment":

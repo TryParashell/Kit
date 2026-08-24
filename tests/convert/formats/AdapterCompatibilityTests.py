@@ -132,10 +132,7 @@ def CheckInfo() -> None:
         == "(self, *, assembly: 'bool') -> 'tuple[str, ...]'"
     )
     assert getattr(AdapterInfo.extensions_for, "__name__") == "extensions_for"
-    assert (
-        getattr(AdapterInfo.extensions_for, "__module__")
-        == "convert.adapters.base"
-    )
+    assert getattr(AdapterInfo.extensions_for, "__module__") == "convert.adapters.base"
     assert InfoData.extensions_for(assembly=False) == ()
     with Pytest.raises(TypeError):
         _ = CallCompat(InfoData.extensions_for, assembly=False, Assembly=False)

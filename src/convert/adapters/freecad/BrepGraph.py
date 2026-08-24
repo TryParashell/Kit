@@ -202,7 +202,9 @@ def InitGraph(Instance: ModelGraph, Model: BrepModel) -> None:
 
 
 # coedge binding remains a graph method because later queries consume its parent identity directly
-def BindCoedge(Instance: ModelGraph, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
+def BindCoedge(
+    Instance: ModelGraph, CoedgeId: str, KindValue: str, OwnerId: str
+) -> None:
     OwnerMap = Instance.coedge_owner
     if CoedgeId in OwnerMap:
         Unsupported(f"B-rep coedge {CoedgeId} belongs to multiple loop or wire values")
