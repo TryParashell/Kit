@@ -137,20 +137,16 @@ def CheckConcurrent(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     # simulated peer ownership prevents cleanup from deleting a concurrently created folder
     def RaceMakeMut(
         TargetValue: FilePath,
-        ModeValue: int = 0o777,
-        ParentsValue: bool = False,
-        ExistOkValue: bool = False,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
     ) -> None:
         nonlocal InjectedFlag
         if TargetValue == SharedPath and not InjectedFlag:
             InjectedFlag = True
-            OriginalMake(
-                TargetValue, mode=ModeValue, parents=ParentsValue, exist_ok=ExistOkValue
-            )
+            OriginalMake(TargetValue, mode=mode, parents=parents, exist_ok=exist_ok)
             raise FileExistsError(TargetValue)
-        OriginalMake(
-            TargetValue, mode=ModeValue, parents=ParentsValue, exist_ok=ExistOkValue
-        )
+        OriginalMake(TargetValue, mode=mode, parents=parents, exist_ok=exist_ok)
 
     MonkeyPatch.setattr(FilePath, "mkdir", RaceMakeMut)
     with Pytest.raises(ApplicationUsabilityError):
