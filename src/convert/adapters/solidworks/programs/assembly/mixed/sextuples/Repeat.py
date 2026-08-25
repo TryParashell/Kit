@@ -141,8 +141,8 @@ def EncodeOps(
                 continue
             if XformPos < RelativePos <= XformPos + 33:
                 continue
-        FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
-        OutputData.extend(EncodeField(KindName, FieldValue))
+        KFieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
+        OutputData.extend(EncodeField(KindName, KFieldValue))
     return bytes(OutputData)
 
 

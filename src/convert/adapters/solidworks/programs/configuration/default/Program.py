@@ -70,8 +70,8 @@ KAtomLinkStamp = 42358
 
 
 # each field operation serializes one recovered value through its typed contract
-def EncodeField(KindName: str, FieldValue: FieldType) -> bytes:
-    return EncodeValue(KindName, FieldValue, "Config-0")
+def EncodeField(KindName: str, KFieldValue: FieldType) -> bytes:
+    return EncodeValue(KindName, KFieldValue, "Config-0")
 
 
 # one semantic atom links a native configuration item to a feature tree object
@@ -114,16 +114,16 @@ def EncodeAtom(
 
 
 # inserted atom references shift every later archive map target
-def ShiftMapRef(KindName: str, FieldValue: FieldType, MapShift: int) -> FieldType:
+def ShiftMapRef(KindName: str, KFieldValue: FieldType, MapShift: int) -> FieldType:
     if MapShift <= 0:
-        return FieldValue
+        return KFieldValue
     if KindName == "classref":
-        RefValue = RequireInt(FieldValue, "configuration class reference")
+        RefValue = RequireInt(KFieldValue, "configuration class reference")
         return RefValue + MapShift if RefValue > KAtomClassIndex else RefValue
     if KindName == "objectref":
-        RefValue = RequireInt(FieldValue, "configuration object reference")
+        RefValue = RequireInt(KFieldValue, "configuration object reference")
         return RefValue + MapShift if RefValue > KAtomClassIndex + 1 else RefValue
-    return FieldValue
+    return KFieldValue
 
 
 # legacy aliases preserve external configuration callers and recovered diagnostic access
@@ -220,10 +220,10 @@ def ReplayConfig(
                 OutputData.extend(AtomData)
                 AtomsWritten = True
             continue
-        FieldValue = KFieldOverrides.get(StartPos, DefaultValue)
+        KFieldValue = KFieldOverrides.get(StartPos, DefaultValue)
         if StartPos >= KAtomEnd:
-            FieldValue = ShiftMapRef(KindName, FieldValue, MapShift)
-        FieldData = EncodeField(KindName, FieldValue)
+            KFieldValue = ShiftMapRef(KindName, KFieldValue, MapShift)
+        FieldData = EncodeField(KindName, KFieldValue)
         if StartPos != KPartNameOffset and len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"Config-0 field width changed at {StartPos}")
         OutputData.extend(FieldData)

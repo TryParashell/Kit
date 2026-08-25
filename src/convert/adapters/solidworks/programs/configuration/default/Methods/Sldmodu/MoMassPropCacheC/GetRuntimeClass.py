@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
-from convert.adapters.solidworks.programs.Common.ProgramContract import KMethodProgram as KMethodProgramType
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    KMethodProgram as KMethodProgramType,
+)
 from convert.adapters.solidworks.programs.Owners.Sldmodu.MoMassPropCacheC.GetRuntimeClass import (
     KOwnerSites,
 )

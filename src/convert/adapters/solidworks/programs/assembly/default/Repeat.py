@@ -153,11 +153,11 @@ def EncodeOps(
     BasisMap = BasisValues or {}
     for Operation in Operations:
         StartPos, KindName, DefaultValue = Operation[0], Operation[3], Operation[4]
-        FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
-        OutputData.extend(EncodeField(KindName, FieldValue))
+        KFieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
+        OutputData.extend(EncodeField(KindName, KFieldValue))
         BasisValue = BasisMap.get(StartPos - BasePos)
         if BasisValue is not None:
-            if KindName != "primitive:uchar" or FieldValue != 1:
+            if KindName != "primitive:uchar" or KFieldValue != 1:
                 raise SldprtFormatError("assembly transform basis marker is invalid")
             OutputData.extend(EncodeField("direct:9d", BasisValue))
     return bytes(OutputData)

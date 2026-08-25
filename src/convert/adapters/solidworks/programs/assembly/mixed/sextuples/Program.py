@@ -24,6 +24,7 @@ from .Registry import (  # lgtm[py/unused-import]
     FieldOwners as FieldOwners,
     KFieldOwners as KFieldOwners,
     KStreamPrograms as KStreamPrograms,
+    StreamPrograms as StreamPrograms,
 )
 
 
@@ -32,8 +33,8 @@ PrimitiveFormats = KPrimitiveFormats
 
 
 # each operation serializes one recovered value through its typed contract
-def EncodeField(KindName: str, FieldValue: FieldType) -> bytes:
-    return EncodeValue(KindName, FieldValue, "assembly")
+def EncodeField(KindName: str, KFieldValue: FieldType) -> bytes:
+    return EncodeValue(KindName, KFieldValue, "assembly")
 
 
 # callers may replace semantic fields while source offsets preserve field order
