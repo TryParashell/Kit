@@ -52,4 +52,3 @@ class JsonWriter:
             vendor_loadable=True,
         )
 
-    write = Write

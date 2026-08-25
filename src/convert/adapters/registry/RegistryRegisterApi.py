@@ -11,8 +11,6 @@ from __future__ import annotations
 from convert.adapters.registry.AdapterDiscovery import IsReaderAdapter
 from convert.adapters.registry.AdapterDiscovery import IsWriterAdapter
 from convert.adapters.base.AdapterMetadata import ValidateInfo
-from convert.adapters.base.AdapterProtocols import CadReaderAdapter
-from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.registry.RegistryBinding import AdapterBinding
 from convert.adapters.registry.RegistryState import BindReaderMut
 from convert.adapters.registry.RegistryState import BindWriterMut
@@ -81,42 +79,6 @@ def RegisterPairMut(
         AliasMap.clear()
         AliasMap.update(PriorState[1])
         raise
-
-
-# focused public bindings keep reader and writer registration independently reviewable
-class BindingApi(RegistryHost):
-
-    # reader registration validates metadata before mutating the shared format namespace
-    def RegisterReader(
-        self,
-        AdapterData: CadReaderAdapter,
-        **NamedValues: object,
-    ) -> None:
-        ReplaceFlag = IsReplaceFlag(NamedValues, "register_reader")
-        BindReaderMut(
-            AdapterData,
-            ValidateInfo(AdapterData),
-            self.BindingMap,
-            self.AliasMap,
-            ReplaceFlag,
-            False,
-        )
-
-    # writer registration validates metadata before mutating the shared format namespace
-    def RegisterWriter(
-        self,
-        AdapterData: CadWriterAdapter,
-        **NamedValues: object,
-    ) -> None:
-        ReplaceFlag = IsReplaceFlag(NamedValues, "register_writer")
-        BindWriterMut(
-            AdapterData,
-            ValidateInfo(AdapterData),
-            self.BindingMap,
-            self.AliasMap,
-            ReplaceFlag,
-            False,
-        )
 
 
 # dual protocol registration owns transaction coordination without growing the registry facade

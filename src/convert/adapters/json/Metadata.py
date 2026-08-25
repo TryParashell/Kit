@@ -62,6 +62,3 @@ class JsonMetadata:
             return FilePath(Target).suffix.lower() in KInfoValue.extensions
         return callable(getattr(Target, "write", None))
 
-    info = InfoAction
-    probe = Probe
-    supports = CanSupport

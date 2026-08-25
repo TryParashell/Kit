@@ -49,4 +49,3 @@ class JsonReader:
             Document.assert_valid()
         return Document
 
-    read = ReadAction

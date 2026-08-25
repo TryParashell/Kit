@@ -6,6 +6,7 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+from convert.adapters.base.AdapterInfo import AdapterInfo
 from convert.adapters.base.ContractTypes import KSourceType as Source
 from convert.adapters.base.ContractTypes import KTargetType as Destination
 from convert.adapters.base.ProbeResult import ProbeResult
@@ -17,8 +18,6 @@ from convert.adapters.json.Reader import JsonReader
 from convert.adapters.json.Writer import JsonWriter
 from interchange.document.models.DocumentModel import CadDocument
 
-from typing import override as Override
-
 
 # this adapter composes focused reading writing and metadata responsibilities
 class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
@@ -26,15 +25,18 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
 
     locals()["__slots__"] = KAdapterSlots
 
+    # metadata identity stays owned here because composed adapters expose one stable surface
+    @property
+    def info(self) -> AdapterInfo:
+        return self.InfoAction
+
     # public probing keywords need exact names because structural callers may pass them directly
-    @Override
-    @Override
     def probe(self, source: Source) -> ProbeResult:
         return self.Probe(source)
 
+    supports = JsonMetadata.CanSupport
+
     # public reading keywords need exact names because structural callers may pass them directly
-    @Override
-    @Override
     def read(
         self,
         source: Source,
@@ -43,8 +45,6 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
         return self.ReadAction(source, options)
 
     # public writing keywords need exact names because structural callers may pass them directly
-    @Override
-    @Override
     def write(
         self,
         document: CadDocument,

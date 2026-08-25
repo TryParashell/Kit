@@ -12,6 +12,7 @@ from typing import Iterable as TypeIterable
 
 from interchange import CadDocument as KCadDocument
 
+from convert.adapters.base.AdapterMetadata import ValidateInfo
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter as KCadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter as KCadWriterAdapter
 from convert.adapters.base.ContractTypes import KSourceType
@@ -30,16 +31,17 @@ from convert.adapters.registry.RegistryErrors import AmbiguousAdapterError
 from convert.adapters.registry.RegistryErrors import CapabilityLossError
 from convert.adapters.registry.RegistryReadApi import ReadApi
 from convert.adapters.registry.RegistryReadApi import ReadSelectApi
-from convert.adapters.registry.RegistryRegisterApi import BindingApi
+from convert.adapters.registry.RegistryRegisterApi import IsReplaceFlag
 from convert.adapters.registry.RegistryRegisterApi import RegisterApi
 from convert.adapters.registry.RegistrySeed import RegistrySeed
+from convert.adapters.registry.RegistryState import BindReaderMut
+from convert.adapters.registry.RegistryState import BindWriterMut
+from convert.adapters.registry.RegistryState import RegistryHost
 from convert.adapters.registry.RegistryWriteApi import WriteApi
 from convert.adapters.registry.RegistryWriteApi import WriteSelectApi
 from convert.adapters.base.UsabilityError import ApplicationUsabilityError
 from convert.adapters.base.WriteOptions import WriteOptions as KWriteOptions
 from convert.adapters.base.WriteResult import WriteResult as KWriteResult
-
-from typing import override as Override
 
 # historical reader annotations need resolution after bindings move behind this compatibility facade
 CadReaderAdapter = KCadReaderAdapter
@@ -70,25 +72,39 @@ Iterable = TypeIterable
 
 
 # facade local registration surface keeps historical spellings attributed to this public module
-class RegisterFacade(BindingApi):
+class RegisterFacade(RegistryHost):
 
-    # pascal binding entry keeps reader registration reviewable beside its historical compatibility spelling
-    @Override
+    # reader registration validates metadata before mutating the shared format namespace
     def RegisterReader(
         self,
         AdapterData: CadReaderAdapter,
         **NamedValues: object,
     ) -> None:
-        super().RegisterReader(AdapterData, **NamedValues)
+        ReplaceFlag = IsReplaceFlag(NamedValues, "register_reader")
+        BindReaderMut(
+            AdapterData,
+            ValidateInfo(AdapterData),
+            self.BindingMap,
+            self.AliasMap,
+            ReplaceFlag,
+            False,
+        )
 
-    # pascal writer binding stays paired with its compatibility spelling inside one composed facade
-    @Override
+    # writer registration validates metadata before mutating the shared format namespace
     def RegisterWriter(
         self,
         AdapterData: CadWriterAdapter,
         **NamedValues: object,
     ) -> None:
-        super().RegisterWriter(AdapterData, **NamedValues)
+        ReplaceFlag = IsReplaceFlag(NamedValues, "register_writer")
+        BindWriterMut(
+            AdapterData,
+            ValidateInfo(AdapterData),
+            self.BindingMap,
+            self.AliasMap,
+            ReplaceFlag,
+            False,
+        )
 
     # public reader registration keeps its established spelling while delegating validation to the shared helper
     def register_reader(
