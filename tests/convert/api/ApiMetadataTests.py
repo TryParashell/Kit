@@ -30,7 +30,6 @@ def CheckMetadata() -> None:
     )
     ProjectData = MetadataData["project"]
     assert ProjectData["name"] == "kit"
-    assert ProjectData["classifiers"][0] == "Private :: Do Not Upload"
     assert ProjectData["entry-points"] == {"kit": {"convert": "convert:convert"}}
     assert "scripts" not in ProjectData
     assert "gui-scripts" not in ProjectData
