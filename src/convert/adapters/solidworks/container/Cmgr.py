@@ -9,7 +9,7 @@
 from __future__ import annotations as Annotations
 from dataclasses import dataclass as Dataclass
 import struct as Struct
-from typing import TypeGuard, cast as Cast
+from typing import TypeGuard, cast as CastValue
 from convert.adapters.solidworks.container.Archive import (
     CLASS_REFERENCE_KIND as ClassRefKind,
     DEFINITION_KIND as DefinitionKind,
@@ -1151,8 +1151,8 @@ def LegacyArgs(KwargValues: dict[str, object]) -> dict[str, object]:
 def IsIntegerTuple(Value: object) -> TypeGuard[tuple[int, ...]]:
     if not isinstance(Value, tuple):
         return False
-    ObjectValues = Cast(tuple[object, ...], Value)
-    return all(isinstance(Item, int) for Item in ObjectValues)
+    ObjectValues = CastValue(tuple[object, ...], Value)
+    return all(isinstance(ItemValue, int) for ItemValue in ObjectValues)
 
 
 # optional identifier sequences preserve absence while rejecting malformed caller input
@@ -1166,8 +1166,8 @@ def IsOptionalStamps(Value: object) -> TypeGuard[tuple[FeatureStamp, ...] | None
         return True
     if not isinstance(Value, tuple):
         return False
-    ObjectValues = Cast(tuple[object, ...], Value)
-    return all(isinstance(Item, FeatureStamp) for Item in ObjectValues)
+    ObjectValues = CastValue(tuple[object, ...], Value)
+    return all(isinstance(ItemValue, FeatureStamp) for ItemValue in ObjectValues)
 
 
 # optional document stamps must be concrete to preserve their paired stream words

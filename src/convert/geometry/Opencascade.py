@@ -13,7 +13,7 @@ from itertools import chain as Chain
 from math import isclose as IsClose, isfinite as IsFinite, sqrt as SquareRoot
 import re as RegexLib
 from sys import float_info as FloatInfo
-from typing import Mapping, cast as Cast
+from typing import Mapping, cast as CastValue
 
 from interchange import (
     BrepBody,
@@ -2390,7 +2390,7 @@ def DecodeLegacy(DataValue: bytes, **LegacyValues: object) -> BrepModel | None:
     if AttributeValue is None:
         Attributes: Mapping[str, object] | None = None
     elif isinstance(AttributeValue, Mapping):
-        SourceAttributes = Cast(Mapping[object, object], AttributeValue)
+        SourceAttributes = CastValue(Mapping[object, object], AttributeValue)
         if not all(isinstance(KeyValue, str) for KeyValue in SourceAttributes):
             return None
         Attributes = {

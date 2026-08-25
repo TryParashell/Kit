@@ -8808,7 +8808,7 @@ def EncodeBrepMut(
         raise TypeError("encode_brep_model model must be a BrepModel")
     if not isinstance(ReceivedPartition, bool):
         raise TypeError("encode_brep_model partition must be a bool")
-    FeatureIds = StringIntMapping(ReceivedFeatureIds)
+    FeatureIds = StrIntMapping(ReceivedFeatureIds)
     if ReceivedFeatureIds is not None and FeatureIds is None:
         raise TypeError("encode_brep_model solidworks_feature_ids must map str to int")
     return EncodeBrepModel(
@@ -8817,7 +8817,7 @@ def EncodeBrepMut(
 
 
 # legacy keyword input needs concrete validation before encoder contracts consume it
-def StringIntMapping(ValueData: object) -> dict[str, int] | None:
+def StrIntMapping(ValueData: object) -> dict[str, int] | None:
     if ValueData is None:
         return None
     if not isinstance(ValueData, Mapping):

@@ -15,7 +15,7 @@ import math as MathValue
 from pathlib import Path as FilePath, PurePosixPath
 import re as RegexLib
 import struct as Struct
-from typing import cast as Cast
+from typing import cast as CastValue
 
 import xml.etree.ElementTree as XmlTree  # noqa: DUO107
 import zipfile as Zipfile
@@ -2756,7 +2756,7 @@ def StoredMateValue(ObjValue: NativeObject) -> ParamValue | None:
     if not isinstance(Decoded, dict):
         return None
     Value: dict[str, object] = {}
-    DecodedMapping = Cast(dict[object, object], Decoded)
+    DecodedMapping = CastValue(dict[object, object], Decoded)
     for KeyValue, ItemValue in DecodedMapping.items():
         if not isinstance(KeyValue, str):
             return None
@@ -2766,7 +2766,7 @@ def StoredMateValue(ObjValue: NativeObject) -> ParamValue | None:
     KindValueA: object = Value.get("kind", ValueKind.NUMBER)
     if isinstance(KindValueA, dict):
         NestedValue: object = ValueKind.NUMBER
-        NestedMapping = Cast(dict[object, object], KindValueA)
+        NestedMapping = CastValue(dict[object, object], KindValueA)
         for KeyValue, ItemValue in NestedMapping.items():
             if KeyValue == "value":
                 NestedValue = ItemValue
@@ -3198,7 +3198,7 @@ def JointRefsMut(
         References.append(RefValue)
         Placement = PlacementElem(ObjValue, f"Placement{RefIndex}")
         Frame = None if Placement is None else MatrixFour(PlacementMatrix(Placement))
-        SubElements = Cast(list[str], RefValue["subelements"])
+        SubElements = CastValue(list[str], RefValue["subelements"])
         for SubIndex, SubElem in enumerate(SubElements):
             ComponentName, Separator, SourceEntityId = str(SubElem).partition(".")
             if not Separator:

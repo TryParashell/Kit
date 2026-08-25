@@ -9,7 +9,7 @@
 from __future__ import annotations as Annotations
 from dataclasses import dataclass as Dataclass
 import struct as Struct
-from typing import TypeGuard, cast as Cast
+from typing import TypeGuard, cast as CastValue
 from uuid import UUID as UuidValue
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
@@ -722,8 +722,8 @@ def IsViewValues(Value: object) -> TypeGuard[tuple[float, ...] | None]:
         return True
     if not isinstance(Value, tuple):
         return False
-    ObjectValues = Cast(tuple[object, ...], Value)
-    return all(isinstance(Item, float) for Item in ObjectValues)
+    ObjectValues = CastValue(tuple[object, ...], Value)
+    return all(isinstance(ItemValue, float) for ItemValue in ObjectValues)
 
 
 # the lowercase body encoder accepts historical and canonical keywords

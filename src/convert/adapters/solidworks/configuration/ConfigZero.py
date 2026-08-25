@@ -9,7 +9,7 @@
 from __future__ import annotations as Annotations
 import struct as Struct
 from collections.abc import Mapping
-from typing import TypeGuard, cast as Cast
+from typing import TypeGuard, cast as CastValue
 from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
 )
@@ -211,11 +211,11 @@ def MapLegacy(
 def IsAtomRecords(Value: object) -> TypeGuard[tuple[tuple[int, int], ...]]:
     if not isinstance(Value, tuple):
         return False
-    ObjectRecords = Cast(tuple[object, ...], Value)
+    ObjectRecords = CastValue(tuple[object, ...], Value)
     for Record in ObjectRecords:
         if not isinstance(Record, tuple):
             return False
-        ObjectRecord = Cast(tuple[object, ...], Record)
+        ObjectRecord = CastValue(tuple[object, ...], Record)
         if (
             len(ObjectRecord) != 2
             or not isinstance(ObjectRecord[0], int)
@@ -231,7 +231,7 @@ def IsHighWater(Value: object) -> TypeGuard[tuple[int, int] | None]:
         return True
     if not isinstance(Value, tuple):
         return False
-    ObjectValues = Cast(tuple[object, ...], Value)
+    ObjectValues = CastValue(tuple[object, ...], Value)
     return (
         len(ObjectValues) == 2
         and isinstance(ObjectValues[0], int)
@@ -249,8 +249,8 @@ def BuildLegacyConfig(MappedValues: Mapping[str, object]) -> bytes:
     MappedHighWater = MappedValues["HighWater"]
     MappedPartRecordBody = MappedValues["PartRecordBody"]
     MappedAnnotationViewCount = MappedValues["AnnotationViewCount"]
-    MappedTerminalParentTreeId = MappedValues["TerminalParentTreeId"]
-    MappedAnnotationViewVariant = MappedValues["AnnotationViewVariant"]
+    MappedParentTreeId = MappedValues["TerminalParentTreeId"]
+    MappedViewVariant = MappedValues["AnnotationViewVariant"]
     if (
         not isinstance(MappedPartName, str)
         or not IsAtomRecords(MappedAtoms)
@@ -260,11 +260,8 @@ def BuildLegacyConfig(MappedValues: Mapping[str, object]) -> bytes:
         or not IsHighWater(MappedHighWater)
         or not (MappedPartRecordBody is None or isinstance(MappedPartRecordBody, bytes))
         or not isinstance(MappedAnnotationViewCount, int)
-        or not (
-            MappedTerminalParentTreeId is None
-            or isinstance(MappedTerminalParentTreeId, int)
-        )
-        or not isinstance(MappedAnnotationViewVariant, str)
+        or not (MappedParentTreeId is None or isinstance(MappedParentTreeId, int))
+        or not isinstance(MappedViewVariant, str)
     ):
         raise TypeError("EncodeConfig() received an invalid keyword value")
     return BuildConfig(
@@ -276,8 +273,8 @@ def BuildLegacyConfig(MappedValues: Mapping[str, object]) -> bytes:
         HighWater=MappedHighWater,
         PartRecordBody=MappedPartRecordBody,
         AnnotationViewCount=MappedAnnotationViewCount,
-        TerminalParentTreeId=MappedTerminalParentTreeId,
-        AnnotationViewVariant=MappedAnnotationViewVariant,
+        TerminalParentTreeId=MappedParentTreeId,
+        AnnotationViewVariant=MappedViewVariant,
     )
 
 

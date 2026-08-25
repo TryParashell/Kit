@@ -140,7 +140,8 @@ def ReplayResolved(
 ) -> bytes:
     KFieldOverrides = Overrides or {}
     OutputData = bytearray()
-    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+        del OwnerIndex
         if len(OutputData) != StartPos:
             raise SldprtFormatError(f"resolved field program drifted at {StartPos}")
         KFieldValue = KFieldOverrides.get(StartPos, DefaultValue)
@@ -163,7 +164,8 @@ def ReplayFixed(
     KFieldOverrides = Overrides or {}
     OutputData = bytearray()
     SourceCursor = 0
-    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+        del OwnerIndex
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"{ScopeName} field program drifted at {StartPos}")
         FieldData = EncodeValue(
@@ -186,7 +188,8 @@ def ReplayAssembly(
     KFieldOverrides = Overrides or {}
     OutputData = bytearray()
     SourceCursor = 0
-    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
+        del OwnerIndex
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"assembly field program drifted at {StartPos}")
         SourceCursor += FieldWidth

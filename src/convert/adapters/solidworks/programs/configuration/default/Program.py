@@ -208,7 +208,8 @@ def ReplayConfig(
     OutputData = bytearray()
     SourceCursor = 0
     AtomsWritten = False
-    for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in ConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in ConfigOps:
+        del OwnerIndex
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"Config-0 field program drifted at {StartPos}")
         SourceCursor += FieldWidth

@@ -105,14 +105,16 @@ def CheckPartMake(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
 
     # forced failure isolates cleanup after only some ancestors were created
     def FailMakeMut(
-        self: FilePath,
-        mode: int = 0o777,
-        parents: bool = False,
-        exist_ok: bool = False,
+        TargetValue: FilePath,
+        ModeValue: int = 0o777,
+        ParentsValue: bool = False,
+        ExistOkValue: bool = False,
     ) -> None:
-        if self == FailurePath:
+        if TargetValue == FailurePath:
             raise OSError("forced staging directory failure")
-        OriginalMake(self, mode=mode, parents=parents, exist_ok=exist_ok)
+        OriginalMake(
+            TargetValue, mode=ModeValue, parents=ParentsValue, exist_ok=ExistOkValue
+        )
 
     MonkeyPatch.setattr(FilePath, "mkdir", FailMakeMut)
     with Pytest.raises(OSError, match="forced staging directory failure"):
@@ -134,17 +136,21 @@ def CheckConcurrent(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
 
     # simulated peer ownership prevents cleanup from deleting a concurrently created folder
     def RaceMakeMut(
-        self: FilePath,
-        mode: int = 0o777,
-        parents: bool = False,
-        exist_ok: bool = False,
+        TargetValue: FilePath,
+        ModeValue: int = 0o777,
+        ParentsValue: bool = False,
+        ExistOkValue: bool = False,
     ) -> None:
         nonlocal InjectedFlag
-        if self == SharedPath and not InjectedFlag:
+        if TargetValue == SharedPath and not InjectedFlag:
             InjectedFlag = True
-            OriginalMake(self, mode=mode, parents=parents, exist_ok=exist_ok)
-            raise FileExistsError(self)
-        OriginalMake(self, mode=mode, parents=parents, exist_ok=exist_ok)
+            OriginalMake(
+                TargetValue, mode=ModeValue, parents=ParentsValue, exist_ok=ExistOkValue
+            )
+            raise FileExistsError(TargetValue)
+        OriginalMake(
+            TargetValue, mode=ModeValue, parents=ParentsValue, exist_ok=ExistOkValue
+        )
 
     MonkeyPatch.setattr(FilePath, "mkdir", RaceMakeMut)
     with Pytest.raises(ApplicationUsabilityError):

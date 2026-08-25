@@ -24,7 +24,7 @@ def IsObjectMap(Value: object) -> TypeGuard[Mapping[object, object]]:
 def GetObjectRows(Value: object) -> tuple[Mapping[str, object], ...]:
     if not IsObjectTuple(Value):
         raise TypeError("metadata rows must be a tuple")
-    Rows: list[Mapping[str, object]] = []
+    RowData: list[Mapping[str, object]] = []
     for RowValue in Value:
         if not IsObjectMap(RowValue):
             raise TypeError("metadata rows must contain mappings")
@@ -33,8 +33,8 @@ def GetObjectRows(Value: object) -> tuple[Mapping[str, object], ...]:
             if not isinstance(KeyValue, str):
                 raise TypeError("metadata row keys must be strings")
             CheckedRow[KeyValue] = ItemValue
-        Rows.append(CheckedRow)
-    return tuple(Rows)
+        RowData.append(CheckedRow)
+    return tuple(RowData)
 
 
 # recursive symbol metadata needs runtime validation before membership checks remain typed
