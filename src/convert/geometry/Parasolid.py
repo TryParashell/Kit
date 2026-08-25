@@ -113,7 +113,7 @@ KBlankDeltaBody = bytes.fromhex(
 )
 
 # concrete carrier unions prevent record tables from erasing decoded geometry contracts
-ParaSurface: TypeAlias = (
+KParaSurface: TypeAlias = (
     PlaneSurface
     | CylinderSurface
     | ConeSurface
@@ -125,7 +125,7 @@ ParaSurface: TypeAlias = (
 )
 
 # concrete carrier unions preserve curve members required by encoder validation
-ParaCurve: TypeAlias = (
+KParaCurve: TypeAlias = (
     LineCurve
     | CircleCurve
     | EllipseCurve
@@ -135,13 +135,13 @@ ParaCurve: TypeAlias = (
 )
 
 # parser construction uses these aliases to retain concrete topology evidence
-ParaGeometry: TypeAlias = ParaCurve | ParaSurface
+KParaGeometry: TypeAlias = KParaCurve | KParaSurface
 
 # face rings preserve their native loop identifier and ordered coedge identifiers
-FaceLoop: TypeAlias = tuple[int, tuple[int, ...]]
+KFaceLoop: TypeAlias = tuple[int, tuple[int, ...]]
 
 # tree construction always returns complete interchange topology collections
-TreeModel: TypeAlias = tuple[
+KTreeModel: TypeAlias = tuple[
     tuple[BrepFaceUse, ...],
     tuple[BrepShell, ...],
     tuple[BrepShellUse, ...],
@@ -150,8 +150,8 @@ TreeModel: TypeAlias = tuple[
 ]
 
 # parser topology aggregation keeps every native relation strongly typed
-PartTopology: TypeAlias = tuple[
-    dict[int, tuple[FaceLoop, ...]],
+KPartTopology: TypeAlias = tuple[
+    dict[int, tuple[KFaceLoop, ...]],
     dict[int, tuple[int, int]],
     dict[int, int],
     dict[int, int],
@@ -166,7 +166,7 @@ PartTopology: TypeAlias = tuple[
 ]
 
 # encoder allocation uses a fixed record family sequence to preserve index slots
-BaseIndices: TypeAlias = tuple[
+KBaseIndices: TypeAlias = tuple[
     dict[str, int],
     dict[str, int],
     dict[str, int],
@@ -182,7 +182,7 @@ BaseIndices: TypeAlias = tuple[
 ]
 
 # solidworks attribute chains require exact index collections for each record family
-SolidIndices: TypeAlias = tuple[
+KSolidIndices: TypeAlias = tuple[
     dict[str, tuple[int, int, int]],
     dict[str, tuple[int, int, int]],
     dict[str, int],
@@ -196,7 +196,7 @@ SolidIndices: TypeAlias = tuple[
 ]
 
 # face attribute records keep native identifiers and validated metadata together
-FaceAttribute: TypeAlias = tuple[
+KFaceAttribute: TypeAlias = tuple[
     str,
     int,
     tuple[int, int, int],
@@ -206,7 +206,7 @@ FaceAttribute: TypeAlias = tuple[
 ]
 
 # face serialization needs ordered shell and surface chains with concrete members
-FaceChain: TypeAlias = tuple[
+KFaceChain: TypeAlias = tuple[
     BrepShell,
     list[str],
     int,
@@ -220,10 +220,10 @@ FaceChain: TypeAlias = tuple[
 ]
 
 # triangle record sizing needs explicit count transforms instead of untyped lambdas
-TriRecordSizer: TypeAlias = Callable[[int], int]
+KTriRecordSizer: TypeAlias = Callable[[int], int]
 
 # spline reconstruction must retain fixed bidirectional descriptor dimensions
-NurbsSurfShapeData: TypeAlias = tuple[
+KNurbsSurfShapeData: TypeAlias = tuple[
     int,
     int,
     int,
@@ -238,7 +238,7 @@ NurbsSurfShapeData: TypeAlias = tuple[
 ]
 
 # record insertion shares duplicate detection across concrete decoded record families
-RecordValue = TypeVar("RecordValue")
+KRecordValue = TypeVar("KRecordValue")
 
 
 # this declaration exists because focused behavior needs one stable owner
@@ -909,7 +909,7 @@ def AllocItemsMut(
 # standard index allocation covers all direct topology and geometry record families
 def BaseIndexesMut(
     Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator
-) -> BaseIndices:
+) -> KBaseIndices:
     Bodies = (
         {BodyData.id: Config.KAttrBases[BodyData.id] + 1 for BodyData in Model.bodies}
         if Config.KAttrBases
@@ -1001,7 +1001,7 @@ def ExteriorIndexes(
 # vendor attribute allocation creates solidworks face and body record chains
 def SolidIndexes(
     Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator
-) -> SolidIndices:
+) -> KSolidIndices:
     FaceAttrs: dict[str, tuple[int, int, int]] = {}
     FaceValues: dict[str, tuple[int, int, int]] = {}
     FaceDefinitions: dict[str, int] = {}
@@ -2166,7 +2166,7 @@ def FaceChainData(
     Config: EncodeConfig,
     Owners: EncodeOwners,
     FinState: EncodeFinState,
-) -> FaceChain:
+) -> KFaceChain:
     ShellData = Topology.shells[Owners.KFaceShell[FaceData.id]]
     FaceIds = OrderIds(
         [Topology.face_uses[FaceUseId].face_id for FaceUseId in ShellData.face_use_ids],
@@ -2299,7 +2299,7 @@ def EmitVendorMut(
         if AttrBase is None or FirstFaceId is None:
             continue
         if Config.KSolidSolid:
-            FaceValues: list[FaceAttribute] = []
+            FaceValues: list[KFaceAttribute] = []
             for FaceData in Model.faces:
                 UnchangedValue = FaceData.attributes.get("solidworks.unchanged_id")
                 UnchangedId = UnchangedValue if type(UnchangedValue) is int else None
@@ -2374,7 +2374,7 @@ def WriteSolidAttrs(
     Output: bytearray,
     BaseValue: int,
     BodyData: int,
-    Faces: Sequence[FaceAttribute],
+    Faces: Sequence[KFaceAttribute],
     FaceDefinitions: Mapping[str, int],
     FaceDefNext: Mapping[str, int],
     FaceIds: Mapping[str, int],
@@ -2426,9 +2426,9 @@ def WriteSolidAttrs(
 
 # face attribute ordering preserves optional vendor ranks and linked list neighbors
 def FaceAttrOrder(
-    Faces: Sequence[FaceAttribute],
-) -> tuple[dict[str, Sequence[FaceAttribute]], dict[tuple[str, str], tuple[int, int]]]:
-    OrderFaces: dict[str, Sequence[FaceAttribute]] = {}
+    Faces: Sequence[KFaceAttribute],
+) -> tuple[dict[str, Sequence[KFaceAttribute]], dict[tuple[str, str], tuple[int, int]]]:
+    OrderFaces: dict[str, Sequence[KFaceAttribute]] = {}
     Neighbors: dict[tuple[str, str], tuple[int, int]] = {}
     for KindValueData, AttrPosition in (
         ("unchanged", 0),
@@ -2466,7 +2466,7 @@ def FaceAttrOrder(
 # face attribute writing emits linked values without owning ordering policy
 def WriteFaceAttMut(
     Output: bytearray,
-    Faces: Sequence[FaceAttribute],
+    Faces: Sequence[KFaceAttribute],
     FaceDefinitions: Mapping[str, int],
     NodeIds: Mapping[int, int],
     Neighbors: Mapping[tuple[str, str], tuple[int, int]],
@@ -2527,7 +2527,7 @@ def WriteFaceAttMut(
 # face definition writing emits schemas and returns each linked list head
 def WriteFaceDefMut(
     Output: bytearray,
-    OrderFaces: Mapping[str, Sequence[FaceAttribute]],
+    OrderFaces: Mapping[str, Sequence[KFaceAttribute]],
     FaceDefinitions: Mapping[str, int],
     FaceDefNext: Mapping[str, int],
     FaceIds: Mapping[str, int],
@@ -3050,7 +3050,7 @@ def TriRecordSize(
     GeomValues = {30: 6, 31: 10, 32: 11, 50: 9, 51: 10, 52: 12, 53: 10, 54: 11}
 
     # this callback exists because local behavior needs one focused transformation
-    VarSizes: dict[int, TriRecordSizer] = {
+    VarSizes: dict[int, KTriRecordSizer] = {
         74: lambda Count: 14 + 2 * Count,
         79: lambda Count: 8 + Count,
         80: lambda Count: 38 + Count,
@@ -3336,7 +3336,7 @@ def FixedRefs(Values: Sequence[int], Message: str) -> tuple[int, ...]:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def SurfValues(SurfValue: ParaSurface) -> tuple[int, tuple[float, ...]]:
+def SurfValues(SurfValue: KParaSurface) -> tuple[int, tuple[float, ...]]:
     if isinstance(SurfValue, PlaneSurface):
         Normal, RefValue = Frame(
             SurfValue.normal,
@@ -3434,7 +3434,7 @@ def SurfValues(SurfValue: ParaSurface) -> tuple[int, tuple[float, ...]]:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def CurveValues(Curve: ParaCurve) -> tuple[int, tuple[float, ...]]:
+def CurveValues(Curve: KParaCurve) -> tuple[int, tuple[float, ...]]:
     if isinstance(Curve, LineCurve):
         DirectData = UnitVector(Curve.direction, f"line curve {Curve.id}")
         return (30, (*ScaledVector(Curve.origin), *VectorValues(DirectData)))
@@ -4186,8 +4186,8 @@ class RecordTables:
     coedges: dict[int, TopologyRecord]
     vertex_uses: dict[int, TopologyRecord]
     points: dict[int, TopologyRecord]
-    curves: dict[int, ParaCurve]
-    surfaces: dict[int, ParaSurface]
+    curves: dict[int, KParaCurve]
+    surfaces: dict[int, KParaSurface]
     entities: dict[int, EntityRecord]
     v12_partition: bool = False
 
@@ -4889,10 +4889,10 @@ def ResolveScansMut(
 
 # this declaration exists because focused behavior needs one stable owner
 def StoreUniqueMut(
-    Target: dict[int, RecordValue],
+    Target: dict[int, KRecordValue],
     Ambiguous: set[int],
     AttrValue: int,
-    Record: RecordValue,
+    Record: KRecordValue,
 ) -> None:
     if AttrValue in Ambiguous:
         return
@@ -5600,7 +5600,7 @@ def NurbsSurfShape(
     VMultiplicities: ShortArray,
     UKnots: FloatArray,
     VKnots: FloatArray,
-) -> NurbsSurfShapeData | None:
+) -> KNurbsSurfShapeData | None:
     if Descriptor.layout == "compact":
         Inferred = CompactNurbSurf(
             len(Control.values), UMultiplicities.values, VMultiplicities.values
@@ -5778,8 +5778,8 @@ def ResolveNurbCurv(
 
 # this declaration exists because focused behavior needs one stable owner
 def ResolveTrimCurv(
-    Record: TrimCurveRecord, Curves: Mapping[int, ParaCurve]
-) -> ParaCurve | None:
+    Record: TrimCurveRecord, Curves: Mapping[int, KParaCurve]
+) -> KParaCurve | None:
     Basis = Curves.get(Record.basis_reference)
     if not Record.sense or Record.attribute == Record.basis_reference:
         return None
@@ -5842,7 +5842,7 @@ def ResolveTrimCurv(
 
 # trimmed curve domain validation isolates periodic and bounded parameter rules
 def TrimCurveDomain(
-    Basis: ParaCurve, ParamOne: float, ParamTwo: float
+    Basis: KParaCurve, ParamOne: float, ParamTwo: float
 ) -> tuple[bool, bool] | None:
     if isinstance(Basis, LineCurve):
         return False, False
@@ -6285,7 +6285,7 @@ def ResolveInter(
     Terms: Mapping[int, TermRecord],
     SupportUv: Mapping[int, SupportUvRecord],
     CompactSupportUv: Mapping[int, CompactUvRecord],
-    Surfaces: Mapping[int, ParaSurface],
+    Surfaces: Mapping[int, KParaSurface],
 ) -> IntersectionCurve | None:
     FirstSurf, SecondSurf, ChartId, StartId, EndId, UvIdValue = Record.references
     Chart = Charts.get(ChartId)
@@ -6359,7 +6359,7 @@ def InterLimits(
 
 # intersection surface validation confirms every chart sample lies on both carriers
 def IsInterSurfFit(
-    Surfaces: Sequence[ParaSurface],
+    Surfaces: Sequence[KParaSurface],
     Chart: ChartRecord,
     UvLanes: Sequence[Sequence[tuple[float, float]]],
     TolValue: float,
@@ -6516,7 +6516,7 @@ def NurbsCurvePoint(Curve: NurbsCurve, Param: float) -> VectorThree | None:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def CurveParamRange(Curve: ParaCurve) -> tuple[float, float, bool, bool] | None:
+def CurveParamRange(Curve: KParaCurve) -> tuple[float, float, bool, bool] | None:
     if isinstance(Curve, (CircleCurve, EllipseCurve)):
         return (0.0, MathValue.tau, True, True)
     if isinstance(Curve, NurbsCurve):
@@ -6549,7 +6549,7 @@ def CurveParamRange(Curve: ParaCurve) -> tuple[float, float, bool, bool] | None:
 
 
 # this declaration exists because focused behavior needs one stable owner
-def CurvePoint(Curve: ParaCurve, Param: float) -> VectorThree | None:
+def CurvePoint(Curve: KParaCurve, Param: float) -> VectorThree | None:
     if isinstance(Curve, LineCurve):
         return LinePoint(Curve, Param)
     if isinstance(Curve, (CircleCurve, EllipseCurve)):
@@ -6622,7 +6622,7 @@ def NurbsSurfPoint(
 
 # this declaration exists because focused behavior needs one stable owner
 def SurfResidual(
-    SurfValue: ParaSurface,
+    SurfValue: KParaSurface,
     Point: VectorThree,
     Params: tuple[float, float] | None = None,
 ) -> float | None:
@@ -7057,7 +7057,7 @@ def AnalyticFields(
 
 
 # this declaration exists because focused behavior needs one stable owner
-def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, ParaGeometry] | None:
+def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, KParaGeometry] | None:
     KindValueData = DataValue[OffsetData + 1]
     ValueCount = KAnalyticValueCounts[KindValueData]
     Fields = AnalyticFields(DataValue, OffsetData)
@@ -7090,7 +7090,7 @@ def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, ParaGeometry] 
 # this declaration exists because focused behavior needs one stable owner
 def AnalyticGeom(
     KindValueData: int, IdValue: str, Values: tuple[float, ...]
-) -> ParaGeometry | None:
+) -> KParaGeometry | None:
     if KindValueData == 30:
         Tangent = AnalyticDirect(Values, 3)
         return (
@@ -7315,7 +7315,7 @@ def LinkedOrder(
 
 
 # this declaration exists because focused behavior needs one stable owner
-def GeomChainLinks(Values: Mapping[int, ParaGeometry]) -> dict[int, tuple[int, int]]:
+def GeomChainLinks(Values: Mapping[int, KParaGeometry]) -> dict[int, tuple[int, int]]:
     Result: dict[int, tuple[int, int]] = {}
     for AttrValue, GeomValue in Values.items():
         Attrs = getattr(GeomValue, "attributes", {})
@@ -7483,8 +7483,8 @@ def BuildPartModel(
 
 
 # topology collection gathers every reachable face edge vertex and carrier identifier
-def CollectPartTopo(Tables: RecordTables) -> PartTopology:
-    FaceLoops: dict[int, tuple[FaceLoop, ...]] = {}
+def CollectPartTopo(Tables: RecordTables) -> KPartTopology:
+    FaceLoops: dict[int, tuple[KFaceLoop, ...]] = {}
     EdgeEndpoints: dict[int, tuple[int, int]] = {}
     EdgeCurves: dict[int, int] = {}
     CoedgeEdges: dict[int, int] = {}
@@ -7537,7 +7537,7 @@ def AddBridgeMut(
     BridgeAttr: int,
     Bridge: TopologyRecord,
     Tables: RecordTables,
-    FaceLoops: dict[int, tuple[FaceLoop, ...]],
+    FaceLoops: dict[int, tuple[KFaceLoop, ...]],
     EdgeEndpoints: dict[int, tuple[int, int]],
     EdgeCurves: dict[int, int],
     CoedgeEdges: dict[int, int],
@@ -7743,7 +7743,7 @@ def GetEdgeUseMut(
 # ranking reconstruction preserves every native linked list ordering dimension
 def MakePartRanks(
     Tables: RecordTables,
-    FaceLoops: Mapping[int, Sequence[FaceLoop]],
+    FaceLoops: Mapping[int, Sequence[KFaceLoop]],
     UsedEdges: set[int],
     UsedVertices: set[int],
     UsedCurves: set[int],
@@ -7906,8 +7906,8 @@ def MakePartCurves(
     CurveOrder: Sequence[int],
     SyntheticCurves: Mapping[int, NativeCurve],
     CurveRanks: Mapping[int, int],
-) -> tuple[ParaCurve, ...]:
-    Curves: list[ParaCurve] = []
+) -> tuple[KParaCurve, ...]:
+    Curves: list[KParaCurve] = []
     for AttrValue in CurveOrder:
         Curve = (
             Tables.curves[AttrValue]
@@ -7926,7 +7926,7 @@ def MakePartCurves(
 
 # intersection support collection retains surfaces referenced only by resolved curves
 def AddCurveSurfMut(
-    Curves: Sequence[ParaCurve], Tables: RecordTables, UsedSurfaces: set[int]
+    Curves: Sequence[KParaCurve], Tables: RecordTables, UsedSurfaces: set[int]
 ) -> None:
     for Curve in Curves:
         if not isinstance(Curve, IntersectionCurve):
@@ -8043,7 +8043,7 @@ def MakePartLoops(
 # surface construction restores native linked list ordering metadata
 def MakePartSurfs(
     Tables: RecordTables, SurfOrder: Sequence[int], SurfRanks: Mapping[int, int]
-) -> tuple[ParaSurface, ...]:
+) -> tuple[KParaSurface, ...]:
     return tuple(
         (
             Replace(
@@ -8063,7 +8063,7 @@ def MakePartSurfs(
 # face construction restores topology tolerance orientation and vendor ordering metadata
 def MakePartFaces(
     Tables: RecordTables,
-    FaceLoops: Mapping[int, Sequence[FaceLoop]],
+    FaceLoops: Mapping[int, Sequence[KFaceLoop]],
     FaceOrder: Sequence[int],
     FaceRanks: Mapping[int, int],
     FaceSurfRanks: Mapping[int, int],
@@ -8111,9 +8111,9 @@ def MakePartFaces(
 def BuildTreeModel(
     Tables: RecordTables,
     OwnerFaces: Mapping[int, int],
-    FaceLoops: Mapping[int, tuple[FaceLoop, ...]],
+    FaceLoops: Mapping[int, tuple[KFaceLoop, ...]],
     FaceRanks: Mapping[int, int],
-) -> TreeModel:
+) -> KTreeModel:
     try:
         TreeValue = BuildBodyTree(Tables.entities, OwnerFaces, set(FaceLoops))
     except ValueError:
@@ -8204,7 +8204,7 @@ def IsConnectedRing(Tables: RecordTables, Candidate: Sequence[int]) -> bool:
 
 # this declaration exists because focused behavior needs one stable owner
 def ProveCurveRange(
-    Curve: ParaCurve,
+    Curve: KParaCurve,
     Start: VectorThree,
     EndValue: VectorThree,
     StartTol: float = 0.0,
@@ -8495,7 +8495,7 @@ def FaceEdgeLinks(
 
 # face component discovery groups topology connected through shared edges
 def FaceComponents(
-    FaceLoops: Mapping[int, tuple[FaceLoop, ...]], FacesByEdge: Mapping[int, set[int]]
+    FaceLoops: Mapping[int, tuple[KFaceLoop, ...]], FacesByEdge: Mapping[int, set[int]]
 ) -> list[tuple[int, ...]]:
     Neighbors: dict[int, set[int]] = {FaceAttr: set() for FaceAttr in FaceLoops}
     for FaceAttrs in FacesByEdge.values():

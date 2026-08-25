@@ -202,8 +202,8 @@ ET = XmlTree
 Path = FilePath
 
 # native fixture options need a closed schema so xml payloads remain statically typed
-NativeOptions = TypeDict(
-    "NativeOptions",
+KNativeOptions = TypeDict(
+    "KNativeOptions",
     {
         "id": str | int,
         "touched": bool,
@@ -703,7 +703,7 @@ def NativeXlink(
 def NativeDeclsMut(
     RootValue: ET.Element,
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
-    ObjectOptions: dict[str, NativeOptions],
+    ObjectOptions: dict[str, KNativeOptions],
 ) -> None:
     Declarations = XmlTree.SubElement(
         RootValue, "Objects", {"Count": str(len(Objects)), "Dependencies": "1"}
@@ -735,7 +735,7 @@ def NativeDeclsMut(
 def NativeDataMut(
     RootValue: ET.Element,
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
-    ObjectOptions: dict[str, NativeOptions],
+    ObjectOptions: dict[str, KNativeOptions],
 ) -> None:
     DataValue = XmlTree.SubElement(
         RootValue, "ObjectData", {"Count": str(len(Objects))}
@@ -789,7 +789,7 @@ def EmitArchive(RootValue: ET.Element, Entries: dict[str, bytes]) -> bytes:
 def NativeArchive(
     Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...],
     Entries: dict[str, bytes],
-    ObjectOptions: dict[str, NativeOptions] | None = None,
+    ObjectOptions: dict[str, KNativeOptions] | None = None,
 ) -> bytes:
     Options = ObjectOptions or {}
     RootValue = XmlTree.Element(

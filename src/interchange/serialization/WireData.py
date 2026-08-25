@@ -13,13 +13,13 @@ from typing import Mapping as TypeMap
 from typing import TypeAlias
 
 # wire values need one recursive contract shared by every serialization boundary
-WireData: TypeAlias = (
-    None | bool | int | float | str | list["WireData"] | dict[str, "WireData"]
+KWireData: TypeAlias = (
+    None | bool | int | float | str | list["KWireData"] | dict[str, "KWireData"]
 )
 
 
 # untrusted parser output must satisfy the recursive wire contract before decoding
-def ValidateWireData(SourceValue: object) -> WireData:
+def ValidateWireData(SourceValue: object) -> KWireData:
     if SourceValue is None or isinstance(SourceValue, (bool, int, float, str)):
         return SourceValue
     if isinstance(SourceValue, list):
@@ -27,7 +27,7 @@ def ValidateWireData(SourceValue: object) -> WireData:
         return [ValidateWireData(ItemValue) for ItemValue in ListItems]
     if isinstance(SourceValue, dict):
         DictItems = CastValue(dict[object, object], SourceValue)
-        ResultValue: dict[str, WireData] = {}
+        ResultValue: dict[str, KWireData] = {}
         for KeyValue, ItemValue in DictItems.items():
             if not isinstance(KeyValue, str):
                 raise TypeError("wire object keys must be strings")
@@ -37,7 +37,7 @@ def ValidateWireData(SourceValue: object) -> WireData:
 
 
 # document restoration requires a recursive object root rather than an arbitrary wire scalar
-def ValidateWireMap(SourceValue: object) -> TypeMap[str, WireData]:
+def ValidateWireMap(SourceValue: object) -> TypeMap[str, KWireData]:
     DataValue = ValidateWireData(SourceValue)
     if not isinstance(DataValue, dict):
         raise TypeError("wire document root must be an object")

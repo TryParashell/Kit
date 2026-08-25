@@ -25,7 +25,7 @@ from interchange.serialization.Wire import ResolveField
 
 
 # model decorators preserve each concrete class identity through dataclass transformation
-ModelValue = TypeVar("ModelValue")
+KModelValue = TypeVar("KModelValue")
 
 # shared frozen set defaults stay one constant so parameter defaults never call constructors
 KEmptyKeywords: frozenset[str] = frozenset()
@@ -42,10 +42,10 @@ class ModelMeta(type):
 
     # old constructor keywords remain accepted because adapters may upgrade independently
     def ConstructModel(
-        self: type[ModelValue],
+        self: type[KModelValue],
         *ArgValues: object,
         **NamedValues: object,
-    ) -> ModelValue:
+    ) -> KModelValue:
         ClassType = CastValue(type[object], self)
         RecordType = GetRecordType(ClassType)
         TranslatedValues: dict[str, object] = {}
@@ -60,7 +60,7 @@ class ModelMeta(type):
                 raise TypeError(f"duplicate model field {ModelName!r}")
             TranslatedValues[ModelName] = FieldValue
         ResultValue: object = type.__call__(self, *ArgValues, **TranslatedValues)
-        return CastValue(ModelValue, ResultValue)
+        return CastValue(KModelValue, ResultValue)
 
     __call__ = ConstructModel
 
@@ -81,12 +81,12 @@ class ModelBase(metaclass=ModelMeta):
 @TypeOverload
 @ModelTransform(frozen_default=True)
 def ModelDataMut(
-    ClassType: type[ModelValue],
+    ClassType: type[KModelValue],
     *,
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = KEmptyKeywords,
-) -> type[ModelValue]: ...  # lgtm[py/ineffectual-statement]
+) -> type[KModelValue]: ...  # lgtm[py/ineffectual-statement]
 
 
 # configured decoration retains concrete model types after defaults are installed
@@ -98,7 +98,7 @@ def ModelDataMut(
     DefaultMap: TypeMap[str, object] | None = None,
     FactoryMap: TypeMap[str, ValueFactory[[], object]] | None = None,
     KeywordOnly: frozenset[str] = KEmptyKeywords,
-) -> ValueFactory[[type[ModelValue]], type[ModelValue]]: ...  # lgtm[py/ineffectual-statement]
+) -> ValueFactory[[type[KModelValue]], type[KModelValue]]: ...  # lgtm[py/ineffectual-statement]
 
 
 # dynamic defaults keep instance fields distinct from true class constants during static checks

@@ -12,7 +12,7 @@ from pathlib import Path as FilePath
 from typing import Mapping as TypeMap
 from typing import Self
 
-from interchange.serialization.WireData import WireData
+from interchange.serialization.WireData import KWireData
 
 
 # document io methods preserve the historical codec surface without owning serialization
@@ -20,14 +20,14 @@ class DocumentIo:
     locals()["__slots__"] = ()
 
     # mapping output remains concrete so callers receive a fully typed document contract
-    def to_dict(self) -> dict[str, WireData]:
+    def to_dict(self) -> dict[str, KWireData]:
         from interchange.document.behavior.DocumentIo import ToMapping
 
         return ToMapping(self)
 
     # mapping construction remains concrete so replacement callers avoid generated compatibility
     @classmethod
-    def from_dict(cls, value: TypeMap[str, WireData]) -> Self:
+    def from_dict(cls, value: TypeMap[str, KWireData]) -> Self:
         from interchange.document.behavior.DocumentIo import FromMapping
 
         return FromMapping(cls, value)
@@ -63,12 +63,12 @@ class DocumentIo:
         return ReadJson(cls, path)
 
     # pascal compatibility keeps existing adapters typed during lowercase method migration
-    def ToMapping(self) -> dict[str, WireData]:
+    def ToMapping(self) -> dict[str, KWireData]:
         return self.to_dict()
 
     # pascal compatibility keeps existing adapters typed during lowercase method migration
     @classmethod
-    def FromMapping(cls, SourceValues: TypeMap[str, WireData]) -> Self:
+    def FromMapping(cls, SourceValues: TypeMap[str, KWireData]) -> Self:
         return cls.from_dict(SourceValues)
 
     # pascal compatibility keeps existing adapters typed during lowercase method migration

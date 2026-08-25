@@ -48,10 +48,10 @@ def CheckNamespace(
     AliasMap: dict[str, str],
 ) -> None:
     FormatKey = GetFormatKey(InfoData.FormatId)
-    OwnerKey = AliasMap.get(FormatKey)
-    if OwnerKey is not None:
+    KOwnerKey = AliasMap.get(FormatKey)
+    if KOwnerKey is not None:
         raise RegistryError(
-            f"format id is already an alias for {OwnerKey}: {InfoData.FormatId}"
+            f"format id is already an alias for {KOwnerKey}: {InfoData.FormatId}"
         )
     for AliasName in InfoData.AliasNames:
         AliasKey = GetFormatKey(AliasName)
@@ -68,18 +68,18 @@ def BindAliasesMut(
     AliasMap: dict[str, str],
     ReplaceFlag: bool,
 ) -> None:
-    OwnerKey = GetFormatKey(InfoData.FormatId)
+    KOwnerKey = GetFormatKey(InfoData.FormatId)
     AliasKeys = {GetFormatKey(AliasName) for AliasName in InfoData.AliasNames}
     if ReplaceFlag:
         StaleNames = tuple(
             AliasName
             for AliasName, ExistingKey in AliasMap.items()
-            if ExistingKey == OwnerKey and AliasName not in AliasKeys
+            if ExistingKey == KOwnerKey and AliasName not in AliasKeys
         )
         for AliasName in StaleNames:
             del AliasMap[AliasName]
     for AliasName in InfoData.AliasNames:
-        AliasMap[GetFormatKey(AliasName)] = OwnerKey
+        AliasMap[GetFormatKey(AliasName)] = KOwnerKey
 
 
 # reader registration enforces metadata agreement with an independently registered writer

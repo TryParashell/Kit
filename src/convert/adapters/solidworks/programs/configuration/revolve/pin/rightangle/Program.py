@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
-    FieldValue as FieldType,
+    KFieldValue as FieldType,
 )
 
 from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed

@@ -1840,7 +1840,7 @@ def LoopUvPoints(
 
 
 # this definition exists because focused behavior needs one stable owner
-def FaceLoop(
+def KFaceLoop(
     Graph: ModelGraph, FaceValue: BrepFace, Tolerance: float
 ) -> dict[str, bool]:
     AreaTolerance = max(Tolerance * Tolerance, 1e-10)
@@ -2409,7 +2409,7 @@ def BuildBrepState(Model: BrepModel, Tolerance: float) -> BrepWriteState:
     for FaceValue in Model.faces:
         FaceIsProven(Graph, FaceValue, Tolerance, SeamBands)
         if FaceValue.id not in SeamBands:
-            LoopReversals.update(FaceLoop(Graph, FaceValue, Tolerance))
+            LoopReversals.update(KFaceLoop(Graph, FaceValue, Tolerance))
     FaceEdges = {
         FaceValue.id: FaceEdge(Graph, FaceValue, LoopReversals, SeamBands)
         for FaceValue in Model.faces

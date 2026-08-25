@@ -14,8 +14,8 @@ from pathlib import PureWindowsPath
 from types import MappingProxyType
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
     BuildOverrides,
-    FieldOp,
-    FieldOverrides,
+    KFieldOp,
+    KFieldOverrides,
 )
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     BuildShiftMap,
@@ -24,7 +24,7 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 
 from convert.adapters.solidworks.programs.assembly.mixed.sextuples.Program import (
     EncodeField,
-    StreamPrograms,
+    KStreamPrograms,
 )
 from convert.adapters.solidworks.programs.assembly.default.Repeat import (
     OccurHash,
@@ -125,8 +125,8 @@ KHeaderTailStart = 2734
 
 # operation emission preserves typed ownership while replacing semantic fields
 def EncodeOps(
-    Operations: Sequence[FieldOp],
-    Overrides: FieldOverrides,
+    Operations: Sequence[KFieldOp],
+    Overrides: KFieldOverrides,
     BasePos: int = 0,
     XformPos: int | None = None,
     XformItem: RepeatItem | None = None,
@@ -173,10 +173,10 @@ def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[FieldOp, ...]:
+) -> tuple[KFieldOp, ...]:
     return tuple(
         Operation
-        for Operation in StreamPrograms[StreamName]
+        for Operation in KStreamPrograms[StreamName]
         if Operation[0] >= StartPos and (EndPos is None or Operation[0] < EndPos)
     )
 
@@ -564,7 +564,7 @@ def EncodeMixCore(
         "Contents/Config-0": EncodeConfig(ModelName, CoreItems, UniqueValues),
         "Contents/Config-0-ResolvedFeatures": EncodeResolved(CoreItems, UniqueValues),
         "Contents/Definition": EncodeOps(
-            StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
+            KStreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
         "Contents/Config-0-ModelHeader": EncodeHeader(
             ModelName, ConfigName, CoreItems, UniqueValues

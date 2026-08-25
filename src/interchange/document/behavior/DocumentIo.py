@@ -17,7 +17,7 @@ from typing import TypeVar
 from interchange.serialization.Deserialize import FromData
 from interchange.serialization.EncodeData import ToData
 from interchange.serialization.JsonCodec import DumpJson, LoadJson
-from interchange.serialization.WireData import WireData
+from interchange.serialization.WireData import KWireData
 
 
 # decoded documents must expose validation before they cross the public construction boundary
@@ -27,11 +27,11 @@ class ValidDocument(TypeProtocol):
 
 
 # generic decoding preserves the concrete document subtype requested by each class method
-DocumentType = TypeVar("DocumentType")
+KDocumentType = TypeVar("KDocumentType")
 
 
 # mapping output gives callers a portable structure without exposing codec internals
-def ToMapping(DocumentValue: object) -> dict[str, WireData]:
+def ToMapping(DocumentValue: object) -> dict[str, KWireData]:
     ResultValue = ToData(DocumentValue)
     if not isinstance(ResultValue, dict):
         raise TypeError("document serialization did not produce a mapping")
@@ -40,15 +40,15 @@ def ToMapping(DocumentValue: object) -> dict[str, WireData]:
 
 # mapping input enforces the requested model type before callers receive data
 def FromMapping(
-    ClassType: type[DocumentType], SourceValues: TypeMap[str, WireData]
-) -> DocumentType:
+    ClassType: type[KDocumentType], SourceValues: TypeMap[str, KWireData]
+) -> KDocumentType:
     ResultValue = FromData(dict(SourceValues))
     if not isinstance(ResultValue, ClassType) or not isinstance(
         ResultValue, ValidDocument
     ):
         raise TypeError("data does not describe a CadDocument")
     ResultValue.assert_valid()
-    return CastValue(DocumentType, ResultValue)
+    return CastValue(KDocumentType, ResultValue)
 
 
 # json output centralizes deterministic serialization options for document methods
@@ -57,14 +57,14 @@ def ToJson(DocumentValue: object, *, IndentSize: int | None = 2) -> str:
 
 
 # json input validates document identity before returning decoded data
-def FromJson(ClassType: type[DocumentType], SourceValue: str) -> DocumentType:
+def FromJson(ClassType: type[KDocumentType], SourceValue: str) -> KDocumentType:
     ResultValue = LoadJson(SourceValue)
     if not isinstance(ResultValue, ClassType) or not isinstance(
         ResultValue, ValidDocument
     ):
         raise TypeError("JSON does not describe a CadDocument")
     ResultValue.assert_valid()
-    return CastValue(DocumentType, ResultValue)
+    return CastValue(KDocumentType, ResultValue)
 
 
 # file output provides atomic ownership of path normalization and parent creation
@@ -76,6 +76,8 @@ def WriteJson(DocumentValue: object, PathValue: str | FilePath) -> FilePath:
 
 
 # file input shares validated json decoding rather than duplicating codec rules
-def ReadJson(ClassType: type[DocumentType], PathValue: str | FilePath) -> DocumentType:
+def ReadJson(
+    ClassType: type[KDocumentType], PathValue: str | FilePath
+) -> KDocumentType:
     SourceText = FilePath(PathValue).expanduser().resolve().read_text("utf-8")
     return FromJson(ClassType, SourceText)

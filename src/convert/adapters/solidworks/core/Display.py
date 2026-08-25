@@ -52,9 +52,9 @@ class NativeFace:
     normals: tuple[tuple[float, float, float], ...]
     triangle_indices: tuple[tuple[int, int, int], ...]
 
-    Positions = property(GetPositions)
+    KPositions = property(GetPositions)
     Triangles = GetTriangles
-    positions = Positions
+    positions = KPositions
     triangles = Triangles
 
 

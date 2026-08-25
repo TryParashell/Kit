@@ -35,15 +35,15 @@ from tests.interchange.compatibility.CompatFieldsTypes import KCompatFieldsTypes
 from tests.interchange.compatibility.PythonCompatTopNames import KPythonCompatTopNames
 
 # compatibility construction must validate dynamic calls before tests trust their concrete result
-CompatType = TypeVar("CompatType")
+KCompatType = TypeVar("KCompatType")
 
 
 # historical constructors remain callable even when reflected keywords differ from storage names
 def CallLegacy(
-    ClassType: type[CompatType],
+    ClassType: type[KCompatType],
     *ArgValues: object,
     **NamedValues: object,
-) -> CompatType:
+) -> KCompatType:
     FactoryValue: object = ClassType
     if not callable(FactoryValue):
         raise TypeError("compatibility constructor is not callable")

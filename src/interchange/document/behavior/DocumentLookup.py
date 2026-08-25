@@ -25,7 +25,7 @@ class Identified(TypeProtocol):
 
 
 # generic lookup results remain the exact model type stored by each collection
-EntityType = TypeVar("EntityType", bound=Identified)
+KEntityType = TypeVar("KEntityType", bound=Identified)
 
 
 # document lookup needs only the four collections exposed by its focused behavior
@@ -46,8 +46,8 @@ def GetLookupDoc(SourceValue: object) -> LookupDocument:
 
 # entity lookup keeps every document convenience method on one failure contract
 def FindEntity(
-    ItemValues: tuple[EntityType, ...], EntityId: str, LabelText: str
-) -> EntityType:
+    ItemValues: tuple[KEntityType, ...], EntityId: str, LabelText: str
+) -> KEntityType:
     for ItemValue in ItemValues:
         if ItemValue.id == EntityId:
             return ItemValue

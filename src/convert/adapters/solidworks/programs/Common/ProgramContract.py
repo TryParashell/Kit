@@ -13,41 +13,41 @@ from typing import TypeAlias
 
 
 # serializer fields need one closed recursive value grammar across every generated program
-FieldValue: TypeAlias = int | float | str | tuple["FieldValue", ...]
+KFieldValue: TypeAlias = int | float | str | tuple["KFieldValue", ...]
 
 # generated owner catalogs use trace offsets except where archive names are canonical keys
-OwnerKey: TypeAlias = int | str
+KOwnerKey: TypeAlias = int | str
 
 # generated owner catalogs retain their concrete homogeneous key families
-OwnerSites: TypeAlias = Mapping[int, str] | Mapping[str, str]
+KOwnerSites: TypeAlias = Mapping[int, str] | Mapping[str, str]
 
 # method operations preserve source offsets widths trace ownership encoding and default values
-MethodOp: TypeAlias = tuple[int, int, OwnerKey, str, FieldValue]
+KMethodOp: TypeAlias = tuple[int, int, KOwnerKey, str, KFieldValue]
 
 # each recovered method contributes an immutable operation sequence per native stream
-MethodStreams: TypeAlias = dict[str, tuple[MethodOp, ...]]
+KMethodStreams: TypeAlias = dict[str, tuple[KMethodOp, ...]]
 
 # generated method modules expose one owner catalog paired with their stream contributions
-MethodProgram: TypeAlias = tuple[OwnerSites, MethodStreams]
+KMethodProgram: TypeAlias = tuple[KOwnerSites, KMethodStreams]
 
 # registries compose independently generated methods through one stable ordered contract
-MethodPrograms: TypeAlias = tuple[MethodProgram, ...]
+KMethodPrograms: TypeAlias = tuple[KMethodProgram, ...]
 
 # composition resolves trace keys into readable owner names before assigning local indices
-OwnedOp: TypeAlias = tuple[int, int, str, str, FieldValue]
+KOwnedOp: TypeAlias = tuple[int, int, str, str, KFieldValue]
 
 # replay operations use compact registry local owner indices after deterministic composition
-FieldOp: TypeAlias = tuple[int, int, int, str, FieldValue]
+KFieldOp: TypeAlias = tuple[int, int, int, str, KFieldValue]
 
 # assembly registries expose every coupled stream through the same concrete operation grammar
-StreamPrograms: TypeAlias = dict[str, tuple[FieldOp, ...]]
+KStreamPrograms: TypeAlias = dict[str, tuple[KFieldOp, ...]]
 
 # serializer callers override recovered defaults only at exact native source offsets
-FieldOverrides: TypeAlias = Mapping[int, FieldValue]
+KFieldOverrides: TypeAlias = Mapping[int, KFieldValue]
 
 
 # mixed override tables need one concrete builder so inference stays stable during later mutation
 def BuildOverrides(
-    InitialValues: FieldOverrides | None = None,
-) -> dict[int, FieldValue]:
+    InitialValues: KFieldOverrides | None = None,
+) -> dict[int, KFieldValue]:
     return {} if InitialValues is None else dict(InitialValues)

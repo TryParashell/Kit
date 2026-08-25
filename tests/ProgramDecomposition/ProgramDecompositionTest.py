@@ -21,11 +21,11 @@ from typing import Callable, cast, Protocol, TypeAlias
 import unittest as UnitTest
 
 # manifest digest entries need one exact shape so generated evidence remains statically checkable
-DigestStat: TypeAlias = tuple[str, int, str]
+KDigestStat: TypeAlias = tuple[str, int, str]
 
 
 # manifest program entries need a direct contract independent from generated module execution
-ProgramStat: TypeAlias = tuple[
+KProgramStat: TypeAlias = tuple[
     str,
     str,
     str,
@@ -33,7 +33,7 @@ ProgramStat: TypeAlias = tuple[
     int,
     str,
     tuple[str, ...],
-    tuple[DigestStat, ...],
+    tuple[KDigestStat, ...],
     str,
 ]
 
@@ -41,7 +41,7 @@ ProgramStat: TypeAlias = tuple[
 # dynamic manifest loading needs a structural contract for immutable decomposition evidence
 class ManifestContract(Protocol):
     KGlobalStats: tuple[int, int, int, int, int, int]
-    KProgramStats: tuple[ProgramStat, ...]
+    KProgramStats: tuple[KProgramStat, ...]
 
 
 # stream encoders need their argument contract separated from parameterless generated encoders
@@ -177,7 +177,7 @@ class TestEncoding(UnitTest.TestCase):
                     if not hasattr(ModuleData, NameText)
                 )
             )
-            if OpsName == "StreamPrograms":
+            if OpsName == "KStreamPrograms":
                 StreamModule = cast(StreamProgram, ModuleData)
                 OutputPairs = tuple(
                     (StreamName, StreamModule.EncodeProgram(StreamName))

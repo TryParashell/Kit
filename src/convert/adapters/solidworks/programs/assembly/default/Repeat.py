@@ -13,8 +13,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
-    FieldOp,
-    FieldOverrides,
+    KFieldOp,
+    KFieldOverrides,
 )
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     BuildShiftMap,
@@ -23,7 +23,7 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 
 from convert.adapters.solidworks.programs.assembly.quintuples.Program import (
     EncodeField,
-    StreamPrograms,
+    KStreamPrograms,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
@@ -144,8 +144,8 @@ def IsIdentityBasis(BasisVals: tuple[float, ...]) -> bool:
 
 # one operation tuple retains its typed serializer owner and native field value
 def EncodeOps(
-    Operations: Sequence[FieldOp],
-    Overrides: FieldOverrides,
+    Operations: Sequence[KFieldOp],
+    Overrides: KFieldOverrides,
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
@@ -168,10 +168,10 @@ def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[FieldOp, ...]:
+) -> tuple[KFieldOp, ...]:
     return tuple(
         Operation
-        for Operation in StreamPrograms[StreamName]
+        for Operation in KStreamPrograms[StreamName]
         if Operation[0] >= StartPos and (EndPos is None or Operation[0] < EndPos)
     )
 
@@ -460,7 +460,7 @@ def EncodeRepCore(
         "Contents/Config-0": EncodeConfig(ModelName, ConfigName, CoreItems),
         "Contents/Config-0-ResolvedFeatures": EncodeResolved(CoreItems),
         "Contents/Definition": EncodeOps(
-            StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
+            KStreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
         "Contents/Config-0-ModelHeader": EncodeHeader(ModelName, ConfigName, CoreItems),
     }

@@ -19,12 +19,12 @@ from typing import get_type_hints as GetTypeHints
 from interchange.serialization.MigrationRegistry import KMigrationRegistry
 from interchange.serialization.RecordType import DataRecord, RecordCtor
 from interchange.serialization.Wire import ResolveField
-from interchange.serialization.WireData import WireData
+from interchange.serialization.WireData import KWireData
 
 
 # record reconstruction applies migrations and mapping immutability before model construction
 def DecodeRecord(
-    SourceValue: dict[str, WireData],
+    SourceValue: dict[str, KWireData],
     TargetType: type[DataRecord],
     DecoderFunc: CallableType[[object], object],
 ) -> object:

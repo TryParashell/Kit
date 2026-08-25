@@ -22,9 +22,9 @@ from convert.adapters.solidworks.container.Archive import (
     DEFINITION_KIND as KindInfoA,
     IsLayoutObject,
     IsLayoutSequence,
-    LayoutObject,
+    KLayoutObject,
     LayoutTable,
-    LayoutValue,
+    KLayoutValue,
     Model,
     NULL_KIND as KindInfoB,
     NULL_TAG as TagInfoA,
@@ -127,7 +127,7 @@ def Layouts() -> LayoutTable:
 
 
 # rejects malformed recorded json before fixture reconstruction consumes its fields
-def RecordedString(Payload: LayoutObject, KeyValue: str) -> str:
+def RecordedString(Payload: KLayoutObject, KeyValue: str) -> str:
     Value = Payload.get(KeyValue)
     if not isinstance(Value, str):
         raise TypeError(f"recorded archive field {KeyValue!r} must be a string")
@@ -135,7 +135,7 @@ def RecordedString(Payload: LayoutObject, KeyValue: str) -> str:
 
 
 # rejects malformed recorded json before numeric offsets enter archive operations
-def RecordedInteger(Payload: LayoutObject, KeyValue: str) -> int:
+def RecordedInteger(Payload: KLayoutObject, KeyValue: str) -> int:
     Value = Payload.get(KeyValue)
     if not isinstance(Value, int) or isinstance(Value, bool):
         raise TypeError(f"recorded archive field {KeyValue!r} must be an integer")
@@ -143,7 +143,7 @@ def RecordedInteger(Payload: LayoutObject, KeyValue: str) -> int:
 
 
 # converts each json segment into the concrete record used by static reconstruction
-def RecordedSegment(Value: LayoutValue) -> SegmentRecord:
+def RecordedSegment(Value: KLayoutValue) -> SegmentRecord:
     if not IsLayoutObject(Value):
         raise TypeError("recorded archive segment must be an object")
     return {
@@ -510,8 +510,8 @@ def TestMRAUNK() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def SingleCT(Entry: LayoutObject) -> LayoutTable:
-    Classes: dict[str, LayoutValue] = {"solo": dict(Entry)}
+def SingleCT(Entry: KLayoutObject) -> LayoutTable:
+    Classes: dict[str, KLayoutValue] = {"solo": dict(Entry)}
     return LayoutTable.from_mapping({"version": 1, "classes": Classes})
 
 
@@ -971,9 +971,9 @@ def TestURCIR() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def PrefixTable(
-    Prefix: int, TailInfo: Mapping[str, LayoutValue] | None = None
+    Prefix: int, TailInfo: Mapping[str, KLayoutValue] | None = None
 ) -> LayoutTable:
-    Entry: dict[str, LayoutValue] = {
+    Entry: dict[str, KLayoutValue] = {
         "confidence": "partial",
         "child_slots": ["*", "*", "..."],
         "runs": {"lead": 4, "0": 2, "1": 6},
@@ -1246,13 +1246,13 @@ def TestPBCAGNAC() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def MakeLayout(
-    GroupData: Mapping[str, LayoutValue],
-    ChildSlots: Sequence[LayoutValue] = (),
-    RunData: Mapping[str, LayoutValue] | None = None,
+    GroupData: Mapping[str, KLayoutValue],
+    ChildSlots: Sequence[KLayoutValue] = (),
+    RunData: Mapping[str, KLayoutValue] | None = None,
 ) -> LayoutTable:
     if RunData is None:
         RunData = {"lead": 0}
-    Entry: dict[str, LayoutValue] = {
+    Entry: dict[str, KLayoutValue] = {
         "confidence": "partial",
         "child_slots": list(ChildSlots),
         "runs": dict(RunData),
@@ -1268,14 +1268,14 @@ def MakeLayout(
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRGAV() -> None:
-    Sound: dict[str, LayoutValue] = {
+    Sound: dict[str, KLayoutValue] = {
         "name": "loop",
         "count": {"back": 2, "width": 2},
         "slots": ["*"],
         "element": [0],
     }
     assert MakeLayout(Sound)["solo"].walks_groups
-    InvalidGroups: tuple[Mapping[str, LayoutValue], ...] = (
+    InvalidGroups: tuple[Mapping[str, KLayoutValue], ...] = (
         {**Sound, "name": ""},
         {**Sound, "element": []},
         {**Sound, "element": [-1]},

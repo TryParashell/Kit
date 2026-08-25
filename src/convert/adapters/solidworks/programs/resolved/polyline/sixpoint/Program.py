@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import math as MathLib
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
-    FieldValue as FieldType,
+    KFieldValue as FieldType,
 )
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError

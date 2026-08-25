@@ -18,11 +18,11 @@ from convert.adapters.base.TransferContract import CapTransfer as CapabilityTran
 from convert.adapters.base.WriteResult import WriteResult
 
 # reflected getters need their public package owner without replacing concrete descriptors
-GetterType = TypeVar("GetterType")
+KGetterType = TypeVar("KGetterType")
 
 
 # public schema ownership differs from the focused implementation module by design
-def SetResultOwner(GetterValue: GetterType) -> GetterType:
+def SetResultOwner(GetterValue: KGetterType) -> KGetterType:
     setattr(GetterValue, "__module__", "convert.engine")
     return GetterValue
 

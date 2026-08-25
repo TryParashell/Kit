@@ -23,7 +23,7 @@ KJsonValue = KJsonScalar | list["KJsonValue"] | dict[str, "KJsonValue"]
 
 
 # mapping factories preserve each caller value type without widening it to any
-MapValue = TypeVar("MapValue")
+KMapValue = TypeVar("KMapValue")
 
 
 # empty immutable mappings provide a concrete object value contract for default factories
@@ -34,12 +34,12 @@ def FreezeMapping() -> TypeMap[str, object]: ...  # lgtm[py/ineffectual-statemen
 # populated immutable mappings retain their precise member type for model fields
 @TypeOverload
 def FreezeMapping(
-    SourceValues: TypeMap[str, MapValue],
-) -> TypeMap[str, MapValue]: ...  # lgtm[py/ineffectual-statement]
+    SourceValues: TypeMap[str, KMapValue],
+) -> TypeMap[str, KMapValue]: ...  # lgtm[py/ineffectual-statement]
 
 
 # immutable mappings prevent accidental mutation of frozen interchange records
 def FreezeMapping(
-    SourceValues: TypeMap[str, MapValue] | None = None,
-) -> TypeMap[str, MapValue] | TypeMap[str, object]:
+    SourceValues: TypeMap[str, KMapValue] | None = None,
+) -> TypeMap[str, KMapValue] | TypeMap[str, object]:
     return FrozenMap(dict(SourceValues or {}))

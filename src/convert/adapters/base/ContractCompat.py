@@ -19,7 +19,7 @@ from typing import cast as CastValue
 from convert.adapters.base.FieldAliases import KFieldAliases
 
 # generic construction preserves each dataclass result type through the compatibility metaclass
-ContractValue = TypeVar("ContractValue")
+KContractValue = TypeVar("KContractValue")
 
 
 # dictionary narrowing supports reflected dataclass state without unknown key or value types
@@ -100,10 +100,10 @@ class ContractMeta(type):
 
     # callers can upgrade independently because old keyword names still reach compliant fields
     def BuildInstance(
-        self: type[ContractValue],
+        self: type[KContractValue],
         *ArgValues: object,
         **NamedValues: object,
-    ) -> ContractValue:
+    ) -> KContractValue:
         TranslatedValues = GetCtorValues(self, NamedValues)
         FieldNames = tuple(FieldData.name for FieldData in GetDataFields(self))
         for ModelName in FieldNames[: len(ArgValues)]:
@@ -114,7 +114,7 @@ class ContractMeta(type):
                     + f"{PublicName!r}"
                 )
         ResultValue = type.__call__(self, *ArgValues, **TranslatedValues)
-        return CastValue(ContractValue, ResultValue)
+        return CastValue(KContractValue, ResultValue)
 
     __call__ = BuildInstance
 

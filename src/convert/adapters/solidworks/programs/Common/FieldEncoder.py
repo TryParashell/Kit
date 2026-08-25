@@ -20,9 +20,9 @@ from convert.adapters.solidworks.container.Archive import (
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
     BuildOverrides,
-    FieldOp,
-    FieldOverrides,
-    FieldValue,
+    KFieldOp,
+    KFieldOverrides,
+    KFieldValue,
 )
 
 
@@ -43,7 +43,7 @@ KPrimitiveFormats = {
 
 
 # reference arithmetic needs validated integers instead of unchecked recursive field values
-def RequireInt(FieldData: FieldValue, ErrorScope: str) -> int:
+def RequireInt(FieldData: KFieldValue, ErrorScope: str) -> int:
     if not isinstance(FieldData, int):
         raise SldprtFormatError(f"{ErrorScope} requires an integer field value")
     return FieldData
@@ -51,11 +51,11 @@ def RequireInt(FieldData: FieldValue, ErrorScope: str) -> int:
 
 # selected suffix references need shared filtering before recursive values are narrowed to integers
 def BuildShiftMap(
-    Operations: Sequence[FieldOp],
+    Operations: Sequence[KFieldOp],
     BasePos: int,
     ShiftRules: Sequence[tuple[Collection[int], int]],
     ErrorScope: str,
-) -> dict[int, FieldValue]:
+) -> dict[int, KFieldValue]:
     ShiftValues = BuildOverrides()
     for Operation in Operations:
         RelativePos = Operation[0] - BasePos
@@ -69,7 +69,7 @@ def BuildShiftMap(
 
 
 # archive field encoding centralizes the recovered structural value grammar
-def EncodeArchive(KindName: str, FieldData: FieldValue) -> bytes | None:
+def EncodeArchive(KindName: str, FieldData: KFieldValue) -> bytes | None:
     if KindName == "definition":
         if not isinstance(FieldData, tuple) or len(FieldData) != 2:
             raise SldprtFormatError("archive class definition value is invalid")
@@ -106,7 +106,7 @@ def EncodeArchive(KindName: str, FieldData: FieldValue) -> bytes | None:
 # typed field encoding preserves every recovered primitive and archive contract
 def EncodeValue(
     KindName: str,
-    FieldData: FieldValue,
+    FieldData: KFieldValue,
     ErrorScope: str,
     FormatMap: Mapping[str, str] = KPrimitiveFormats,
 ) -> bytes:
@@ -122,7 +122,7 @@ def EncodeValue(
         if isinstance(FieldData, str):
             raise SldprtFormatError(f"invalid {ErrorScope} direct value")
         FormatText = KindName.split(":", 1)[1]
-        ValuesData: tuple[FieldValue, ...] = (
+        ValuesData: tuple[KFieldValue, ...] = (
             FieldData if isinstance(FieldData, tuple) else (FieldData,)
         )
         if any(not isinstance(ItemValue, int | float) for ItemValue in ValuesData):
@@ -133,18 +133,18 @@ def EncodeValue(
 
 # resolved replay validates contiguous offsets field widths and final closure
 def ReplayResolved(
-    Operations: tuple[FieldOp, ...],
+    Operations: tuple[KFieldOp, ...],
     ExpectedLength: int,
-    Overrides: FieldOverrides | None = None,
+    Overrides: KFieldOverrides | None = None,
     FormatMap: Mapping[str, str] = KPrimitiveFormats,
 ) -> bytes:
-    FieldOverrides = Overrides or {}
+    KFieldOverrides = Overrides or {}
     OutputData = bytearray()
     for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         if len(OutputData) != StartPos:
             raise SldprtFormatError(f"resolved field program drifted at {StartPos}")
-        FieldValue = FieldOverrides.get(StartPos, DefaultValue)
-        FieldData = EncodeValue(KindName, FieldValue, "resolved", FormatMap)
+        KFieldValue = KFieldOverrides.get(StartPos, DefaultValue)
+        FieldData = EncodeValue(KindName, KFieldValue, "resolved", FormatMap)
         if len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"resolved field width changed at {StartPos}")
         OutputData.extend(FieldData)
@@ -155,19 +155,19 @@ def ReplayResolved(
 
 # fixed replay validates source ordering encoded widths and exact source closure
 def ReplayFixed(
-    Operations: tuple[FieldOp, ...],
+    Operations: tuple[KFieldOp, ...],
     ExpectedLength: int,
     ScopeName: str,
-    Overrides: FieldOverrides | None = None,
+    Overrides: KFieldOverrides | None = None,
 ) -> bytes:
-    FieldOverrides = Overrides or {}
+    KFieldOverrides = Overrides or {}
     OutputData = bytearray()
     SourceCursor = 0
     for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"{ScopeName} field program drifted at {StartPos}")
         FieldData = EncodeValue(
-            KindName, FieldOverrides.get(StartPos, DefaultValue), ScopeName
+            KindName, KFieldOverrides.get(StartPos, DefaultValue), ScopeName
         )
         if len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"{ScopeName} field width changed at {StartPos}")
@@ -180,18 +180,18 @@ def ReplayFixed(
 
 # assembly replay permits only the recovered variable width string operations
 def ReplayAssembly(
-    Operations: tuple[FieldOp, ...],
-    Overrides: FieldOverrides | None = None,
+    Operations: tuple[KFieldOp, ...],
+    Overrides: KFieldOverrides | None = None,
 ) -> bytes:
-    FieldOverrides = Overrides or {}
+    KFieldOverrides = Overrides or {}
     OutputData = bytearray()
     SourceCursor = 0
     for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"assembly field program drifted at {StartPos}")
         SourceCursor += FieldWidth
-        FieldValue = FieldOverrides.get(StartPos, DefaultValue)
-        FieldData = EncodeValue(KindName, FieldValue, "assembly")
+        KFieldValue = KFieldOverrides.get(StartPos, DefaultValue)
+        FieldData = EncodeValue(KindName, KFieldValue, "assembly")
         if KindName not in {"string", "stringlist"} and len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"assembly field width changed at {StartPos}")
         OutputData.extend(FieldData)

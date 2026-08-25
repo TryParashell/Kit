@@ -15,7 +15,7 @@ from typing import Mapping, Protocol
 from convert.adapters.solidworks.programs.assembly.default.Program import (
     EncodeProgram,
     FieldOwners,
-    StreamPrograms,
+    KStreamPrograms,
 )
 from convert.adapters.solidworks.programs.assembly.pairs.Program import (
     EncodeProgram as EncodeProgramTwo,
@@ -52,7 +52,7 @@ KCoreStreamNames = (
 
 # this binding exists because shared behavior needs one stable value
 KCoreFieldCount = sum(
-    (len(StreamPrograms[StreamName]) for StreamName in KCoreStreamNames)
+    (len(KStreamPrograms[StreamName]) for StreamName in KCoreStreamNames)
 )
 
 # this binding exists because shared behavior needs one stable value

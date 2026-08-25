@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
-    FieldValue as FieldType,
+    KFieldValue as FieldType,
 )
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
@@ -23,7 +23,7 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
 from .Registry import (  # lgtm[py/unused-import]
     FieldOwners as FieldOwners,
     KFieldOwners as KFieldOwners,
-    StreamPrograms as StreamPrograms,
+    KStreamPrograms as KStreamPrograms,
 )
 
 
@@ -41,7 +41,7 @@ def EncodeProgram(
     StreamName: str, Overrides: Mapping[int, FieldType] | None = None
 ) -> bytes:
     try:
-        Operations = StreamPrograms[StreamName]
+        Operations = KStreamPrograms[StreamName]
     except KeyError as ErrorData:
         raise SldprtFormatError(
             f"unknown assembly stream {StreamName!r}"

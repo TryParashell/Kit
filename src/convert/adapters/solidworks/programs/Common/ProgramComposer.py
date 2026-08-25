@@ -12,29 +12,29 @@ from operator import itemgetter as ItemGetter
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.ProgramContract import (  # lgtm[py/unused-import]
-    FieldOp,
-    MethodPrograms,
-    OwnedOp,
-    OwnerKey,
-    StreamPrograms,
+    KFieldOp,
+    KMethodPrograms,
+    KOwnedOp,
+    KOwnerKey,
+    KStreamPrograms,
 )
 
 
 # split method tables need one checked path back into exact source order
-def ComposeOps(MethodTables: MethodPrograms, StreamName: str) -> tuple[OwnedOp, ...]:
-    OwnedOps: list[OwnedOp] = []
-    for OwnerSites, StreamOps in MethodTables:
-        OwnerLookup: dict[OwnerKey, str] = {
-            OwnerKeyValue: OwnerText for OwnerKeyValue, OwnerText in OwnerSites.items()
+def ComposeOps(MethodTables: KMethodPrograms, StreamName: str) -> tuple[KOwnedOp, ...]:
+    OwnedOps: list[KOwnedOp] = []
+    for KOwnerSites, StreamOps in MethodTables:
+        OwnerLookup: dict[KOwnerKey, str] = {
+            OwnerKeyValue: OwnerText for OwnerKeyValue, OwnerText in KOwnerSites.items()
         }
-        for StartPos, FieldWidth, OwnerKey, KindName, DefaultValue in StreamOps.get(
+        for StartPos, FieldWidth, KOwnerKey, KindName, DefaultValue in StreamOps.get(
             StreamName, ()
         ):
             try:
-                OwnerText = OwnerLookup[OwnerKey]
+                OwnerText = OwnerLookup[KOwnerKey]
             except KeyError as ErrorData:
                 raise SldprtFormatError(
-                    f"program owner key {OwnerKey!r} is missing for {StreamName!r}"
+                    f"program owner key {KOwnerKey!r} is missing for {StreamName!r}"
                 ) from ErrorData
             OwnedOps.append((StartPos, FieldWidth, OwnerText, KindName, DefaultValue))
     OwnedOps.sort(key=ItemGetter(0))
@@ -54,8 +54,8 @@ def ComposeOps(MethodTables: MethodPrograms, StreamName: str) -> tuple[OwnedOp, 
 
 # legacy callers still require one local owner index for each variant
 def BuildProgram(
-    MethodTables: MethodPrograms, StreamName: str
-) -> tuple[tuple[str, ...], tuple[FieldOp, ...]]:
+    MethodTables: KMethodPrograms, StreamName: str
+) -> tuple[tuple[str, ...], tuple[KFieldOp, ...]]:
     OwnedOps = ComposeOps(MethodTables, StreamName)
     OwnerNames = tuple(
         sorted(
@@ -78,8 +78,8 @@ def BuildProgram(
 
 # assembly callers need shared owner indices across every coupled stream
 def BuildStreams(
-    MethodTables: MethodPrograms, StreamNames: tuple[str, ...]
-) -> tuple[tuple[str, ...], StreamPrograms]:
+    MethodTables: KMethodPrograms, StreamNames: tuple[str, ...]
+) -> tuple[tuple[str, ...], KStreamPrograms]:
     OwnedStreams = {
         StreamName: ComposeOps(MethodTables, StreamName) for StreamName in StreamNames
     }

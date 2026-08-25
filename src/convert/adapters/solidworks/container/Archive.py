@@ -24,29 +24,29 @@ from convert.adapters.solidworks.container.RunGroups import (
 )
 
 # this contract exists because decoded layouts need recursively concrete json values
-LayoutValue: TypeAlias = (
-    str | int | float | bool | None | list["LayoutValue"] | dict[str, "LayoutValue"]
+KLayoutValue: TypeAlias = (
+    str | int | float | bool | None | list["KLayoutValue"] | dict[str, "KLayoutValue"]
 )
 
 # this contract exists because layout parsers only accept keyed json objects
-LayoutObject: TypeAlias = Mapping[str, LayoutValue]
+KLayoutObject: TypeAlias = Mapping[str, KLayoutValue]
 
 # this binding exists because layout constructors preserve concrete table subclasses
-LayoutTableType = TypeVar("LayoutTableType", bound="LayoutTable")
+KLayoutTableType = TypeVar("KLayoutTableType", bound="LayoutTable")
 
 
 # this guard exists because runtime json objects need a typed parsing boundary
-def IsLayoutObject(Value: object) -> TypeGuard[LayoutObject]:
+def IsLayoutObject(Value: object) -> TypeGuard[KLayoutObject]:
     return isinstance(Value, Mapping)
 
 
 # this guard exists because layout lists must exclude textual scalar values
-def IsLayoutSequence(Value: object) -> TypeGuard[Sequence[LayoutValue]]:
+def IsLayoutSequence(Value: object) -> TypeGuard[Sequence[KLayoutValue]]:
     return not isinstance(Value, str) and isinstance(Value, Sequence)
 
 
 # this conversion exists because json scalar fields retain their existing numeric coercion
-def LayoutInteger(Value: LayoutValue) -> int:
+def LayoutInteger(Value: KLayoutValue) -> int:
     if isinstance(Value, (str, int, float)):
         return int(Value)
     raise TypeError(f"layout value {Value!r} is not an integer")
@@ -158,7 +158,7 @@ class Segmentation(ArchiveError):
     class_name: str
     slot: str
     offset: int
-    reason: str
+    ReasonText: str
     base: int
     progress: int
     depth: int
@@ -183,7 +183,7 @@ class Segmentation(ArchiveError):
         self.class_name = ClassName
         self.slot = SlotValue
         self.offset = Offset
-        self.reason = Reason
+        self.ReasonText = Reason
         self.base = BaseValue
         self.progress = Progress
         self.depth = Depth
@@ -701,15 +701,15 @@ class LayoutTable:
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromMapping(
-        cls: type[LayoutTableType], Payload: LayoutObject
-    ) -> LayoutTableType:
+        cls: type[KLayoutTableType], Payload: KLayoutObject
+    ) -> KLayoutTableType:
         return ParseLayouts(cls, Payload)
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def LoadAction(
-        cls: type[LayoutTableType], SourcePath: str | Path
-    ) -> LayoutTableType:
+        cls: type[KLayoutTableType], SourcePath: str | Path
+    ) -> KLayoutTableType:
         return LoadLayouts(cls, SourcePath)
 
     __contains__ = IsContains
@@ -722,8 +722,8 @@ class LayoutTable:
 
 # this definition exists because layout mapping validation is independent from table storage
 def ParseLayouts(
-    ClassType: type[LayoutTableType], Payload: LayoutObject
-) -> LayoutTableType:
+    ClassType: type[KLayoutTableType], Payload: KLayoutObject
+) -> KLayoutTableType:
     RawClasses = Payload.get("classes")
     if not IsLayoutObject(RawClasses):
         raise ArchiveError("layout table has no classes mapping")
@@ -743,8 +743,8 @@ def ParseLayouts(
 
 # this definition exists because layout file loading owns filesystem and json failures
 def LoadLayouts(
-    ClassType: type[LayoutTableType], SourcePath: str | Path
-) -> LayoutTableType:
+    ClassType: type[KLayoutTableType], SourcePath: str | Path
+) -> KLayoutTableType:
     Location = PathValue(SourcePath)
     try:
         Payload: object = JsonModule.loads(Location.read_text(encoding="utf-8"))
@@ -759,7 +759,7 @@ def LoadLayouts(
 
 # this definition exists because focused behavior needs one stable owner
 def ParseRunGroup(
-    OwnerName: str, GroupName: str, Entry: LayoutObject, HasLead: bool
+    OwnerName: str, GroupName: str, Entry: KLayoutObject, HasLead: bool
 ) -> RunGroupCount:
     RawAt = Entry.get("at")
     RawBack = Entry.get("back")
@@ -789,7 +789,7 @@ def ParseRunGroup(
 
 
 # this definition exists because focused behavior needs one stable owner
-def RunGroupA(NameValue: str, Entry: LayoutObject) -> RunGroup:
+def RunGroupA(NameValue: str, Entry: KLayoutObject) -> RunGroup:
     Label, ElemValue, Slots, TrailerA = GroupBase(NameValue, Entry)
     Gated = GroupGated(NameValue, Label, ElemValue, Entry)
     Variants = GroupVariants(NameValue, Label, ElemValue, Entry)
@@ -813,7 +813,7 @@ def RunGroupA(NameValue: str, Entry: LayoutObject) -> RunGroup:
 
 # this definition exists because group element and slot validation forms one structural boundary
 def GroupBase(
-    NameValue: str, Entry: LayoutObject
+    NameValue: str, Entry: KLayoutObject
 ) -> tuple[str, tuple[int, ...], tuple[str, ...], int]:
     Label = str(Entry.get("name", ""))
     if not Label:
@@ -842,7 +842,7 @@ def GroupBase(
 
 # this definition exists because version gated element widths share one validation boundary
 def GroupGated(
-    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: LayoutObject
+    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: KLayoutObject
 ) -> dict[int, tuple[int, ...]]:
     RawGated = Entry.get("element_by_version", {})
     if not IsLayoutObject(RawGated):
@@ -871,7 +871,7 @@ def GroupGated(
 
 # this definition exists because element variant lists require mapping entries exclusively
 def GroupVariants(
-    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: LayoutObject
+    NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: KLayoutObject
 ) -> list[RunGroupVariant]:
     RawVariants = Entry.get("element_run_variants", ())
     if not IsLayoutSequence(RawVariants):
@@ -893,7 +893,7 @@ def GroupVariant(
     NameValue: str,
     Label: str,
     ElemValue: tuple[int, ...],
-    RawVariant: LayoutObject,
+    RawVariant: KLayoutObject,
 ) -> RunGroupVariant:
     SlotValue = LayoutInteger(RawVariant.get("slot", -1))
     PredicateAt = LayoutInteger(RawVariant.get("predicate_at", 0))
@@ -963,7 +963,7 @@ def GroupVariant(
 
 
 # this definition exists because version run overrides require numeric keys and widths
-def VariantRuns(NameValue: str, Label: str, RawRuns: LayoutObject) -> dict[int, int]:
+def VariantRuns(NameValue: str, Label: str, RawRuns: KLayoutObject) -> dict[int, int]:
     VersionRuns: dict[int, int] = {}
     for Version, Width in RawRuns.items():
         VersionText = str(Version)
@@ -982,7 +982,7 @@ def VariantRuns(NameValue: str, Label: str, RawRuns: LayoutObject) -> dict[int, 
 
 # this definition exists because trailer variants share predicate and version validation
 def GroupTrailers(
-    NameValue: str, Label: str, Entry: LayoutObject
+    NameValue: str, Label: str, Entry: KLayoutObject
 ) -> list[RunGroupTrailer]:
     RawTrailerVariants = Entry.get("trailer_variants", ())
     if not IsLayoutSequence(RawTrailerVariants):
@@ -1044,7 +1044,7 @@ def GroupTrailers(
 
 # this definition exists because count variants share predicate and version validation
 def CountVariantsA(
-    NameValue: str, Label: str, Entry: LayoutObject
+    NameValue: str, Label: str, Entry: KLayoutObject
 ) -> list[RunGroupCountA]:
     RawCountVariants = Entry.get("count_variants", ())
     if not IsLayoutSequence(RawCountVariants):
@@ -1111,7 +1111,7 @@ def CountVariantsA(
 
 # this definition exists because child class count branches share locator parsing
 def CountBranchesA(
-    NameValue: str, Label: str, Entry: LayoutObject
+    NameValue: str, Label: str, Entry: KLayoutObject
 ) -> dict[str, RunGroupCount]:
     RawCountBranches = Entry.get("count_by_child_class", {})
     if not IsLayoutObject(RawCountBranches):
@@ -1142,7 +1142,7 @@ def FinalRunGroup(
     TrailerVariants: list[RunGroupTrailer],
     CountVariants: list[RunGroupCountA],
     CountBranches: dict[str, RunGroupCount],
-    Entry: LayoutObject,
+    Entry: KLayoutObject,
 ) -> RunGroup:
     RawCountA = Entry.get("count")
     RawRepeat = Entry.get("repeat")
@@ -1208,7 +1208,7 @@ def FinalRunGroup(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ClassLayoutA(NameValue: str, Entry: LayoutObject) -> ClassLayout:
+def ClassLayoutA(NameValue: str, Entry: KLayoutObject) -> ClassLayout:
     Slots = LayoutSlots(NameValue, Entry)
     RunsValue = LayoutRunsA(NameValue, Entry)
     Gated = VersionedRuns(NameValue, Entry)
@@ -1242,7 +1242,7 @@ def ClassLayoutA(NameValue: str, Entry: LayoutObject) -> ClassLayout:
 
 
 # this definition exists because child slot parsing has one sequence validation boundary
-def LayoutSlots(NameValue: str, Entry: LayoutObject) -> tuple[str, ...]:
+def LayoutSlots(NameValue: str, Entry: KLayoutObject) -> tuple[str, ...]:
     RawSlots = Entry.get("child_slots", ())
     if not IsLayoutSequence(RawSlots):
         raise ArchiveError(
@@ -1252,7 +1252,7 @@ def LayoutSlots(NameValue: str, Entry: LayoutObject) -> tuple[str, ...]:
 
 
 # this definition exists because constant layout runs require non negative integer widths
-def LayoutRunsA(NameValue: str, Entry: LayoutObject) -> dict[str, int]:
+def LayoutRunsA(NameValue: str, Entry: KLayoutObject) -> dict[str, int]:
     RawRuns = Entry.get("runs", {})
     if not IsLayoutObject(RawRuns):
         raise ArchiveError(
@@ -1269,7 +1269,7 @@ def LayoutRunsA(NameValue: str, Entry: LayoutObject) -> dict[str, int]:
 
 
 # this definition exists because versioned layout runs require numeric version mappings
-def VersionedRuns(NameValue: str, Entry: LayoutObject) -> dict[str, Mapping[int, int]]:
+def VersionedRuns(NameValue: str, Entry: KLayoutObject) -> dict[str, Mapping[int, int]]:
     RawGated = Entry.get("runs_by_version", {})
     if not IsLayoutObject(RawGated):
         raise ArchiveError(
@@ -1302,7 +1302,9 @@ def VersionedRuns(NameValue: str, Entry: LayoutObject) -> dict[str, Mapping[int,
 
 
 # this definition exists because child class run branches require complete class mappings
-def ChildClassRuns(NameValue: str, Entry: LayoutObject) -> dict[str, Mapping[str, int]]:
+def ChildClassRuns(
+    NameValue: str, Entry: KLayoutObject
+) -> dict[str, Mapping[str, int]]:
     RawChildRuns = Entry.get("runs_by_child_class", {})
     if not IsLayoutObject(RawChildRuns):
         raise ArchiveError(
@@ -1331,7 +1333,7 @@ def ChildClassRuns(NameValue: str, Entry: LayoutObject) -> dict[str, Mapping[str
 
 
 # this definition exists because variable run lists group validated entries by slot
-def VariableRunsA(NameValue: str, Entry: LayoutObject) -> dict[str, list[VariableRun]]:
+def VariableRunsA(NameValue: str, Entry: KLayoutObject) -> dict[str, list[VariableRun]]:
     RawVariable = Entry.get("variable_runs", ())
     if not IsLayoutSequence(RawVariable):
         raise ArchiveError(
@@ -1347,7 +1349,7 @@ def VariableRunsA(NameValue: str, Entry: LayoutObject) -> dict[str, list[Variabl
 
 
 # this definition exists because one variable run owns its value and version gates
-def VariableEntry(NameValue: str, ItemValue: LayoutObject) -> tuple[str, VariableRun]:
+def VariableEntry(NameValue: str, ItemValue: KLayoutObject) -> tuple[str, VariableRun]:
     SlotValue = str(ItemValue.get("slot", ""))
     RawValues = ItemValue.get("values", ())
     if not IsLayoutSequence(RawValues):
@@ -1423,7 +1425,7 @@ def RepeatRule(
 def RepeatSettings(
     NameValue: str,
     Slots: tuple[str, ...],
-    Entry: LayoutObject,
+    Entry: KLayoutObject,
     Repeat: RepeatField | None,
     Unresolved: bool,
 ) -> tuple[int, int]:
@@ -1461,7 +1463,7 @@ def RepeatSettings(
 def ChildCountRule(
     NameValue: str,
     Slots: tuple[str, ...],
-    Entry: LayoutObject,
+    Entry: KLayoutObject,
     Repeat: RepeatField | None,
     Unresolved: bool,
     Prefix: int,
@@ -1506,7 +1508,7 @@ def ChildCountRule(
 def GroupRules(
     NameValue: str,
     Slots: tuple[str, ...],
-    Entry: LayoutObject,
+    Entry: KLayoutObject,
     Repeat: RepeatField | None,
     Unresolved: bool,
     Prefix: int,

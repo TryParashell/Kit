@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import struct as StructLib
 from convert.adapters.solidworks.programs.Common.ProgramContract import (
-    FieldValue as FieldType,
+    KFieldValue as FieldType,
 )
 
 from convert.adapters.solidworks.container.Archive import (
@@ -165,18 +165,18 @@ def MakeOverrides(
     HighWater: tuple[int, int],
     Overrides: Mapping[int, FieldType] | None,
 ) -> tuple[dict[int, FieldType], int]:
-    FieldOverrides = dict(Overrides or {})
-    FieldOverrides[KPartRecordLengthOffset] = (
+    KFieldOverrides = dict(Overrides or {})
+    KFieldOverrides[KPartRecordLengthOffset] = (
         RequireInt(ConfigOps[1][4], "configuration record length")
         + len(EncodeString(PartName))
         - len(EncodeString(KReferencePartName))
     )
-    FieldOverrides[KPartNameOffset] = PartName
-    FieldOverrides[KAtomHeadOffsets[0]] = max(AtomData[0] for AtomData in Atoms)
-    FieldOverrides[KAtomHeadOffsets[1]] = len(Atoms)
-    FieldOverrides[KHighWaterOffsets[0]] = HighWater[0]
-    FieldOverrides[KHighWaterOffsets[1]] = HighWater[1]
-    return FieldOverrides, len(Atoms) - 1
+    KFieldOverrides[KPartNameOffset] = PartName
+    KFieldOverrides[KAtomHeadOffsets[0]] = max(AtomData[0] for AtomData in Atoms)
+    KFieldOverrides[KAtomHeadOffsets[1]] = len(Atoms)
+    KFieldOverrides[KHighWaterOffsets[0]] = HighWater[0]
+    KFieldOverrides[KHighWaterOffsets[1]] = HighWater[1]
+    return KFieldOverrides, len(Atoms) - 1
 
 
 # atom sequence encoding preserves ordering links and terminal generation framing
@@ -200,7 +200,7 @@ def EncodeAtoms(
 
 # configuration replay replaces semantic regions while preserving recovered field order
 def ReplayConfig(
-    FieldOverrides: Mapping[int, FieldType],
+    KFieldOverrides: Mapping[int, FieldType],
     AtomData: bytes,
     DualLengthUnits: bool,
     MapShift: int,
@@ -219,7 +219,7 @@ def ReplayConfig(
                 OutputData.extend(AtomData)
                 AtomsWritten = True
             continue
-        FieldValue = FieldOverrides.get(StartPos, DefaultValue)
+        FieldValue = KFieldOverrides.get(StartPos, DefaultValue)
         if StartPos >= KAtomEnd:
             FieldValue = ShiftMapRef(KindName, FieldValue, MapShift)
         FieldData = EncodeField(KindName, FieldValue)
@@ -242,6 +242,6 @@ def EncodeProgram(
     Overrides: Mapping[int, FieldType] | None = None,
 ) -> bytes:
     ValidateAtoms(Atoms, Generation)
-    FieldOverrides, MapShift = MakeOverrides(PartName, Atoms, HighWater, Overrides)
+    KFieldOverrides, MapShift = MakeOverrides(PartName, Atoms, HighWater, Overrides)
     AtomData = EncodeAtoms(Atoms, SessionStamp, Generation)
-    return ReplayConfig(FieldOverrides, AtomData, DualLengthUnits, MapShift)
+    return ReplayConfig(KFieldOverrides, AtomData, DualLengthUnits, MapShift)

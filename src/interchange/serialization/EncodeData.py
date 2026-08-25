@@ -18,15 +18,15 @@ import json as JsonCodec
 from typing import cast as CastValue
 
 from interchange.serialization.Wire import GetWireField, GetWireType
-from interchange.serialization.WireData import WireData
+from interchange.serialization.WireData import KWireData
 
 
 # unordered collections need canonical ordering so output remains stable across hash seeds
-def OrderData(SourceValues: SetBase[object]) -> list[WireData]:
+def OrderData(SourceValues: SetBase[object]) -> list[KWireData]:
     EncodedValues = [ToData(ItemValue) for ItemValue in SourceValues]
 
     # canonical text ordering avoids dependence on collection hash iteration order
-    def GetSortKey(ItemValue: WireData) -> str:
+    def GetSortKey(ItemValue: KWireData) -> str:
         return JsonCodec.dumps(
             ItemValue, sort_keys=True, ensure_ascii=False, separators=(",", ":")
         )
@@ -35,9 +35,9 @@ def OrderData(SourceValues: SetBase[object]) -> list[WireData]:
 
 
 # recursive encoding preserves every supported container and model type losslessly
-def ToData(SourceValue: object) -> WireData:
+def ToData(SourceValue: object) -> KWireData:
     if IsDataClass(SourceValue) and not isinstance(SourceValue, type):
-        ResultValue: dict[str, WireData] = {"$type": GetWireType(type(SourceValue))}
+        ResultValue: dict[str, KWireData] = {"$type": GetWireType(type(SourceValue))}
         for FieldValue in GetFields(SourceValue):
             ResultValue[GetWireField(FieldValue.name, type(SourceValue))] = ToData(
                 CastValue(object, getattr(SourceValue, FieldValue.name))

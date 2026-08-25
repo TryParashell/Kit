@@ -17,7 +17,7 @@ from typing import Mapping as TypeMap
 from typing import TypeAlias
 
 # historical signature rows accept only the four parameter shapes used by public facades
-CompatParam: TypeAlias = (
+KCompatParam: TypeAlias = (
     tuple[str]
     | tuple[str, str]
     | tuple[str, str, object]
@@ -161,7 +161,7 @@ def MakeParam(
 
 # compact signature data keeps historical method contracts readable in focused binders
 def MakeLegacySig(
-    ParamSpecs: tuple[CompatParam, ...],
+    ParamSpecs: tuple[KCompatParam, ...],
     ReturnAnnot: str,
 ) -> FuncSig:
     ParamValues: list[FuncParam] = []

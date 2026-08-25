@@ -22,27 +22,27 @@ from interchange.compatibility.PythonCompatMethods import (
     BindAliasMut,
     BindDirectMut,
     BindStaticMut,
-    CompatParam,
+    KCompatParam,
     MakeLegacySig,
 )
 
 # document compatibility rows share one concrete shape so empty metadata remains typed
-CompatMethod: TypeAlias = tuple[
+KCompatMethod: TypeAlias = tuple[
     str,
     str,
     TypeMap[str, str],
-    tuple[CompatParam, ...],
+    tuple[KCompatParam, ...],
     str,
 ]
 
 # method contracts stay declarative because exact historical reflection spans several split behaviors
-KDocumentMethods: tuple[CompatMethod, ...] = (
-    ("ToMapping", "to_dict", {}, (), "dict[str, WireData]"),
+KDocumentMethods: tuple[KCompatMethod, ...] = (
+    ("ToMapping", "to_dict", {}, (), "dict[str, KWireData]"),
     (
         "FromMapping",
         "from_dict",
-        {"value": "Mapping[str, WireData]"},
-        (("value", "Mapping[str, WireData]"),),
+        {"value": "Mapping[str, KWireData]"},
+        (("value", "Mapping[str, KWireData]"),),
         "CadDocument",
     ),
     (

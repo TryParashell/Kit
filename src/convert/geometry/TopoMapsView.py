@@ -26,8 +26,8 @@ from interchange.brep.topology.BrepTopology import (
 
 if IsTypeCheck:
     from convert.geometry.Parasolid import (
-        ParaCurve,  # lgtm[py/unsafe-cyclic-import]
-        ParaSurface,  # lgtm[py/unsafe-cyclic-import]
+        KParaCurve,  # lgtm[py/unsafe-cyclic-import]
+        KParaSurface,  # lgtm[py/unsafe-cyclic-import]
     )
 
 
@@ -50,6 +50,6 @@ class TopoMapsView(TypeProtocol):
     shell_use_region: dict[str, str]
     shell_uses: dict[str, BrepShellUse]
     shells: dict[str, BrepShell]
-    surface_by_id: dict[str, ParaSurface]
-    curve_by_id: dict[str, ParaCurve]
+    surface_by_id: dict[str, KParaSurface]
+    curve_by_id: dict[str, KParaCurve]
     vertex_by_id: dict[str, BrepVertex]
