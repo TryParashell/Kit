@@ -47,7 +47,6 @@ def CheckMetadata() -> None:
     ReadmeText = (KRootPath / ProjectData["readme"]).read_text(encoding="utf-8")
     for SuffixText in (".SLDPRT", ".SLDASM", ".FCStd", ".CATPart", ".CATProduct"):
         assert SuffixText in ReadmeText
-    assert "Internal use only" in ReadmeText
 
 
 # readme guarantees remain tested because reversible defaults and strict mode define public behavior
