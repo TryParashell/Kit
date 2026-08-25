@@ -25,7 +25,16 @@ authors = [
 maintainers = [
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
-keywords = ["cad"]
+keywords = [
+    "cad",
+    "interchange",
+    "translation",
+    "geometry",
+    "brep",
+    "mesh",
+    "assembly",
+    "sdk",
+]
 
 [project.urls]
 Repository = "https://github.com/TryParashell/Kit"
