@@ -177,7 +177,7 @@ class TestEncoding(UnitTest.TestCase):
                     if not hasattr(ModuleData, NameText)
                 )
             )
-            if OpsName == "KStreamPrograms":
+            if OpsName == "StreamPrograms":
                 StreamModule = cast(StreamProgram, ModuleData)
                 OutputPairs = tuple(
                     (StreamName, StreamModule.EncodeProgram(StreamName))
