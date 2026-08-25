@@ -703,6 +703,42 @@ def MatrixPower(Value: tuple[float, ...], Power: int) -> tuple[float, ...]:
 
 
 # this definition exists because focused parser behavior needs one stable owner
+def ReadChainMut(
+    TokensA: Tokens,
+    IndexA: int,
+    Chains: list[tuple[tuple[int, int], ...]],
+    Direct: dict[int, tuple[float, ...]],
+) -> tuple[tuple[int, int], ...]:
+    LocationA: tuple[tuple[int, int], ...]
+    if TokensA.ReadInteger(1, 2) == 1:
+        Direct[IndexA] = ParseTransform(TokensA)
+        return ((IndexA, 1),)
+    LocationA = ()
+    ReferenceA = TokensA.ReadInteger(0, len(Chains))
+    while ReferenceA:
+        Power = TokensA.SignedInteger()
+        LocationA = LocationProduct(
+            LocationPower(Chains[ReferenceA - 1], Power), LocationA
+        )
+        ReferenceA = TokensA.ReadInteger(0, len(Chains))
+    return LocationA
+
+
+# matrix folding stays isolated because chain validation must precede every product step
+def FoldMatrix(
+    LocationA: tuple[tuple[int, int], ...],
+    Direct: dict[int, tuple[float, ...]],
+) -> tuple[float, ...]:
+    Matrix: tuple[float, ...] = KIdentityLocation
+    for Datum, Power in LocationA:
+        BaseValue = Direct.get(Datum)
+        if BaseValue is None:
+            raise DecodeFailure("invalid BRep location record")
+        Matrix = ProductLocation(Matrix, MatrixPower(BaseValue, Power))
+    return Matrix
+
+
+# this definition exists because focused parser behavior needs one stable owner
 def ModelLocations(TokensA: Tokens) -> tuple[tuple[float, ...], ...]:
     Count = ReadCount(TokensA, b"Locations", KMaxGeometry)
     Chains: list[tuple[tuple[int, int], ...]] = []
@@ -710,30 +746,11 @@ def ModelLocations(TokensA: Tokens) -> tuple[tuple[float, ...], ...]:
     Matrices: list[tuple[float, ...]] = []
     UniqueLocations: set[tuple[tuple[int, int], ...]] = set()
     for IndexA in range(1, Count + 1):
-        LocationA: tuple[tuple[int, int], ...]
-        KindValue = TokensA.ReadInteger(1, 2)
-        if KindValue == 1:
-            Direct[IndexA] = ParseTransform(TokensA)
-            LocationA = ((IndexA, 1),)
-        else:
-            LocationA = ()
-            ReferenceA = TokensA.ReadInteger(0, len(Chains))
-            while ReferenceA:
-                Power = TokensA.SignedInteger()
-                LocationA = LocationProduct(
-                    LocationPower(Chains[ReferenceA - 1], Power), LocationA
-                )
-                ReferenceA = TokensA.ReadInteger(0, len(Chains))
+        LocationA = ReadChainMut(TokensA, IndexA, Chains, Direct)
         if not LocationA or LocationA in UniqueLocations:
             raise DecodeFailure("invalid BRep location record")
-        Matrix: tuple[float, ...] = KIdentityLocation
-        for Datum, Power in LocationA:
-            BaseValue = Direct.get(Datum)
-            if BaseValue is None:
-                raise DecodeFailure("invalid BRep location record")
-            Matrix = ProductLocation(Matrix, MatrixPower(BaseValue, Power))
+        Matrices.append(FoldMatrix(LocationA, Direct))
         Chains.append(LocationA)
-        Matrices.append(Matrix)
         UniqueLocations.add(LocationA)
     return tuple(Matrices)
 

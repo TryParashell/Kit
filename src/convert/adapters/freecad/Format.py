@@ -23,38 +23,41 @@ from interchange.enums.EnumDocument import Capability
 # this binding exists because shared behavior needs one stable value
 KSuffix = ".FCStd"
 
+# write type ids stay grouped in lead order because one literal would exceed the split threshold
+KCapabilityWriteTypeLead: Mapping[Capability, frozenset[str]] = {
+    Capability.PARAMETERS: frozenset({"Spreadsheet::Sheet"}),
+    Capability.PARAMETRIC_HISTORY: frozenset[str]().union(
+        *FeatureWriteTypeIds.values()
+    ),
+    Capability.SUPPORT_PLANES: frozenset({"App::Plane"}),
+    Capability.EDITABLE_SKETCHES: frozenset({SketchTypeId}),
+    Capability.SELECTIONS: frozenset({"App::PropertyLinkSubList"}),
+    Capability.BODY_STRUCTURE: frozenset({"App::Part"}),
+    Capability.CONFIGURATIONS: frozenset({"App::PropertyString:KitConfigurationId"}),
+    Capability.EXPRESSIONS: frozenset(
+        {"App::PropertyExpressionEngine", "Spreadsheet::PropertySheet"}
+    ),
+}
+
+# write type ids finish here because the tail holds structure and payload surfaces
+KCapabilityWriteTypeTail: Mapping[Capability, frozenset[str]] = {
+    Capability.BREP: frozenset({"Part::PropertyPartShape"}),
+    Capability.TESSELLATION: frozenset({"Mesh::Feature", "Mesh::PropertyMeshKernel"}),
+    Capability.ASSEMBLIES: frozenset({AsmRootTypeId, AsmLinkTypeId, "App::Link"}),
+    Capability.ASSEMBLY_MATES: frozenset(
+        {AsmJointGroupTypeId, "App::PropertyEnumeration:JointType"}
+    ),
+    Capability.COMPONENT_DOCUMENTS: frozenset({"App::PropertyXLink"}),
+    Capability.EXTERNAL_REFERENCES: frozenset({"App::PropertyXLink"}),
+    Capability.MATERIALS: frozenset({"App::PropertyString:MaterialId"}),
+    Capability.NATIVE_PAYLOADS: frozenset[str](),
+    Capability.PROVENANCE: frozenset[str](),
+    Capability.ROUNDTRIP_METADATA: frozenset[str](),
+}
+
 # this binding exists because shared behavior needs one stable value
 KCapabilityWriteTypeIds: Mapping[Capability, frozenset[str]] = MappingProxyType(
-    {
-        Capability.PARAMETERS: frozenset({"Spreadsheet::Sheet"}),
-        Capability.PARAMETRIC_HISTORY: frozenset[str]().union(
-            *FeatureWriteTypeIds.values()
-        ),
-        Capability.SUPPORT_PLANES: frozenset({"App::Plane"}),
-        Capability.EDITABLE_SKETCHES: frozenset({SketchTypeId}),
-        Capability.SELECTIONS: frozenset({"App::PropertyLinkSubList"}),
-        Capability.BODY_STRUCTURE: frozenset({"App::Part"}),
-        Capability.CONFIGURATIONS: frozenset(
-            {"App::PropertyString:KitConfigurationId"}
-        ),
-        Capability.EXPRESSIONS: frozenset(
-            {"App::PropertyExpressionEngine", "Spreadsheet::PropertySheet"}
-        ),
-        Capability.BREP: frozenset({"Part::PropertyPartShape"}),
-        Capability.TESSELLATION: frozenset(
-            {"Mesh::Feature", "Mesh::PropertyMeshKernel"}
-        ),
-        Capability.ASSEMBLIES: frozenset({AsmRootTypeId, AsmLinkTypeId, "App::Link"}),
-        Capability.ASSEMBLY_MATES: frozenset(
-            {AsmJointGroupTypeId, "App::PropertyEnumeration:JointType"}
-        ),
-        Capability.COMPONENT_DOCUMENTS: frozenset({"App::PropertyXLink"}),
-        Capability.EXTERNAL_REFERENCES: frozenset({"App::PropertyXLink"}),
-        Capability.MATERIALS: frozenset({"App::PropertyString:MaterialId"}),
-        Capability.NATIVE_PAYLOADS: frozenset[str](),
-        Capability.PROVENANCE: frozenset[str](),
-        Capability.ROUNDTRIP_METADATA: frozenset[str](),
-    }
+    {**KCapabilityWriteTypeLead, **KCapabilityWriteTypeTail}
 )
 if set(KCapabilityWriteTypeIds) != set(Capability):
     raise RuntimeError("FreeCAD capability write types are not exhaustive")

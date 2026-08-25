@@ -43,7 +43,6 @@ src/convert/adapters/freecad/Archive.py	NAM001	function identifier 'sheet_proper
 src/convert/adapters/freecad/BrepGraph.py	NAM001	variable identifier 'reason' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/freecad/BrepGraph.py	NAM001	function identifier 'face_for_coedge' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Format.py	SPL001	declaration 'KCapabilityWriteTypeIds' has 32 logical lines and must be split at 30
-src/convert/adapters/freecad/Native.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/freecad/Native.py	SPL001	declaration 'StoredMateValue' has 35 logical lines and must be split at 30
 src/convert/adapters/json/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
@@ -96,22 +95,14 @@ src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'drop
 src/convert/adapters/registry/RegistryState.py	NAM001	attribute identifier 'reader' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryState.py	NAM001	attribute identifier 'writer' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/assembly/Assembly.py	SPL001	declaration 'ResolvedMate' has 42 logical lines and must be split at 30
-src/convert/adapters/solidworks/configuration/ConfigZero.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/configuration/ConfigZero.py	NAM001	function identifier 'BuildLegacyConfig' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/configuration/ConfigZero.py	NAM001	variable identifier 'MappedTerminalParentTreeId' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/configuration/ConfigZero.py	NAM001	variable identifier 'MappedAnnotationViewVariant' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Archive.py	NAM001	function identifier 'IsLayoutSequence' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Cmgr.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/container/Cmgr.py	NAM001	variable identifier 'Item' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'IsOptionalIntegers' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'IsOptionalStamps' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Cmgr.py	NAM001	variable identifier 'Item' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Container.py	SPL001	declaration 'SldprtArchive' has 35 logical lines and must be split at 30
 src/convert/adapters/solidworks/container/Container.py	NAM001	function identifier 'open' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Container.py	NAM001	function identifier 'get' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Container.py	SPL001	declaration 'BuildSldprt' has 40 logical lines and must be split at 30
-src/convert/adapters/solidworks/container/Definition.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/container/Definition.py	NAM001	variable identifier 'Item' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Parasolid.py	NAM001	argument identifier 'partition' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/container/Parasolid.py	NAM001	argument identifier 'solidworks_feature_ids' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/core/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
@@ -123,10 +114,6 @@ src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'ReadHeaderObj
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'DecodeNative' has 36 logical lines and must be split at 30
 src/convert/adapters/solidworks/core/Native.py	SPL001	declaration 'CircleSet' has 34 logical lines and must be split at 30
 src/convert/adapters/solidworks/programs/Common/FieldEncoder.py	SPL001	declaration 'EncodeArchive' has 32 logical lines and must be split at 30
-src/convert/adapters/solidworks/programs/Common/FieldEncoder.py	NAM001	variable identifier '_OwnerIndex' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/programs/Common/FieldEncoder.py	NAM001	variable identifier '_OwnerIndex' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/programs/Common/FieldEncoder.py	NAM001	variable identifier '_OwnerIndex' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/solidworks/programs/configuration/default/Program.py	NAM001	variable identifier '_OwnerIndex' must be PascalCase ASCII letters with length 5 through 25
 src/convert/api/__init__.py	NAM001	function identifier 'available_adapters' must be PascalCase ASCII letters with length 5 through 15
 src/convert/api/__init__.py	NAM001	function identifier 'convert' must be PascalCase ASCII letters with length 5 through 15
 src/convert/api/__init__.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
@@ -188,10 +175,8 @@ src/convert/engine/EngineInit.py	NAM001	attribute identifier 'registry' must be 
 src/convert/engine/EngineResult.py	MRK002	function 'SetResultOwner' mutates argument GetterValue and must end with Mut
 src/convert/engine/EngineResult.py	SPL001	declaration 'ConversionResult' has 50 logical lines and must be split at 30
 src/convert/engine/EngineResult.py	NAM001	class identifier 'ConversionResult' must be PascalCase ASCII letters with length 5 through 15
-src/convert/geometry/Opencascade.py	NAM001	import identifier 'Cast' must be PascalCase ASCII letters with length 5 through 25
 src/convert/geometry/Opencascade.py	SPL001	declaration 'ModelLocations' has 31 logical lines and must be split at 30
 src/convert/geometry/Parasolid.py	SPL001	declaration 'ParseBridge' has 36 logical lines and must be split at 30
-src/convert/geometry/Parasolid.py	NAM001	function identifier 'StringIntMapping' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/__init__.py	SPL001	declaration '__all__' has 134 logical lines and must be split at 30
 src/interchange/assembly/AssemblyData.py	NAM001	function identifier 'definition' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/assembly/AssemblyData.py	NAM001	argument identifier 'entity_id' must be PascalCase ASCII letters with length 5 through 25
@@ -242,7 +227,6 @@ tests/convert/api/ApiTestCapture.py	NAM001	argument identifier 'source_format' m
 tests/convert/api/ApiTestCapture.py	NAM001	argument identifier 'destination_format' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/api/ApiTestCapture.py	NAM001	argument identifier 'read_options' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/api/ApiTestCapture.py	NAM001	argument identifier 'write_options' must be PascalCase ASCII letters with length 5 through 25
-tests/convert/catia/MetadataAccess.py	NAM001	variable identifier 'Rows' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/formats/ParasolidTests.py	SPL001	declaration 'TestNICDAWCFC' has 31 logical lines and must be split at 30
 tests/convert/formats/ParasolidTests.py	SPL001	declaration 'TestNSDAWCFC' has 31 logical lines and must be split at 30
 tests/convert/freecad/FreecadAssemblyTests.py	SPL001	declaration 'TestFcstdAsm' has 37 logical lines and must be split at 30
@@ -252,11 +236,9 @@ tests/convert/registry/RegistryContractsTests.py	NAM001	function identifier 'wri
 tests/convert/registry/RegistryContractsTests.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryContractsTests.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryContractsTests.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'self' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'mode' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'parents' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'exist_ok' must be PascalCase ASCII letters with length 5 through 25
-tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'self' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'mode' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'parents' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/registry/RegistryPathsTests.py	NAM001	argument identifier 'exist_ok' must be PascalCase ASCII letters with length 5 through 25
@@ -311,3 +293,5 @@ tools/audit/FcstdResult.py	NAM001	function identifier 'ParseAuditRecord' must be
 tools/audit/FcstdResult.py	SPL001	declaration 'ParseAuditRecord' has 34 logical lines and must be split at 30
 src/convert/api/__init__.py	CON001	constant 'registry' must start with K
 src/convert/adapters/freecad/BrepGraph.py	CON001	constant 'reason' must start with K
+src/interchange/__init__.py	SPL001	declaration '__all__' has 134 logical lines and must be split at 30
+src/interchange/brep/__init__.py	SPL001	declaration '__all__' has 36 logical lines and must be split at 30
