@@ -17,8 +17,6 @@ from interchange import Capability
 from convert.adapters.base.AdapterInfoView import AdapterInfoView
 from convert.adapters.base.ContractCompat import ContractBase
 
-from typing import override as Override
-
 
 # legacy extension keywords need one strict translation point before document kind lookup
 def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
@@ -75,12 +73,13 @@ class AdapterInfo(AdapterInfoView, ContractBase):
         return self.ExtensionsFor(**NamedValues)
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
-    @Override
-    def __repr__(self) -> str:
+    def RenderIdentity(self) -> str:
         FieldValues = ", ".join(
             f"{ModelName}={getattr(self, ModelName)!r}" for ModelName in KModelFields
         )
         return f"AdapterInfo({FieldValues})"
+
+    __repr__ = RenderIdentity
 
 
 # canonical field order remains necessary for immutable slot pickle restoration

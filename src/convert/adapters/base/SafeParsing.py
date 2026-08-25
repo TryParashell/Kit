@@ -12,7 +12,7 @@ from __future__ import annotations as Annotations
 
 from re import compile as CompilePattern
 from xml.etree.ElementTree import Element
-from xml.etree.ElementTree import fromstring as ParseTreeText
+from xml.etree.ElementTree import fromstring as ParseTreeText  # noqa: DUO107
 
 # doctype detection stays lexical because every entity expansion vector requires one declared doctype
 KDoctypeMark = CompilePattern("<![dD][oO][cC][tT][yY][pP][eE]")
