@@ -19,7 +19,7 @@ from convert.adapters.registry.RegistryErrors import DiscoveryError
 
 
 # discovery trusts metadata only after confirming its concrete contract and identifier
-def ValidateAdapterInfo(InfoValue: object) -> AdapterInfo:
+def VetAdapterInfo(InfoValue: object) -> AdapterInfo:
     if not isinstance(InfoValue, AdapterInfo) or not InfoValue.FormatId:
         raise DiscoveryError("invalid adapter metadata")
     return InfoValue
@@ -44,7 +44,7 @@ def BuildAdapter(
             f"invalid adapter {AdapterType.__module__}.{AdapterType.__qualname__}"
         )
     try:
-        _ = ValidateAdapterInfo(ValidAdapter.info)
+        _ = VetAdapterInfo(ValidAdapter.info)
     except DiscoveryError as ErrorInfo:
         raise DiscoveryError(
             f"invalid adapter metadata {AdapterType.__module__}.{AdapterType.__qualname__}"

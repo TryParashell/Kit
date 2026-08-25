@@ -41,6 +41,16 @@ class ConversionEngine:
     ) -> CadDocument:
         return self.registry.ReadDocument(source, FormatId=format_id, ReadOpts=options)
 
+    # pascal surface stays beside its historical spelling because steering accepts paired compat methods
+    def Read(
+        self,
+        Source: Source,
+        *,
+        FormatId: str | None = None,
+        Options: ReadOptions | None = None,
+    ) -> CadDocument:
+        return self.read(Source, format_id=FormatId, options=Options)
+
     # document writes retain the public compatibility signature at the static composition root
     def write(
         self,
@@ -56,6 +66,17 @@ class ConversionEngine:
             FormatId=format_id,
             WriteOpts=options,
         )
+
+    # pascal surface stays beside its historical spelling because steering accepts paired compat methods
+    def Write(
+        self,
+        Document: CadDocument,
+        Destination: Destination,
+        *,
+        FormatId: str | None = None,
+        Options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return self.write(Document, Destination, format_id=FormatId, options=Options)
 
     # conversion keeps adapter selection and output policy coordinated through one registry instance
     def convert(
@@ -84,6 +105,26 @@ class ConversionEngine:
             output,
             ResolveFormat(document, reader),
             output.AdapterName,
+        )
+
+    # pascal surface stays beside its historical spelling because steering accepts paired compat methods
+    def Convert(
+        self,
+        Source: Source,
+        Destination: Destination,
+        *,
+        SourceFormat: str | None = None,
+        DestinationFormat: str | None = None,
+        ReadOptions: ReadOptions | None = None,
+        WriteOptions: WriteOptions | None = None,
+    ) -> ConversionResult:
+        return self.convert(
+            Source,
+            Destination,
+            source_format=SourceFormat,
+            destination_format=DestinationFormat,
+            read_options=ReadOptions,
+            write_options=WriteOptions,
         )
 
 

@@ -2131,7 +2131,7 @@ def WriteComponents(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativePayloadSize(DocValue: CadDoc) -> int:
+def PayloadSize(DocValue: CadDoc) -> int:
     Total = 0
     for Payload in DocValue.BrepPayloads:
         DataValue = Payload.PayloadData
@@ -2176,7 +2176,7 @@ def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
                 "native FreeCAD external document metadata contains duplicates"
             )
         SeenValue.add(SourceFile)
-        Total += NativePayloadSize(Linked)
+        Total += PayloadSize(Linked)
         if len(Result) >= MaxOuterFiles or Total > MaxTotalSize:
             raise FreeCadAdapterA(
                 "native FreeCAD external documents exceed safe limits"

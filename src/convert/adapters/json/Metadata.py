@@ -42,7 +42,7 @@ class JsonMetadata:
         return KInfoValue
 
     # this probe reads only enough data to identify an interchange document
-    def Probe(self, SourceValue: Source) -> ProbeResult:
+    def InspectSource(self, SourceValue: Source) -> ProbeResult:
         Suffix = ""
         if isinstance(SourceValue, (str, FilePath)):
             Suffix = FilePath(SourceValue).suffix.lower()

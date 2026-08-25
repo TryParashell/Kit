@@ -15,13 +15,13 @@ from enum import Enum as EnumBase
 from interchange.serialization.DecodeRecord import DecodeRecord
 from interchange.serialization.RecordType import DataRecord
 from interchange.serialization.TypeRegistry import KTypeRegistry
-from interchange.serialization.WireData import ValidateWireData
+from interchange.serialization.WireData import CheckWireData
 from typing import cast as CastValue
 
 
 # recursive decoding validates registered types before constructing immutable model records
 def FromData(SourceValue: object) -> object:
-    DataValue = ValidateWireData(SourceValue)
+    DataValue = CheckWireData(SourceValue)
     if isinstance(DataValue, list):
         return [FromData(ItemValue) for ItemValue in DataValue]
     if not isinstance(DataValue, dict):

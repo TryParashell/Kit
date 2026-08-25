@@ -21,7 +21,7 @@ from convert.adapters.solidworks.container.Archive import (
     ClassLayout,
     DEFINITION_KIND as KindInfoA,
     IsLayoutObject,
-    IsLayoutSequence,
+    IsLayoutSeq,
     KLayoutObject,
     LayoutTable,
     KLayoutValue,
@@ -171,7 +171,7 @@ def Recorded(Label: str) -> RecordedArchive:
     if not IsLayoutObject(RawPayload):
         raise TypeError(f"recorded archive {TargetPath} must be a json object")
     RawSegments = RawPayload.get("segments")
-    if not IsLayoutSequence(RawSegments):
+    if not IsLayoutSeq(RawSegments):
         raise TypeError(f"recorded archive {TargetPath} must contain a segments list")
     return {
         "part": RecordedString(RawPayload, "part"),
@@ -1901,7 +1901,7 @@ def DonorFC(NameText: str) -> int:
     if not IsLayoutObject(RawMeta):
         return -1
     Features = RawMeta.get("features")
-    return len(Features) if IsLayoutSequence(Features) else -1
+    return len(Features) if IsLayoutSeq(Features) else -1
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

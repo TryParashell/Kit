@@ -240,7 +240,7 @@ def IsHighWater(Value: object) -> TypeGuard[tuple[int, int] | None]:
 
 
 # compatibility inputs cross this boundary before the recovered writer receives concrete values
-def BuildLegacyConfig(MappedValues: Mapping[str, object]) -> bytes:
+def LegacyConfig(MappedValues: Mapping[str, object]) -> bytes:
     MappedPartName = MappedValues["PartName"]
     MappedAtoms = MappedValues["Atoms"]
     MappedSessionStamp = MappedValues["SessionStamp"]
@@ -346,7 +346,7 @@ def EncodeConfig(
         "TerminalParentTreeId": TerminalParentTreeId,
         "AnnotationViewVariant": AnnotationViewVariant,
     }
-    return BuildLegacyConfig(MapLegacy(CurrentValues, LegacyValues))
+    return LegacyConfig(MapLegacy(CurrentValues, LegacyValues))
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -363,7 +363,7 @@ def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
         "TerminalParentTreeId": None,
         "AnnotationViewVariant": "default",
     }
-    StreamData = BuildLegacyConfig(MapLegacy(CurrentValues, KwargValues))
+    StreamData = LegacyConfig(MapLegacy(CurrentValues, KwargValues))
     return {
         "stream_bytes": len(StreamData),
         "typed": len(StreamData),

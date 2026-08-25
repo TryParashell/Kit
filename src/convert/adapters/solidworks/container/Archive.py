@@ -41,7 +41,7 @@ def IsLayoutObject(Value: object) -> TypeGuard[KLayoutObject]:
 
 
 # this guard exists because layout lists must exclude textual scalar values
-def IsLayoutSequence(Value: object) -> TypeGuard[Sequence[KLayoutValue]]:
+def IsLayoutSeq(Value: object) -> TypeGuard[Sequence[KLayoutValue]]:
     return not isinstance(Value, str) and isinstance(Value, Sequence)
 
 
@@ -819,7 +819,7 @@ def GroupBase(
     if not Label:
         raise ArchiveError(f"a run group of {NameValue!r} has no name")
     RawElem = Entry.get("element", ())
-    if not IsLayoutSequence(RawElem):
+    if not IsLayoutSeq(RawElem):
         raise ArchiveError(f"run group {NameValue}@{Label} has a malformed element")
     ElemValue = tuple((LayoutInteger(Value) for Value in RawElem))
     if not ElemValue or any((Value < 0 for Value in ElemValue)):
@@ -827,7 +827,7 @@ def GroupBase(
             f"run group {NameValue}@{Label} needs one non negative run per element child"
         )
     RawSlots = Entry.get("slots", ())
-    if not IsLayoutSequence(RawSlots):
+    if not IsLayoutSeq(RawSlots):
         raise ArchiveError(f"run group {NameValue}@{Label} has a malformed slots list")
     Slots = tuple((str(Value) for Value in RawSlots))
     if len(Slots) != len(ElemValue):
@@ -856,7 +856,7 @@ def GroupGated(
             raise ArchiveError(
                 f"run group {NameValue}@{Label} names a non numeric document version {TextValue!r}"
             )
-        if not IsLayoutSequence(Values):
+        if not IsLayoutSeq(Values):
             raise ArchiveError(
                 f"run group {NameValue}@{Label} at document version {TextValue} has no element"
             )
@@ -874,7 +874,7 @@ def GroupVariants(
     NameValue: str, Label: str, ElemValue: tuple[int, ...], Entry: KLayoutObject
 ) -> list[RunGroupVariant]:
     RawVariants = Entry.get("element_run_variants", ())
-    if not IsLayoutSequence(RawVariants):
+    if not IsLayoutSeq(RawVariants):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed element_run_variants"
         )
@@ -912,7 +912,7 @@ def GroupVariant(
         or SlotValue >= len(ElemValue)
         or PredicateAt < 0
         or isinstance(RawValues, str)
-        or (not IsLayoutSequence(RawValues))
+        or (not IsLayoutSeq(RawValues))
         or any(
             (
                 not isinstance(Value, int) or isinstance(Value, bool) or Value < 0
@@ -920,7 +920,7 @@ def GroupVariant(
             )
         )
         or isinstance(RawChildClasses, str)
-        or (not IsLayoutSequence(RawChildClasses))
+        or (not IsLayoutSeq(RawChildClasses))
         or any(
             (
                 not isinstance(ChildClass, str) or not ChildClass
@@ -929,7 +929,7 @@ def GroupVariant(
         )
         or (not isinstance(RawLast, bool))
         or (not isinstance(RawStopGroups, bool))
-        or (not IsLayoutSequence(RawVersions))
+        or (not IsLayoutSeq(RawVersions))
         or any(
             (
                 not isinstance(Version, int) or isinstance(Version, bool) or Version < 0
@@ -985,7 +985,7 @@ def GroupTrailers(
     NameValue: str, Label: str, Entry: KLayoutObject
 ) -> list[RunGroupTrailer]:
     RawTrailerVariants = Entry.get("trailer_variants", ())
-    if not IsLayoutSequence(RawTrailerVariants):
+    if not IsLayoutSeq(RawTrailerVariants):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed trailer_variants"
         )
@@ -1001,7 +1001,7 @@ def GroupTrailers(
         RawValues = RawVariant.get("values", ())
         RawTrailer = RawVariant.get("trailer", -1)
         if (
-            not IsLayoutSequence(RawVersions)
+            not IsLayoutSeq(RawVersions)
             or any(
                 (
                     not isinstance(Version, int)
@@ -1015,7 +1015,7 @@ def GroupTrailers(
             or (PredicateAt < 0)
             or (not isinstance(PredicateWidth, int))
             or (PredicateWidth not in (1, 2, 4, 8))
-            or (not IsLayoutSequence(RawValues))
+            or (not IsLayoutSeq(RawValues))
             or (not RawValues)
             or any(
                 (
@@ -1047,7 +1047,7 @@ def CountVariantsA(
     NameValue: str, Label: str, Entry: KLayoutObject
 ) -> list[RunGroupCountA]:
     RawCountVariants = Entry.get("count_variants", ())
-    if not IsLayoutSequence(RawCountVariants):
+    if not IsLayoutSeq(RawCountVariants):
         raise ArchiveError(
             f"run group {NameValue}@{Label} has malformed count_variants"
         )
@@ -1064,7 +1064,7 @@ def CountVariantsA(
         RawCount = RawVariant.get("count", -1)
         RawLead = RawVariant.get("lead", 0)
         if (
-            not IsLayoutSequence(RawVersions)
+            not IsLayoutSeq(RawVersions)
             or any(
                 (
                     not isinstance(Version, int)
@@ -1078,7 +1078,7 @@ def CountVariantsA(
             or (PredicateAt < 0)
             or (not isinstance(PredicateWidth, int))
             or (PredicateWidth not in (1, 2, 4, 8))
-            or (not IsLayoutSequence(RawValues))
+            or (not IsLayoutSeq(RawValues))
             or (not RawValues)
             or any(
                 (
@@ -1244,7 +1244,7 @@ def ClassLayoutA(NameValue: str, Entry: KLayoutObject) -> ClassLayout:
 # this definition exists because child slot parsing has one sequence validation boundary
 def LayoutSlots(NameValue: str, Entry: KLayoutObject) -> tuple[str, ...]:
     RawSlots = Entry.get("child_slots", ())
-    if not IsLayoutSequence(RawSlots):
+    if not IsLayoutSeq(RawSlots):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed child_slots"
         )
@@ -1335,7 +1335,7 @@ def ChildClassRuns(
 # this definition exists because variable run lists group validated entries by slot
 def VariableRunsA(NameValue: str, Entry: KLayoutObject) -> dict[str, list[VariableRun]]:
     RawVariable = Entry.get("variable_runs", ())
-    if not IsLayoutSequence(RawVariable):
+    if not IsLayoutSeq(RawVariable):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed variable_runs"
         )
@@ -1352,7 +1352,7 @@ def VariableRunsA(NameValue: str, Entry: KLayoutObject) -> dict[str, list[Variab
 def VariableEntry(NameValue: str, ItemValue: KLayoutObject) -> tuple[str, VariableRun]:
     SlotValue = str(ItemValue.get("slot", ""))
     RawValues = ItemValue.get("values", ())
-    if not IsLayoutSequence(RawValues):
+    if not IsLayoutSeq(RawValues):
         raise ArchiveError(f"variable run {NameValue}@{SlotValue} has malformed values")
     RawTailGate = ItemValue.get("tail_by_version", {})
     if not IsLayoutObject(RawTailGate):
@@ -1516,7 +1516,7 @@ def GroupRules(
     Gated: dict[str, Mapping[int, int]],
 ) -> tuple[RunGroup, ...]:
     RawGroups = Entry.get("groups", ())
-    if not IsLayoutSequence(RawGroups):
+    if not IsLayoutSeq(RawGroups):
         raise ArchiveError(
             f"layout entry for {NameValue!r} has a malformed groups list"
         )

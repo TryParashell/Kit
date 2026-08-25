@@ -14,7 +14,7 @@ import subprocess as Subprocess
 import sys as System
 
 from tools.audit.FcstdContext import KRepositoryRoot
-from tools.audit.FcstdResult import AuditRecord, MakeFailure, ParseAuditRecord
+from tools.audit.FcstdResult import AuditRecord, MakeFailure, ReadAuditRecord
 
 # bounded diagnostics keep failed workers useful without flooding recursive audit output
 KErrorLimit = 1000
@@ -69,7 +69,7 @@ def AuditIsolated(
             ResultData: object = JsonData.loads(OutputLines[-1])
         except JsonData.JSONDecodeError:
             ResultData = None
-        ParsedResult = ParseAuditRecord(ResultData)
+        ParsedResult = ReadAuditRecord(ResultData)
         if ParsedResult is not None:
             return ParsedResult
     ErrorText = ProcessData.stderr.strip() or ProcessData.stdout.strip()

@@ -37,11 +37,10 @@ def IsStringList(ValueData: object) -> TypeGuard[list[str]]:
     return all(isinstance(ItemData, str) for ItemData in CandidateData)
 
 
-# isolated json needs every field validated before it rejoins typed report processing
-def ParseAuditRecord(ValueData: object) -> AuditRecord | None:
-    if not isinstance(ValueData, dict):
-        return None
-    CandidateData = cast(dict[object, object], ValueData)
+# field extraction stays isolated because guard clauses dominate the validation shape
+def AuditFields(
+    CandidateData: dict[object, object],
+) -> dict[str, object] | None:
     PathData = CandidateData.get("path")
     KindData = CandidateData.get("kind")
     FeatureTypesData = CandidateData.get("feature_types")
@@ -63,9 +62,7 @@ def ParseAuditRecord(ValueData: object) -> AuditRecord | None:
         return None
     if not isinstance(NearLosslessData, bool):
         return None
-    if not IsStringList(NativeCapabilitiesData):
-        return None
-    if not IsStringList(RequirementsData):
+    if not IsStringList(NativeCapabilitiesData) or not IsStringList(RequirementsData):
         return None
     if not isinstance(BytesData, int) or not isinstance(StreamsData, int):
         return None
@@ -84,6 +81,16 @@ def ParseAuditRecord(ValueData: object) -> AuditRecord | None:
         "streams": StreamsData,
         "error": ErrorData,
     }
+
+
+# isolated json needs every field validated before it rejoins typed report processing
+def ReadAuditRecord(ValueData: object) -> AuditRecord | None:
+    if not isinstance(ValueData, dict):
+        return None
+    FieldsData = AuditFields(cast(dict[object, object], ValueData))
+    if FieldsData is None:
+        return None
+    return cast(AuditRecord, FieldsData)
 
 
 # stable path rendering keeps audit records portable inside and outside the repository

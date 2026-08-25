@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import fields as GetFields
 
-from interchange.core.Reflection import GetCanonicalName
+from interchange.core.Reflection import CanonName
 from interchange.serialization.RecordType import DataRecord
 from interchange.serialization.WireFields import KTypeWireFields, KWireFields
 from interchange.serialization.WireTypes import KWireTypes
@@ -31,7 +31,7 @@ def GetSlotNames(ClassType: type[object]) -> tuple[str, ...]:
 
 # type registration needs stable names independent of internal model naming
 def GetWireType(ClassType: type[object]) -> str:
-    CanonicalName = GetCanonicalName(ClassType)
+    CanonicalName = CanonName(ClassType)
     return KWireTypes.get(CanonicalName, ClassType.__name__)
 
 
@@ -54,7 +54,7 @@ def FormatWireName(FieldName: str) -> str:
 # boolean model fields omit their source marker on the historical wire format
 def GetWireField(FieldName: str, ClassType: type[object] | None = None) -> str:
     if ClassType is not None:
-        TypeFields = KTypeWireFields.get(GetCanonicalName(ClassType), {})
+        TypeFields = KTypeWireFields.get(CanonName(ClassType), {})
         if FieldName in TypeFields:
             return TypeFields[FieldName]
     if FieldName in KWireFields:
@@ -68,7 +68,7 @@ def GetModelField(WireName: str, ClassType: type[object] | None = None) -> str:
     if WireName and WireName[0].isupper() and "_" not in WireName:
         return WireName
     if ClassType is not None:
-        TypeFields = KTypeWireFields.get(GetCanonicalName(ClassType), {})
+        TypeFields = KTypeWireFields.get(CanonName(ClassType), {})
         for ModelField, WireField in TypeFields.items():
             if WireField == WireName:
                 return ModelField
@@ -85,7 +85,7 @@ def GetModelField(WireName: str, ClassType: type[object] | None = None) -> str:
 def ResolveField(ClassType: type[DataRecord], WireName: str) -> str:
     FieldNames = GetSlotNames(ClassType)
     TypeFields = KTypeWireFields.get(
-        GetCanonicalName(ClassType),
+        CanonName(ClassType),
         {},
     )
     for FieldName in FieldNames:

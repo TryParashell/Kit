@@ -1156,12 +1156,12 @@ def IsIntegerTuple(Value: object) -> TypeGuard[tuple[int, ...]]:
 
 
 # optional identifier sequences preserve absence while rejecting malformed caller input
-def IsOptionalIntegers(Value: object) -> TypeGuard[tuple[int, ...] | None]:
+def HasOptIntegers(Value: object) -> TypeGuard[tuple[int, ...] | None]:
     return Value is None or IsIntegerTuple(Value)
 
 
 # feature stamps must remain concrete records before their stream ordering is resolved
-def IsOptionalStamps(Value: object) -> TypeGuard[tuple[FeatureStamp, ...] | None]:
+def HasOptStamps(Value: object) -> TypeGuard[tuple[FeatureStamp, ...] | None]:
     if Value is None:
         return True
     if not isinstance(Value, tuple):
@@ -1212,11 +1212,11 @@ def EncodeLegacy(**KwargValues: object) -> bytes:
         or not isinstance(ConfigName, str)
         or not isinstance(PartName, str)
         or not isinstance(NameStamp, int)
-        or not IsOptionalIntegers(AtomIds)
-        or not IsOptionalIntegers(LinkAtomIds)
-        or not IsOptionalIntegers(LinkTreeIds)
-        or not IsOptionalIntegers(ReverseAtomIds)
-        or not IsOptionalStamps(FeatureStamps)
+        or not HasOptIntegers(AtomIds)
+        or not HasOptIntegers(LinkAtomIds)
+        or not HasOptIntegers(LinkTreeIds)
+        or not HasOptIntegers(ReverseAtomIds)
+        or not HasOptStamps(FeatureStamps)
         or not isinstance(DocStamp, Stamp)
         or not IsOptionalStamp(DisplayStamp)
         or not IsOptionalStamp(ViewStamp)

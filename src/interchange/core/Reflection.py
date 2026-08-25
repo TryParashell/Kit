@@ -21,7 +21,7 @@ class DataField(TypeProtocol):
 
 
 # compatibility renames runtime classes so wire identity needs the preserved source name
-def GetCanonicalName(ClassType: type[object]) -> str:
+def CanonName(ClassType: type[object]) -> str:
     CanonicalValue: object = vars(ClassType).get("__canonical_name__")
     return CanonicalValue if isinstance(CanonicalValue, str) else ClassType.__name__
 

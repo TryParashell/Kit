@@ -19,26 +19,26 @@ KWireData: TypeAlias = (
 
 
 # untrusted parser output must satisfy the recursive wire contract before decoding
-def ValidateWireData(SourceValue: object) -> KWireData:
+def CheckWireData(SourceValue: object) -> KWireData:
     if SourceValue is None or isinstance(SourceValue, (bool, int, float, str)):
         return SourceValue
     if isinstance(SourceValue, list):
         ListItems = CastValue(list[object], SourceValue)
-        return [ValidateWireData(ItemValue) for ItemValue in ListItems]
+        return [CheckWireData(ItemValue) for ItemValue in ListItems]
     if isinstance(SourceValue, dict):
         DictItems = CastValue(dict[object, object], SourceValue)
         ResultValue: dict[str, KWireData] = {}
         for KeyValue, ItemValue in DictItems.items():
             if not isinstance(KeyValue, str):
                 raise TypeError("wire object keys must be strings")
-            ResultValue[KeyValue] = ValidateWireData(ItemValue)
+            ResultValue[KeyValue] = CheckWireData(ItemValue)
         return ResultValue
     raise TypeError(f"unsupported wire value type {type(SourceValue).__name__}")
 
 
 # document restoration requires a recursive object root rather than an arbitrary wire scalar
 def ValidateWireMap(SourceValue: object) -> TypeMap[str, KWireData]:
-    DataValue = ValidateWireData(SourceValue)
+    DataValue = CheckWireData(SourceValue)
     if not isinstance(DataValue, dict):
         raise TypeError("wire document root must be an object")
     return DataValue

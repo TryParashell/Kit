@@ -23,7 +23,7 @@ from interchange.compatibility.PythonCompatData import (
 )
 from interchange.core.Reflection import (
     DataField,
-    GetCanonicalName,
+    CanonName,
     GetDataFields,
     GetFieldMap,
 )
@@ -74,7 +74,7 @@ def GetLegacyAnnot(FieldValue: DataField) -> str:
 def OrderLeadNames(
     ClassType: type[object], FieldNames: tuple[str, ...]
 ) -> tuple[str, ...]:
-    if GetCanonicalName(ClassType) not in KLeadingMetadataModels:
+    if CanonName(ClassType) not in KLeadingMetadataModels:
         return FieldNames
     SharedNames = ("id", "provenance", "attributes")
     LeadNames = tuple(NameText for NameText in FieldNames if NameText in SharedNames)
@@ -190,7 +190,7 @@ def BindCompatMut(
     ModuleScopes: TypeMap[str, dict[str, object]],
 ) -> None:
     for ClassType in ClassTypes:
-        ModelName = GetCanonicalName(ClassType)
+        ModelName = CanonName(ClassType)
         LegacyName, ModuleName = KLegacyModels[ModelName]
         setattr(ClassType, "__canonical_name__", ModelName)
         BindTypedFields(ClassType)

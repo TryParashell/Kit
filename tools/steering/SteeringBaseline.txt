@@ -24,7 +24,6 @@ src/convert/adapters/catia/Container.py	NAM001	function identifier 'from_bytes' 
 src/convert/adapters/catia/Container.py	NAM001	function identifier 'stream_bytes' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Container.py	NAM001	function identifier 'named_stream' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/catia/Container.py	NAM001	function identifier 'declarations' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'NativePayloadSize' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Adapter.py	SPL001	declaration 'NativeOuter' has 32 logical lines and must be split at 30
 src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
@@ -44,15 +43,11 @@ src/convert/adapters/freecad/BrepGraph.py	NAM001	variable identifier 'reason' mu
 src/convert/adapters/freecad/BrepGraph.py	NAM001	function identifier 'face_for_coedge' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/freecad/Format.py	SPL001	declaration 'KCapabilityWriteTypeIds' has 32 logical lines and must be split at 30
 src/convert/adapters/freecad/Native.py	SPL001	declaration 'StoredMateValue' has 35 logical lines and must be split at 30
-src/convert/adapters/json/Adapter.py	NAM001	function identifier 'probe' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/json/Adapter.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/json/Adapter.py	NAM001	function identifier 'supports' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/json/Adapter.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/json/Adapter.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
@@ -89,16 +84,11 @@ src/convert/adapters/registry/__init__.py	NAM001	argument identifier 'options' m
 src/convert/adapters/registry/__init__.py	NAM001	function identifier 'format_ids' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/registry/__init__.py	NAM001	function identifier 'extend' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/registry/__init__.py	NAM001	argument identifier 'adapters' must be PascalCase ASCII letters with length 5 through 25
-src/convert/adapters/registry/RegistryDiscover.py	NAM001	function identifier 'ValidateAdapterInfo' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'format_id' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryErrors.py	NAM001	argument identifier 'dropped' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryState.py	NAM001	attribute identifier 'reader' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/registry/RegistryState.py	NAM001	attribute identifier 'writer' must be PascalCase ASCII letters with length 5 through 25
 src/convert/adapters/solidworks/assembly/Assembly.py	SPL001	declaration 'ResolvedMate' has 42 logical lines and must be split at 30
-src/convert/adapters/solidworks/configuration/ConfigZero.py	NAM001	function identifier 'BuildLegacyConfig' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Archive.py	NAM001	function identifier 'IsLayoutSequence' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'IsOptionalIntegers' must be PascalCase ASCII letters with length 5 through 15
-src/convert/adapters/solidworks/container/Cmgr.py	NAM001	function identifier 'IsOptionalStamps' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Container.py	SPL001	declaration 'SldprtArchive' has 35 logical lines and must be split at 30
 src/convert/adapters/solidworks/container/Container.py	NAM001	function identifier 'open' must be PascalCase ASCII letters with length 5 through 15
 src/convert/adapters/solidworks/container/Container.py	NAM001	function identifier 'get' must be PascalCase ASCII letters with length 5 through 15
@@ -152,16 +142,13 @@ src/convert/api/__init__.py	NAM001	function identifier '_build_registry' must be
 src/convert/api/__init__.py	NAM001	variable identifier 'registry' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	class identifier 'ConversionEngine' must be PascalCase ASCII letters with length 5 through 15
 src/convert/engine/__init__.py	NAM001	argument identifier 'registry' must be PascalCase ASCII letters with length 5 through 25
-src/convert/engine/__init__.py	NAM001	function identifier 'read' must be PascalCase ASCII letters with length 5 through 15
 src/convert/engine/__init__.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'format_id' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-src/convert/engine/__init__.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
 src/convert/engine/__init__.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'format_id' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'options' must be PascalCase ASCII letters with length 5 through 25
-src/convert/engine/__init__.py	NAM001	function identifier 'convert' must be PascalCase ASCII letters with length 5 through 15
 src/convert/engine/__init__.py	NAM001	argument identifier 'source' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
 src/convert/engine/__init__.py	NAM001	argument identifier 'source_format' must be PascalCase ASCII letters with length 5 through 25
@@ -190,7 +177,6 @@ src/interchange/brep/topology/BrepModel.py	NAM001	function identifier 'validate'
 src/interchange/brep/topology/BrepModel.py	NAM001	argument identifier 'design_body_ids' must be PascalCase ASCII letters with length 5 through 25
 src/interchange/core/ModelBase.py	MRK003	function 'ModelDataMut' has Mut suffix but is statically pure
 src/interchange/core/ModelBase.py	MRK003	function 'ModelDataMut' has Mut suffix but is statically pure
-src/interchange/core/Reflection.py	NAM001	function identifier 'GetCanonicalName' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/document/behavior/DocumentIoBehavior.py	SPL001	declaration 'DocumentIo' has 38 logical lines and must be split at 30
 src/interchange/document/behavior/DocumentIoBehavior.py	NAM001	function identifier 'to_dict' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/document/behavior/DocumentIoBehavior.py	NAM001	function identifier 'from_dict' must be PascalCase ASCII letters with length 5 through 15
@@ -212,7 +198,6 @@ src/interchange/enums/EnumGeometry.py	SPL001	declaration 'GeometryKind' has 31 l
 src/interchange/enums/EnumGeometry.py	SPL001	declaration 'ConstraintKind' has 51 logical lines and must be split at 30
 src/interchange/serialization/Deserialize.py	SPL001	declaration 'FromData' has 43 logical lines and must be split at 30
 src/interchange/serialization/EncodeData.py	SPL001	declaration 'ToData' has 33 logical lines and must be split at 30
-src/interchange/serialization/WireData.py	NAM001	function identifier 'ValidateWireData' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/api/ApiTestCapture.py	NAM001	function identifier 'write' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/api/ApiTestCapture.py	NAM001	argument identifier 'document' must be PascalCase ASCII letters with length 5 through 25
 tests/convert/api/ApiTestCapture.py	NAM001	argument identifier 'destination' must be PascalCase ASCII letters with length 5 through 25
@@ -286,8 +271,5 @@ tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	NAM001	function 
 tests/convert/solidworks/core/SolidworksDonorFixtureManifest.py	NAM001	function identifier 'LoadDonorMetadata' must be PascalCase ASCII letters with length 5 through 15
 tests/convert/solidworks/core/SolidworksWriterTests.py	SPL001	declaration 'TestFPGWENRC' has 31 logical lines and must be split at 30
 tests/convert/solidworks/core/SolidworksWriterTests.py	SPL001	declaration 'TestFPTPWFENF' has 32 logical lines and must be split at 30
-tools/audit/FcstdFeatures.py	NAM001	function identifier 'IsStringKeyedMapping' must be PascalCase ASCII letters with length 5 through 15
-tools/audit/FcstdResult.py	NAM001	function identifier 'ParseAuditRecord' must be PascalCase ASCII letters with length 5 through 15
-tools/audit/FcstdResult.py	SPL001	declaration 'ParseAuditRecord' has 34 logical lines and must be split at 30
 src/convert/api/__init__.py	CON001	constant 'registry' must start with K
 src/convert/adapters/freecad/BrepGraph.py	CON001	constant 'reason' must start with K

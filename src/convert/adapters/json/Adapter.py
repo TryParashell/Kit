@@ -34,6 +34,14 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
     def probe(self, source: Source) -> ProbeResult:
         return self.Probe(source)
 
+    # pascal surface stays beside its historical spelling because steering accepts paired compat methods
+    def Probe(self, Source: Source) -> ProbeResult:
+        return self.InspectSource(Source)
+
+    # destination answers reuse metadata policy because selection consults destinations first
+    def Supports(self, DocValue: CadDocument, Target: Destination) -> bool:
+        return self.CanSupport(DocValue, Target)
+
     supports = JsonMetadata.CanSupport
 
     # public reading keywords need exact names because structural callers may pass them directly
@@ -44,6 +52,10 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
     ) -> CadDocument:
         return self.ReadAction(source, options)
 
+    # pascal surface stays beside its historical spelling because steering accepts paired compat methods
+    def Read(self, Source: Source, Options: ReadOptions | None = None) -> CadDocument:
+        return self.read(Source, Options)
+
     # public writing keywords need exact names because structural callers may pass them directly
     def write(
         self,
@@ -52,3 +64,12 @@ class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
         options: WriteOptions | None = None,
     ) -> WriteResult:
         return self.Write(document, destination, options)
+
+    # pascal surface stays beside its historical spelling because steering accepts paired compat methods
+    def Write(
+        self,
+        Document: CadDocument,
+        Destination: Destination,
+        Options: WriteOptions | None = None,
+    ) -> WriteResult:
+        return self.EmitTarget(Document, Destination, Options)

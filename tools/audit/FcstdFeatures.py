@@ -35,7 +35,7 @@ class DocumentPayload(Protocol):
 
 
 # decoded extension metadata needs validated keys before typed lookups can be trusted
-def IsStringKeyedMapping(ValueData: object) -> TypeGuard[Mapping[str, object]]:
+def HasKeyedStrings(ValueData: object) -> TypeGuard[Mapping[str, object]]:
     if not isinstance(ValueData, Mapping):
         return False
     CandidateData = cast(Mapping[object, object], ValueData)
@@ -48,7 +48,7 @@ def FeatureTypes(DocumentData: DocumentPayload) -> tuple[str, ...]:
     for FeatureData in DocumentData.feature_timeline:
         FreecadData: object = FeatureData.attributes.get("freecad")
         TypeName = (
-            FreecadData.get("type_id", "") if IsStringKeyedMapping(FreecadData) else ""
+            FreecadData.get("type_id", "") if HasKeyedStrings(FreecadData) else ""
         )
         TypeNames.add(str(TypeName or FeatureData.kind))
     return tuple(sorted(TypeNames))

@@ -20,7 +20,7 @@ from interchange import CadDocument
 class JsonWriter:
 
     # this writer validates and emits deterministic utf eight json
-    def Write(
+    def EmitTarget(
         self,
         DocValue: CadDocument,
         Target: Destination,
