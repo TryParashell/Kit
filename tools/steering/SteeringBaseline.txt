@@ -177,7 +177,6 @@ src/convert/engine/EngineResult.py	SPL001	declaration 'ConversionResult' has 50 
 src/convert/engine/EngineResult.py	NAM001	class identifier 'ConversionResult' must be PascalCase ASCII letters with length 5 through 15
 src/convert/geometry/Opencascade.py	SPL001	declaration 'ModelLocations' has 31 logical lines and must be split at 30
 src/convert/geometry/Parasolid.py	SPL001	declaration 'ParseBridge' has 36 logical lines and must be split at 30
-src/interchange/__init__.py	SPL001	declaration '__all__' has 134 logical lines and must be split at 30
 src/interchange/assembly/AssemblyData.py	NAM001	function identifier 'definition' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/assembly/AssemblyData.py	NAM001	argument identifier 'entity_id' must be PascalCase ASCII letters with length 5 through 25
 src/interchange/assembly/AssemblyData.py	NAM001	function identifier 'document' must be PascalCase ASCII letters with length 5 through 15
@@ -186,7 +185,6 @@ src/interchange/assembly/AssemblyData.py	NAM001	function identifier 'children' m
 src/interchange/assembly/AssemblyData.py	NAM001	argument identifier 'definition_id' must be PascalCase ASCII letters with length 5 through 25
 src/interchange/assembly/AssemblyEnums.py	SPL001	declaration 'MateKind' has 53 logical lines and must be split at 30
 src/interchange/assembly/AssemblyEnums.py	SPL001	declaration 'MateEntityKind' has 33 logical lines and must be split at 30
-src/interchange/brep/__init__.py	SPL001	declaration '__all__' has 36 logical lines and must be split at 30
 src/interchange/brep/topology/BrepModel.py	SPL001	declaration 'BrepModel' has 67 logical lines and must be split at 30
 src/interchange/brep/topology/BrepModel.py	NAM001	function identifier 'validate' must be PascalCase ASCII letters with length 5 through 15
 src/interchange/brep/topology/BrepModel.py	NAM001	argument identifier 'design_body_ids' must be PascalCase ASCII letters with length 5 through 25
@@ -293,5 +291,3 @@ tools/audit/FcstdResult.py	NAM001	function identifier 'ParseAuditRecord' must be
 tools/audit/FcstdResult.py	SPL001	declaration 'ParseAuditRecord' has 34 logical lines and must be split at 30
 src/convert/api/__init__.py	CON001	constant 'registry' must start with K
 src/convert/adapters/freecad/BrepGraph.py	CON001	constant 'reason' must start with K
-src/interchange/__init__.py	SPL001	declaration '__all__' has 134 logical lines and must be split at 30
-src/interchange/brep/__init__.py	SPL001	declaration '__all__' has 36 logical lines and must be split at 30

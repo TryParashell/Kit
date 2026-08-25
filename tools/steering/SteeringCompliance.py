@@ -1215,6 +1215,8 @@ def CheckSplits(
             NameText = GetAssignName(AstNode, ParentMap)
         if NameText is None:
             continue
+        if NameText == "__all__":
+            continue
         if isinstance(AstNode, (AstLib.Assign, AstLib.AnnAssign)) and (
             IsFocusedAssign(SourcePath, NameText)
             or IsProgramTable(SourcePath, NameText)
