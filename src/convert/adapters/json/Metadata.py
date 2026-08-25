@@ -61,4 +61,3 @@ class JsonMetadata:
         if isinstance(Target, (str, FilePath)):
             return FilePath(Target).suffix.lower() in KInfoValue.extensions
         return callable(getattr(Target, "write", None))
-

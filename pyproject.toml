@@ -26,7 +26,6 @@ maintainers = [
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 keywords = ["cad"]
-classifiers = ["Private :: Do Not Upload"]
 
 [project.urls]
 Repository = "https://github.com/TryParashell/Kit"
@@ -127,7 +126,7 @@ pretty = true
 include = ["src", "tests", "tools"]
 exclude = [".venv", "examples", "Parashell", "modules", "tests/oracle"]
 typeCheckingMode = "strict"
-pythonVersion = "3.12"
+pythonVersion = "3.11"
 reportAssertTypeFailure = "error"
 reportCallInDefaultInitializer = "error"
 reportDeprecated = "error"

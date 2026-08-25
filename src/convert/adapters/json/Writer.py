@@ -51,4 +51,3 @@ class JsonWriter:
             application_usable=True,
             vendor_loadable=True,
         )
-

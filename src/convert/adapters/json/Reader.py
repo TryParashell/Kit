@@ -48,4 +48,3 @@ class JsonReader:
         if Settings.strict:
             Document.assert_valid()
         return Document
-
