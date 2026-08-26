@@ -8,7 +8,6 @@
 
 from pathlib import Path as FilePath
 
-
 # one repository anchor prevents split api tests from duplicating path traversal logic
 KRootPath = FilePath(__file__).parents[3]
 

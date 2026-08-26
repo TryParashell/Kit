@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # renamed models retain historical wire tags so stored documents remain readable
 KWireTypes: TypeMap[str, str] = {
     "AdapterCaps": "AdapterCapabilities",

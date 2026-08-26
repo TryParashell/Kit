@@ -6,23 +6,50 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.payloads.PayloadRoles import PayloadRole
 
+# one shared empty set keeps rule defaults free of repeated constructor calls
+KEmptyKindSets: frozenset[str] = frozenset()
+
 
 # legacy payload inference needs declarative evidence that remains independently testable
-@ModelDataMut(
-    DefaultMap={
-        "FormatIds": frozenset(),
-        "Kinds": frozenset(),
-        "Schemas": frozenset(),
-        "SourceSuffixes": frozenset(),
-    }
-)
+@ModelDataMut
 class PayloadRule(ModelBase):
-    ValueRole: PayloadRole
-    FileExtension: str
-    FormatIds: frozenset[str]
-    Kinds: frozenset[str]
-    Schemas: frozenset[str]
-    SourceSuffixes: frozenset[str]
+    role: PayloadRole
+    file_extension: str
+    format_ids: frozenset[str] = KEmptyKindSets
+    kinds: frozenset[str] = KEmptyKindSets
+    schemas: frozenset[str] = KEmptyKindSets
+    source_suffixes: frozenset[str] = KEmptyKindSets
+
+    # role tags separate driven driving and reference usages cleanly
+    @property
+    def ValueRole(self) -> PayloadRole:
+        return self.role
+
+    # extension hint keeps extracted files recognizable on disk immediately
+    @property
+    def FileExtension(self) -> str:
+        return self.file_extension
+
+    # format scoping prevents rules from firing on unrelated inputs
+    @property
+    def FormatIds(self) -> frozenset[str]:
+        return self.format_ids
+
+    # kind scoping narrows rule application to relevant entity types
+    @property
+    def Kinds(self) -> frozenset[str]:
+        return self.kinds
+
+    # schema scoping keeps strict rules away from legacy payloads
+    @property
+    def Schemas(self) -> frozenset[str]:
+        return self.schemas
+
+    # suffix matching catches sources that omit reliable format metadata
+    @property
+    def SourceSuffixes(self) -> frozenset[str]:
+        return self.source_suffixes

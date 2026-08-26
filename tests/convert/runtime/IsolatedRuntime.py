@@ -90,7 +90,10 @@ cases = (
     (output / "conversion_0.FCStd", ".CATPart"),
     (root / "examples" / ".CATPart" / "Banjo.CATPart", ".SLDPRT"),
     (
-        root / "examples" / "Random" / "Pistons" / "Piston.SLDASM",
+        root
+        / "examples"
+        / "Single Turbo Dual Overhead Cam V8 - KDP - 2024"
+        / "Cylinder Head Assy 1.SLDASM",
         ".CATProduct",
     ),
     (

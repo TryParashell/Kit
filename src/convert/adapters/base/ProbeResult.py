@@ -16,11 +16,26 @@ from convert.adapters.base.ContractCompat import ContractBase
 # probe results keep reader selection evidence deterministic and bounded
 @DataClass(frozen=True, slots=True)
 class ProbeResult(ContractBase):
-    FormatId: str
-    Confidence: float
-    ReasonText: str = ""
+    format_id: str
+    confidence: float
+    reason: str = ""
+
+    # historical format access remains typed because selector diagnostics consume this public field
+    @property
+    def FormatId(self) -> str:
+        return self.format_id
+
+    # historical confidence access remains typed because selectors rank this public field
+    @property
+    def Confidence(self) -> float:
+        return self.confidence
+
+    # historical reason access remains typed because selector diagnostics expose this public field
+    @property
+    def ReasonText(self) -> str:
+        return self.reason
 
     # confidence validation prevents malformed adapters from corrupting reader ordering
-    def __post_init__(SelfValue) -> None:
-        if not 0.0 <= SelfValue.Confidence <= 1.0:
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("probe confidence must be between zero and one")

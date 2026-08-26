@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    KFieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
@@ -18,27 +20,29 @@ from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     ReplayAssembly,
 )
 
-from .Registry import (
-    FieldOwners,
-    StreamPrograms,
+from .Registry import (  # lgtm[py/unused-import]
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
+    KStreamPrograms as KStreamPrograms,
+    StreamPrograms as StreamPrograms,
 )
 
 
 # legacy format access remains available while shared encoding owns the mapping
-globals()["PrimitiveFormats"] = KPrimitiveFormats
+PrimitiveFormats = KPrimitiveFormats
 
 
 # each operation serializes one recovered value through its typed contract
-def EncodeField(KindName: str, FieldValue: AnyValue) -> bytes:
-    return EncodeValue(KindName, FieldValue, "assembly")
+def EncodeField(KindName: str, KFieldValue: FieldType) -> bytes:
+    return EncodeValue(KindName, KFieldValue, "assembly")
 
 
 # callers may replace semantic fields while source offsets preserve field order
 def EncodeProgram(
-    StreamName: str, Overrides: Mapping[int, AnyValue] | None = None
+    StreamName: str, Overrides: Mapping[int, FieldType] | None = None
 ) -> bytes:
     try:
-        Operations = StreamPrograms[StreamName]
+        Operations = KStreamPrograms[StreamName]
     except KeyError as ErrorData:
         raise SldprtFormatError(
             f"unknown assembly stream {StreamName!r}"

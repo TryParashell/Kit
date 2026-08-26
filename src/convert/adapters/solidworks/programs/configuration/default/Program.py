@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import struct as StructLib
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    KFieldValue as FieldType,
+)
 
 from convert.adapters.solidworks.container.Archive import (
     encode_class_reference as EncodeClassReference,
@@ -20,11 +22,13 @@ from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.programs.Common.FieldEncoder import (
     EncodeValue,
     KPrimitiveFormats,
+    RequireInt,
 )
 
-from .Registry import (
-    FieldOwners,
-    ConfigOps,
+from .Registry import (  # lgtm[py/unused-import]
+    ConfigOps as ConfigOps,
+    FieldOwners as FieldOwners,
+    KFieldOwners as KFieldOwners,
 )
 
 
@@ -66,8 +70,8 @@ KAtomLinkStamp = 42358
 
 
 # each field operation serializes one recovered value through its typed contract
-def EncodeField(KindName: str, FieldValue: AnyValue) -> bytes:
-    return EncodeValue(KindName, FieldValue, "Config-0")
+def EncodeField(KindName: str, KFieldValue: FieldType) -> bytes:
+    return EncodeValue(KindName, KFieldValue, "Config-0")
 
 
 # one semantic atom links a native configuration item to a feature tree object
@@ -110,34 +114,33 @@ def EncodeAtom(
 
 
 # inserted atom references shift every later archive map target
-def ShiftMapRef(KindName: str, FieldValue: AnyValue, MapShift: int) -> AnyValue:
+def ShiftMapRef(KindName: str, KFieldValue: FieldType, MapShift: int) -> FieldType:
     if MapShift <= 0:
-        return FieldValue
-    if KindName == "classref" and int(FieldValue) > KAtomClassIndex:
-        return int(FieldValue) + MapShift
-    if KindName == "objectref" and int(FieldValue) > KAtomClassIndex + 1:
-        return int(FieldValue) + MapShift
-    return FieldValue
+        return KFieldValue
+    if KindName == "classref":
+        RefValue = RequireInt(KFieldValue, "configuration class reference")
+        return RefValue + MapShift if RefValue > KAtomClassIndex else RefValue
+    if KindName == "objectref":
+        RefValue = RequireInt(KFieldValue, "configuration object reference")
+        return RefValue + MapShift if RefValue > KAtomClassIndex + 1 else RefValue
+    return KFieldValue
 
 
 # legacy aliases preserve external configuration callers and recovered diagnostic access
-KLegacyAliases = {
-    "PrimitiveFormats": KPrimitiveFormats,
-    "ReferenceLength": KReferenceLength,
-    "PartRecordLengthOffset": KPartRecordLengthOffset,
-    "PartNameOffset": KPartNameOffset,
-    "ReferencePartName": KReferencePartName,
-    "SecondUnitStart": KSecondUnitStart,
-    "SecondUnitEnd": KSecondUnitEnd,
-    "AtomHeadOffsets": KAtomHeadOffsets,
-    "AtomStart": KAtomStart,
-    "AtomEnd": KAtomEnd,
-    "HighWaterOffsets": KHighWaterOffsets,
-    "AtomClassIndex": KAtomClassIndex,
-    "AtomLinkStamp": KAtomLinkStamp,
-    "ShiftMapReference": ShiftMapRef,
-}
-globals().update(KLegacyAliases)
+PrimitiveFormats = KPrimitiveFormats
+ReferenceLength = KReferenceLength
+PartRecordLengthOffset = KPartRecordLengthOffset
+PartNameOffset = KPartNameOffset
+ReferencePartName = KReferencePartName
+SecondUnitStart = KSecondUnitStart
+SecondUnitEnd = KSecondUnitEnd
+AtomHeadOffsets = KAtomHeadOffsets
+AtomStart = KAtomStart
+AtomEnd = KAtomEnd
+HighWaterOffsets = KHighWaterOffsets
+AtomClassIndex = KAtomClassIndex
+AtomLinkStamp = KAtomLinkStamp
+ShiftMapReference = ShiftMapRef
 
 
 # atom validation protects native identifiers and the recovered generation contract
@@ -160,20 +163,20 @@ def MakeOverrides(
     PartName: str,
     Atoms: tuple[tuple[int, int], ...],
     HighWater: tuple[int, int],
-    Overrides: Mapping[int, AnyValue] | None,
-) -> tuple[dict[int, AnyValue], int]:
-    FieldOverrides = dict(Overrides or {})
-    FieldOverrides[KPartRecordLengthOffset] = (
-        ConfigOps[1][4]
+    Overrides: Mapping[int, FieldType] | None,
+) -> tuple[dict[int, FieldType], int]:
+    KFieldOverrides = dict(Overrides or {})
+    KFieldOverrides[KPartRecordLengthOffset] = (
+        RequireInt(ConfigOps[1][4], "configuration record length")
         + len(EncodeString(PartName))
         - len(EncodeString(KReferencePartName))
     )
-    FieldOverrides[KPartNameOffset] = PartName
-    FieldOverrides[KAtomHeadOffsets[0]] = max(AtomId for AtomId, TreeValue in Atoms)
-    FieldOverrides[KAtomHeadOffsets[1]] = len(Atoms)
-    FieldOverrides[KHighWaterOffsets[0]] = HighWater[0]
-    FieldOverrides[KHighWaterOffsets[1]] = HighWater[1]
-    return FieldOverrides, len(Atoms) - 1
+    KFieldOverrides[KPartNameOffset] = PartName
+    KFieldOverrides[KAtomHeadOffsets[0]] = max(AtomData[0] for AtomData in Atoms)
+    KFieldOverrides[KAtomHeadOffsets[1]] = len(Atoms)
+    KFieldOverrides[KHighWaterOffsets[0]] = HighWater[0]
+    KFieldOverrides[KHighWaterOffsets[1]] = HighWater[1]
+    return KFieldOverrides, len(Atoms) - 1
 
 
 # atom sequence encoding preserves ordering links and terminal generation framing
@@ -197,7 +200,7 @@ def EncodeAtoms(
 
 # configuration replay replaces semantic regions while preserving recovered field order
 def ReplayConfig(
-    FieldOverrides: Mapping[int, AnyValue],
+    KFieldOverrides: Mapping[int, FieldType],
     AtomData: bytes,
     DualLengthUnits: bool,
     MapShift: int,
@@ -206,6 +209,7 @@ def ReplayConfig(
     SourceCursor = 0
     AtomsWritten = False
     for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in ConfigOps:
+        del OwnerIndex
         if StartPos != SourceCursor:
             raise SldprtFormatError(f"Config-0 field program drifted at {StartPos}")
         SourceCursor += FieldWidth
@@ -216,10 +220,10 @@ def ReplayConfig(
                 OutputData.extend(AtomData)
                 AtomsWritten = True
             continue
-        FieldValue = FieldOverrides.get(StartPos, DefaultValue)
+        KFieldValue = KFieldOverrides.get(StartPos, DefaultValue)
         if StartPos >= KAtomEnd:
-            FieldValue = ShiftMapRef(KindName, FieldValue, MapShift)
-        FieldData = EncodeField(KindName, FieldValue)
+            KFieldValue = ShiftMapRef(KindName, KFieldValue, MapShift)
+        FieldData = EncodeField(KindName, KFieldValue)
         if StartPos != KPartNameOffset and len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"Config-0 field width changed at {StartPos}")
         OutputData.extend(FieldData)
@@ -236,9 +240,9 @@ def EncodeProgram(
     Generation: int = 18000,
     DualLengthUnits: bool = True,
     HighWater: tuple[int, int] = (101, 103),
-    Overrides: Mapping[int, AnyValue] | None = None,
+    Overrides: Mapping[int, FieldType] | None = None,
 ) -> bytes:
     ValidateAtoms(Atoms, Generation)
-    FieldOverrides, MapShift = MakeOverrides(PartName, Atoms, HighWater, Overrides)
+    KFieldOverrides, MapShift = MakeOverrides(PartName, Atoms, HighWater, Overrides)
     AtomData = EncodeAtoms(Atoms, SessionStamp, Generation)
-    return ReplayConfig(FieldOverrides, AtomData, DualLengthUnits, MapShift)
+    return ReplayConfig(KFieldOverrides, AtomData, DualLengthUnits, MapShift)

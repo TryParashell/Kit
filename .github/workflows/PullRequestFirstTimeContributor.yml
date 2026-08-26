@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Pull request first-time contributor label
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] Labels API metadata without executing PR code.
+    types:
+      - opened
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label-first-time-contributor:
+    name: Label first-time contributors
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # Reads pull request metadata through GitHub's API.
+      issues: write # Creates the first-time contributor label when missing.
+      pull-requests: write # Applies the first-time contributor label.
+    steps:
+      - name: Apply first-time contributor label
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const LabelName = "First-Time Contributor";
+            const PullNumber = context.payload.pull_request.number;
+            const Association = context.payload.pull_request.author_association;
+            const IsMatched = ["FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR"].includes(
+              Association,
+            );
+
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: LabelName,
+              });
+            } catch (ErrorInfo) {
+              if (ErrorInfo.status !== 404) throw ErrorInfo;
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: LabelName,
+                color: "7057ff",
+              });
+            }
+
+            if (IsMatched) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: PullNumber,
+                labels: [LabelName],
+              });
+            }

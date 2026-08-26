@@ -12,11 +12,18 @@ import binascii as BinaryAscii
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import Any as AnyValue
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    KFieldOp,
+    KFieldOverrides,
+)
+from convert.adapters.solidworks.programs.Common.FieldEncoder import (
+    BuildShiftMap,
+    RequireInt,
+)
 
 from convert.adapters.solidworks.programs.assembly.quintuples.Program import (
     EncodeField,
-    StreamPrograms,
+    KStreamPrograms,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
@@ -73,42 +80,17 @@ KResolvedShiftFour = frozenset({1493, 4069, 4243, 4330})
 KHeaderShiftRefs = frozenset({257, 382, 384, 390})
 
 
-# occurrence initialization stays standalone so public casing remains analyzer safe
-def InitRepeatMut(
-    ItemValue: RepeatItem,
-    OccurName: str,
-    CompPath: str,
-    TransX: float = 0.0,
-    TransY: float = 0.0,
-    TransZ: float = 0.0,
-    ConfigName: str = "Default",
-    FileStamp: int = 0,
-    BasisVals: tuple[float, ...] = (
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    ),
-) -> None:
-    if len(BasisVals) != 9:
-        raise SldprtFormatError("assembly transform basis requires nine values")
-    ItemValue.OccurName = OccurName
-    ItemValue.CompPath = CompPath
-    ItemValue.TransX = TransX
-    ItemValue.TransY = TransY
-    ItemValue.TransZ = TransZ
-    ItemValue.ConfigName = ConfigName
-    ItemValue.FileStamp = FileStamp
-    ItemValue.BasisVals = BasisVals
-
-
 # one repeated item supplies semantic identity and display translation fields
 class RepeatItem:
+    OccurName: str
+    CompPath: str
+    TransX: float
+    TransY: float
+    TransZ: float
+    ConfigName: str
+    FileStamp: int
+    BasisVals: tuple[float, ...]
+
     __slots__ = (
         "OccurName",
         "CompPath",
@@ -120,7 +102,39 @@ class RepeatItem:
         "BasisVals",
     )
 
-    locals()["__init__"] = InitRepeatMut
+    # explicit initialization lets static consumers retain every recovered occurrence field
+    def __init__(
+        self,
+        OccurName: str,
+        CompPath: str,
+        TransX: float = 0.0,
+        TransY: float = 0.0,
+        TransZ: float = 0.0,
+        ConfigName: str = "Default",
+        FileStamp: int = 0,
+        BasisVals: tuple[float, ...] = (
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ),
+    ) -> None:
+        super().__init__()
+        if len(BasisVals) != 9:
+            raise SldprtFormatError("assembly transform basis requires nine values")
+        self.OccurName = OccurName
+        self.CompPath = CompPath
+        self.TransX = TransX
+        self.TransY = TransY
+        self.TransZ = TransZ
+        self.ConfigName = ConfigName
+        self.FileStamp = FileStamp
+        self.BasisVals = BasisVals
 
 
 # identity transforms retain the compact native transform representation
@@ -130,19 +144,20 @@ def IsIdentityBasis(BasisVals: tuple[float, ...]) -> bool:
 
 # one operation tuple retains its typed serializer owner and native field value
 def EncodeOps(
-    Operations: Sequence[tuple[int, int, int, str, AnyValue]],
-    Overrides: Mapping[int, AnyValue],
+    Operations: Sequence[KFieldOp],
+    Overrides: KFieldOverrides,
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
     BasisMap = BasisValues or {}
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
-        FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
-        OutputData.extend(EncodeField(KindName, FieldValue))
+    for Operation in Operations:
+        StartPos, KindName, DefaultValue = Operation[0], Operation[3], Operation[4]
+        KFieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
+        OutputData.extend(EncodeField(KindName, KFieldValue))
         BasisValue = BasisMap.get(StartPos - BasePos)
         if BasisValue is not None:
-            if KindName != "primitive:uchar" or FieldValue != 1:
+            if KindName != "primitive:uchar" or KFieldValue != 1:
                 raise SldprtFormatError("assembly transform basis marker is invalid")
             OutputData.extend(EncodeField("direct:9d", BasisValue))
     return bytes(OutputData)
@@ -153,10 +168,10 @@ def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[tuple[int, int, int, str, AnyValue], ...]:
+) -> tuple[KFieldOp, ...]:
     return tuple(
         Operation
-        for Operation in StreamPrograms[StreamName]
+        for Operation in KStreamPrograms[StreamName]
         if Operation[0] >= StartPos and (EndPos is None or Operation[0] < EndPos)
     )
 
@@ -291,14 +306,12 @@ def EncodeConfig(
         )
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     RefShift = 4 * (ItemCount - KTracedCount)
-    SuffixOverrides = {
-        OffsetValue: DefaultValue + RefShift
-        for OffsetValue in KConfigShiftRefs
-        for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SliceOps(
-            "Contents/Config-0", SuffixStart
-        )
-        if StartPos - SuffixStart == OffsetValue
-    }
+    SuffixOverrides = BuildShiftMap(
+        SliceOps("Contents/Config-0", SuffixStart),
+        SuffixStart,
+        ((KConfigShiftRefs, RefShift),),
+        "configuration suffix reference",
+    )
     SuffixOverrides[23442] = ItemCount
     SuffixData = EncodeOps(
         SliceOps("Contents/Config-0", SuffixStart),
@@ -327,9 +340,11 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
             UnitStart + UnitWidth,
         )
         RefValues = {
-            StartPos - UnitStart: DefaultValue + BaseShift
-            for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in UnitOps
-            if KindName == "classref"
+            Operation[0]
+            - UnitStart: RequireInt(Operation[4], "resolved unit reference")
+            + BaseShift
+            for Operation in UnitOps
+            if Operation[3] == "classref"
         }
         UnitData.extend(
             EncodeOps(
@@ -345,13 +360,15 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     ShiftCount = ItemCount - KTracedCount
     SuffixOps = SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
-    SuffixOverrides: dict[int, AnyValue] = {}
-    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
-        RelativePos = StartPos - SuffixStart
-        if RelativePos in KResolvedShiftEight:
-            SuffixOverrides[RelativePos] = DefaultValue + (8 * ShiftCount)
-        elif RelativePos in KResolvedShiftFour:
-            SuffixOverrides[RelativePos] = DefaultValue + (4 * ShiftCount)
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        (
+            (KResolvedShiftEight, 8 * ShiftCount),
+            (KResolvedShiftFour, 4 * ShiftCount),
+        ),
+        "resolved suffix reference",
+    )
     SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
@@ -388,12 +405,12 @@ def EncodeHeader(
     SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
     RefShift = 2 * (ItemCount - KTracedCount)
     SuffixOps = SliceOps("Contents/Config-0-ModelHeader", SuffixStart)
-    SuffixOverrides = {
-        OffsetValue: DefaultValue + RefShift
-        for OffsetValue in KHeaderShiftRefs
-        for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps
-        if StartPos - SuffixStart == OffsetValue
-    }
+    SuffixOverrides = BuildShiftMap(
+        SuffixOps,
+        SuffixStart,
+        ((KHeaderShiftRefs, RefShift),),
+        "header suffix reference",
+    )
     SuffixOverrides.update(
         {
             4: 24 + ItemCount,
@@ -412,23 +429,20 @@ def EncodeHeader(
 
 
 # legacy aliases preserve recovered repeat helpers and existing external callers
-KLegacyAliases = {
-    "InsertSpecs": KInsertSpecs,
-    "TracedCount": KTracedCount,
-    "ConfigShiftRefs": KConfigShiftRefs,
-    "ResolvedShift8": KResolvedShiftEight,
-    "ResolvedShift4": KResolvedShiftFour,
-    "HeaderShiftRefs": KHeaderShiftRefs,
-    "_IsIdentityBasis": IsIdentityBasis,
-    "_EmitOps": EncodeOps,
-    "_SliceOps": SliceOps,
-    "_OccurHash": OccurHash,
-    "_EncodeCMgr": EncodeCmgr,
-    "_EncodeConfig": EncodeConfig,
-    "_EncodeResolved": EncodeResolved,
-    "_EncodeHeader": EncodeHeader,
-}
-globals().update(KLegacyAliases)
+InsertSpecs = KInsertSpecs
+TracedCount = KTracedCount
+ConfigShiftRefs = KConfigShiftRefs
+ResolvedShift8 = KResolvedShiftEight
+ResolvedShift4 = KResolvedShiftFour
+HeaderShiftRefs = KHeaderShiftRefs
+_IsIdentityBasis = IsIdentityBasis  # lgtm[py/unused-global-variable]
+_EmitOps = EncodeOps  # lgtm[py/unused-global-variable]
+_SliceOps = SliceOps  # lgtm[py/unused-global-variable]
+_OccurHash = OccurHash  # lgtm[py/unused-global-variable]
+_EncodeCMgr = EncodeCmgr  # lgtm[py/unused-global-variable]
+_EncodeConfig = EncodeConfig  # lgtm[py/unused-global-variable]
+_EncodeResolved = EncodeResolved  # lgtm[py/unused-global-variable]
+_EncodeHeader = EncodeHeader  # lgtm[py/unused-global-variable]
 
 
 # canonical repeat assembly programs scale one shared component file to map limit
@@ -446,7 +460,7 @@ def EncodeRepCore(
         "Contents/Config-0": EncodeConfig(ModelName, ConfigName, CoreItems),
         "Contents/Config-0-ResolvedFeatures": EncodeResolved(CoreItems),
         "Contents/Definition": EncodeOps(
-            StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
+            KStreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
         "Contents/Config-0-ModelHeader": EncodeHeader(ModelName, ConfigName, CoreItems),
     }

@@ -11,100 +11,69 @@ from __future__ import annotations
 from dataclasses import dataclass as DataClass
 from dataclasses import field as DataField
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from interchange import Capability
 from interchange import Diagnostic
 from interchange import frozen_mapping as FreezeMapping
 
+from convert.adapters.base.CapabilityView import CapabilityView
 from convert.adapters.base.ContractCompat import ContractBase
+from convert.adapters.base.ResultOutputs import ResultOutputs
+from convert.adapters.base.ResultPolicy import ResultPolicy
 from convert.adapters.base.TransferContract import CapTransfer
-from convert.adapters.base.TransferContract import CarrierReason
-from convert.adapters.base.TransferContract import TransferMode
 from convert.adapters.base.WriteValidate import CheckDropped
 from convert.adapters.base.WriteValidate import CheckNeeds
 from convert.adapters.base.WriteValidate import CheckTransfers
 from convert.adapters.base.WriteValidate import CheckUsability
-from convert.adapters.base.WriteValidate import GetCarrierCaps
-from convert.adapters.base.WriteValidate import GetNativeCaps
+
+
+# construction rejects contradictory evidence before registry policy can trust it
+def CheckResult(SelfValue: WriteResult) -> None:
+    if SelfValue.bytes_written < 0:
+        raise ValueError("bytes written cannot be negative")
+    CheckDropped(SelfValue.dropped)
+    CheckTransfers(SelfValue.transfers, SelfValue.dropped)
+    CheckNeeds(SelfValue.requirements)
+    CheckUsability(
+        SelfValue.application_usable,
+        SelfValue.vendor_loadable,
+        SelfValue.metadata,
+    )
 
 
 # writer outcomes centralize transactional output and preservation evidence for callers
 @DataClass(frozen=True, slots=True)
-class WriteResult(ContractBase):
-    OutputPath: FilePath | None
-    AdapterName: str
-    ByteCount: int
-    Diagnostics: tuple[Diagnostic, ...] = ()
-    MetadataMap: TypeMap[str, AnyValue] = DataField(default_factory=FreezeMapping)
-    Transfers: tuple[CapTransfer, ...] = ()
-    DroppedCaps: frozenset[Capability] = frozenset()
-    Requirements: tuple[str, ...] = ()
-    IsAppUsable: bool = False
-    IsVendorLoadable: bool = False
+class WriteResult(ResultOutputs, ResultPolicy, CapabilityView, ContractBase):
+    path: FilePath | None
+    adapter: str
+    bytes_written: int
+    diagnostics: tuple[Diagnostic, ...] = ()
+    metadata: TypeMap[str, object] = DataField(default_factory=FreezeMapping)
+    transfers: tuple[CapTransfer, ...] = ()
+    dropped: frozenset[Capability] = frozenset()
+    requirements: tuple[str, ...] = ()
+    application_usable: bool = False
+    vendor_loadable: bool = False
 
     # construction rejects contradictory evidence before registry policy can trust it
-    def __post_init__(SelfValue) -> None:
-        if SelfValue.ByteCount < 0:
-            raise ValueError("bytes written cannot be negative")
-        CheckDropped(SelfValue.DroppedCaps)
-        CheckTransfers(SelfValue.Transfers, SelfValue.DroppedCaps)
-        CheckNeeds(SelfValue.Requirements)
-        CheckUsability(
-            SelfValue.IsAppUsable,
-            SelfValue.IsVendorLoadable,
-            SelfValue.MetadataMap,
-        )
+    def __post_init__(self) -> None:
+        CheckResult(self)
 
-    # callers need one complete preservation view independent from representation mode
+    near_lossless = CapabilityView.IsNearLossless
+    roundtrip_safe = CapabilityView.IsRoundtripSafe
+
+    # legacy callers need the full transferred capability set without reflection
     @property
-    def TransferCaps(SelfValue) -> frozenset[Capability]:
-        return frozenset(
-            TransferData.CapabilityData for TransferData in SelfValue.Transfers
-        )
+    def transferred_capabilities(self) -> frozenset[Capability]:
+        return self.TransferCaps
 
-    # roundtrip safety means no source capability was discarded regardless of dependencies
+    # legacy callers need native capability accounting without reflection
     @property
-    def IsRoundtripSafe(SelfValue) -> bool:
-        return not SelfValue.DroppedCaps
+    def native_capabilities(self) -> frozenset[Capability]:
+        return self.NativeCaps
 
-    # near losslessness requires usable output and only intrinsic target format limitations
+    # legacy callers need carrier capability accounting without reflection
     @property
-    def IsNearLossless(SelfValue) -> bool:
-        return (
-            SelfValue.IsAppUsable
-            and SelfValue.IsVendorLoadable
-            and not SelfValue.Requirements
-            and not SelfValue.DroppedCaps
-            and all(
-                TransferData.CarrierCause is CarrierReason.KTargetGap
-                for TransferData in SelfValue.Transfers
-                if TransferData.TransferModeData
-                in {TransferMode.KCarrier, TransferMode.KMixed}
-            )
-        )
-
-
-for LegacyName, PropertyName in {
-    "transferred_capabilities": "TransferCaps",
-    "roundtrip_safe": "IsRoundtripSafe",
-    "near_lossless": "IsNearLossless",
-}.items():
-    setattr(WriteResult, LegacyName, getattr(WriteResult, PropertyName))
-
-
-# native view stays focused because target representation is independently useful
-def GetNativeView(SelfValue: WriteResult) -> frozenset[Capability]:
-    return GetNativeCaps(SelfValue.Transfers)
-
-
-# carrier view stays focused because reversible preservation is independently useful
-def GetCarrierView(SelfValue: WriteResult) -> frozenset[Capability]:
-    return GetCarrierCaps(SelfValue.Transfers)
-
-
-setattr(WriteResult, "NativeCaps", property(GetNativeView))
-setattr(WriteResult, "CarrierCaps", property(GetCarrierView))
-setattr(WriteResult, "native_capabilities", getattr(WriteResult, "NativeCaps"))
-setattr(WriteResult, "carrier_capabilities", getattr(WriteResult, "CarrierCaps"))
+    def carrier_capabilities(self) -> frozenset[Capability]:
+        return self.CarrierCaps

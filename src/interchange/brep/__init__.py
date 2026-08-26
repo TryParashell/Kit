@@ -16,7 +16,6 @@ from interchange.brep.curves.BrepCurves import (
     NativeCurve,
     NurbsCurve,
 )
-from interchange.brep.topology.BrepExports import KBrepExports
 from interchange.brep.topology.BrepModel import BrepModel
 from interchange.brep.curves.BrepPcurves import (
     BrepPcurve,
@@ -54,20 +53,16 @@ from interchange.compatibility.PythonCompatBrepMethods import BindBrepMut
 
 BindCompatMut(
     (
-        BrepEntity,
-        BrepCurve,
         LineCurve,
         CircleCurve,
         EllipseCurve,
         NurbsCurve,
         IntersectCurve,
         NativeCurve,
-        BrepPcurve,
         LinePcurve,
         CirclePcurve,
         NurbsPcurve,
         NativePcurve,
-        BrepSurface,
         PlaneSurface,
         CylinderSurface,
         ConeSurface,
@@ -93,5 +88,42 @@ BindCompatMut(
 )
 BindBrepMut(BrepModel)
 
+IntersectionCurve = IntersectCurve
+
 # brep consumers need one intentional historical public contract
-__all__ = KBrepExports
+__all__ = (
+    "BrepBody",
+    "BrepCoedge",
+    "BrepCurve",
+    "BrepEdge",
+    "BrepEntity",
+    "BrepFace",
+    "BrepFaceUse",
+    "BrepLoop",
+    "BrepModel",
+    "BrepPcurve",
+    "BrepRegion",
+    "BrepShell",
+    "BrepShellUse",
+    "BrepSurface",
+    "BrepVertex",
+    "BrepWire",
+    "CircleCurve",
+    "CirclePcurve",
+    "ConeSurface",
+    "CylinderSurface",
+    "EllipseCurve",
+    "IntersectionCurve",
+    "LineCurve",
+    "LinePcurve",
+    "NativeCurve",
+    "NativePcurve",
+    "NativeSurface",
+    "NurbsCurve",
+    "NurbsPcurve",
+    "NurbsSurface",
+    "OffsetSurface",
+    "PlaneSurface",
+    "SphereSurface",
+    "TorusSurface",
+)

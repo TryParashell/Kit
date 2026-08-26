@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from convert.adapters.base.ContractTypes import (
@@ -19,7 +18,7 @@ from convert.adapters.base.ReadOptions import ReadOptions
 from convert.adapters.base.WriteOptions import WriteOptions
 from convert.api.ApiContext import KConvertEngine
 from convert.api.ApiValues import BuildWriteVals
-from convert.engine import ConversionResult as ConvertResult
+from convert.engine.EngineResult import ConversionResult as ConvertResult
 
 
 # public conversion keeps independent adapters separated by one neutral document boundary
@@ -35,9 +34,8 @@ def ConvertFile(
     StrictMode: bool = True,
     Overwrite: bool = False,
     AllowCarrier: bool = True,
-    WriteValues: TypeMap[str, AnyValue] | None = None,
+    WriteValues: TypeMap[str, object] | None = None,
 ) -> ConvertResult:
-    EngineCall = getattr(KConvertEngine, "convert", None)
     ReadOpts = ReadOptions(
         configuration=Configuration,
         include_brep=IncludeBrep,
@@ -50,20 +48,11 @@ def ConvertFile(
         validate=True,
         values=BuildWriteVals(WriteValues, AllowCarrier),
     )
-    if EngineCall is not None:
-        return EngineCall(
-            SourceData,
-            TargetData,
-            source_format=SourceFormat,
-            destination_format=DestFormat,
-            read_options=ReadOpts,
-            write_options=WriteOpts,
-        )
-    return KConvertEngine.ConvertData(
+    return KConvertEngine.convert(
         SourceData,
         TargetData,
-        SourceFormat=SourceFormat,
-        DestFormat=DestFormat,
-        ReadOpts=ReadOpts,
-        WriteOpts=WriteOpts,
+        source_format=SourceFormat,
+        destination_format=DestFormat,
+        read_options=ReadOpts,
+        write_options=WriteOpts,
     )

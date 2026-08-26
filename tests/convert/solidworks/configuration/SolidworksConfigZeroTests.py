@@ -35,31 +35,41 @@ from convert.adapters.solidworks.container.Archive import (
     encode_class_definition as EncodeClassDefinition,
 )
 from convert.adapters.solidworks.programs.configuration.default.Program import (
-    ConfigOps,
-    FieldOwners,
     ReferenceLength,
     ShiftMapReference,
 )
+from convert.adapters.solidworks.programs.configuration.default.Registry import (
+    ConfigOps,
+    FieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.box.Program import (
-    ConfigOps as BoxConfigOps,
     EncodeProgram as EncodeBoxConfigProgram,
-    FieldOwners as BoxFieldOwners,
     ReferenceLength as BoxReferenceLength,
 )
+from convert.adapters.solidworks.programs.configuration.box.Registry import (
+    ConfigOps as BoxConfigOps,
+    FieldOwners as BoxFieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.views.pair.Program import (
-    AnnotationOps,
-    FieldOwners as AnnotationFieldOwners,
     ReferenceLength as AnnotationReferenceLength,
 )
+from convert.adapters.solidworks.programs.configuration.views.pair.Registry import (
+    AnnotationOps,
+    FieldOwners as AnnotationFieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.fillet.views.Program import (
-    AnnotationOps as FilletAnnotationOps,
-    FieldOwners as FilletFieldOwners,
     ReferenceLength as FilletReferenceLength,
 )
+from convert.adapters.solidworks.programs.configuration.fillet.views.Registry import (
+    AnnotationOps as FilletAnnotationOps,
+    FieldOwners as FilletFieldOwners,
+)
 from convert.adapters.solidworks.programs.configuration.pattern.views.Program import (
+    ReferenceLength as PatternReferenceLength,
+)
+from convert.adapters.solidworks.programs.configuration.pattern.views.Registry import (
     AnnotationOps as PatternAnnotationOps,
     FieldOwners as PatternFieldOwners,
-    ReferenceLength as PatternReferenceLength,
 )
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
@@ -87,7 +97,7 @@ def TestRFRTSBI() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestERBHEOTO() -> None:
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in ConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in ConfigOps:
         assert StartPos == SourceCursor
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(FieldOwners)
@@ -123,7 +133,7 @@ def TestRPCNEVB() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestDBCIET() -> None:
     SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in BoxConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in BoxConfigOps:
         assert StartPos == SourceCursor
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(BoxFieldOwners)
@@ -277,7 +287,7 @@ def TestPVPCNEVB() -> None:
 @PytestLib.mark.parametrize("ViewCount", (0, 3))
 def TestUAVCIR(ViewCount: int) -> None:
     with PytestLib.raises(SldprtFormatError, match="one or two"):
-        EncodeConfigZeroStream(annotation_view_count=ViewCount)
+        _ = EncodeConfigZeroStream(annotation_view_count=ViewCount)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -342,20 +352,20 @@ def TestAICOTIF() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestEARIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="at least one atom record"):
-        EncodeConfigZeroStream(atoms=())
+        _ = EncodeConfigZeroStream(atoms=())
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFDGIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="recovered at generation"):
-        EncodeConfigZeroStream(generation=14000)
+        _ = EncodeConfigZeroStream(generation=14000)
     assert Version == 18000
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCRPIR() -> None:
     with PytestLib.raises(SldprtFormatError, match="raw Config-0 prologue"):
-        EncodeConfigZeroStream(part_record_body=b"not allowed")
+        _ = EncodeConfigZeroStream(part_record_body=b"not allowed")
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -364,4 +374,4 @@ def TestCRPIR() -> None:
 )
 def TestOORAIAR(AtomData: tuple[tuple[int, int], ...]) -> None:
     with PytestLib.raises(SldprtFormatError, match="fit in 32 bits"):
-        EncodeConfigZeroStream(atoms=AtomData)
+        _ = EncodeConfigZeroStream(atoms=AtomData)

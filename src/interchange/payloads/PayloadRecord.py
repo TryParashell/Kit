@@ -8,17 +8,19 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelExtras import ModelExtras
 from interchange.payloads.PayloadRoles import PayloadRole
+from interchange.payloads.PayloadView import PayloadView
 from interchange.records.RecordProvenance import Provenance
 
 
 # payload extensions need validation before writers derive filesystem paths
-def FindExtError(ExtensionText: AnyValue) -> str:
+def FindExtError(ExtensionText: object) -> str:
     if not isinstance(ExtensionText, str):
         return "payload file extension must start with a period"
     NameValue = ExtensionText[1:] if ExtensionText.startswith(".") else ""
@@ -34,33 +36,24 @@ def FindExtError(ExtensionText: AnyValue) -> str:
 
 
 # native bytes need identity purpose and integrity metadata for lossless translation
-@ModelDataMut(
-    DefaultMap={
-        "PayloadData": None,
-        "SourceStream": "",
-        "Provenance": None,
-        "ValueRole": PayloadRole.KAuxiliary,
-        "FileExtension": ".bin",
-    },
-    FactoryMap={"Attributes": FreezeMapping},
-)
-class BrepPayload(ModelBase):
-    EntityId: str
-    FormatId: str
-    EntityKind: str
-    SchemaText: str
-    SourceDigest: str
-    PayloadData: bytes | None
-    SourceStream: str
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
-    ValueRole: PayloadRole
-    FileExtension: str
+@ModelDataMut
+class BrepPayload(PayloadView, ModelExtras, ModelBase):
+    id: str
+    format_id: str
+    kind: str
+    schema: str
+    sha256: str
+    data: bytes | None = None
+    source_stream: str = ""
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+    role: PayloadRole = PayloadRole.KAuxiliary
+    file_extension: str = ".bin"
 
     # invalid metadata must fail before bytes reach archive writers
-    def __post_init__(SelfValue) -> None:
-        if not isinstance(SelfValue.ValueRole, PayloadRole):
+    def __post_init__(self) -> None:
+        if type(self.role) is not PayloadRole:
             raise TypeError("payload role must be a PayloadRole")
-        ErrorText = FindExtError(SelfValue.FileExtension)
+        ErrorText = FindExtError(self.file_extension)
         if ErrorText:
             raise ValueError(ErrorText)

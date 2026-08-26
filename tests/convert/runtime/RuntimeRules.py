@@ -9,7 +9,6 @@
 from pathlib import Path as FilePath
 import sys as SystemLib
 
-
 # repository resolution stays shared so every runtime policy checks the same source tree
 KRootPath = FilePath(__file__).parents[3]
 

@@ -1,0 +1,513 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Security stack
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bandit:
+    name: Bandit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run Bandit SAST
+        run: uv run bandit -q -r src tools .github/scripts -x .venv,examples,Parashell,modules,re,tests -s B101,B105,B314,B404,B405,B603,B607
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run Semgrep SAST
+        run: uv run semgrep scan --config=p/default --error --metrics=off --timeout=30 --exclude=.venv --exclude=examples --exclude=Parashell --exclude=modules --exclude=re
+
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run pip-audit SCA
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/runtime-requirements.txt"
+          uv run pip-audit --strict --requirement "${RUNNER_TEMP}/runtime-requirements.txt"
+
+  safety:
+    name: Safety
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run Safety SCA
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/runtime-requirements.txt"
+          uv run safety check --file "${RUNNER_TEMP}/runtime-requirements.txt" --output text
+
+  checkov:
+    name: Checkov
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run Checkov IaC
+        run: uv run checkov --directory . --quiet --skip-framework secrets --skip-path .venv --skip-path examples --skip-path re
+
+  zizmor:
+    name: Zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run Zizmor Actions audit
+        run: uv run zizmor --pedantic .github/workflows
+
+  detect-secrets:
+    name: detect-secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run detect-secrets
+        run: uv run detect-secrets scan --all-files --exclude-files '(^\.venv/|^examples/|^re/|^uv\.lock$)' --only-verified
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned actionlint
+        env:
+          ActionlintVersion: "1.7.12"
+          ActionlintSha256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/actionlint_${ActionlintVersion}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ActionlintVersion}/actionlint_${ActionlintVersion}_linux_amd64.tar.gz"
+          echo "${ActionlintSha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" actionlint
+          chmod u+x "${RUNNER_TEMP}/actionlint"
+
+      - name: Run actionlint workflow analysis
+        run: '"${RUNNER_TEMP}/actionlint"'
+
+  syft:
+    name: Syft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Syft
+        env:
+          SyftVersion: "1.51.0"
+          SyftSha256: 2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/syft_${SyftVersion}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/anchore/syft/releases/download/v${SyftVersion}/syft_${SyftVersion}_linux_amd64.tar.gz"
+          echo "${SyftSha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" syft
+          chmod u+x "${RUNNER_TEMP}/syft"
+
+      - name: Generate the independent runtime SBOM
+        run: '"${RUNNER_TEMP}/syft" scan uv.lock -o cyclonedx-json="${RUNNER_TEMP}/Kit.syft.cdx.json"'
+
+      - name: Cross-check SBOM catalog coverage
+        run: |
+          set -euo pipefail
+          jq -e '[.components[].name] | index("defusedxml") != null and index("typing-extensions") != null' \
+            "${RUNNER_TEMP}/Kit.syft.cdx.json"
+
+  cyclonedx-sbom:
+    name: CycloneDX SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Export locked runtime requirements
+        run: uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/RuntimeRequirements.txt"
+
+      - name: Generate validated runtime SBOM
+        run: >-
+          uv run cyclonedx-py requirements "${RUNNER_TEMP}/RuntimeRequirements.txt"
+          --outfile "${RUNNER_TEMP}/Kit.cdx.json" --of JSON --sv 1.6
+          --output-reproducible --mc-type application
+
+  dlint:
+    name: dlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Run dlint insecure-pattern scan
+        run: >-
+          uv run flake8 --select=DUO
+          --exclude=.venv,examples,Parashell,modules,re,tests
+          src tools .github/scripts
+
+  gitleaks:
+    name: Gitleaks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned Gitleaks
+        env:
+          GitleaksVersion: "8.30.1"
+          GitleaksSha256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/gitleaks_${GitleaksVersion}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GitleaksVersion}/gitleaks_${GitleaksVersion}_linux_x64.tar.gz"
+          echo "${GitleaksSha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" gitleaks
+          chmod u+x "${RUNNER_TEMP}/gitleaks"
+
+      - name: Run Gitleaks history secret audit
+        run: >-
+          "${RUNNER_TEMP}/gitleaks" git
+          --config .github/config/Gitleaks.toml
+          --redact --verbose .
+
+  grype:
+    name: Grype
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
+
+      - name: Export locked runtime requirements
+        run: uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/RuntimeRequirements.txt"
+
+      - name: Build the CycloneDX manifest
+        run: >-
+          uv run cyclonedx-py requirements "${RUNNER_TEMP}/RuntimeRequirements.txt"
+          --outfile "${RUNNER_TEMP}/Kit.cdx.json" --of JSON --sv 1.6
+          --output-reproducible --mc-type application
+
+      - name: Install pinned Grype
+        env:
+          GrypeVersion: "0.117.0"
+          GrypeSha256: 38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/grype_${GrypeVersion}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/anchore/grype/releases/download/v${GrypeVersion}/grype_${GrypeVersion}_linux_amd64.tar.gz"
+          echo "${GrypeSha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" grype
+          chmod u+x "${RUNNER_TEMP}/grype"
+
+      - name: Run Grype vulnerability scan
+        env:
+          GRYPE_CONFIG: .github/config/Grype.yaml
+        run: '"${RUNNER_TEMP}/grype" sbom:"${RUNNER_TEMP}/Kit.cdx.json" --fail-on low'
+
+  osv-scanner:
+    name: OSV-Scanner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned OSV-Scanner
+        env:
+          OsvScannerVersion: "2.5.1"
+          OsvScannerSha256: f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be
+        run: |
+          set -euo pipefail
+          BinaryPath="${RUNNER_TEMP}/osv-scanner"
+          curl --fail --silent --show-error --location \
+            --output "${BinaryPath}" \
+            "https://github.com/google/osv-scanner/releases/download/v${OsvScannerVersion}/osv-scanner_linux_amd64"
+          echo "${OsvScannerSha256}  ${BinaryPath}" | sha256sum --check --
+          chmod u+x "${BinaryPath}"
+
+      - name: Run OSV-Scanner lockfile audit
+        run: '"${RUNNER_TEMP}/osv-scanner" scan source --lockfile=uv.lock --config .github/config/OsvScanner.toml'
+
+  scorecard:
+    name: Scorecard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run OSSF Scorecard supply-chain audit
+        uses: ossf/scorecard-action@55891bbd73f2425e97637d96e306fc9d491d0b21 # v2.4.4
+        with:
+          results_file: Scorecard.sarif
+          results_format: sarif
+          publish_results: false
+          repo_token: ${{ github.token }}
+
+      - name: Summarize Scorecard results
+        run: |
+          set -euo pipefail
+          jq -r '.runs[0].results[] | [.ruleId, (.message.text // "")] | @tsv' Scorecard.sarif
+
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Trivy
+        env:
+          TrivyVersion: "0.74.0"
+          TrivySha256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/trivy_${TrivyVersion}_Linux-64bit.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TrivyVersion}/trivy_${TrivyVersion}_Linux-64bit.tar.gz"
+          echo "${TrivySha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" trivy
+          chmod u+x "${RUNNER_TEMP}/trivy"
+
+      - name: Run Trivy filesystem audit
+        run: >-
+          "${RUNNER_TEMP}/trivy" fs
+          --scanners vuln,misconfig,secret
+          --skip-dirs .venv,examples,Parashell,modules,re
+          --ignorefile .github/config/TrivyIgnore.txt
+          --exit-code 1 .
+
+  trufflehog:
+    name: TruffleHog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned TruffleHog
+        env:
+          TrufflehogVersion: "3.97.0"
+          TrufflehogSha256: 62224de2f9dd7cd418800feb953760a302ed2f82a7c547fe1146a4874fb179e4
+        run: |
+          set -euo pipefail
+          ArchivePath="${RUNNER_TEMP}/trufflehog_${TrufflehogVersion}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${ArchivePath}" \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${TrufflehogVersion}/trufflehog_${TrufflehogVersion}_linux_amd64.tar.gz"
+          echo "${TrufflehogSha256}  ${ArchivePath}" | sha256sum --check --
+          tar --extract --gzip --file "${ArchivePath}" --directory "${RUNNER_TEMP}" trufflehog
+          chmod u+x "${RUNNER_TEMP}/trufflehog"
+
+      - name: Run TruffleHog verified secret scan
+        run: |
+          set -euo pipefail
+          cat > "${RUNNER_TEMP}/TrufflehogExcludes" <<'EOF'
+          (^|/)\.venv/
+          (^|/)examples/
+          (^|/)Parashell/
+          (^|/)modules/
+          (^|/)re/
+          EOF
+          "${RUNNER_TEMP}/trufflehog" git file://. \
+            --only-verified \
+            --exclude-paths="${RUNNER_TEMP}/TrufflehogExcludes"

@@ -24,42 +24,42 @@ class ResolveWriter:
     KBufferData: bytearray = Field(default_factory=bytearray)
     KMapCounter: int = 109
     KObjectCount: int = 0
-    KClassIndex: dict[str, int] = Field(default_factory=dict)
+    KClassIndex: dict[str, int] = Field(default_factory=dict[str, int])
 
     # this definition exists because focused behavior needs one stable owner
-    def PutValues(Instance, FormatText: str, *FieldValues: object) -> None:
-        Instance.KBufferData.extend(Struct.pack(FormatText, *FieldValues))
+    def PutValues(self, FormatText: str, *FieldValues: object) -> None:
+        self.KBufferData.extend(Struct.pack(FormatText, *FieldValues))
 
     # this definition exists because focused behavior needs one stable owner
-    def PutClass(Instance, ClassName: str, SchemaCode: int = 1) -> int:
-        return PutClassMut(Instance, ClassName, SchemaCode)
+    def PutClass(self, ClassName: str, SchemaCode: int = 1) -> int:
+        return PutClassMut(self, ClassName, SchemaCode)
 
     # this definition exists because focused behavior needs one stable owner
-    def PutExtern(Instance, ClassIndex: int) -> None:
-        Instance.KBufferData.extend(EncodeClassRef(ClassIndex))
-        Instance.KMapCounter += 1
-        Instance.KObjectCount += 1
+    def PutExtern(self, ClassIndex: int) -> None:
+        self.KBufferData.extend(EncodeClassRef(ClassIndex))
+        self.KMapCounter += 1
+        self.KObjectCount += 1
 
     # this definition exists because focused behavior needs one stable owner
-    def PutNull(Instance) -> None:
-        Instance.KBufferData.extend(Struct.pack("<H", 0))
-        Instance.KObjectCount += 1
+    def PutNull(self) -> None:
+        self.KBufferData.extend(Struct.pack("<H", 0))
+        self.KObjectCount += 1
 
     # this definition exists because focused behavior needs one stable owner
-    def PutObjRef(Instance, ObjectIndex: int) -> None:
-        Instance.KBufferData.extend(EncodeObjectRef(ObjectIndex))
-        Instance.KObjectCount += 1
+    def PutObjRef(self, ObjectIndex: int) -> None:
+        self.KBufferData.extend(EncodeObjectRef(ObjectIndex))
+        self.KObjectCount += 1
 
     # this definition exists because focused behavior needs one stable owner
-    def PutString(Instance, TextValue: str) -> None:
-        Instance.KBufferData.extend(EncodeString(TextValue))
+    def PutString(self, TextValue: str) -> None:
+        self.KBufferData.extend(EncodeString(TextValue))
 
     # this definition exists because focused behavior needs one stable owner
-    def EmitData(Instance) -> bytes:
-        if Instance.KObjectCount < 1:
+    def EmitData(self) -> bytes:
+        if self.KObjectCount < 1:
             raise SldprtFormatError("resolved features must contain an object")
-        StreamHead = Struct.pack("<IH", 109, Instance.KObjectCount - 1)
-        return StreamHead + bytes(Instance.KBufferData)
+        StreamHead = Struct.pack("<IH", 109, self.KObjectCount - 1)
+        return StreamHead + bytes(self.KBufferData)
 
 
 # this definition exists because class emission owns map and object counter updates
@@ -82,26 +82,26 @@ def PutClassMut(Writer: ResolveWriter, ClassName: str, SchemaCode: int = 1) -> i
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class FeatureState:
-    KNodeIdent: int
-    KNodeName: str
-    KNodeFlags: int
-    KUpdateStamp: int = 101
-    KVersionStamp: int = 2025268
-    KCreatedHigh: int = 31269705
-    KCreatedLow: int = 1613040660
-    KAuthored: bool = False
-    KHiddenCode: int = 0
+    NodeIdent: int
+    NodeName: str
+    NodeFlags: int
+    UpdateStamp: int = 101
+    VersionStamp: int = 2025268
+    CreatedHigh: int = 31269705
+    CreatedLow: int = 1613040660
+    Authored: bool = False
+    HiddenCode: int = 0
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class PlaneState:
-    KFeatureData: FeatureState
-    KPickPoint: tuple[float, float, float]
-    KNormalVec: tuple[float, float, float]
-    KBasisMatrix: tuple[float, ...]
-    KViewBounds: tuple[float, float, float, float]
-    KLabelPoint: tuple[float, float, float]
+    FeatureData: FeatureState
+    PickPoint: tuple[float, float, float]
+    NormalVec: tuple[float, float, float]
+    BasisMatrix: tuple[float, ...]
+    ViewBounds: tuple[float, float, float, float]
+    LabelPoint: tuple[float, float, float]
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -171,7 +171,7 @@ def WriteFolder(
     FolderFlags: int = 0,
     FolderState: int = 0,
 ) -> None:
-    Writer.PutClass(ClassName)
+    _ = Writer.PutClass(ClassName)
     WriteNodeData(Writer, StateData)
     WriteFeatData(Writer, StateData)
     Writer.PutValues("<ii", FolderFlags, FolderState)
@@ -212,11 +212,11 @@ def WriteSysFolder(
 
 # this definition exists because focused behavior needs one stable owner
 def WriteHistItem(Writer: ResolveWriter, FeatureIdent: int, FeatureStamp: int) -> None:
-    Writer.PutClass("moHistoryFeatItemData_c")
+    _ = Writer.PutClass("moHistoryFeatItemData_c")
     Writer.PutNull()
     Writer.PutValues("<iiii", 1, 1073741824, -1, 0)
     Writer.PutString("")
-    Writer.PutClass("moCompFeature_c")
+    _ = Writer.PutClass("moCompFeature_c")
     Writer.PutExtern(43)
     Writer.PutObjRef(2)
     Writer.PutValues(
@@ -266,11 +266,11 @@ def WriteDetailTree(
     FirstState: FeatureState,
     SecondState: FeatureState,
 ) -> None:
-    Writer.PutClass("moDetailCabinet_c")
+    _ = Writer.PutClass("moDetailCabinet_c")
     WriteNodeData(Writer, CabinetState)
     Writer.PutNull()
     Writer.PutValues("<H", 2)
-    Ignored, SecondIndex = WriteNotePair(Writer, FirstState, SecondState)
+    _, SecondIndex = WriteNotePair(Writer, FirstState, SecondState)
     Writer.PutObjRef(SecondIndex)
     WriteFeatTail(Writer, CabinetState)
     Writer.PutValues("<iHddHii", 0, 0, 1.0, 1.0, 0, 0, 0)
@@ -284,7 +284,7 @@ def WriteEmpty(Writer: ResolveWriter) -> None:
 
 # this definition exists because empty sketch headers form one native record section
 def WriteEmptyHead(Writer: ResolveWriter) -> None:
-    Writer.PutClass("sgSketch")
+    _ = Writer.PutClass("sgSketch")
     Writer.PutValues("<iHii", 1, 0, 0, 1)
     Writer.PutValues("<HHBIHhf", 65535, 31, 3, 4294967295, 65535, -1, -1.0)
     Writer.PutValues("<i4Hhf", 1, 0, 4, 2, 1, 0, -1.0)
@@ -306,7 +306,7 @@ def WriteEmptyHead(Writer: ResolveWriter) -> None:
 def WriteEmptyTail(Writer: ResolveWriter) -> None:
     Writer.PutValues("<HBi4H", 0, 0, 17, 2, 0, 0, 65534)
     Writer.PutValues("<H", 0)
-    Writer.PutClass("sgPointHandle")
+    _ = Writer.PutClass("sgPointHandle")
     Writer.PutValues("<Hii", 0, -1, 0)
     Writer.PutValues("<7H", *[0] * 7)
     Writer.PutExtern(82)
@@ -343,7 +343,7 @@ def WriteEmptyTail(Writer: ResolveWriter) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WriteCompPlane(Writer: ResolveWriter, FeatureStamp: int) -> None:
-    Writer.PutClass("moCompRefPlane_c")
+    _ = Writer.PutClass("moCompRefPlane_c")
     Writer.PutExtern(43)
     Writer.PutObjRef(2)
     Writer.PutValues(
@@ -357,7 +357,7 @@ def WriteCompPlane(Writer: ResolveWriter, FeatureStamp: int) -> None:
 def WriteOrigin(
     Writer: ResolveWriter, StateData: FeatureState, FeatureStamp: int
 ) -> None:
-    Writer.PutClass("moOriginProfileFeature_c")
+    _ = Writer.PutClass("moOriginProfileFeature_c")
     WriteNodeData(Writer, StateData)
     WriteFeatData(Writer, StateData)
     Writer.PutValues("<ii", 0, 0)
@@ -387,7 +387,7 @@ def WriteStockData(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WritePlaneData(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
-    Writer.PutClass("moDefaultRefPlnData_c")
+    _ = Writer.PutClass("moDefaultRefPlnData_c")
     Writer.PutValues("<3d3d", 0.0, 0.0, 0.0, *PlaneData.NormalVec)
     HasMatrix = bool(PlaneData.BasisMatrix)
     Writer.PutValues("<B", int(HasMatrix))
@@ -407,7 +407,7 @@ def WritePlaneData(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WriteRefPlane(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
-    Writer.PutClass("moRefPlane_c")
+    _ = Writer.PutClass("moRefPlane_c")
     WriteNodeData(Writer, PlaneData.FeatureData)
     WriteFeatData(Writer, PlaneData.FeatureData)
     WriteStockData(Writer, PlaneData)
@@ -415,28 +415,28 @@ def WriteRefPlane(Writer: ResolveWriter, PlaneData: PlaneState) -> None:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["WriteEmptySketch"] = WriteEmpty
+WriteEmptySketch = WriteEmpty
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+dataclass = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_class_definition"] = EncodeClassDefinition
+encode_class_definition = EncodeClassDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_class_reference"] = EncodeClassRef
+encode_class_reference = EncodeClassRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_object_reference"] = EncodeObjectRef
+encode_object_reference = EncodeObjectRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_string"] = EncodeString
+encode_string = EncodeString
 
 # this binding exists because shared behavior needs one stable value
-globals()["field"] = Field
+field = Field
 
 # this binding exists because shared behavior needs one stable value
-globals()["struct"] = Struct
+struct = Struct

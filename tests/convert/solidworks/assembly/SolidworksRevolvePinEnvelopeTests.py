@@ -13,10 +13,10 @@ from pathlib import Path as FilePath
 import pytest as PytestLib
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.core.Native import (
-    _HEADER_OBJECTS as Objects,
-    _NativeIdentity as NativeIdentity,
-    _SOLIDWORKS_CONFIGURATION_FLAGS as Flags,
-    _header_payload as HeaderPayload,
+    HeaderPayload,
+    KHeaderObjects as Objects,
+    KSolidworksConfigFlags as Flags,
+    NativeIdentity,
 )
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
     BuildEnvelope,
@@ -134,8 +134,8 @@ def TestPMHBFP() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPMHBRIP() -> None:
     with PytestLib.raises(SldprtFormatError, match="at least three"):
-        CalcPinBounds(((0.0, 0.0), (1.0, 0.0)))
+        _ = CalcPinBounds(((0.0, 0.0), (1.0, 0.0)))
     with PytestLib.raises(SldprtFormatError, match="finite"):
-        CalcPinBounds(((0.0, 0.0), (1.0, 0.0), (MathInfo.nan, -1.0)))
+        _ = CalcPinBounds(((0.0, 0.0), (1.0, 0.0), (MathInfo.nan, -1.0)))
     with PytestLib.raises(SldprtFormatError, match="vertical axis"):
-        CalcPinBounds(((1.0, 0.0), (2.0, 0.0), (2.0, -1.0)))
+        _ = CalcPinBounds(((1.0, 0.0), (2.0, 0.0), (2.0, -1.0)))

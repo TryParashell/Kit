@@ -6,6 +6,7 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.geometry.models.VectorSpace import SpaceVector
 
@@ -13,5 +14,15 @@ from interchange.geometry.models.VectorSpace import SpaceVector
 # spatial bounds support planning without forcing complete geometry traversal
 @ModelDataMut
 class BoundingBox(ModelBase):
-    Minimum: SpaceVector
-    Maximum: SpaceVector
+    minimum: SpaceVector
+    maximum: SpaceVector
+
+    # lower corner keeps box tests allocation free and branch simple
+    @property
+    def Minimum(self) -> SpaceVector:
+        return self.minimum
+
+    # upper corner completes the extent so containment tests stay trivial
+    @property
+    def Maximum(self) -> SpaceVector:
+        return self.maximum

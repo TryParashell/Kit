@@ -8,18 +8,18 @@
 
 from __future__ import annotations
 from convert.adapters.solidworks.core.Native import (
-    _principal_plane_ids as PrincipalPlaneIds,
-    _repair_plane_object_ids as RepairPlaneObjectIds,
-    _write_object_ids as WriteObjectIds,
+    PrincipalPlaneB as PrincipalPlaneIds,
+    RepairPlaneIMut as RepairPlaneObjectIds,
+    WriteObjectIds,
 )
 from interchange import (
     CadDocument,
     CadSource,
     SupportPlane,
     Transform,
-    UnitSystem,
     Vector3 as VectorThree,
 )
+from interchange.enums.EnumUnits import UnitSystem
 
 # centralizes shared evidence so every related assertion uses one value
 KFront = Transform(

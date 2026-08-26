@@ -67,17 +67,14 @@ BindCompatMut(
     {__name__: globals()},
 )
 
-globals().update(
-    {
-        "JsonScalar": KJsonScalar,
-        "JsonValue": KJsonValue,
-        "ParameterOverride": ParamOverride,
-        "TopologySummary": TopologyCounts,
-        "Vector2": PlaneVector,
-        "Vector3": SpaceVector,
-        "frozen_mapping": FreezeMapping,
-    }
-)
+JsonScalar = KJsonScalar
+JsonValue = KJsonValue
+BooleanOperation = BooleanOp
+ParameterOverride = ParamOverride
+TopologySummary = TopologyCounts
+Vector2 = PlaneVector
+Vector3 = SpaceVector
+frozen_mapping = FreezeMapping
 
 BindFunctionMut(
     FreezeMapping,

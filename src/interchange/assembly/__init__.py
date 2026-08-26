@@ -41,6 +41,11 @@ BindCompatMut(
 )
 BindAssemblyMut(AssemblyData, TransformMatrix)
 
+ComponentDefinition = ComponentDef
+ComponentDocument = ComponentDoc
+ComponentInstance = ComponentInst
+Matrix4 = TransformMatrix
+
 # assembly consumers need one intentional historical public contract
 __all__ = (
     "AssemblyData",

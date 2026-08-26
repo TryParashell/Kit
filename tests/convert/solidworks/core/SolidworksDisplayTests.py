@@ -49,6 +49,9 @@ def TestCPDRERAF(ItemValue: str) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KAssembly.is_file(), reason="random assembly corpus is unavailable"
+)
 def TestDLREFAGG() -> None:
     DataValue = SldprtArchive.open(KAssembly).require("Contents/DisplayLists")
     Faces = DecodeTessellationFaces(DataValue)
@@ -61,6 +64,9 @@ def TestDLREFAGG() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KAssembly.is_file(), reason="random assembly corpus is unavailable"
+)
 def TestDGISTMAMTS() -> None:
     DataValue = SldprtArchive.open(KAssembly).require("Contents/DisplayLists")
     Component = DecodeDisplayLists(DataValue)[0]

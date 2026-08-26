@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from interchange import CadDocument
@@ -30,25 +29,17 @@ def WriteDocument(
     Overwrite: bool = False,
     ValidateData: bool = True,
     AllowCarrier: bool = True,
-    InputValues: TypeMap[str, AnyValue] | None = None,
+    InputValues: TypeMap[str, object] | None = None,
 ) -> WriteResult:
-    EngineCall = getattr(KConvertEngine, "write", None)
     WriteOpts = WriteOptions(
         configuration=Configuration,
         overwrite=Overwrite,
         validate=ValidateData,
         values=BuildWriteVals(InputValues, AllowCarrier),
     )
-    if EngineCall is not None:
-        return EngineCall(
-            DocumentData,
-            TargetData,
-            format_id=DestFormat,
-            options=WriteOpts,
-        )
-    return KConvertEngine.WriteTarget(
+    return KConvertEngine.write(
         DocumentData,
         TargetData,
-        FormatId=DestFormat,
-        WriteOpts=WriteOpts,
+        format_id=DestFormat,
+        options=WriteOpts,
     )

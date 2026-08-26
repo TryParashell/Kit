@@ -20,8 +20,8 @@ from interchange import CadDocument
 class JsonWriter:
 
     # this writer validates and emits deterministic utf eight json
-    def Write(
-        Instance,
+    def EmitTarget(
+        self,
         DocValue: CadDocument,
         Target: Destination,
         Options: WriteOptions | None = None,
@@ -35,7 +35,7 @@ class JsonWriter:
             if Output.exists() and not Settings.overwrite:
                 raise FileExistsError(Output)
             Output.parent.mkdir(parents=True, exist_ok=True)
-            Output.write_bytes(Payload)
+            _ = Output.write_bytes(Payload)
             return WriteResult(
                 Output,
                 KInfoValue.format_id,
@@ -51,5 +51,3 @@ class JsonWriter:
             application_usable=True,
             vendor_loadable=True,
         )
-
-    locals()["write"] = Write

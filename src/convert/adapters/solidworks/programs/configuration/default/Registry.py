@@ -443,10 +443,10 @@ KFieldOwners, KConfigOps = BuildProgram(
 )
 
 # generated registry exports remain explicit for facade composition and extension imports
-__all__ = ["KFieldOwners", "KConfigOps", "KMethodPrograms"]
+__all__ = ["KFieldOwners", "KConfigOps", "KMethodPrograms", "FieldOwners", "ConfigOps"]
 
 # compatibility binding preserves its established public import after decomposition
-globals()["FieldOwners"] = KFieldOwners
+FieldOwners = KFieldOwners
 
 # compatibility binding preserves its established public import after decomposition
-globals()["ConfigOps"] = KConfigOps
+ConfigOps = KConfigOps

@@ -9,11 +9,25 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any as AnyValue
+from typing import TypedDict
+
+from tools.audit.FcstdResult import AuditRecord
+
+
+# report consumers need a stable aggregate shape independent from individual audit records
+class AuditSummary(TypedDict):
+    files: int
+    application_usable: int
+    vendor_loadable: int
+    vendor_only: int
+    near_lossless: int
+    errors: int
+    unsupported_feature_types: dict[str, int]
+    vendor_only_feature_types: dict[str, int]
 
 
 # aggregate verdicts retain unsupported families so research can prioritize measured gaps
-def BuildSummary(ResultsData: tuple[dict[str, AnyValue], ...]) -> dict[str, AnyValue]:
+def BuildSummary(ResultsData: tuple[AuditRecord, ...]) -> AuditSummary:
     UnsupportedTypes = Counter(
         TypeName
         for ResultData in ResultsData

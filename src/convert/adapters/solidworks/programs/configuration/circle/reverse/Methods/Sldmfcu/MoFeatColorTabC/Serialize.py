@@ -8,13 +8,16 @@
 
 from __future__ import annotations
 
+from convert.adapters.solidworks.programs.Common.ProgramContract import (
+    KMethodProgram as KMethodProgramType,
+)
 from convert.adapters.solidworks.programs.Owners.Sldmfcu.MoFeatColorTabC.Serialize import (
     KOwnerSites,
 )
 
 
 # isolated method data lets new reverse engineered serializers compose independently
-KMethodProgram = (
+KMethodProgram: KMethodProgramType = (
     KOwnerSites,
     {
         "Configuration": ((24051, 4, 225, "primitive:ulong", 0),),

@@ -29,19 +29,19 @@ __all__ = [
 ]
 
 # this binding preserves the historical public adapter listing name
-globals()["available_adapters"] = AvailableAdapters
+available_adapters = AvailableAdapters
 
 # this binding preserves the historical public conversion name
-globals()["convert"] = ConvertDoc
+convert = ConvertDoc
 
 # this binding preserves the historical public boundary extraction name
-globals()["extract_brep"] = ExtractBrep
+extract_brep = ExtractBrep
 
 # this binding preserves the historical public document reader name
-globals()["open_document"] = OpenDoc
+open_document = OpenDoc
 
 # this binding preserves the historical public registry name
-globals()["registry"] = RegistryValue
+registry = RegistryValue
 
 # this binding preserves the historical public document writer name
-globals()["write_document"] = WriteDoc
+write_document = WriteDoc

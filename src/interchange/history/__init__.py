@@ -36,22 +36,25 @@ from interchange.compatibility.PythonCompat import BindCompatMut
 from interchange.compatibility.PythonCompatHistoryMethods import BindHistoryMut
 from interchange.records.RecordTopology import TopologyCounts
 
+# one shared empty set keeps capability defaults free of repeated constructor calls
+KEmptyCaps: frozenset[Capability] = frozenset()
+
 
 # adapter capability sets centralize feature support checks for conversion decisions
 @DataClass(frozen=True, slots=True)
 class AdapterCaps(ModelBase):
-    Values: frozenset[Capability] = frozenset()
-
-    # historical constructor keywords must remain accepted without changing canonical storage
-    def __init__(
-        SelfValue,
-        Values: frozenset[Capability] = frozenset(),
-    ) -> None:
-        object.__setattr__(SelfValue, "Values", Values)
+    Values: frozenset[Capability] = KEmptyCaps
 
     # callers need one consistent containment check for adapter support declarations
-    def HasCapability(SelfValue, CapabilityValue: Capability) -> bool:
-        return CapabilityValue in SelfValue.Values
+    def HasCapability(self, CapabilityValue: Capability) -> bool:
+        return CapabilityValue in self.Values
+
+    # lowercase reads and the historical method alias stay real runtime members
+    @property
+    def values(self) -> frozenset[Capability]:
+        return self.Values
+
+    supports = HasCapability
 
 
 BindCompatMut(
@@ -81,31 +84,36 @@ BindCompatMut(
 )
 BindHistoryMut(AdapterCaps)
 
-for AttrName, AttrValue in {
+for FeatureAttrName, FeatureAttrValue in {
     "__name__": "ExtrusionEndCondition",
     "__qualname__": "ExtrusionEndCondition",
     "__module__": __name__,
 }.items():
-    setattr(ExtrudeEnd, AttrName, AttrValue)
-for AttrName, AttrValue in {"__module__": __name__}.items():
-    setattr(PayloadRole, AttrName, AttrValue)
-for AttrName, AttrValue in {
+    setattr(ExtrudeEnd, FeatureAttrName, FeatureAttrValue)
+for PayloadAttrName, PayloadAttrValue in {"__module__": __name__}.items():
+    setattr(PayloadRole, PayloadAttrName, PayloadAttrValue)
+for DefinitionAttrName, DefinitionAttrValue in {
     "__name__": "FeatureDefinition",
     "__qualname__": "FeatureDefinition",
     "__module__": __name__,
     "__signature__": FuncSig(),
 }.items():
-    setattr(FeatureDef, AttrName, AttrValue)
-for AttrName, AttrValue in {"__module__": __name__}.items():
-    setattr(TopologyCounts, AttrName, AttrValue)
+    setattr(FeatureDef, DefinitionAttrName, DefinitionAttrValue)
+for TopologyAttrName, TopologyAttrValue in {"__module__": __name__}.items():
+    setattr(TopologyCounts, TopologyAttrName, TopologyAttrValue)
 
-globals().update(
-    {
-        "ExtrusionEndCondition": ExtrudeEnd,
-        "FeatureDefinition": FeatureDef,
-        "TopologySummary": TopologyCounts,
-    }
-)
+ExtrusionEndCondition = ExtrudeEnd
+FeatureDefinition = FeatureDef
+TopologySummary = TopologyCounts
+AdapterCapabilities = AdapterCaps
+Body = DesignBody
+CircularPatternFeature = CirclePattern
+ExtrusionFeature = ExtrudeFeature
+FeatureConfigurationState = FeatureCfgState
+LinearPatternFeature = LinearPattern
+NativeFeatureDefinition = NativeFeature
+ReferencePlaneFeature = RefPlaneFeature
+RevolutionFeature = RevolveFeature
 
 
 # legacy module exports stay explicit so integrations cannot depend on implementation details

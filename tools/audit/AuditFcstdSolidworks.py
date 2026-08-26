@@ -11,7 +11,6 @@ from __future__ import annotations
 import sys as System
 from pathlib import Path as FilePath
 
-
 # repository insertion keeps package imports available when this file runs directly
 KEntryRoot = FilePath(__file__).resolve().parents[2]
 
@@ -20,9 +19,6 @@ if str(KEntryRoot) not in System.path:
 
 from tools.audit.FcstdCompat import GetLegacyAttr, KLegacyApi
 from tools.audit.FcstdCli import MainRun
-
-# explicit exports retain legacy imports because reverse engineering notebooks may use them
-__all__ = tuple(KLegacyApi)
 
 
 # compatibility resolution prevents module restructuring from breaking existing audit automation

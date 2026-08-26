@@ -7,57 +7,63 @@
 # to you under it immediately and permanently.
 
 from math import isfinite as IsFiniteNum
-from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
-from interchange.document.models.DocumentRoot import DocumentRoot
+from interchange.assembly.AssemblyData import AssemblyData  # lgtm[py/cyclic-import]
+from interchange.assembly.ComponentDefinition import ComponentDef
+from interchange.assembly.ComponentInstance import ComponentInst
+from interchange.assembly.MateEntity import MateEntity
+from interchange.document.models.DocumentModel import (  # lgtm[py/cyclic-import]
+    CadDocument,
+)
+
+
+# runtime model construction can bypass annotations so radii need an explicit numeric boundary
+def IsValidRadius(SourceValue: object) -> bool:
+    return (
+        isinstance(SourceValue, (int, float))
+        and IsFiniteNum(SourceValue)
+        and SourceValue >= 0.0
+    )
 
 
 # mate entity checks protect occurrence paths frames radii and selection ownership
 def GetMateEntErrs(
-    DocumentValue: AnyValue,
-    AssemblyValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    Instances: TypeMap[str, AnyValue],
-    DocumentValues: TypeMap[str, AnyValue],
+    DocumentValue: CadDocument,
+    AssemblyValue: AssemblyData,
+    Definitions: TypeMap[str, ComponentDef],
+    Instances: TypeMap[str, ComponentInst],
+    DocumentValues: TypeMap[str, CadDocument],
     IdentitySets: TypeMap[str, set[str]],
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    for EntityValue in AssemblyValue.MateEntities:
-        if EntityValue.OwnerDefinitionId not in Definitions:
+    for EntityValue in AssemblyValue.mate_entities:
+        if EntityValue.owner_definition_id not in Definitions:
             ErrorValues.append(
-                f"mate entity {EntityValue.EntityId} references missing owner definition"
+                f"mate entity {EntityValue.id} references missing owner definition"
             )
             continue
-        CurrentDefId = EntityValue.OwnerDefinitionId
+        CurrentDefId = EntityValue.owner_definition_id
         IsValidPath = True
-        for InstanceId in EntityValue.InstancePath:
+        for InstanceId in EntityValue.instance_path:
             InstanceValue = Instances.get(InstanceId)
             if InstanceValue is None:
                 ErrorValues.append(
-                    f"mate entity {EntityValue.EntityId} references missing instance {InstanceId}"
+                    f"mate entity {EntityValue.id} references missing instance {InstanceId}"
                 )
                 IsValidPath = False
                 break
-            if InstanceValue.OwnerDefinitionId != CurrentDefId:
+            if InstanceValue.owner_definition_id != CurrentDefId:
                 ErrorValues.append(
-                    f"mate entity {EntityValue.EntityId} has a disconnected instance path"
+                    f"mate entity {EntityValue.id} has a disconnected instance path"
                 )
                 IsValidPath = False
                 break
-            CurrentDefId = InstanceValue.DefinitionId
-        if EntityValue.Frame is not None and not EntityValue.Frame.IsFinite():
-            ErrorValues.append(
-                f"mate entity {EntityValue.EntityId} has an invalid frame"
-            )
-        if EntityValue.Radius is not None and (
-            not isinstance(EntityValue.Radius, (int, float))
-            or not IsFiniteNum(EntityValue.Radius)
-            or EntityValue.Radius < 0.0
-        ):
-            ErrorValues.append(
-                f"mate entity {EntityValue.EntityId} has an invalid radius"
-            )
+            CurrentDefId = InstanceValue.definition_id
+        if EntityValue.frame is not None and not EntityValue.frame.IsFinite():
+            ErrorValues.append(f"mate entity {EntityValue.id} has an invalid frame")
+        if EntityValue.radius is not None and not IsValidRadius(EntityValue.radius):
+            ErrorValues.append(f"mate entity {EntityValue.id} has an invalid radius")
         ErrorValues.extend(
             GetSelectErrors(
                 DocumentValue,
@@ -74,31 +80,27 @@ def GetMateEntErrs(
 
 # selection checks protect resolved mate geometry from dangling document references
 def GetSelectErrors(
-    DocumentValue: AnyValue,
-    EntityValue: AnyValue,
-    Definitions: TypeMap[str, AnyValue],
-    DocumentValues: TypeMap[str, AnyValue],
+    DocumentValue: CadDocument,
+    EntityValue: MateEntity,
+    Definitions: TypeMap[str, ComponentDef],
+    DocumentValues: TypeMap[str, CadDocument],
     IdentitySets: TypeMap[str, set[str]],
     CurrentDefId: str,
     IsValidPath: bool,
 ) -> tuple[str, ...]:
-    if not EntityValue.SelectionId or not IsValidPath:
+    if not EntityValue.selection_id or not IsValidPath:
         return ()
     TargetDef = Definitions.get(CurrentDefId)
-    TargetDocument = DocumentValue
-    if TargetDef is not None and TargetDef.DocumentId:
-        TargetDocument = DocumentValues.get(TargetDef.DocumentId)
+    TargetDocument: CadDocument | None = DocumentValue
+    if TargetDef is not None and TargetDef.document_id:
+        TargetDocument = DocumentValues.get(TargetDef.document_id)
+    if TargetDocument is None:
+        return ()
     TargetSelectIds = (
-        IdentitySets["Selections"]
+        IdentitySets["selections"]
         if TargetDocument is DocumentValue
-        else {
-            SelectionValue.EntityId
-            for SelectionValue in getattr(TargetDocument, "Selections", ())
-        }
+        else {SelectionValue.id for SelectionValue in TargetDocument.selections}
     )
-    if (
-        isinstance(TargetDocument, DocumentRoot)
-        and EntityValue.SelectionId not in TargetSelectIds
-    ):
-        return (f"mate entity {EntityValue.EntityId} references missing selection",)
+    if EntityValue.selection_id not in TargetSelectIds:
+        return (f"mate entity {EntityValue.id} references missing selection",)
     return ()

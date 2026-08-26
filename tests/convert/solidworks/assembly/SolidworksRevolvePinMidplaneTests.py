@@ -21,10 +21,12 @@ from convert.adapters.solidworks.programs.configuration.revolve.pin.midplane.Pro
     GetCoverage as GetConfigCoverage,
 )
 from convert.adapters.solidworks.programs.configuration.revolve.pin.midplane.Program import (
-    KConfigOps,
-    KFieldOwners as KConfigOwners,
     KReferenceDigest as KConfigDigest,
     KReferenceLength as KConfigLength,
+)
+from convert.adapters.solidworks.programs.configuration.revolve.pin.midplane.Registry import (
+    KConfigOps,
+    KFieldOwners as KConfigOwners,
 )
 from convert.adapters.solidworks.container.Container import (
     SldprtArchive,
@@ -37,14 +39,16 @@ from convert.adapters.solidworks.container.Format import (
 from convert.adapters.solidworks.programs.resolved.revolve.pin.midplane.Program import (
     EncodeProgram,
     GetCoverage,
-    KFieldOwners,
     KFirstAngleOffsets,
     KProfileOffsets,
     KReferenceDigest,
     KReferenceLength,
-    KResolvedOps,
     KSecondAngleOffsets,
     KSingleEndOffset,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.pin.midplane.Registry import (
+    KFieldOwners,
+    KResolvedOps,
 )
 from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
     CalcPinBounds,
@@ -98,7 +102,7 @@ KOraclePath = (
 def TestMPPWRFC(TmpPath: FilePath) -> None:
     SourceData = ReadFreecad(KSourcePath)
     with PytestLib.raises(ApplicationUsabilityError):
-        WriteDocument(
+        _ = WriteDocument(
             SourceData, TmpPath / "MidplanePinPending.SLDPRT", allow_carrier=False
         )
 
@@ -123,7 +127,7 @@ def TestMPCPHETC() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMPCOTWG() -> None:
     CursorValue = 0
-    for StartPos, FieldWidth, OwnerIndex, KindNameA, DefaultValue in KConfigOps:
+    for StartPos, FieldWidth, OwnerIndex, _, _ in KConfigOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KConfigOwners)
@@ -182,7 +186,7 @@ def TestMPPHETC() -> None:
 def TestMPPOTWG() -> None:
     CursorValue = 0
     AllowedKinds = {"definition", "classref", "objectref", "null", "string"}
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in KResolvedOps:
+    for StartPos, FieldWidth, OwnerIndex, KindName, _ in KResolvedOps:
         assert StartPos == CursorValue
         assert FieldWidth > 0
         assert 0 <= OwnerIndex < len(KFieldOwners)
@@ -236,7 +240,7 @@ def TestMPPCAPV() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMPPRVWO() -> None:
     with PytestLib.raises(SldprtFormatError, match="field width changed"):
-        EncodeProgram({11251: "D100"})
+        _ = EncodeProgram({11251: "D100"})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

@@ -15,11 +15,11 @@ def GetLoopErrors(
     ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
-    EdgeById = {EdgeValue.EntityId: EdgeValue for EdgeValue in ModelValue.Edges}
+    EdgeById = {EdgeValue.EntityId: EdgeValue for EdgeValue in ModelValue.edges}
     CoedgeById = {
-        CoedgeValue.EntityId: CoedgeValue for CoedgeValue in ModelValue.Coedges
+        CoedgeValue.EntityId: CoedgeValue for CoedgeValue in ModelValue.coedges
     }
-    for LoopValue in ModelValue.Loops:
+    for LoopValue in ModelValue.loops:
         if not LoopValue.CoedgeIds:
             ErrorValues.append(f"B-rep loop {LoopValue.EntityId} is empty")
         if any(
@@ -32,7 +32,7 @@ def GetLoopErrors(
             ErrorValues.append(
                 f"B-rep loop {LoopValue.EntityId} is disconnected or open"
             )
-    for WireValue in ModelValue.Wires:
+    for WireValue in ModelValue.wires:
         if not WireValue.CoedgeIds:
             ErrorValues.append(f"B-rep wire {WireValue.EntityId} is empty")
         if any(

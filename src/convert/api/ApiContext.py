@@ -15,7 +15,7 @@ from convert.engine import ConversionEngine
 # one discovery factory keeps the public composition root independent from format packages
 def BuildRegistry() -> AdapterRegistry:
     RegistryData = AdapterRegistry()
-    RegistryData.introspect()
+    _ = RegistryData.introspect()
     return RegistryData
 
 

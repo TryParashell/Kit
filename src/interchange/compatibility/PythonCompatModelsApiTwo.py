@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # historical api identity set 2 keeps pickle globals stable after module splits
 KLegacyApiTwo: TypeMap[str, tuple[str, str]] = {
     "HoleFeature": ("HoleFeature", "interchange.history"),

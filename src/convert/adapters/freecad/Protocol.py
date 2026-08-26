@@ -7,18 +7,16 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
+from collections.abc import Mapping
 from dataclasses import dataclass as Dataclass
 from types import MappingProxyType
-from interchange import (
-    BooleanOperation as BoolOperation,
-    ConstraintKind as RuleKind,
-    ExtrusionEndCondition,
-    FeatureKind,
-    GeometryKind as GeomKind,
-    MateEntityKind,
-    MateKind,
-    ValueKind,
-)
+from interchange.assembly.AssemblyEnums import MateEntityKind, MateKind
+from interchange.enums.EnumFeatures import BooleanOp as BoolOperation
+from interchange.enums.EnumFeatures import FeatureKind
+from interchange.enums.EnumGeometry import ConstraintKind as RuleKind
+from interchange.enums.EnumGeometry import GeometryKind as GeomKind
+from interchange.enums.EnumValues import ValueKind
+from interchange.features.FeatureExtrude import ExtrudeEnd as ExtrusionEndCondition
 
 # this binding exists because shared behavior needs one stable value
 KAsmObjectTypePrefix = "Assembly::"
@@ -197,11 +195,10 @@ KQuantityPropUnits = {
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ScalarPropType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["type_id"] = "str"
-    __annotations__["value_kind"] = "ValueKind"
-    __annotations__["unit"] = "str"
-    __annotations__["value_tag"] = "str"
+    type_id: str
+    value_kind: ValueKind
+    unit: str
+    value_tag: str
 
 
 # this binding exists because shared behavior needs one stable value
@@ -242,9 +239,8 @@ KScalarPropKinds = {
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class FeatureType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["type_id"] = "str"
-    __annotations__["kind"] = "FeatureKind"
+    type_id: str
+    kind: FeatureKind
 
 
 # this binding groups foundational part workbench feature identities
@@ -361,7 +357,7 @@ KDesignBinderTypes = (
 )
 
 # this binding preserves the complete ordered feature type contract
-KFeatureTypes = (
+KFeatureTypes: tuple[FeatureType, ...] = (
     *KPartCoreTypes,
     *KPartShapeTypes,
     *KDesignCoreTypes,
@@ -370,17 +366,18 @@ KFeatureTypes = (
 )
 
 # this binding exists because shared behavior needs one stable value
-KFeatureKindByTypeId = {Value.type_id: Value.kind for Value in KFeatureTypes}
+KFeatureKindByTypeId: dict[str, FeatureKind] = {
+    Value.type_id: Value.kind for Value in KFeatureTypes
+}
 
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class BoolOperationA:
-    locals().setdefault("__annotations__", {})
-    __annotations__["operation"] = "BoolOperation"
-    __annotations__["type_id"] = "str"
-    __annotations__["label"] = "str"
-    __annotations__["input_mode"] = "str"
+    operation: BoolOperation
+    type_id: str
+    label: str
+    input_mode: str
 
 
 # this binding exists because shared behavior needs one stable value
@@ -400,7 +397,7 @@ KBoolOperationTypeByKind = {
 KCreateOperationNames = frozenset({"", BoolOperation.CREATE.value})
 
 # this binding exists because shared behavior needs one stable value
-KFeatureWriteTypeIds = MappingProxyType(
+KFeatureWriteTypeIds: Mapping[FeatureKind, frozenset[str]] = MappingProxyType(
     {
         FeatureKind.EXTRUSION: frozenset(
             (Value.type_id for Value in KBoolOperationTypes)
@@ -428,7 +425,7 @@ KFeatureWriteTypeIds = MappingProxyType(
         FeatureKind.NATIVE: frozenset(),
     }
 )
-if KFeatureWriteTypeIds.keys() != set(FeatureKind):
+if set(KFeatureWriteTypeIds) != set(FeatureKind):
     raise RuntimeError("FreeCAD feature write types are not exhaustive")
 
 # this binding exists because shared behavior needs one stable value
@@ -443,11 +440,9 @@ KFeatureCarrierKinds = frozenset(FeatureKind) - KFeatureWriteKinds
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ExtrusionType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["code"] = "int"
-    __annotations__["end_condition"] = "ExtrusionEndCondition"
-    __annotations__["pocket_end_condition"] = "ExtrusionEndCondition | None"
-    locals()["pocket_end_condition"] = None
+    code: int
+    end_condition: ExtrusionEndCondition
+    pocket_end_condition: ExtrusionEndCondition | None = None
 
 
 # this binding exists because shared behavior needs one stable value
@@ -472,10 +467,9 @@ KPocketTypeId = "PartDesign::Pocket"
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class PrimitiveFamily:
-    locals().setdefault("__annotations__", {})
-    __annotations__["namespace"] = "str"
-    __annotations__["prefixes"] = "tuple[str, ...]"
-    __annotations__["shapes"] = "tuple[str, ...]"
+    namespace: str
+    prefixes: tuple[str, ...]
+    shapes: tuple[str, ...]
 
 
 # this binding exists because shared behavior needs one stable value
@@ -538,11 +532,9 @@ KRegisteredPartObjectType = KPartObjectTypeIds - KAdditionalPartObjectType
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RulePoint:
-    locals().setdefault("__annotations__", {})
-    __annotations__["index"] = "int"
-    __annotations__["name"] = "str"
-    __annotations__["aliases"] = "tuple[str, ...]"
-    locals()["aliases"] = ()
+    index: int
+    name: str
+    aliases: tuple[str, ...] = ()
 
 
 # this binding exists because shared behavior needs one stable value
@@ -580,15 +572,11 @@ KMidpointRefPointNames = frozenset(
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class RuleType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["code"] = "int"
-    __annotations__["kind"] = "RuleKind"
-    __annotations__["value_kind"] = "ValueKind | None"
-    locals()["value_kind"] = None
-    __annotations__["unit"] = "str"
-    locals()["unit"] = ""
-    __annotations__["write_kinds"] = "tuple[RuleKind, ...]"
-    locals()["write_kinds"] = ()
+    code: int
+    kind: RuleKind
+    value_kind: ValueKind | None = None
+    unit: str = ""
+    write_kinds: tuple[RuleKind, ...] = ()
 
 
 # this binding exists because shared behavior needs one stable value
@@ -663,7 +651,7 @@ KRuleWriteCodes = MappingProxyType(
         RuleKind.NATIVE: frozenset(),
     }
 )
-if KRuleWriteCodes.keys() != set(RuleKind):
+if set(KRuleWriteCodes) != set(RuleKind):
     raise RuntimeError("FreeCAD constraint write codes are not exhaustive")
 
 # this binding exists because shared behavior needs one stable value
@@ -696,13 +684,10 @@ KDimensionalRuleCodes = frozenset(KRuleValueKindByCode)
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class GeomType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["type_id"] = "str"
-    __annotations__["kind"] = "GeomKind"
-    __annotations__["neutral_type"] = "str"
-    locals()["neutral_type"] = ""
-    __annotations__["neutral_default"] = "bool"
-    locals()["neutral_default"] = False
+    type_id: str
+    kind: GeomKind
+    neutral_type: str = ""
+    neutral_default: bool = False
 
 
 # this binding exists because shared behavior needs one stable value
@@ -774,7 +759,7 @@ KGeomWriteTypeIds = MappingProxyType(
         GeomKind.NATIVE: frozenset(),
     }
 )
-if KGeomWriteTypeIds.keys() != set(GeomKind):
+if set(KGeomWriteTypeIds) != set(GeomKind):
     raise RuntimeError("FreeCAD geometry write types are not exhaustive")
 
 # this binding exists because shared behavior needs one stable value
@@ -800,17 +785,12 @@ KSplineGeomTypeIds = frozenset(
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class JointType:
-    locals().setdefault("__annotations__", {})
-    __annotations__["name"] = "str"
-    __annotations__["kind"] = "MateKind"
-    __annotations__["write_kinds"] = "tuple[MateKind, ...]"
-    locals()["write_kinds"] = ()
-    __annotations__["write_aliases"] = "tuple[str, ...]"
-    locals()["write_aliases"] = ()
-    __annotations__["uses_distance"] = "bool"
-    locals()["uses_distance"] = False
-    __annotations__["uses_second_distance"] = "bool"
-    locals()["uses_second_distance"] = False
+    name: str
+    kind: MateKind
+    write_kinds: tuple[MateKind, ...] = ()
+    write_aliases: tuple[str, ...] = ()
+    uses_distance: bool = False
+    uses_second_distance: bool = False
 
 
 # this binding exists because shared behavior needs one stable value
@@ -886,7 +866,7 @@ KMateWriteTypes = MappingProxyType(
         MateKind.NATIVE: frozenset(),
     }
 )
-if KMateWriteTypes.keys() != set(MateKind):
+if set(KMateWriteTypes) != set(MateKind):
     raise RuntimeError("FreeCAD mate write types are not exhaustive")
 
 # this binding exists because shared behavior needs one stable value
@@ -921,280 +901,280 @@ KMateKindsUsingSecond = frozenset(
 )
 
 # this binding exists because shared behavior needs one stable value
-globals()["ADDITIONAL_PART_OBJECT_TYPE_IDS"] = KAdditionalPartObjectType
+ADDITIONAL_PART_OBJECT_TYPE_IDS = KAdditionalPartObjectType
 
 # this binding exists because shared behavior needs one stable value
-globals()["APP_LINK_TYPE_ID"] = KAppLinkTypeId
+APP_LINK_TYPE_ID = KAppLinkTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["APP_PART_TYPE_ID"] = KAppPartTypeId
+APP_PART_TYPE_ID = KAppPartTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_CONNECTOR_PROPERTY_PREFIXES"] = KAsmConnectorPropPrefixes
+ASSEMBLY_CONNECTOR_PROPERTY_PREFIXES = KAsmConnectorPropPrefixes
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_JOINT_GROUP_TYPE_ID"] = KAsmJointGroupTypeId
+ASSEMBLY_JOINT_GROUP_TYPE_ID = KAsmJointGroupTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_LINK_TYPE_ID"] = KAsmLinkTypeId
+ASSEMBLY_LINK_TYPE_ID = KAsmLinkTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_OBJECT_TYPE_PREFIX"] = KAsmObjectTypePrefix
+ASSEMBLY_OBJECT_TYPE_PREFIX = KAsmObjectTypePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["ASSEMBLY_ROOT_TYPE_ID"] = KAsmRootTypeId
+ASSEMBLY_ROOT_TYPE_ID = KAsmRootTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["BODY_CONTAINER_TYPE_IDS"] = KBodyContainerTypeIds
+BODY_CONTAINER_TYPE_IDS = KBodyContainerTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["BODY_TYPE_ID"] = KBodyTypeId
+BODY_TYPE_ID = KBodyTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["BOOLEAN_OPERATION_TYPES"] = KBoolOperationTypes
+BOOLEAN_OPERATION_TYPES = KBoolOperationTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["BOOLEAN_OPERATION_TYPE_BY_KIND"] = KBoolOperationTypeByKind
+BOOLEAN_OPERATION_TYPE_BY_KIND = KBoolOperationTypeByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["BooleanOperation"] = BoolOperation
+BooleanOperation = BoolOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()["BooleanOperationType"] = BoolOperationA
+BooleanOperationType = BoolOperationA
 
 # this binding exists because shared behavior needs one stable value
-globals()["CIRCULAR_GEOMETRY_KINDS"] = KCircularGeomKinds
+CIRCULAR_GEOMETRY_KINDS = KCircularGeomKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_CARRIER_KINDS"] = KRuleCarrierKinds
+CONSTRAINT_CARRIER_KINDS = KRuleCarrierKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_CODE_BY_KIND"] = KRuleCodeByKind
+CONSTRAINT_CODE_BY_KIND = KRuleCodeByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_COMPOSED_KINDS"] = KRuleComposedKinds
+CONSTRAINT_COMPOSED_KINDS = KRuleComposedKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_DIRECT_KINDS"] = KRuleDirectKinds
+CONSTRAINT_DIRECT_KINDS = KRuleDirectKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_KIND_BY_CODE"] = KRuleKindByCode
+CONSTRAINT_KIND_BY_CODE = KRuleKindByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_POINTS"] = KRulePoints
+CONSTRAINT_POINTS = KRulePoints
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_POINT_BY_INDEX"] = KRulePointByIndex
+CONSTRAINT_POINT_BY_INDEX = KRulePointByIndex
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_POINT_INDEX_BY_NAME"] = KRulePointIndexByName
+CONSTRAINT_POINT_INDEX_BY_NAME = KRulePointIndexByName
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_TYPES"] = KRuleTypes
+CONSTRAINT_TYPES = KRuleTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_VALUE_KIND_BY_CODE"] = KRuleValueKindByCode
+CONSTRAINT_VALUE_KIND_BY_CODE = KRuleValueKindByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_WRITE_CODES"] = KRuleWriteCodes
+CONSTRAINT_WRITE_CODES = KRuleWriteCodes
 
 # this binding exists because shared behavior needs one stable value
-globals()["CONSTRAINT_WRITE_KINDS"] = KRuleWriteKinds
+CONSTRAINT_WRITE_KINDS = KRuleWriteKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["CREATE_OPERATION_NAMES"] = KCreateOperationNames
+CREATE_OPERATION_NAMES = KCreateOperationNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintKind"] = RuleKind
+ConstraintKind = RuleKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintPoint"] = RulePoint
+ConstraintPoint = RulePoint
 
 # this binding exists because shared behavior needs one stable value
-globals()["ConstraintType"] = RuleType
+ConstraintType = RuleType
 
 # this binding exists because shared behavior needs one stable value
-globals()["DIMENSIONAL_CONSTRAINT_CODES"] = KDimensionalRuleCodes
+DIMENSIONAL_CONSTRAINT_CODES = KDimensionalRuleCodes
 
 # this binding exists because shared behavior needs one stable value
-globals()["EXTRUSION_TYPES"] = KExtrusionTypes
+EXTRUSION_TYPES = KExtrusionTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["EXTRUSION_TYPE_BY_CODE"] = KExtrusionTypeByCode
+EXTRUSION_TYPE_BY_CODE = KExtrusionTypeByCode
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_CARRIER_KINDS"] = KFeatureCarrierKinds
+FEATURE_CARRIER_KINDS = KFeatureCarrierKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_KIND_BY_TYPE_ID"] = KFeatureKindByTypeId
+FEATURE_KIND_BY_TYPE_ID = KFeatureKindByTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_TYPES"] = KFeatureTypes
+FEATURE_TYPES = KFeatureTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_WRITE_KINDS"] = KFeatureWriteKinds
+FEATURE_WRITE_KINDS = KFeatureWriteKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FEATURE_WRITE_TYPE_IDS"] = KFeatureWriteTypeIds
+FEATURE_WRITE_TYPE_IDS = KFeatureWriteTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FIXED_CONSTRAINT_KINDS"] = KFixedRuleKinds
+FIXED_CONSTRAINT_KINDS = KFixedRuleKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FREECAD_BREP_FORMAT_IDS"] = KFreecadBrepFormatIds
+FREECAD_BREP_FORMAT_IDS = KFreecadBrepFormatIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["FREECAD_BREP_HEADER"] = KFreecadBrepHeader
+FREECAD_BREP_HEADER = KFreecadBrepHeader
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_CARRIER_KINDS"] = KGeomCarrierKinds
+GEOMETRY_CARRIER_KINDS = KGeomCarrierKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_KIND_BY_TYPE_ID"] = KGeomKindByTypeId
+GEOMETRY_KIND_BY_TYPE_ID = KGeomKindByTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_TYPES"] = KGeomTypes
+GEOMETRY_TYPES = KGeomTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_TYPE_IDS_BY_KIND"] = KGeomTypeIdsByKind
+GEOMETRY_TYPE_IDS_BY_KIND = KGeomTypeIdsByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_WRITE_KINDS"] = KGeomWriteKinds
+GEOMETRY_WRITE_KINDS = KGeomWriteKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["GEOMETRY_WRITE_TYPE_IDS"] = KGeomWriteTypeIds
+GEOMETRY_WRITE_TYPE_IDS = KGeomWriteTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["GeometryKind"] = GeomKind
+GeometryKind = GeomKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["GeometryType"] = GeomType
+GeometryType = GeomType
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_GROUND_PROPERTY"] = KJointGroundProp
+JOINT_GROUND_PROPERTY = KJointGroundProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_REFERENCE_INDEX_BY_PROPERTY"] = KJointRefIndexByProp
+JOINT_REFERENCE_INDEX_BY_PROPERTY = KJointRefIndexByProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_REFERENCE_PROPERTIES"] = KJointRefProperties
+JOINT_REFERENCE_PROPERTIES = KJointRefProperties
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_RESERVED_LINK_PROPERTIES"] = KJointReservedLink
+JOINT_RESERVED_LINK_PROPERTIES = KJointReservedLink
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPES"] = KJointTypes
+JOINT_TYPES = KJointTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPES_USING_DISTANCE"] = KJointTypesUsingDistance
+JOINT_TYPES_USING_DISTANCE = KJointTypesUsingDistance
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPES_USING_SECOND_DISTANCE"] = KJointTypesUsingSecond
+JOINT_TYPES_USING_SECOND_DISTANCE = KJointTypesUsingSecond
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPE_BY_MATE_KIND"] = KJointTypeByMateKind
+JOINT_TYPE_BY_MATE_KIND = KJointTypeByMateKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPE_DEFINITIONS"] = KJointTypeDefinitions
+JOINT_TYPE_DEFINITIONS = KJointTypeDefinitions
 
 # this binding exists because shared behavior needs one stable value
-globals()["JOINT_TYPE_PROPERTIES"] = KJointTypeProperties
+JOINT_TYPE_PROPERTIES = KJointTypeProperties
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_CARRIER_KINDS"] = KMateCarrierKinds
+MATE_CARRIER_KINDS = KMateCarrierKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_KINDS_USING_DISTANCE"] = KMateKindsUsingDistance
+MATE_KINDS_USING_DISTANCE = KMateKindsUsingDistance
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_KINDS_USING_SECOND_DISTANCE"] = KMateKindsUsingSecond
+MATE_KINDS_USING_SECOND_DISTANCE = KMateKindsUsingSecond
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_KIND_BY_JOINT_TYPE"] = KMateKindByJointType
+MATE_KIND_BY_JOINT_TYPE = KMateKindByJointType
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_WRITE_KINDS"] = KMateWriteKinds
+MATE_WRITE_KINDS = KMateWriteKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["MATE_WRITE_TYPES"] = KMateWriteTypes
+MATE_WRITE_TYPES = KMateWriteTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["MIDPOINT_REFERENCE_POINT_NAMES"] = KMidpointRefPointNames
+MIDPOINT_REFERENCE_POINT_NAMES = KMidpointRefPointNames
 
 # this binding exists because shared behavior needs one stable value
-globals()["NEUTRAL_GEOMETRY_TYPE_BY_KIND"] = KNeutralGeomTypeByKind
+NEUTRAL_GEOMETRY_TYPE_BY_KIND = KNeutralGeomTypeByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["NEUTRAL_GEOMETRY_TYPE_ID_BY_KIND"] = KNeutralGeomTypeIdByKind
+NEUTRAL_GEOMETRY_TYPE_ID_BY_KIND = KNeutralGeomTypeIdByKind
 
 # this binding exists because shared behavior needs one stable value
-globals()["NON_FEATURE_OBJECT_TYPE_IDS"] = KNonFeatureObjectTypeIds
+NON_FEATURE_OBJECT_TYPE_IDS = KNonFeatureObjectTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_CONTAINER_TYPE_IDS"] = KPartContainerTypeIds
+PART_CONTAINER_TYPE_IDS = KPartContainerTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["PART_OBJECT_TYPE_IDS"] = KPartObjectTypeIds
+PART_OBJECT_TYPE_IDS = KPartObjectTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["PERMISSIVE_TRUE_VALUES"] = KPermissiveTrueValues
+PERMISSIVE_TRUE_VALUES = KPermissiveTrueValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["POCKET_TYPE_ID"] = KPocketTypeId
+POCKET_TYPE_ID = KPocketTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["PRIMITIVE_FEATURE_FAMILIES"] = KPrimitiveFeatureFamilies
+PRIMITIVE_FEATURE_FAMILIES = KPrimitiveFeatureFamilies
 
 # this binding exists because shared behavior needs one stable value
-globals()["PRIMITIVE_FEATURE_TYPE_IDS"] = KPrimitiveFeatureTypeIds
+PRIMITIVE_FEATURE_TYPE_IDS = KPrimitiveFeatureTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["PrimitiveFeatureFamily"] = PrimitiveFamily
+PrimitiveFeatureFamily = PrimitiveFamily
 
 # this binding exists because shared behavior needs one stable value
-globals()["QUANTITY_PROPERTY_UNITS"] = KQuantityPropUnits
+QUANTITY_PROPERTY_UNITS = KQuantityPropUnits
 
 # this binding exists because shared behavior needs one stable value
-globals()["REGISTERED_PART_OBJECT_TYPE_IDS"] = KRegisteredPartObjectType
+REGISTERED_PART_OBJECT_TYPE_IDS = KRegisteredPartObjectType
 
 # this binding exists because shared behavior needs one stable value
-globals()["SCALAR_PROPERTY_KINDS"] = KScalarPropKinds
+SCALAR_PROPERTY_KINDS = KScalarPropKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["SCALAR_PROPERTY_TYPES"] = KScalarPropTypes
+SCALAR_PROPERTY_TYPES = KScalarPropTypes
 
 # this binding exists because shared behavior needs one stable value
-globals()["SKETCH_TYPE_ID"] = KSketchTypeId
+SKETCH_TYPE_ID = KSketchTypeId
 
 # this binding exists because shared behavior needs one stable value
-globals()["SPLINE_CONTROL_TAGS"] = KSplineControlTags
+SPLINE_CONTROL_TAGS = KSplineControlTags
 
 # this binding exists because shared behavior needs one stable value
-globals()["SPLINE_GEOMETRY_KINDS"] = KSplineGeomKinds
+SPLINE_GEOMETRY_KINDS = KSplineGeomKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["SPLINE_GEOMETRY_TYPE_IDS"] = KSplineGeomTypeIds
+SPLINE_GEOMETRY_TYPE_IDS = KSplineGeomTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["STRING_HASHER_TAGS"] = KStringHasherTags
+STRING_HASHER_TAGS = KStringHasherTags
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUBELEMENT_KIND_BY_PREFIX"] = KSubElemKindByPrefix
+SUBELEMENT_KIND_BY_PREFIX = KSubElemKindByPrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUBELEMENT_MATE_ENTITY_KINDS"] = KSubElemMateEntityKinds
+SUBELEMENT_MATE_ENTITY_KINDS = KSubElemMateEntityKinds
 
 # this binding exists because shared behavior needs one stable value
-globals()["SUPPORT_PLANE_TYPE_IDS"] = KSupportPlaneTypeIds
+SUPPORT_PLANE_TYPE_IDS = KSupportPlaneTypeIds
 
 # this binding exists because shared behavior needs one stable value
-globals()["ScalarPropertyType"] = ScalarPropType
+ScalarPropertyType = ScalarPropType
 
 # this binding exists because shared behavior needs one stable value
-globals()["XML_TRUE_VALUES"] = KXmlTrueValues
+XML_TRUE_VALUES = KXmlTrueValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["dataclass"] = Dataclass
+dataclass = Dataclass

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import replace as ReplaceValue
 from io import BytesIO
-from typing import Any as AnyValue
 
 import pytest as Pytest
 
@@ -20,41 +19,53 @@ from convert.adapters import (
     ApplicationUsabilityError,
     CarrierReason,
     CapabilityTransfer,
+    Destination,
     TransferMode,
+    WriteOptions,
     WriteResult,
 )
-from interchange import CadDocument, Capability, InferCaps
+from interchange import CadDocument, Capability
+from interchange.document.models.DocumentCaps import InferCaps
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
+
+from typing_extensions import override as Override
 
 
 # one sorted capability view keeps transfer fixtures deterministic across hash seeds
 def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
-    ReturnCaps = DocumentData.capabilities | InferCaps(
+    ReturnCaps = DocumentData.Capabilities | InferCaps(
         DocumentData,
-        RoundtripMeta=Capability.ROUNDTRIP_METADATA in DocumentData.capabilities,
+        RoundtripMeta=Capability.KRoundtripMeta in DocumentData.Capabilities,
     )
 
     # capability wire names provide stable ordering for transfer assertions across runs
     return tuple(sorted(ReturnCaps, key=lambda CapabilityData: CapabilityData.value))
 
 
-# writer gaps remain explicit carriers so default policy can reject incomplete translation
-class MixedAdapter(ResultAdapter):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+    pass
+
+
+# mixed adapter keeps the historical surface because callers depend on it directly
+class MixedAdapter(PairProtocol, ResultAdapter):
 
     # one native transfer plus writer gaps exercises mixed preservation without capability loss
-    def WriteData(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+    @Override
+    @Override
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().WriteData(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
-                TransferMode.NATIVE if IndexValue == 0 else TransferMode.CARRIER,
+                TransferMode.KNative if IndexValue == 0 else TransferMode.KCarrier,
             )
-            for IndexValue, CapabilityData in enumerate(GetCapabilities(DocumentData))
+            for IndexValue, CapabilityData in enumerate(GetCapabilities(document))
         )
         return ReplaceValue(
             ResultData,
@@ -62,9 +73,6 @@ class MixedAdapter(ResultAdapter):
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(MixedAdapter, "write", MixedAdapter.WriteData)
 
 
 # default policy rejects writer gaps even when resulting bytes are vendor loadable
@@ -80,7 +88,7 @@ def CheckWriterGap() -> None:
     RegistryData.register(MixedAdapter(InfoData))
     TargetData = BytesIO()
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(BuildSource(), TargetData, format_id=InfoData.format_id)
+        _ = RegistryData.write(BuildSource(), TargetData, format_id=InfoData.format_id)
     assert TargetData.getvalue() == b""
     assert ErrorInfo.value.application_usable is True
     assert ErrorInfo.value.vendor_loadable is True
@@ -89,23 +97,25 @@ def CheckWriterGap() -> None:
 
 
 # target format limits remain truthful reversible carriers rather than implementation gaps
-class TargetAdapter(ResultAdapter):
+class TargetAdapter(PairProtocol, ResultAdapter):
 
     # native seed plus intrinsic carriers proves near losslessness accepts target limitations
-    def WriteData(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+    @Override
+    @Override
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().WriteData(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
-                TransferMode.NATIVE if IndexValue == 0 else TransferMode.CARRIER,
-                None if IndexValue == 0 else CarrierReason.TARGET_UNSUPPORTED,
+                TransferMode.KNative if IndexValue == 0 else TransferMode.KCarrier,
+                None if IndexValue == 0 else CarrierReason.KTargetGap,
             )
-            for IndexValue, CapabilityData in enumerate(GetCapabilities(DocumentData))
+            for IndexValue, CapabilityData in enumerate(GetCapabilities(document))
         )
         return ReplaceValue(
             ResultData,
@@ -113,9 +123,6 @@ class TargetAdapter(ResultAdapter):
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(TargetAdapter, "write", TargetAdapter.WriteData)
 
 
 # intrinsic target limitations remain acceptable when output is usable and reversible
@@ -141,30 +148,32 @@ def CheckTargetGap() -> None:
     assert ResultData.carrier_capabilities
     assert ResultData.near_lossless is True
     assert all(
-        TransferData.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+        TransferData.carrier_reason is CarrierReason.KTargetGap
         for TransferData in ResultData.transfers
-        if TransferData.mode is TransferMode.CARRIER
+        if TransferData.mode is TransferMode.KCarrier
     )
 
 
 # carrier only target limits model formats with no native representation for this document
-class OnlyCarrier(ResultAdapter):
+class OnlyCarrier(PairProtocol, ResultAdapter):
 
     # every intrinsic carrier proves native emptiness alone does not make usable output invalid
-    def WriteData(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+    @Override
+    @Override
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        ResultData = super().WriteData(DocumentData, TargetData, OptionsData)
+        ResultData = super().write(document, destination, options)
         TransferValues = tuple(
             CapabilityTransfer(
                 CapabilityData,
-                TransferMode.CARRIER,
-                CarrierReason.TARGET_UNSUPPORTED,
+                TransferMode.KCarrier,
+                CarrierReason.KTargetGap,
             )
-            for CapabilityData in GetCapabilities(DocumentData)
+            for CapabilityData in GetCapabilities(document)
         )
         return ReplaceValue(
             ResultData,
@@ -172,9 +181,6 @@ class OnlyCarrier(ResultAdapter):
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(OnlyCarrier, "write", OnlyCarrier.WriteData)
 
 
 # usable carrier only documents remain near lossless when every carrier is intrinsic

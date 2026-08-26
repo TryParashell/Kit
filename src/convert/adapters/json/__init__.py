@@ -8,5 +8,5 @@
 
 from convert.adapters.json.Adapter import JsonAdapter
 
-# this binding exists because shared behavior needs one stable value
-KAllValue = ["JsonAdapter"]
+# package exports stay explicit so static analysis recognizes the public adapter
+__all__ = ("JsonAdapter",)

@@ -21,7 +21,7 @@ from tests.Policy.RepoFixture import RepoFixture
 class TestCommand(UnitTest.TestCase):
 
     # full and changed invocations must distinguish legacy paths new destinations and invalid arguments
-    def CheckExitCodes(CaseSelf) -> None:
+    def CheckExitCodes(self) -> None:
         with Tempfile.TemporaryDirectory() as TmpPath:
             RootPath = FilePath(TmpPath)
             FixtureInfo = RepoFixture(RootPath)
@@ -58,11 +58,11 @@ class TestCommand(UnitTest.TestCase):
                 text=True,
                 check=False,
             )
-        CaseSelf.assertEqual(FullResult.returncode, 1)
-        CaseSelf.assertIn("bad_name.py", FullResult.stdout)
-        CaseSelf.assertEqual(
+        self.assertEqual(FullResult.returncode, 1)
+        self.assertIn("bad_name.py", FullResult.stdout)
+        self.assertEqual(
             ChangeResult.returncode,
             0,
             ChangeResult.stdout + ChangeResult.stderr,
         )
-        CaseSelf.assertEqual(InvalidResult.returncode, 2)
+        self.assertEqual(InvalidResult.returncode, 2)

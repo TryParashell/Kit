@@ -32,25 +32,25 @@ KAllValue = [
 ]
 
 # this binding exists because shared behavior needs one stable value
-globals()["FreeCADAdapter"] = FreeCadAdapter
+FreeCADAdapter = FreeCadAdapter
 
 # this binding exists because shared behavior needs one stable value
-globals()["FreeCADAdapterError"] = FreeCadAdapterError
+FreeCADAdapterError = FreeCadAdapterError
 
 # this binding exists because shared behavior needs one stable value
-globals()["build_fcstd_archive"] = BuildFcstdArchive
+build_fcstd_archive = BuildFcstdArchive
 
 # this binding exists because shared behavior needs one stable value
-globals()["document_to_manifest"] = DocToManifest
+document_to_manifest = DocToManifest
 
 # this binding exists because shared behavior needs one stable value
-globals()["extract_freecad_manifest"] = ExtractFreecadManifest
+extract_freecad_manifest = ExtractFreecadManifest
 
 # this binding exists because shared behavior needs one stable value
-globals()["extract_manifest_from_fcstd"] = ExtractManifestFromFcstd
+extract_manifest_from_fcstd = ExtractManifestFromFcstd
 
 # this binding exists because shared behavior needs one stable value
-globals()["read_freecad"] = ReadFreecad
+read_freecad = ReadFreecad
 
 # this binding exists because shared behavior needs one stable value
-globals()["write_freecad"] = WriteFreecad
+write_freecad = WriteFreecad

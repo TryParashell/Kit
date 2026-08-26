@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import replace as ReplaceValue
 from io import BytesIO
 from pathlib import Path as FilePath
-from typing import Any as AnyValue
 
 import pytest as Pytest
 
@@ -19,30 +18,37 @@ from convert.adapters import (
     AdapterInfo,
     AdapterRegistry,
     ApplicationUsabilityError,
+    Destination,
     WriteOptions,
     WriteResult,
 )
 from interchange import CadDocument, Capability
 from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapter
 
+from typing_extensions import override as Override
 
-# requirement producing output isolates dependency policy from carrier and capability behavior
-class NeedAdapter(ResultAdapter):
+
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+    pass
+
+
+# need adapter keeps the historical surface because callers depend on it directly
+class NeedAdapter(PairProtocol, ResultAdapter):
 
     # external dependency evidence exercises default and self contained rejection gates
-    def WriteData(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+    @Override
+    @Override
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
         return ReplaceValue(
-            super().WriteData(DocumentData, TargetData, OptionsData),
+            super().write(document, destination, options),
             requirements=("external application",),
         )
-
-
-setattr(NeedAdapter, "write", NeedAdapter.WriteData)
 
 
 # one dependency registry keeps requirement policy tests focused on caller options
@@ -66,7 +72,7 @@ def CheckNeeds(OptionValues: dict[str, bool]) -> None:
     RegistryData, InfoData = BuildRegistry("format.requirement")
     TargetData = BytesIO()
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetData,
             format_id=InfoData.format_id,
@@ -82,7 +88,7 @@ def CheckStream() -> None:
     RegistryData, InfoData = BuildRegistry("format.self-contained-stream")
     TargetData = BytesIO(b"original")
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetData,
             format_id=InfoData.format_id,
@@ -99,35 +105,42 @@ def CheckStream() -> None:
 
 
 # companion bundle output exercises rollback across every generated staged file
-class BundleAdapter(ResultAdapter):
+class BundleAdapter(PairProtocol, ResultAdapter):
 
     # path restriction forces bundle rollback through transactional filesystem staging
-    def CanWrite(SelfValue, DocumentData: CadDocument, TargetData: AnyValue) -> bool:
-        return isinstance(TargetData, (str, FilePath))
+    @Override
+    def CanSupport(
+        self,
+        DocValue: CadDocument,
+        Target: Destination,
+    ) -> bool:
+        return isinstance(Target, (str, FilePath))
+
+    supports = CanSupport
 
     # generated companions prove rejection restores both destination and neighboring files
-    def WriteData(
-        SelfValue,
-        DocumentData: CadDocument,
-        TargetData: AnyValue,
-        OptionsData: AnyValue = None,
+    @Override
+    @Override
+    def write(
+        self,
+        document: CadDocument,
+        destination: Destination,
+        options: WriteOptions | None = None,
     ) -> WriteResult:
-        OutputPath = FilePath(TargetData).expanduser().resolve()
+        if not isinstance(destination, (str, FilePath)):
+            raise TypeError("bundle adapter requires a filesystem destination")
+        OutputPath = FilePath(destination).expanduser().resolve()
         OutputPath.parent.mkdir(parents=True, exist_ok=True)
-        OutputPath.write_bytes(b"generated")
-        (OutputPath.parent / "component.bin").write_bytes(b"generated component")
+        _ = OutputPath.write_bytes(b"generated")
+        _ = (OutputPath.parent / "component.bin").write_bytes(b"generated component")
         return WriteResult(
             OutputPath,
-            SelfValue.info.format_id,
+            self.info.format_id,
             len(b"generated"),
             requirements=("external component file",),
             application_usable=True,
             vendor_loadable=True,
         )
-
-
-setattr(BundleAdapter, "supports", BundleAdapter.CanWrite)
-setattr(BundleAdapter, "write", BundleAdapter.WriteData)
 
 
 # rejected bundles restore every preexisting file before surfacing dependency evidence
@@ -144,10 +157,10 @@ def CheckBundle(TmpPath: FilePath) -> None:
     RegistryData.register(BundleAdapter(InfoData))
     TargetPath = TmpPath / "existing.bundle"
     ComponentPath = TmpPath / "component.bin"
-    TargetPath.write_bytes(b"original")
-    ComponentPath.write_bytes(b"original component")
+    _ = TargetPath.write_bytes(b"original")
+    _ = ComponentPath.write_bytes(b"original component")
     with Pytest.raises(ApplicationUsabilityError) as ErrorInfo:
-        RegistryData.write(
+        _ = RegistryData.write(
             BuildSource(),
             TargetPath,
             format_id=InfoData.format_id,

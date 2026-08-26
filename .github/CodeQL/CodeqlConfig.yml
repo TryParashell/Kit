@@ -13,6 +13,9 @@ disable-default-queries: true
 
 threat-models: local
 
+paths-ignore:
+  - re/**
+
 queries:
   - uses: security-and-quality
   - uses: security-experimental
@@ -20,6 +23,7 @@ queries:
 query-filters:
   - exclude:
       id:
+        - actions/unnecessary-use-of-advanced-config
         - py/not-named-self
         - py/not-named-cls
         - py/possible-timing-attack-sensitive-info

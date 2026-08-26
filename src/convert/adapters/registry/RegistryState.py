@@ -8,12 +8,20 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from convert.adapters.base.AdapterInfo import AdapterInfo
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.registry.RegistryBinding import AdapterBinding
 from convert.adapters.registry.RegistryErrors import RegistryError
 from convert.adapters.base.WritePolicy import GetFormatKey
+
+
+# registry mixins share typed state without depending on the final composition class
+class RegistryHost(Protocol):
+    BindingMap: dict[str, AdapterBinding]
+    AliasMap: dict[str, str]
 
 
 # state snapshots support transactional registration across reader writer and bulk operations
@@ -24,8 +32,8 @@ def CopyState(
     return (
         {
             NameValue: AdapterBinding(
-                BindingData.ReaderData,
-                BindingData.WriterData,
+                BindingData.reader,
+                BindingData.writer,
             )
             for NameValue, BindingData in BindingMap.items()
         },
@@ -40,10 +48,10 @@ def CheckNamespace(
     AliasMap: dict[str, str],
 ) -> None:
     FormatKey = GetFormatKey(InfoData.FormatId)
-    OwnerKey = AliasMap.get(FormatKey)
-    if OwnerKey is not None:
+    KOwnerKey = AliasMap.get(FormatKey)
+    if KOwnerKey is not None:
         raise RegistryError(
-            f"format id is already an alias for {OwnerKey}: {InfoData.FormatId}"
+            f"format id is already an alias for {KOwnerKey}: {InfoData.FormatId}"
         )
     for AliasName in InfoData.AliasNames:
         AliasKey = GetFormatKey(AliasName)
@@ -60,18 +68,18 @@ def BindAliasesMut(
     AliasMap: dict[str, str],
     ReplaceFlag: bool,
 ) -> None:
-    OwnerKey = GetFormatKey(InfoData.FormatId)
+    KOwnerKey = GetFormatKey(InfoData.FormatId)
     AliasKeys = {GetFormatKey(AliasName) for AliasName in InfoData.AliasNames}
     if ReplaceFlag:
         StaleNames = tuple(
             AliasName
             for AliasName, ExistingKey in AliasMap.items()
-            if ExistingKey == OwnerKey and AliasName not in AliasKeys
+            if ExistingKey == KOwnerKey and AliasName not in AliasKeys
         )
         for AliasName in StaleNames:
             del AliasMap[AliasName]
     for AliasName in InfoData.AliasNames:
-        AliasMap[GetFormatKey(AliasName)] = OwnerKey
+        AliasMap[GetFormatKey(AliasName)] = KOwnerKey
 
 
 # reader registration enforces metadata agreement with an independently registered writer
@@ -87,23 +95,23 @@ def BindReaderMut(
     FormatKey = GetFormatKey(InfoData.FormatId)
     BindingData = BindingMap.get(FormatKey, AdapterBinding())
     if (
-        BindingData.WriterData is not None
-        and BindingData.WriterData.info != InfoData
+        BindingData.writer is not None
+        and BindingData.writer.info != InfoData
         and not Coordinated
     ):
         raise RegistryError(
             f"reader and writer metadata differ for {InfoData.FormatId}"
         )
-    if BindingData.ReaderData is not None and not ReplaceFlag:
+    if BindingData.reader is not None and not ReplaceFlag:
         if (
-            type(BindingData.ReaderData) is type(AdapterData)
-            and BindingData.ReaderData.info == InfoData
+            type(BindingData.reader) is type(AdapterData)
+            and BindingData.reader.info == InfoData
         ):
             return
         raise RegistryError(f"reader already registered for {InfoData.FormatId}")
     BindAliasesMut(InfoData, AliasMap, ReplaceFlag)
-    BindingMap.setdefault(FormatKey, BindingData)
-    BindingData.ReaderData = AdapterData
+    _ = BindingMap.setdefault(FormatKey, BindingData)
+    BindingData.reader = AdapterData
 
 
 # writer registration enforces metadata agreement with an independently registered reader
@@ -119,20 +127,20 @@ def BindWriterMut(
     FormatKey = GetFormatKey(InfoData.FormatId)
     BindingData = BindingMap.get(FormatKey, AdapterBinding())
     if (
-        BindingData.ReaderData is not None
-        and BindingData.ReaderData.info != InfoData
+        BindingData.reader is not None
+        and BindingData.reader.info != InfoData
         and not Coordinated
     ):
         raise RegistryError(
             f"reader and writer metadata differ for {InfoData.FormatId}"
         )
-    if BindingData.WriterData is not None and not ReplaceFlag:
+    if BindingData.writer is not None and not ReplaceFlag:
         if (
-            type(BindingData.WriterData) is type(AdapterData)
-            and BindingData.WriterData.info == InfoData
+            type(BindingData.writer) is type(AdapterData)
+            and BindingData.writer.info == InfoData
         ):
             return
         raise RegistryError(f"writer already registered for {InfoData.FormatId}")
     BindAliasesMut(InfoData, AliasMap, ReplaceFlag)
-    BindingMap.setdefault(FormatKey, BindingData)
-    BindingData.WriterData = AdapterData
+    _ = BindingMap.setdefault(FormatKey, BindingData)
+    BindingData.writer = AdapterData

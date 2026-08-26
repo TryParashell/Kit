@@ -8,12 +8,32 @@
 
 from dataclasses import replace as ReplaceData
 from pathlib import Path as FilePath
+import sys as SysModule
+from typing import cast as CastValue
+from typing import Protocol
 
 import pytest as Pytest
 
-from convert.adapters import AdapterDiscoveryError
+from convert.adapters import AdapterDiscoveryError, AdapterInfo
 from convert.adapters import AdapterRegistry, AdapterRegistryError
 from convert.adapters.json import JsonAdapter
+
+from typing_extensions import override as Override
+
+
+# reflected replacement calls need a typed boundary for deliberately malformed metadata
+class InfoReplacer(Protocol):
+
+    # arbitrary values remain necessary because these tests exercise runtime contract rejection
+    def __call__(
+        self,
+        InfoData: AdapterInfo,
+        **NamedValues: object,
+    ) -> AdapterInfo: ...  # lgtm[py/ineffectual-statement]
+
+
+# the runtime dataclass helper retains legacy reflected names behind the typed test boundary
+KReplaceInfo = CastValue(InfoReplacer, ReplaceData)
 
 
 # empty format packages must fail because silent omission would make catalog coverage misleading
@@ -22,11 +42,11 @@ def CheckEmptyPack(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     PackagePath = TmpPath / PackageName
     FormatPath = PackagePath / "empty"
     FormatPath.mkdir(parents=True)
-    (PackagePath / "__init__.py").write_text("", encoding="utf-8")
-    (FormatPath / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    _ = (PackagePath / "__init__.py").write_text("", encoding="utf-8")
+    _ = (FormatPath / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     with Pytest.raises(AdapterDiscoveryError, match="contains no adapter"):
-        AdapterRegistry().introspect(PackageName)
+        _ = AdapterRegistry().introspect(PackageName)
 
 
 # discovery must inspect package contents because export lists are optional implementation details
@@ -35,14 +55,14 @@ def CheckHiddenPack(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     PackagePath = TmpPath / PackageName
     FormatPath = PackagePath / "hidden"
     FormatPath.mkdir(parents=True)
-    (PackagePath / "__init__.py").write_text("", encoding="utf-8")
-    (FormatPath / "__init__.py").write_text(
+    _ = (PackagePath / "__init__.py").write_text("", encoding="utf-8")
+    _ = (FormatPath / "__init__.py").write_text(
         "from convert.adapters.json.Adapter import JsonAdapter as _JsonAdapter\n"
-        "class HiddenAdapter(_JsonAdapter):\n    discovered = True\n"
-        "__all__ = []\n",
+        + "class HiddenAdapter(_JsonAdapter):\n    discovered = True\n"
+        + "__all__ = []\n",
         encoding="utf-8",
     )
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     RegistryData = AdapterRegistry()
     assert RegistryData.introspect(PackageName) == ("interchange.json",)
 
@@ -52,13 +72,13 @@ def CheckSingleMod(TmpPath: FilePath, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     PackageName = f"kit_module_{TmpPath.name.replace('-', '_')}"
     PackagePath = TmpPath / PackageName
     PackagePath.mkdir()
-    (PackagePath / "__init__.py").write_text("", encoding="utf-8")
-    (PackagePath / "single.py").write_text(
+    _ = (PackagePath / "__init__.py").write_text("", encoding="utf-8")
+    _ = (PackagePath / "single.py").write_text(
         "from convert.adapters.json.Adapter import JsonAdapter as _JsonAdapter\n"
-        "class SingleAdapter(_JsonAdapter):\n    discovered = True\n",
+        + "class SingleAdapter(_JsonAdapter):\n    discovered = True\n",
         encoding="utf-8",
     )
-    MonkeyPatch.syspath_prepend(str(TmpPath))
+    MonkeyPatch.setattr(SysModule, "path", [str(TmpPath), *SysModule.path])
     RegistryData = AdapterRegistry()
     assert RegistryData.introspect(PackageName) == ("interchange.json",)
 
@@ -76,10 +96,10 @@ def CheckAliasCase() -> None:
 
         # altered metadata exists because registry conflicts need an independently constructed adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, format_id="INTERCHANGE.JSON")
-
-        locals()["info"] = GetInfo
+        @Override
+        @Override
+        def info(self) -> AdapterInfo:
+            return KReplaceInfo(super().info, format_id="INTERCHANGE.JSON")
 
     with Pytest.raises(AdapterRegistryError, match="metadata differ"):
         RegistryData.register(ConflictJson())
@@ -93,10 +113,10 @@ def CheckAliasIds() -> None:
 
         # altered metadata exists because self alias rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, aliases=("INTERCHANGE.JSON",))
-
-        locals()["info"] = GetInfo
+        @Override
+        @Override
+        def info(self) -> AdapterInfo:
+            return KReplaceInfo(super().info, aliases=("INTERCHANGE.JSON",))
 
     with Pytest.raises(AdapterRegistryError, match="alias must differ"):
         AdapterRegistry().register(SelfAliasJson())
@@ -106,10 +126,13 @@ def CheckAliasIds() -> None:
 
         # altered metadata exists because duplicate alias rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, aliases=("kit.json", "KIT.JSON"))
-
-        locals()["info"] = GetInfo
+        @Override
+        @Override
+        def info(self) -> AdapterInfo:
+            return KReplaceInfo(
+                super().info,
+                aliases=("kit.json", "KIT.JSON"),
+            )
 
     with Pytest.raises(AdapterRegistryError, match="aliases must be unique"):
         AdapterRegistry().register(DupAliasJson())
@@ -123,10 +146,13 @@ def CheckInfoTypes() -> None:
 
         # altered metadata exists because mutable extension rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, extensions=[".json"])
-
-        locals()["info"] = GetInfo
+        @Override
+        @Override
+        def info(self) -> AdapterInfo:
+            return KReplaceInfo(
+                super().info,
+                extensions=CastValue(tuple[str, ...], [".json"]),
+            )
 
     with Pytest.raises(AdapterRegistryError, match="extensions has an invalid type"):
         AdapterRegistry().register(MutableExtJson())
@@ -136,10 +162,10 @@ def CheckInfoTypes() -> None:
 
         # altered metadata exists because numeric version rejection needs an independent adapter
         @property
-        def GetInfo(SelfValue):
-            return ReplaceData(super().info, version=1)
-
-        locals()["info"] = GetInfo
+        @Override
+        @Override
+        def info(self) -> AdapterInfo:
+            return KReplaceInfo(super().info, version=CastValue(str, 1))
 
     with Pytest.raises(AdapterRegistryError, match="version has an invalid type"):
         AdapterRegistry().register(NumericVerJson())

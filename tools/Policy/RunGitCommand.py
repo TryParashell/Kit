@@ -32,6 +32,6 @@ def RunGitCommand(RootPath: FilePath, ArgItems: Sequence[str]) -> bytes:
         CommandText = " ".join(ArgItems)
         raise GitFailure(
             f"git {CommandText} failed in {RootPath} with exit "
-            f"{RunResult.returncode}: {ErrorText}"
+            + f"{RunResult.returncode}: {ErrorText}"
         )
     return RunResult.stdout

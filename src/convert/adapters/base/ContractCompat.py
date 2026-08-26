@@ -11,24 +11,61 @@ from __future__ import annotations
 from inspect import Parameter as SigParam
 from inspect import Signature as CallSignature
 from dataclasses import MISSING as MissingValue
-from dataclasses import fields as DataFields
-from typing import Any as AnyValue
+from dataclasses import Field as DataField
 from typing import Mapping as TypeMap
+from typing import TypeGuard
+from typing import TypeVar
+from typing import cast as CastValue
 from convert.adapters.base.FieldAliases import KFieldAliases
+
+# generic construction preserves each dataclass result type through the compatibility metaclass
+KContractValue = TypeVar("KContractValue")
+
+
+# dictionary narrowing supports reflected dataclass state without unknown key or value types
+def IsObjectDict(FieldValue: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(FieldValue, dict)
+
+
+# metaclass instances require runtime narrowing before ordinary class reflection helpers accept them
+def GetClassType(ClassValue: object) -> type[object]:
+    if not isinstance(ClassValue, type):
+        raise TypeError("contract metadata requires a class")
+    return CastValue(type[object], ClassValue)
+
+
+# reflected fields need runtime proof before compatibility signatures consume their defaults
+def GetDataFields(ClassValue: object) -> tuple[DataField[object], ...]:
+    ClassType = GetClassType(ClassValue)
+    FieldMap: object = type.__getattribute__(ClassType, "__dataclass_fields__")
+    if not IsObjectDict(FieldMap):
+        raise TypeError("contract class must expose dataclass fields")
+    FieldValues: list[DataField[object]] = []
+    for FieldValue in FieldMap.values():
+        if not isinstance(FieldValue, DataField):
+            raise TypeError("contract field metadata must be a dataclass Field")
+        FieldValues.append(CastValue(DataField[object], FieldValue))
+    return tuple(FieldValues)
 
 
 # constructor translation remains separate because compatibility records may choose strict canonical collision handling
 def GetCtorValues(
-    ClassType: type,
-    NamedValues: TypeMap[str, AnyValue],
-) -> dict[str, AnyValue]:
-    TranslatedValues: dict[str, AnyValue] = {}
+    ClassType: type[object],
+    NamedValues: TypeMap[str, object],
+) -> dict[str, object]:
+    TranslatedValues: dict[str, object] = {}
     PublicValues: dict[str, str] = {}
     IsStrictAliases = ClassType.__name__ == "AdapterInfo"
     for FieldName, FieldValue in NamedValues.items():
         ModelName = KFieldAliases.get(FieldName, FieldName)
         if ModelName in TranslatedValues:
             if not IsStrictAliases and PublicValues[ModelName] != ModelName:
+                continue
+            if (
+                IsStrictAliases
+                and PublicValues[ModelName] != ModelName
+                and TranslatedValues[ModelName] != FieldValue
+            ):
                 continue
             raise TypeError(f"got multiple values for field {ModelName!r}")
         TranslatedValues[ModelName] = FieldValue
@@ -41,9 +78,9 @@ class ContractMeta(type):
 
     # dataclass constructors retain historical field reflection despite compliant internal storage names
     @property
-    def __signature__(ClassType) -> CallSignature:
+    def __signature__(self) -> CallSignature:
         ParamValues: list[SigParam] = []
-        for FieldData in DataFields(ClassType):
+        for FieldData in GetDataFields(self):
             ModelName = KFieldAliases.get(FieldData.name, FieldData.name)
             PublicName = GetLegacyName(ModelName)
             DefaultValue = FieldData.default
@@ -56,45 +93,50 @@ class ContractMeta(type):
                     PublicName,
                     SigParam.POSITIONAL_OR_KEYWORD,
                     default=DefaultValue,
-                    annotation=GetLegacyType(ClassType, ModelName),
+                    annotation=GetLegacyType(self, ModelName),
                 )
             )
         return CallSignature(ParamValues, return_annotation=None)
 
     # callers can upgrade independently because old keyword names still reach compliant fields
-    def __call__(ClassType, *ArgValues: AnyValue, **NamedValues: AnyValue) -> AnyValue:
-        TranslatedValues = GetCtorValues(ClassType, NamedValues)
-        FieldNames = tuple(FieldData.name for FieldData in DataFields(ClassType))
-        for ArgIndex, ModelName in enumerate(FieldNames[: len(ArgValues)]):
+    def BuildInstance(
+        self: type[KContractValue],
+        *ArgValues: object,
+        **NamedValues: object,
+    ) -> KContractValue:
+        TranslatedValues = GetCtorValues(self, NamedValues)
+        FieldNames = tuple(FieldData.name for FieldData in GetDataFields(self))
+        for ModelName in FieldNames[: len(ArgValues)]:
             if ModelName in TranslatedValues:
                 PublicName = GetLegacyName(ModelName)
                 raise TypeError(
-                    f"{ClassType.__name__}() got multiple values for argument "
-                    f"{PublicName!r}"
+                    f"{self.__name__}() got multiple values for argument "
+                    + f"{PublicName!r}"
                 )
-        return super().__call__(*ArgValues, **TranslatedValues)
+        ResultValue = type.__call__(self, *ArgValues, **TranslatedValues)
+        return CastValue(KContractValue, ResultValue)
+
+    __call__ = BuildInstance
 
     # class level legacy fields keep introspection and descriptor access compatible for external adapters
-    def __getattr__(ClassType, FieldName: str) -> AnyValue:
+    def __getattr__(self, FieldName: str) -> object:
         ModelName = KFieldAliases.get(FieldName, FieldName)
-        return type.__getattribute__(ClassType, ModelName)
+        ResultValue: object = type.__getattribute__(self, ModelName)
+        return ResultValue
 
 
-# historical reflection chooses the public field spelling for each compliant storage name
+# stored field spellings already match the public contract so reflection needs no renaming
 def GetLegacyName(ModelName: str) -> str:
-    return next(
-        (
-            FieldName
-            for FieldName, FieldModel in KFieldAliases.items()
-            if FieldModel == ModelName
-        ),
-        ModelName,
-    )
+    return ModelName
 
 
 # historical annotations remain readable because third party adapters may inspect constructor contracts
-def GetLegacyType(ClassType: type, ModelName: str) -> AnyValue:
-    AnnotationMap: TypeMap[str, AnyValue] = getattr(ClassType, "__annotations__", {})
+def GetLegacyType(ClassValue: object, ModelName: str) -> object:
+    ClassType = GetClassType(ClassValue)
+    AnnotationValue: object = type.__getattribute__(ClassType, "__annotations__")
+    if not IsObjectDict(AnnotationValue):
+        return SigParam.empty
+    AnnotationMap = CastValue(dict[str, object], AnnotationValue)
     return AnnotationMap.get(
         ModelName,
         AnnotationMap.get(GetLegacyName(ModelName), SigParam.empty),
@@ -106,6 +148,7 @@ class ContractBase(metaclass=ContractMeta):
     locals()["__slots__"] = ()
 
     # old attribute spellings remain available because wire and api behavior cannot drift
-    def __getattr__(SelfValue, FieldName: str) -> AnyValue:
+    def __getattr__(self, FieldName: str) -> object:
         ModelName = KFieldAliases.get(FieldName, FieldName)
-        return object.__getattribute__(SelfValue, ModelName)
+        ResultValue: object = object.__getattribute__(self, ModelName)
+        return ResultValue

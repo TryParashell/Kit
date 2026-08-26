@@ -11,21 +11,23 @@ from pathlib import Path as FilePath
 import struct as StructLib
 import pytest as PytestLib
 from convert.adapters.solidworks import (
-    SldprtAdapter,
     SldprtArchive,
     build_sldprt as BuildSldprt,
     read_sldprt as ReadSldprt,
 )
 from convert.adapters.solidworks.core.Adapter import (
-    _FEATURE_KIND_BY_NATIVE as Native,
-    _final_body_feature_id as FinalBodyFeatureId,
-    _feature_kind as FeatureKindA,
-    _is_geometry_brep_payload as IsGeometryBrepPayload,
-    _marker_curve_semantic as MarkerCurveSemantic,
-    _sketch as Sketch,
-    _sketch_constraints as SketchConstraints,
-    _solid_body_feature as SolidBodyFeature,
-    _timeline as Timeline,
+    FinalBodyId as FinalBodyFeatureId,
+    FeatureKindA,
+    IsGeomBrep as IsGeometryBrepPayload,
+    MarkerCurve as MarkerCurveSemantic,
+    SketchA as Sketch,
+    SketchB as SketchConstraints,
+    SolidBody as SolidBodyFeature,
+    SldprtAdapter,
+    Timeline,
+)
+from convert.adapters.solidworks.core.FeatureKindByNative import (
+    KFeatureKindByNative as Native,
 )
 from convert.adapters.solidworks.container.Container import (
     container_signatures as ContainerSignatures,
@@ -42,29 +44,30 @@ from convert.adapters.solidworks.core.Native import (
     NativeOperation,
     NativePlane,
     NativeSketch,
-    _decode_planes as DecodePlanes,
-    _native_scale_factors as NativeScaleFactors,
-    _parse_native_equations as ParseNativeEquations,
-    _parse_keywords as ParseKeywords,
-    _reference_plane_ids as ReferencePlaneIds,
-    _constraints as Constraints,
-    _profiles as Profiles,
+    DecodePlanes,
+    NativeScale as NativeScaleFactors,
+    ParseNative as ParseNativeEquations,
+    ParseKeywords,
+    RefPlaneIds as ReferencePlaneIds,
+    Constraints,
+    DecodeProfiles as Profiles,
     decode_native_model as DecodeNativeModel,
 )
 from interchange import (
     BooleanOperation,
     BrepPayload,
+    CadDocument,
     Capability,
-    CircleGeometry,
-    ExtrusionFeature,
-    FeatureKind,
     FeatureStep,
-    FilletFeature,
-    LineGeometry,
     NativeFeatureDefinition,
     NativeGeometry,
     PayloadRole,
 )
+from interchange.enums.EnumFeatures import FeatureKind
+from interchange.features.FeatureExtrude import ExtrudeFeature as ExtrusionFeature
+from interchange.features.FeatureKinds import FilletFeature
+from interchange.geometry.models.GeometryCurves import CircleGeometry, LineGeometry
+from interchange.geometry.models.Sketch import SketchEntity
 
 # centralizes shared evidence so every related assertion uses one value
 KSample = (
@@ -99,7 +102,7 @@ def ResolvedNR(
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAAESC() -> None:
-    assert SldprtAdapter().info.capabilities == frozenset(Capability)
+    assert SldprtAdapter().info.Capabilities == frozenset(Capability)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -440,6 +443,10 @@ def TestNFTMTNK(NativeKind: str, NeutralKind: FeatureKind) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Engine_Block.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestCHWFRTT() -> None:
     Document = ReadSldprt(KCorpus / "Engine_Block.SLDPRT", include_brep=False)
     Holes = [
@@ -530,14 +537,24 @@ def TestARFOAD() -> None:
     assert Operations["Boss-Extrude2"].operation == BooleanOperation.JOIN
     assert Operations["Cut-Extrude2"].operation == BooleanOperation.CUT
     assert Operations["Boss-Extrude3"].operation == BooleanOperation.JOIN
-    assert isinstance(Operations["Boss-Extrude1"].definition, ExtrusionFeature)
-    assert isinstance(Operations["Fillet1"].definition, FilletFeature)
-    assert Operations["Boss-Extrude1"].definition.length.value == 20.0
-    assert Operations["Cut-Extrude1"].definition.length.value == 0.25
-    assert Operations["Boss-Extrude2"].definition.length.value == 0.75
-    assert Operations["Cut-Extrude2"].definition.length.value == 9.0
-    assert Operations["Boss-Extrude3"].definition.length.value == 6.0
-    assert Operations["Fillet1"].definition.radius.value == 0.25
+    BossOneDef = Operations["Boss-Extrude1"].definition
+    CutOneDef = Operations["Cut-Extrude1"].definition
+    BossTwoDef = Operations["Boss-Extrude2"].definition
+    CutTwoDef = Operations["Cut-Extrude2"].definition
+    BossThreeDef = Operations["Boss-Extrude3"].definition
+    FilletOneDef = Operations["Fillet1"].definition
+    assert isinstance(BossOneDef, ExtrusionFeature)
+    assert isinstance(CutOneDef, ExtrusionFeature)
+    assert isinstance(BossTwoDef, ExtrusionFeature)
+    assert isinstance(CutTwoDef, ExtrusionFeature)
+    assert isinstance(BossThreeDef, ExtrusionFeature)
+    assert isinstance(FilletOneDef, FilletFeature)
+    assert BossOneDef.length.value == 20.0
+    assert CutOneDef.length.value == 0.25
+    assert BossTwoDef.length.value == 0.75
+    assert CutTwoDef.length.value == 9.0
+    assert BossThreeDef.length.value == 6.0
+    assert FilletOneDef.radius.value == 0.25
     assert Operations["Boss-Extrude1"].attributes["length_mm"] == 20.0
     assert Operations["Cut-Extrude1"].attributes["length_mm"] == 0.25
     assert Operations["Boss-Extrude2"].attributes["length_mm"] == 0.75
@@ -577,9 +594,11 @@ def TestARSFAP() -> None:
             if Entity.id == SketchFour.closed_profile_entity_ids[0][0]
         )
     )
-    assert Circle.geometry.center.x == PytestLib.approx(10.0)
-    assert Circle.geometry.center.y == PytestLib.approx(81.631746131982)
-    assert Circle.geometry.radius == PytestLib.approx(2.75)
+    CircleInfo = Circle.geometry
+    assert isinstance(CircleInfo, CircleGeometry)
+    assert CircleInfo.center.x == PytestLib.approx(10.0)
+    assert CircleInfo.center.y == PytestLib.approx(81.631746131982)
+    assert CircleInfo.radius == PytestLib.approx(2.75)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -641,12 +660,21 @@ def TestARCGWG() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Cover.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAAPCP() -> None:
     Document = ReadSldprt(KCorpus / "Cover.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:26")
     Entities = {Entity.id: Entity.geometry for Entity in SketchA.entities}
-    ProfilesA = [Entities[Profile[0]] for Profile in SketchA.closed_profile_entity_ids]
-    assert all((isinstance(Profile, CircleGeometry) for Profile in ProfilesA))
+    ProfileGeometries = [
+        Entities[Profile[0]] for Profile in SketchA.closed_profile_entity_ids
+    ]
+    ProfilesA = [
+        Profile for Profile in ProfileGeometries if isinstance(Profile, CircleGeometry)
+    ]
+    assert len(ProfilesA) == len(ProfileGeometries)
     assert [Profile.radius for Profile in ProfilesA] == PytestLib.approx((16.0, 184.0))
     assert (ProfilesA[0].center.x, ProfilesA[0].center.y) == PytestLib.approx(
         (15.300876095409, 4.677947275564)
@@ -657,6 +685,10 @@ def TestAAPCP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Cover.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestABDOBMP() -> None:
     Document = ReadSldprt(KCorpus / "Cover.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:77")
@@ -687,6 +719,10 @@ def TestABDOBMP() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Engine_Block.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestARLEBNMI() -> None:
     Document = ReadSldprt(KCorpus / "Engine_Block.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:139")
@@ -708,9 +744,12 @@ def TestARLEBNMI() -> None:
             (-98.287842584929, 161.92745289172),
         ),
     }
-    Entities = {
-        Entity.provenance.spans[0].offset: Entity for Entity in SketchA.entities
-    }
+    Entities: dict[int, SketchEntity] = {}
+    for Entity in SketchA.entities:
+        ProvenanceInfo = Entity.provenance
+        assert ProvenanceInfo is not None
+        assert ProvenanceInfo.spans
+        Entities[ProvenanceInfo.spans[0].offset] = Entity
     for Offset, (Start, EndInfo) in Expected.items():
         Geometry = Entities[Offset].geometry
         assert isinstance(Geometry, LineGeometry)
@@ -930,6 +969,10 @@ def TestBMCSUCS() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Engine_Block.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAPULBRNI() -> None:
     Document = ReadSldprt(KCorpus / "Engine_Block.SLDPRT", include_brep=False)
     SketchA = Document.sketch("sldprt:sketch:200")
@@ -1004,13 +1047,17 @@ def TestAAMARNJ() -> None:
     Adapter = SldprtAdapter()
     assert Adapter.probe(SourceDoc).confidence == 1.0
     Document = ReadSldprt(SourceDoc, include_brep=False)
-    Restored = type(Document).from_json(Document.to_json())
+    Restored = CadDocument.from_json(Document.to_json())
     assert Restored.validate() == ()
     assert Restored.source.path == "<memory>"
     assert Restored.feature("sldprt:feature:116").name == "Fillet1"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not KCorpus.is_dir(),
+    reason="the SOLIDWORKS corpus is not present in this checkout",
+)
 def TestELSCD() -> None:
     Examples = FilePath(__file__).resolve().parents[4] / "examples"
     Parts = sorted(
@@ -1043,6 +1090,10 @@ def TestELSCD() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Addons" / "Alternator.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAHPZPFV() -> None:
     Document = ReadSldprt(KCorpus / "Addons" / "Alternator.SLDPRT", include_brep=False)
     Plane = Document.plane("sldprt:plane:289")
@@ -1053,6 +1104,10 @@ def TestAHPZPFV() -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not (KCorpus / "Cylinder_heads" / "Spark_plug.SLDPRT").is_file(),
+    reason="solidworks corpus is not present in this checkout",
+)
 def TestAAOITDD() -> None:
     Document = ReadSldprt(
         KCorpus / "Cylinder_heads" / "Spark_plug.SLDPRT", include_brep=False

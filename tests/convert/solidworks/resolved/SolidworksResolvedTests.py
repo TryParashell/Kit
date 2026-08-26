@@ -372,8 +372,7 @@ def TestFFWHODAMTK() -> None:
         FlagsC: KindInfoB,
     }
     assert FlagsI == frozenset(FlagsB) | {FlagsF, FlagsD}
-    with PytestLib.raises(TypeError):
-        FlagsB[FlagsF] = KindInfo
+    assert type(FlagsB).__name__ == "mappingproxy"
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -416,7 +415,7 @@ def TestCGRTTTSDP() -> None:
     assert CircleRadiusMm(ValueX, ValueY) == PytestLib.approx(4.0)
     for Radius in (0.0, -1.0, MathInfo.nan, MathInfo.inf):
         with PytestLib.raises(SldprtFormatError):
-            CircleCPM(Radius)
+            _ = CircleCPM(Radius)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -437,7 +436,7 @@ def TestWRPIRTTGL() -> None:
     assert Feature.reverse_offset == Layout.reverse_offset
     assert Feature.end_condition_offset == Layout.end_condition_offset
     assert tuple((Point.offset for Point in Feature.points)) == tuple(
-        (XOffset for XOffset, IgnoredValue in Layout.point_offsets)
+        (XOffset for XOffset, _ in Layout.point_offsets)
     )
     assert Feature.corners_mm == Layout.corners_mm
     assert Feature.bounds_mm == (-20.0, -10.0, 20.0, 10.0)
@@ -532,7 +531,7 @@ def TestPFRETSCH() -> None:
     )
     for Edits in Rejected:
         with PytestLib.raises(SldprtFormatError):
-            PatchFeatures(Resolved, Edits)
+            _ = PatchFeatures(Resolved, Edits)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -562,7 +561,7 @@ def TestDBPRIDD() -> None:
     ProgramData = EncodeBoxProgram()
     for DimensionData in ((10.0,), (10.0, 0.0), (10.0, MathInfo.nan)):
         with PytestLib.raises(SldprtFormatError):
-            PatchFeatures(
+            _ = PatchFeatures(
                 ProgramData, {0: FeatureEdit(SketchDimensionsMm=DimensionData)}
             )
 
@@ -944,6 +943,8 @@ def TestCSOFLBRABD() -> None:
     assert Features[0].depth_mm == PytestLib.approx(10.0)
     assert Features[1].corners_mm == RectangleCornersMm(-7.0, -7.0, 7.0, 7.0)
     assert Features[1].depth_mm == PytestLib.approx(5.0)
+    assert Features[0].depth_offset is not None
+    assert Features[1].depth_offset is not None
     assert Features[0].depth_offset < Features[1].depth_offset
 
 
@@ -984,7 +985,7 @@ def TestTAFHNDSBKIS() -> None:
     Patched = PatchFeatures(Resolved, {1: FeatureEdit(corners_mm=Corners)})
     assert LocateFeatures(Patched)[1].corners_mm == Corners
     with PytestLib.raises(SldprtFormatError):
-        PatchFeatures(Resolved, {1: FeatureEdit(depth_mm=4.0)})
+        _ = PatchFeatures(Resolved, {1: FeatureEdit(depth_mm=4.0)})
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -997,6 +998,8 @@ def TestDAECFRBFTC(NameText: str) -> None:
     for Feature, (Reverse, CodeInfo) in zip(Features, Expected, strict=True):
         assert Feature.reversed is Reverse
         assert Feature.end_condition_code == CodeInfo
+        assert Feature.depth_offset is not None
+        assert Feature.reverse_offset is not None
         DistanceD = Feature.depth_offset - Feature.reverse_offset
         assert DistanceD == (DistanceA if Feature.ordinal == 0 else DistanceC)
 
@@ -1057,12 +1060,8 @@ def TestBBACFMTKD() -> None:
     )
     assert tuple(
         ((Feature.feature_id, Feature.kind) for Feature in Extrusions)
-    ) == tuple(
-        ((Identifier, KindInfoE) for Identifier, KindInfoE, IgnoredValue in KExtrusions)
-    )
-    for Feature, (Identifier, IgnoredValue, DepthMm) in zip(
-        Extrusions, KExtrusions, strict=True
-    ):
+    ) == tuple(((Identifier, KindInfoE) for Identifier, KindInfoE, _ in KExtrusions))
+    for Feature, (Identifier, _, DepthMm) in zip(Extrusions, KExtrusions, strict=True):
         Element = Authored[Identifier]
         assert Element.tag == "Extrusion"
         assert float(AuthoredD(Element, "D1") or "nan") == PytestLib.approx(DepthMm)
@@ -1081,7 +1080,7 @@ def TestBCACARF() -> None:
     Authored = AuthoredNodes(AuthoredK("BIELA"))
     Rounds = tuple((Feature for Feature in Features if Feature.kind == KindInfoC))
     assert tuple((Feature.feature_id for Feature in Rounds)) == tuple(
-        (Identifier for Identifier, IgnoredValue in KChamfers)
+        (Identifier for Identifier, _ in KChamfers)
     )
     for Feature, (Identifier, DistanceMm) in zip(Rounds, KChamfers, strict=True):
         Element = Authored[Identifier]
@@ -1210,7 +1209,7 @@ def TestPSARAACR() -> None:
     assert PatchSketchArcs(Resolved, {}) == Resolved
     for Radii in ({len(ArcsInfo): 5.0}, {0: 0.0}, {0: MathInfo.inf}, {0: MathInfo.nan}):
         with PytestLib.raises(SldprtFormatError):
-            PatchSketchArcs(Resolved, Radii)
+            _ = PatchSketchArcs(Resolved, Radii)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1230,7 +1229,7 @@ def TestPFRTROACP() -> None:
     assert len(Patched) == len(Resolved)
     Relocated = LocateFeatures(Patched)[Circular.ordinal]
     assert Relocated.feature_id == 214
-    assert Relocated.radii_mm == (PytestLib.approx(6.0), PytestLib.approx(6.5))
+    assert Relocated.radii_mm == PytestLib.approx((6.0, 6.5))
     for ArcData, ExpectedCentre in zip(Relocated.arcs, ExpectedCentres, strict=True):
         assert ArcData.centre_mm == PytestLib.approx(ExpectedCentre)
     assert Relocated.depth_mm == PytestLib.approx(44.0)
@@ -1243,7 +1242,7 @@ def TestPFRTROACP() -> None:
     )
     for Edits in Rejected:
         with PytestLib.raises(SldprtFormatError):
-            PatchFeatures(Resolved, Edits)
+            _ = PatchFeatures(Resolved, Edits)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -1260,12 +1259,14 @@ def TestCCRIRTLF(NameText: str, RadiusMm: float) -> None:
     assert len(Circular.arcs) == 1
     ArcInfo = Circular.arcs[0]
     assert ArcInfo.radius_mm == PytestLib.approx(RadiusMm)
-    assert ArcInfo.centre_mm == (PytestLib.approx(0.0), PytestLib.approx(0.0))
-    assert Circular.bounds_mm == (
-        PytestLib.approx(-RadiusMm),
-        PytestLib.approx(-RadiusMm),
-        PytestLib.approx(RadiusMm),
-        PytestLib.approx(RadiusMm),
+    assert ArcInfo.centre_mm == PytestLib.approx((0.0, 0.0))
+    assert Circular.bounds_mm == PytestLib.approx(
+        (
+            -RadiusMm,
+            -RadiusMm,
+            RadiusMm,
+            RadiusMm,
+        )
     )
     Patched = PatchFeatures(Resolved, {1: FeatureEdit(radii_mm=(RadiusMm + 1.5,))})
     assert LocateFeatures(Patched)[1].arcs[0].radius_mm == PytestLib.approx(

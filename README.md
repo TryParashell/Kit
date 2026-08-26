@@ -77,7 +77,4 @@ result = convert("bracket.SLDPRT", "bracket.FCStd", allow_carrier=False)
 
 ## Distribution
 
-Internal use only. Kit is source-available under the PolyForm Strict License 1.0.0 and is not
-published to any public package index.
-
-License: Polyform Strict 1.0.0
+Kit is source-available under the PolyForm Strict License 1.0.0

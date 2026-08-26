@@ -8,23 +8,32 @@
 
 from __future__ import annotations as Annotations
 from dataclasses import replace as Replace
-from datetime import datetime as Datetime, timezone as Timezone
+from datetime import datetime as Datetime, timezone as Timezone, tzinfo as TzInfo
 import io as IoStream
 from pathlib import Path as FilePath
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
+from typing import Self
+from pytest import MonkeyPatch
 import convert.adapters.freecad.Adapter as FreecadAdapter
 from convert.adapters.freecad import (
     read_freecad as ReadFreecad,
     write_freecad as WriteFreecad,
 )
 from interchange import (
-    Capability,
+    CadDocument as CadDoc,
     ComponentDocument as ComponentDoc,
     Mesh as MeshRecord,
     Vector3 as VectorThree,
 )
+from interchange.enums.EnumDocument import Capability
 from tests.interchange.assembly.AssemblyTests import assembly_document as AsmDoc
+
+# this binding keeps xml element annotations aligned with the imported parser
+ET = XmlTree
+
+# this binding keeps fixture paths aligned with the imported pathlib contract
+Path = FilePath
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -64,7 +73,7 @@ def Representation(RootValue: ET.Element, Target: str) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshSource(Linked: bool):
+def MeshSource(Linked: bool) -> tuple[CadDoc, MeshRecord]:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -162,7 +171,7 @@ def TestPathAsmWith(TmpPath: Path) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
+def TestPathAsmOne(TmpPath: Path, MonkeyPatch: MonkeyPatch) -> None:
     Fixed = Datetime(2026, 8, 1, 18, 0, 0, tzinfo=Timezone.utc)
 
     # this definition exists because focused behavior needs one stable owner
@@ -170,16 +179,16 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
 
         # this definition exists because focused behavior needs one stable owner
         @classmethod
-        def NowAction(ClassType, TzValue=None):
-            return Fixed if TzValue is not None else Fixed.replace(tzinfo=None)
+        def NowAction(cls, tz: TzInfo | None = None) -> Self:
+            return cls.fromtimestamp(Fixed.timestamp(), tz)
 
-        locals()["now"] = NowAction
+        now = NowAction
 
     MonkeyPatch.setattr(FreecadAdapter, "Datetime", FixedDateTime)
-    Source, Ignored = MeshSource(Linked=True)
+    Source, _ = MeshSource(Linked=True)
     Output = TmpPath / "assembly.FCStd"
     Component = TmpPath / "assembly" / "Piston.FCStd"
-    WriteFreecad(Source, Output)
+    _ = WriteFreecad(Source, Output)
     FirstRoot = XmlAction(Output)
     FirstComponent = XmlAction(Component)
     FirstStamp = "2026-08-01T18:00:00Z"
@@ -187,7 +196,7 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
     for RootValue in (FirstRoot, FirstComponent):
         assert DocTimestamp(RootValue, "CreationDate") == FirstStamp
         assert DocTimestamp(RootValue, "LastModifiedDate") == FirstStamp
-    WriteFreecad(Source, Output, Overwrite=True)
+    _ = WriteFreecad(Source, Output, Overwrite=True)
     SecondRoot = XmlAction(Output)
     SecondComponent = XmlAction(Component)
     SecondStamp = "2026-08-01T18:00:01Z"
@@ -202,10 +211,10 @@ def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def TestNestedAsmTo(TmpPath: Path) -> None:
-    Source, Ignored = MeshSource(Linked=True)
+    Source, _ = MeshSource(Linked=True)
     AsmValue = Source.assembly
     assert AsmValue is not None
-    Nested, Ignored = MeshSource(Linked=True)
+    Nested, _ = MeshSource(Linked=True)
     NestedAsm = Nested.assembly
     assert NestedAsm is not None
     Nested = Replace(
@@ -247,7 +256,7 @@ def TestNestedAsmTo(TmpPath: Path) -> None:
         ),
     )
     Output = TmpPath / "nested.FCStd"
-    WriteFreecad(Source, Output)
+    _ = WriteFreecad(Source, Output)
     AsmComponent = TmpPath / "nested" / "Piston.FCStd"
     PartComponent = TmpPath / "nested" / "Piston_2.FCStd"
     AsmRoot = XmlAction(AsmComponent)
@@ -272,7 +281,7 @@ def TestNestedAsmTo(TmpPath: Path) -> None:
 def TestPathAsmMesh(TmpPath: Path) -> None:
     Source, MeshValue = MeshSource(Linked=False)
     Output = TmpPath / "toolbox.FCStd"
-    WriteFreecad(Source, Output)
+    _ = WriteFreecad(Source, Output)
     Component = TmpPath / "toolbox" / "Piston.FCStd"
     RootValue = XmlAction(Output)
     LinkValue = LinkedObject(RootValue)
@@ -288,7 +297,7 @@ def TestPathAsmMesh(TmpPath: Path) -> None:
 def TestBinaryAsm() -> None:
     Stream = IoStream.BytesIO()
     Result = WriteFreecad(AsmDoc(), Stream)
-    Stream.seek(0)
+    _ = Stream.seek(0)
     with Zipfile.ZipFile(Stream) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
     Links = RootValue.findall(

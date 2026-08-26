@@ -17,12 +17,12 @@ def ParseArgs() -> Argparse.Namespace:
         description="Generate and verify the Agent Skills copy of Kiro steering."
     )
     ModeGroup = ParserInfo.add_mutually_exclusive_group()
-    ModeGroup.add_argument(
+    _ = ModeGroup.add_argument(
         "--write",
         action="store_true",
         help="write the Agent Skills copy from .kiro/steering",
     )
-    ModeGroup.add_argument(
+    _ = ModeGroup.add_argument(
         "--check",
         action="store_true",
         help="verify the Agent Skills copy without writing (the default)",

@@ -23,7 +23,9 @@ def CheckPayloadArg() -> None:
             filename=str(SourcePath),
         )
         for NodeData in AstLib.walk(SyntaxTree):
-            IsConstructor = isinstance(NodeData, AstLib.Call) and (
+            if not isinstance(NodeData, AstLib.Call):
+                continue
+            IsConstructor = (
                 isinstance(NodeData.func, AstLib.Name)
                 and NodeData.func.id == "BrepPayload"
                 or isinstance(NodeData.func, AstLib.Attribute)
@@ -44,7 +46,7 @@ def CheckPayloadArg() -> None:
 def CheckNoFormats() -> None:
     PackageNames = ListFormatPacks()
     RegistryData = AdapterRegistry()
-    RegistryData.introspect()
+    _ = RegistryData.introspect()
     AdapterNames = {
         type(AdapterData).__name__
         for AdapterData in (*RegistryData.readers(), *RegistryData.writers())

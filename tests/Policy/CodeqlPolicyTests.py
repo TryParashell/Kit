@@ -27,6 +27,10 @@ KCorePathBarriers = frozenset(
     (
         (
             "convert",
+            "Member[Security].Member[LexicalBoundary].Member[ResolveLexical].ReturnValue",
+        ),
+        (
+            "convert",
             "Member[Security].Member[PathBoundary].Member[ResolveInput].ReturnValue",
         ),
         (
@@ -104,13 +108,20 @@ def ModelRows(SourceText: str) -> frozenset[tuple[str, str, str]]:
     return frozenset(Matches)
 
 
-# workflow configuration must run every suite and supported repository language
+# workflow configuration must scan every suite and maintained repository language
 def TestFlowScope() -> None:
     SourceText = LoadText(".github/workflows/CodeqlSecurity.yml")
+    ConfigText = LoadText(".github/CodeQL/CodeqlConfig.yml")
+    SuiteText = LoadText(".github/CodeQL/PythonMaximal.qls")
     assert "config-file: ./.github/CodeQL/CodeqlConfig.yml" in SourceText
     assert "cp -R .github/CodeQL/extensions .github/codeql/extensions" in SourceText
-    for LanguageName in ("actions", "java-kotlin", "python"):
-        assert f"- {LanguageName}" in SourceText
+    assert "paths-ignore:\n  - re/**" in ConfigText
+    assert "queries: ./.github/CodeQL/PythonMaximal.qls" in SourceText
+    assert "- query: AlertSuppression.ql" in SuiteText
+    assert 'select(any(.suppressions[]?; .kind == "inSource") | not)' in SourceText
+    for LanguageName in ("actions", "python"):
+        assert f"language: {LanguageName}" in SourceText
+    assert "- java-kotlin" not in SourceText
 
 
 # query exceptions stay limited to receiver naming and nonsecret timing heuristics

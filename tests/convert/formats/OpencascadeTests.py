@@ -13,15 +13,17 @@ from pathlib import Path as PathValue
 
 import pytest as PytestLib
 
-from convert.geometry import Opencascade as Opencascade
-from convert.adapters.freecad.Brep import triangle_mesh_brep as TriangleMeshBrep
+from convert.adapters.freecad.Brep import TriangleMesh as TriangleMeshBrep
 from convert.adapters.freecad.Native import (
-    _decoded_document_brep as DecodedDocumentBrep,
-    read_native_fcstd as ReadNativeFcstd,
+    DecodedDocBrep,
+    ReadNativeFcstd,
 )
 from convert.geometry.Opencascade import (
-    decode_ascii_brep as DecodeAsciiBrep,
-    is_structurally_valid_ascii_brep as IsSVAB,
+    CanonicalVerts,
+    DecodeAsciiBrep,
+    IsValidBrep as IsSVAB,
+    ShapeRecord,
+    VertexData,
 )
 from interchange import (
     Body as BodyValue,
@@ -37,26 +39,26 @@ KExamples = PathValue(__file__).parents[3] / "examples" / "Random" / "V8_engine"
 # this definition exists because focused behavior needs one stable owner
 def TestCVRJTR() -> None:
     RecordsData = {
-        1: Opencascade._ShapeRecord(
+        1: ShapeRecord(
             b"Ve",
             "0101101",
             (),
-            Opencascade._VertexData(
+            VertexData(
                 1.0e-7,
                 VectorThree(-4.253254041760199, 3.090169943749473, 5.0),
             ),
         ),
-        2: Opencascade._ShapeRecord(
+        2: ShapeRecord(
             b"Ve",
             "0101101",
             (),
-            Opencascade._VertexData(
+            VertexData(
                 1.0e-7,
                 VectorThree(-4.253254041760199, 3.0901699437494736, 5.0),
             ),
         ),
     }
-    CanonicalData = Opencascade._CanonicalVertexRecords(RecordsData)
+    CanonicalData = CanonicalVerts(RecordsData)
     assert CanonicalData[1] == CanonicalData[2]
 
 
@@ -94,9 +96,9 @@ def FaceTF(Surface: int, TailValue: bytes) -> bytes:
     return b"".join(
         (
             b"DBRep_DrawableShape\n\n"
-            b"CASCADE Topology V1, (c) Matra-Datavision\n"
-            b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
-            b"PolygonOnTriangulations 0\n",
+            + b"CASCADE Topology V1, (c) Matra-Datavision\n"
+            + b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
+            + b"PolygonOnTriangulations 0\n",
             Surfaces,
             b"Triangulations 1\n3 1 0 0\n0 0 0 1 0 0 0 1 0 1 2 3\nTShapes 1\nFa\n",
             f"0 0 {Surface} 0".encode("ascii"),
@@ -111,20 +113,20 @@ def PolygonTF() -> bytes:
     return b"".join(
         (
             b"DBRep_DrawableShape\n\n"
-            b"CASCADE Topology V1, (c) Matra-Datavision\n"
-            b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
-            b"PolygonOnTriangulations 1\n"
-            b"2 1 4\np 0 0\n"
-            b"Surfaces 0\nTriangulations 2\n"
-            b"4 1 0 0\n"
-            b"0 0 0 1 0 0 1 1 0 0 1 0 1 2 3\n"
-            b"3 1 0 0\n"
-            b"0 0 0 1 0 0 0 1 0 1 2 3\n"
-            b"TShapes 3\n"
-            b"Ve\n0 0 0 0 0 0\n0101101\n*\n"
-            b"Ve\n0 1 0 0 0 0\n0101101\n*\n"
-            b"Ed\n0 1 1 0\n6 1 1 0\n0\n0101000\n+3 0 -2 0 *\n"
-            b"+1 0\n",
+            + b"CASCADE Topology V1, (c) Matra-Datavision\n"
+            + b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
+            + b"PolygonOnTriangulations 1\n"
+            + b"2 1 4\np 0 0\n"
+            + b"Surfaces 0\nTriangulations 2\n"
+            + b"4 1 0 0\n"
+            + b"0 0 0 1 0 0 1 1 0 0 1 0 1 2 3\n"
+            + b"3 1 0 0\n"
+            + b"0 0 0 1 0 0 0 1 0 1 2 3\n"
+            + b"TShapes 3\n"
+            + b"Ve\n0 0 0 0 0 0\n0101101\n*\n"
+            + b"Ve\n0 1 0 0 0 0\n0101101\n*\n"
+            + b"Ed\n0 1 1 0\n6 1 1 0\n0\n0101000\n+3 0 -2 0 *\n"
+            + b"+1 0\n",
         )
     )
 
@@ -135,7 +137,7 @@ def TestABDNOST() -> None:
         ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
         ((0, 1, 2),),
     )
-    Model = DecodeAsciiBrep(DataValueA, id_prefix="test:triangle")
+    Model = DecodeAsciiBrep(DataValueA, IdPrefix="test:triangle")
     assert Model is not None
     assert len(Model.curves) == 3
     assert len(Model.surfaces) == 1
@@ -154,7 +156,7 @@ def TestABDNCST() -> None:
         ((0, 0, 0), (2, 0, 0), (0, 3, 0), (0, 0, 4)),
         ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)),
     )
-    Model = DecodeAsciiBrep(DataValueA, id_prefix="test:solid")
+    Model = DecodeAsciiBrep(DataValueA, IdPrefix="test:solid")
     assert Model is not None
     assert len(Model.faces) == 4
     assert len(Model.shells) == 1
@@ -474,7 +476,7 @@ def TestFSOMMDB() -> None:
         )
         for Index, BodyValueA in enumerate(Bodies, 1)
     )
-    Model = DecodedDocumentBrep(Payloads, Bodies)
+    Model = DecodedDocBrep(Payloads, Bodies)
     assert Model is not None
     assert {Value.design_body_id for Value in Model.bodies} == {
         "body:first",
@@ -492,7 +494,7 @@ def TestFSOMMDB() -> None:
         role=PayloadRole.BREP,
         file_extension=".brep",
     )
-    SelectedModel = DecodedDocumentBrep(
+    SelectedModel = DecodedDocBrep(
         (OwnedPayload, *Payloads),
         Bodies,
     )

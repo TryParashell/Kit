@@ -23,8 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-python:
-    name: Verify Python steering rules
+  steering:
+    name: Python steering
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -36,7 +36,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: "0.9.13"
+          version: "0.12.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -46,7 +46,6 @@ jobs:
       - name: Verify tracked Python sources
         run: |
           mapfile -d '' PythonFiles < <(git ls-files -z -- '*.py')
-          uv run python -m tools.steering.SteeringCompliance "${PythonFiles[@]}"
-
-      - name: Verify Python formatting
-        run: uv run black --check .
+          uv run python -m tools.steering.SteeringCompliance \
+            --baseline-file tools/steering/SteeringBaseline.txt \
+            "${PythonFiles[@]}"

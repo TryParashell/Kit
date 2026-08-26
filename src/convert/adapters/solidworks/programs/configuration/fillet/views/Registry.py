@@ -55,10 +55,16 @@ KFieldOwners, KAnnotationOps = BuildProgram(
 )
 
 # generated registry exports remain explicit for facade composition and extension imports
-__all__ = ["KFieldOwners", "KAnnotationOps", "KMethodPrograms"]
+__all__ = [
+    "KFieldOwners",
+    "KAnnotationOps",
+    "KMethodPrograms",
+    "FieldOwners",
+    "AnnotationOps",
+]
 
 # compatibility binding preserves its established public import after decomposition
-globals()["FieldOwners"] = KFieldOwners
+FieldOwners = KFieldOwners
 
 # compatibility binding preserves its established public import after decomposition
-globals()["AnnotationOps"] = KAnnotationOps
+AnnotationOps = KAnnotationOps

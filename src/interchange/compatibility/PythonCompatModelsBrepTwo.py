@@ -8,7 +8,6 @@
 
 from typing import Mapping as TypeMap
 
-
 # historical brep identity set 2 keeps pickle globals stable after module splits
 KLegacyBrepTwo: TypeMap[str, tuple[str, str]] = {
     "BrepCoedge": ("BrepCoedge", "interchange.brep"),

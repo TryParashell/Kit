@@ -14,6 +14,7 @@ from inspect import Signature as CallSignature
 
 from interchange import Capability
 
+from convert.adapters.base.AdapterInfoView import AdapterInfoView
 from convert.adapters.base.ContractCompat import ContractBase
 
 
@@ -26,7 +27,7 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
     if UnknownNames:
         raise TypeError(
             "AdapterInfo.extensions_for() got an unexpected keyword argument "
-            f"{UnknownNames[0]!r}"
+            + f"{UnknownNames[0]!r}"
         )
     if "assembly" in NamedValues and "Assembly" in NamedValues:
         raise TypeError(
@@ -35,7 +36,7 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
     if not NamedValues:
         raise TypeError(
             "AdapterInfo.extensions_for() missing required keyword only argument "
-            "'assembly'"
+            + "'assembly'"
         )
     Assembly = NamedValues.get("assembly", NamedValues.get("Assembly"))
     if not isinstance(Assembly, bool):
@@ -45,48 +46,55 @@ def IsAssemblyFlag(NamedValues: dict[str, object]) -> bool:
 
 # adapter metadata gives discovery and selection one immutable format description
 @DataClass(frozen=True, slots=True)
-class AdapterInfo(ContractBase):
-    FormatId: str
-    DisplayName: str
-    VersionText: str
-    Extensions: tuple[str, ...]
-    AliasNames: tuple[str, ...] = ()
-    Capabilities: frozenset[Capability] = frozenset()
-    MediaTypes: tuple[str, ...] = ()
-    NativeCaps: frozenset[Capability] = frozenset()
-    PartExts: tuple[str, ...] = ()
-    AssemblyExts: tuple[str, ...] = ()
+class AdapterInfo(AdapterInfoView, ContractBase):
+    format_id: str
+    name: str
+    version: str
+    extensions: tuple[str, ...]
+    aliases: tuple[str, ...] = ()
+    capabilities: frozenset[Capability] = frozenset()
+    media_types: tuple[str, ...] = ()
+    native_capabilities: frozenset[Capability] = frozenset()
+    part_extensions: tuple[str, ...] = ()
+    assembly_extensions: tuple[str, ...] = ()
+
+    # canonical extension access remains typed because selectors consume this storage field
+    @property
+    def Extensions(self) -> tuple[str, ...]:
+        return self.extensions
 
     # document kind lookup belongs here so clients need no format specific branching
-    def GetExtensions(SelfValue, **NamedValues: object) -> tuple[str, ...]:
+    def ExtensionsFor(self, **NamedValues: object) -> tuple[str, ...]:
         Assembly = IsAssemblyFlag(NamedValues)
-        return SelfValue.AssemblyExts if Assembly else SelfValue.PartExts
+        return self.assembly_extensions if Assembly else self.part_extensions
+
+    # historical keyword lookup remains typed because api consumers call this public selector
+    def extensions_for(self, **NamedValues: object) -> tuple[str, ...]:
+        return self.ExtensionsFor(**NamedValues)
 
     # historical representation keeps logs and diagnostics comparable across package upgrades
-    def __repr__(SelfValue) -> str:
+    def RenderIdentity(self) -> str:
         FieldValues = ", ".join(
-            f"{LegacyName}={getattr(SelfValue, ModelName)!r}"
-            for LegacyName, ModelName in KLegacyFields
+            f"{ModelName}={getattr(self, ModelName)!r}" for ModelName in KModelFields
         )
         return f"AdapterInfo({FieldValues})"
 
+    __repr__ = RenderIdentity
 
-# historical dataclass reflection remains available because plugin tooling inspects legacy field names
-KLegacyFields = (
-    ("format_id", "FormatId"),
-    ("name", "DisplayName"),
-    ("version", "VersionText"),
-    ("extensions", "Extensions"),
-    ("aliases", "AliasNames"),
-    ("capabilities", "Capabilities"),
-    ("media_types", "MediaTypes"),
-    ("native_capabilities", "NativeCaps"),
-    ("part_extensions", "PartExts"),
-    ("assembly_extensions", "AssemblyExts"),
-)
 
 # canonical field order remains necessary for immutable slot pickle restoration
-KModelFields = tuple(ModelName for LegacyName, ModelName in KLegacyFields)
+KModelFields: tuple[str, ...] = (
+    "format_id",
+    "name",
+    "version",
+    "extensions",
+    "aliases",
+    "capabilities",
+    "media_types",
+    "native_capabilities",
+    "part_extensions",
+    "assembly_extensions",
+)
 
 
 # immutable slot pickles read canonical storage despite historical field reflection
@@ -103,47 +111,33 @@ def SetPickleState(SelfValue: AdapterInfo, FieldValues: tuple[object, ...]) -> N
 setattr(AdapterInfo, "__getstate__", GetPickleState)
 setattr(AdapterInfo, "__setstate__", SetPickleState)
 
-for LegacyName, ModelName in KLegacyFields:
-    setattr(AdapterInfo.__dataclass_fields__[ModelName], "name", LegacyName)
 
-# plugin reflection needs legacy mapping keys because direct field lookups are established behavior
-AdapterInfo.__dataclass_fields__ = {
-    LegacyName: AdapterInfo.__dataclass_fields__[ModelName]
-    for LegacyName, ModelName in KLegacyFields
-}
-
-# runtime annotation inspection needs historical keys because third party forms resolve them directly
-AdapterInfo.__annotations__ = {
-    LegacyName: AdapterInfo.__annotations__[ModelName]
-    for LegacyName, ModelName in KLegacyFields
-}
-
-
-setattr(AdapterInfo, "extensions_for", AdapterInfo.GetExtensions)
-
-setattr(AdapterInfo.GetExtensions, "__module__", "convert.adapters.base")
-setattr(AdapterInfo.GetExtensions, "__name__", "extensions_for")
-setattr(AdapterInfo.GetExtensions, "__qualname__", "AdapterInfo.extensions_for")
-setattr(
-    AdapterInfo.GetExtensions,
-    "__annotations__",
-    {"assembly": "bool", "return": "tuple[str, ...]"},
-)
-setattr(
-    AdapterInfo.GetExtensions,
-    "__signature__",
-    CallSignature(
-        (
-            SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
-            SigParam(
-                "assembly",
-                SigParam.KEYWORD_ONLY,
-                annotation="bool",
+# reflected signatures keep the historical keyword only assembly contract introspectable
+def ApplySignatures() -> None:
+    setattr(AdapterInfo.extensions_for, "__module__", "convert.adapters.base")
+    setattr(
+        AdapterInfo.extensions_for,
+        "__annotations__",
+        {"assembly": "bool", "return": "tuple[str, ...]"},
+    )
+    setattr(
+        AdapterInfo.extensions_for,
+        "__signature__",
+        CallSignature(
+            (
+                SigParam("self", SigParam.POSITIONAL_OR_KEYWORD),
+                SigParam(
+                    "assembly",
+                    SigParam.KEYWORD_ONLY,
+                    annotation="bool",
+                ),
             ),
+            return_annotation="tuple[str, ...]",
         ),
-        return_annotation="tuple[str, ...]",
-    ),
-)
+    )
+
+
+ApplySignatures()
 
 setattr(
     AdapterInfo,

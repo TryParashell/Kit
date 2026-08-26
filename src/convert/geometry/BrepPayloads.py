@@ -15,6 +15,7 @@ from interchange import BrepPayload, CadDocument, PayloadRole
 def GetBrepPayloads(DocumentData: CadDocument) -> tuple[BrepPayload, ...]:
     return tuple(
         PayloadData
-        for PayloadData in DocumentData.brep_payloads
-        if PayloadData.role == PayloadRole.BREP and PayloadData.data is not None
+        for PayloadData in DocumentData.BrepPayloads
+        if PayloadData.ValueRole == PayloadRole.KBrep
+        and PayloadData.PayloadData is not None
     )

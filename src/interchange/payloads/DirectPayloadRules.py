@@ -9,7 +9,6 @@
 from interchange.payloads.PayloadRoles import PayloadRole
 from interchange.payloads.PayloadRuleModel import PayloadRule
 
-
 # direct format evidence preserves exact roles before generic semantic fallbacks
 KDirectPayloadRules = (
     PayloadRule(
@@ -47,8 +46,8 @@ KDirectPayloadRules = (
     PayloadRule(
         PayloadRole.KVerification,
         ".sha256",
-        Kinds=frozenset({"native_document_binding"}),
-        Schemas=frozenset({"sha256"}),
+        kinds=frozenset({"native_document_binding"}),
+        schemas=frozenset({"sha256"}),
     ),
     PayloadRule(
         PayloadRole.KFeatureHistory,

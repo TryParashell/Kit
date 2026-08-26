@@ -94,23 +94,29 @@ def EncodeFeatures() -> bytes:
 
 # this definition exists because focused behavior needs one stable owner
 def EncodeHeader() -> bytes:
-    from convert.adapters.solidworks.core import Native as NativeMod
+    from convert.adapters.solidworks.core.Native import (
+        HeaderPayload,
+        KHeaderObjects,
+        KSolidworksConfigFlags,
+        NativeIdentity,
+        Serialized,
+    )
 
     CreatedStamp, ModifiedStamp, BaselineStamp, HeaderStamp = KHeaderIdentity
-    IdentityData = NativeMod._NativeIdentity(
+    IdentityData = NativeIdentity(
         CreatedStamp,
         ModifiedStamp,
         BaselineStamp,
         HeaderStamp,
-        NativeMod._SOLIDWORKS_CONFIGURATION_FLAGS,
+        KSolidworksConfigFlags,
         KHeaderLogRef,
     )
     HeaderData = bytearray(
-        NativeMod._header_payload(
+        HeaderPayload(
             IdentityData,
             "Default",
             (
-                *NativeMod._HEADER_OBJECTS,
+                *KHeaderObjects,
                 (26, "Sketch1", True),
                 (31, "Revolve1", False),
             ),
@@ -121,8 +127,8 @@ def EncodeHeader() -> bytes:
             CalcPinFront(),
         )
     )
-    LogRefData = NativeMod._serialized_string(KHeaderLogRef)
-    ModelRefData = NativeMod._serialized_string(KHeaderModelRef)
+    LogRefData = Serialized(KHeaderLogRef)
+    ModelRefData = Serialized(KHeaderModelRef)
     RefPositions: list[int] = []
     SearchStart = 0
     while True:
@@ -151,16 +157,16 @@ def BuildEnvelope() -> PinEnvelope:
 
 
 # this binding exists because shared behavior needs one stable value
-globals()["CalcPinFrontBounds"] = CalcPinFront
+CalcPinFrontBounds = CalcPinFront
 
 # this binding exists because shared behavior needs one stable value
-globals()["KHeaderLogReference"] = KHeaderLogRef
+KHeaderLogReference = KHeaderLogRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["KHeaderModelReference"] = KHeaderModelRef
+KHeaderModelReference = KHeaderModelRef
 
 # this binding exists because shared behavior needs one stable value
-globals()["annotations"] = Annotations
+annotations = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()["math"] = MathValue
+math = MathValue

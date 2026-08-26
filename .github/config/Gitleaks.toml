@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+# Gitleaks extends the upstream default rule set so third-party detections
+# stay current, then narrows scope to the directories this repository audits.
+title = "Kit gitleaks policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths outside the CI security boundary"
+paths = [
+    '''(^|/)\.venv(/|$)''',
+    '''(^|/)examples(/|$)''',
+    '''(^|/)Parashell(/|$)''',
+    '''(^|/)modules(/|$)''',
+    '''(^|/)re(/|$)''',
+]

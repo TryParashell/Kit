@@ -8,63 +8,70 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from dataclasses import dataclass as MakeDataClass
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
 from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
 from interchange.features.FeatureContract import FeatureDef
-from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.features.FeatureStepView import FeatureStepView
+from interchange.features.StepConfigView import (
+    StepConfigView,  # lgtm[py/unsafe-cyclic-import]
+)
+from interchange.core.ModelBase import ModelBase
+from interchange.core.ModelExtras import ModelExtras
 from interchange.records.RecordProvenance import Provenance
 
 
-# canonical typing needs an inherited key while public reflection exposes historical fields
-class FeatureHintBase(ModelBase):
-    Definition: FeatureDef | None
+# runtime construction accepts untrusted values so feature definitions need one checked boundary
+def ValidateFeature(SourceValue: object) -> FeatureDef | None:
+    if SourceValue is None or isinstance(SourceValue, FeatureDef):
+        return SourceValue
+    raise TypeError("feature definition must implement FeatureDefinition")
 
 
 # configuration state retains suppression and parameter changes without duplicate features
-@ModelDataMut(DefaultMap={"IsSuppressed": False, "ParamOverrideIds": ()})
+@MakeDataClass(frozen=True, slots=True)
 class FeatureCfgState(ModelBase):
-    ConfigurationId: str
-    IsSuppressed: bool
-    ParamOverrideIds: tuple[str, ...]
+    configuration_id: str
+    suppressed: bool = False
+    parameter_override_ids: tuple[str, ...] = ()
+
+    # configuration id keeps variant references stable across renames
+    @property
+    def ConfigurationId(self) -> str:
+        return self.configuration_id
+
+    # suppression state keeps feature trees honest about what contributes geometry
+    @property
+    def IsSuppressed(self) -> bool:
+        return self.suppressed
+
+    # override list tracks configuration specific parameters without cloning steps
+    @property
+    def ParamOverrideIds(self) -> tuple[str, ...]:
+        return self.parameter_override_ids
 
 
 # feature steps preserve ordered dependencies and definitions for editable translation
-@ModelDataMut(
-    DefaultMap={
-        "InputFeatureIds": (),
-        "SketchId": None,
-        "ParameterIds": (),
-        "Operation": None,
-        "Definition": None,
-        "SelectionIds": (),
-        "IsSuppressed": False,
-        "ConfigStates": (),
-        "Provenance": None,
-    },
-    FactoryMap={"Attributes": FreezeMapping},
-)
-class FeatureStep(FeatureHintBase):
-    EntityId: str
-    EntityName: str
-    EntityKind: FeatureKind | str
-    Order: int
-    InputFeatureIds: tuple[str, ...]
-    SketchId: str | None
-    ParameterIds: tuple[str, ...]
-    Operation: BooleanOp | str | None
-    Definition: FeatureDef | None
-    SelectionIds: tuple[str, ...]
-    IsSuppressed: bool
-    ConfigStates: tuple[FeatureCfgState, ...]
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+@MakeDataClass(frozen=True, slots=True)
+class FeatureStep(FeatureStepView, StepConfigView, ModelExtras, ModelBase):
+    id: str
+    name: str
+    kind: FeatureKind | str
+    order: int
+    input_feature_ids: tuple[str, ...] = ()
+    sketch_id: str | None = None
+    parameter_ids: tuple[str, ...] = ()
+    operation: BooleanOp | str | None = None
+    definition: FeatureDef | None = None
+    selection_ids: tuple[str, ...] = ()
+    suppressed: bool = False
+    configuration_states: tuple[FeatureCfgState, ...] = ()
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
     # invalid definitions must fail before corrupt feature records propagate
-    def __post_init__(SelfValue) -> None:
-        if SelfValue.Definition is not None and not isinstance(
-            SelfValue.Definition, FeatureDef
-        ):
-            raise TypeError("feature definition must implement FeatureDefinition")
+    def __post_init__(self) -> None:
+        _ = ValidateFeature(self.definition)

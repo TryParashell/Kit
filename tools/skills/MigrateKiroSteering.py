@@ -11,7 +11,6 @@ from __future__ import annotations
 import sys as System
 from pathlib import Path as FilePath
 
-
 # repository insertion keeps package imports available when this file runs directly
 KEntryRoot = FilePath(__file__).resolve().parents[2]
 
@@ -20,9 +19,6 @@ if str(KEntryRoot) not in System.path:
 
 from tools.skills.SkillCompat import GetLegacyAttr, KLegacyApi
 from tools.skills.SkillCli import MainRun
-
-# explicit exports retain legacy imports because downstream automation may still reference them
-__all__ = tuple(KLegacyApi)
 
 
 # legacy attribute resolution avoids forcing existing callers through an immediate migration

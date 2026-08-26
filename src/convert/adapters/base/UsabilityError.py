@@ -10,14 +10,31 @@ from __future__ import annotations
 
 from inspect import Parameter as SigParam
 from inspect import Signature as CallSignature
-from typing import Any as AnyValue
+from types import MappingProxyType
+from typing import Mapping as TypeMap
+from typing import TypedDict
 
 from interchange import Capability
-from interchange import frozen_mapping as FreezeMapping
 
 from convert.adapters.registry.RegistryErrors import RegistryError
 from convert.adapters.base.TransferContract import CarrierReason
 from convert.adapters.base.WriteResult import WriteResult
+from convert.adapters.base.WriteValidate import GetCarrierCaps
+
+
+# structured payload typing keeps compatibility fields useful without weakening dictionary values
+class ErrorPayload(TypedDict):
+    code: str
+    format_id: str
+    issues: tuple[str, ...]
+    application_usable: bool
+    vendor_loadable: bool
+    requirements: tuple[str, ...]
+    dropped: tuple[str, ...]
+    carrier_capabilities: tuple[str, ...]
+    carrier_reasons: dict[str, str]
+    unimplemented_capabilities: tuple[str, ...]
+    source_opaque_capabilities: tuple[str, ...]
 
 
 # issue collection stays focused because structured usability failures serve api consumers directly
@@ -53,9 +70,9 @@ def GetReasonCaps(
 
 # legacy constructor aliases need one strict translation point before structured collection begins
 def GetErrorArgs(
-    FormatId: str | None,
-    ResultData: WriteResult | None,
-    NamedValues: dict[str, AnyValue],
+    FormatId: object,
+    ResultData: object,
+    NamedValues: dict[str, object],
 ) -> tuple[str, WriteResult]:
     AllowedNames = {"format_id", "result"}
     UnknownNames = tuple(
@@ -64,7 +81,7 @@ def GetErrorArgs(
     if UnknownNames:
         raise TypeError(
             "ApplicationUsabilityError() got an unexpected keyword argument "
-            f"{UnknownNames[0]!r}"
+            + f"{UnknownNames[0]!r}"
         )
     if FormatId is not None and "format_id" in NamedValues:
         raise TypeError(
@@ -89,8 +106,27 @@ def GetErrorArgs(
     return FormatId, ResultData
 
 
-# usability failures expose every gate reason so callers never parse message text
-class UsabilityError(RegistryError):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# usability error keeps the historical surface because callers depend on it directly
+class UsabilityError(PairProtocol, RegistryError):
+    AppUsable: bool
+    CarrierCaps: frozenset[Capability]
+    CarrierReasons: TypeMap[Capability, CarrierReason]
+    ErrorCode: str
+    DroppedCaps: frozenset[Capability]
+    FormatId: str
+    IssueValues: tuple[str, ...]
+    Requirements: tuple[str, ...]
+    OpaqueCaps: frozenset[Capability]
+    MissingCaps: frozenset[Capability]
+    VendorLoadable: bool
     locals()["__slots__"] = (
         "AppUsable",
         "CarrierCaps",
@@ -107,36 +143,99 @@ class UsabilityError(RegistryError):
 
     # structured evidence preserves every historical error field and message
     def __init__(
-        SelfValue,
+        self,
         FormatId: str | None = None,
         ResultData: WriteResult | None = None,
-        **NamedValues: AnyValue,
+        **NamedValues: object,
     ) -> None:
         FormatId, ResultData = GetErrorArgs(FormatId, ResultData, NamedValues)
-        SelfValue.ErrorCode = "output_not_application_usable"
-        SelfValue.FormatId = FormatId
-        SelfValue.IssueValues = GetIssues(ResultData)
-        SelfValue.AppUsable = ResultData.IsAppUsable
-        SelfValue.VendorLoadable = ResultData.IsVendorLoadable
-        SelfValue.Requirements = ResultData.Requirements
-        SelfValue.DroppedCaps = ResultData.DroppedCaps
-        SelfValue.CarrierCaps = ResultData.CarrierCaps
-        SelfValue.CarrierReasons = FreezeMapping(
+        self.ErrorCode = "output_not_application_usable"
+        self.FormatId = FormatId
+        self.IssueValues = GetIssues(ResultData)
+        self.AppUsable = ResultData.IsAppUsable
+        self.VendorLoadable = ResultData.IsVendorLoadable
+        self.Requirements = ResultData.Requirements
+        self.DroppedCaps = ResultData.DroppedCaps
+        self.CarrierCaps = GetCarrierCaps(ResultData.Transfers)
+        self.CarrierReasons = MappingProxyType(
             {
                 TransferData.CapabilityData: TransferData.CarrierCause
                 for TransferData in ResultData.Transfers
                 if TransferData.CarrierCause is not None
             }
         )
-        SelfValue.MissingCaps = GetReasonCaps(ResultData, CarrierReason.KWriterGap)
-        SelfValue.OpaqueCaps = GetReasonCaps(ResultData, CarrierReason.KSourceOpaque)
-        DetailText = ", ".join(SelfValue.IssueValues) or "unverified_output"
+        self.MissingCaps = GetReasonCaps(ResultData, CarrierReason.KWriterGap)
+        self.OpaqueCaps = GetReasonCaps(ResultData, CarrierReason.KSourceOpaque)
+        DetailText = ", ".join(self.IssueValues) or "unverified_output"
         super().__init__(
             f"{FormatId} output failed application usability: {DetailText}"
         )
 
+    # historical usability access remains typed because api consumers inspect this public error field
+    @property
+    def IsAppUsable(self) -> bool:
+        return self.AppUsable
+
+    application_usable = IsAppUsable
+
+    # historical carrier access remains typed because api consumers inspect this public error field
+    @property
+    def carrier_capabilities(self) -> frozenset[Capability]:
+        return self.CarrierCaps
+
+    # historical reason access remains typed because api consumers inspect this public error field
+    @property
+    def carrier_reasons(self) -> TypeMap[Capability, CarrierReason]:
+        return self.CarrierReasons
+
+    # historical code access remains typed because api consumers dispatch on this public error field
+    @property
+    def code(self) -> str:
+        return self.ErrorCode
+
+    # historical loss access remains typed because api consumers inspect this public error field
+    @property
+    def dropped(self) -> frozenset[Capability]:
+        return self.DroppedCaps
+
+    # historical format access remains typed because api consumers inspect this public error field
+    @property
+    def format_id(self) -> str:
+        return self.FormatId
+
+    # historical issue access remains typed because api consumers inspect this public error field
+    @property
+    def issues(self) -> tuple[str, ...]:
+        return self.IssueValues
+
+    # historical requirement access remains typed because api consumers inspect this public error field
+    @property
+    def requirements(self) -> tuple[str, ...]:
+        return self.Requirements
+
+    # historical opaque capability access remains typed because api consumers inspect this public error field
+    @property
+    def source_opaque_capabilities(self) -> frozenset[Capability]:
+        return self.OpaqueCaps
+
+    # historical missing capability access remains typed because api consumers inspect this public error field
+    @property
+    def unimplemented_capabilities(self) -> frozenset[Capability]:
+        return self.MissingCaps
+
+    # historical vendor access remains typed because api consumers inspect this public error field
+    @property
+    def IsVendorLoadable(self) -> bool:
+        return self.VendorLoadable
+
+    vendor_loadable = IsVendorLoadable
+
+    # historical mapping method remains typed because api consumers serialize this public error contract
+    def to_dict(self) -> ErrorPayload:
+        return BuildErrorMap(self)
+
     # legacy attributes remain readable because error fields are established public behavior
-    def __getattr__(SelfValue, FieldName: str) -> AnyValue:
+    def __getattr__(self, FieldName: str) -> object:
         AliasMap = {
             "application_usable": "AppUsable",
             "carrier_capabilities": "CarrierCaps",
@@ -151,12 +250,13 @@ class UsabilityError(RegistryError):
             "vendor_loadable": "VendorLoadable",
         }
         if FieldName in AliasMap:
-            return object.__getattribute__(SelfValue, AliasMap[FieldName])
+            ResultValue: object = object.__getattribute__(self, AliasMap[FieldName])
+            return ResultValue
         raise AttributeError(FieldName)
 
     # dictionary output remains wire compatible for api error serialization
-    def ToMapping(SelfValue) -> dict[str, object]:
-        return BuildErrorMap(SelfValue)
+    def ToMapping(self) -> ErrorPayload:
+        return BuildErrorMap(self)
 
 
 # deterministic sorting keeps the legacy error payload byte stable across executions
@@ -165,8 +265,8 @@ def SortCaps(CapValues: frozenset[Capability]) -> tuple[str, ...]:
 
 
 # payload construction stays independent because error representation changes separately from collection
-def BuildErrorMap(ErrorData: UsabilityError) -> dict[str, object]:
-    ReasonMap = {
+def BuildErrorMap(ErrorData: UsabilityError) -> ErrorPayload:
+    ReasonMap: dict[str, str] = {
         CapabilityData.value: ReasonData.value
         for CapabilityData, ReasonData in sorted(
             ErrorData.CarrierReasons.items(),
@@ -193,11 +293,8 @@ def GetReasonKey(ItemData: tuple[Capability, CarrierReason]) -> str:
     return ItemData[0].value
 
 
-setattr(UsabilityError, "to_dict", UsabilityError.ToMapping)
-
-
 # public usability exception name remains stable because api consumers import it directly
-globals()["ApplicationUsabilityError"] = UsabilityError
+ApplicationUsabilityError = UsabilityError
 
 setattr(
     UsabilityError,

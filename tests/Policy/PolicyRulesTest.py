@@ -19,13 +19,13 @@ from tools.Policy.IsValidStem import IsValidStem
 class TestPathRules(UnitTest.TestCase):
 
     # broad exclusion belongs only to example inputs because project code must stay enforceable
-    def CheckExamples(CaseSelf) -> None:
-        CaseSelf.assertTrue(IsBroadSkip("examples/vendor/part_2.SLDPRT"))
-        CaseSelf.assertFalse(IsBroadSkip("example/vendor/part_2.SLDPRT"))
-        CaseSelf.assertFalse(IsBroadSkip("examples.md"))
+    def CheckExamples(self) -> None:
+        self.assertTrue(IsBroadSkip("examples/vendor/part_2.SLDPRT"))
+        self.assertFalse(IsBroadSkip("example/vendor/part_2.SLDPRT"))
+        self.assertFalse(IsBroadSkip("examples.md"))
 
     # standards retain fixed filenames because their consumers cannot discover renamed alternatives
-    def CheckStandards(CaseSelf) -> None:
+    def CheckStandards(self) -> None:
         AllowedPaths = (
             ".gitattributes",
             ".github/CodeQL/extensions/KitPython/codeql-pack.yml",
@@ -35,27 +35,27 @@ class TestPathRules(UnitTest.TestCase):
             ".agents/skills/naming/SKILL.md",
         )
         for RepoPath in AllowedPaths:
-            with CaseSelf.subTest(RepoPath=RepoPath):
-                CaseSelf.assertTrue(IsNameExempt(RepoPath))
-        CaseSelf.assertFalse(IsNameExempt("Source/settings.json"))
-        CaseSelf.assertFalse(IsNameExempt("Source/SKILL.md"))
-        CaseSelf.assertFalse(
+            with self.subTest(RepoPath=RepoPath):
+                self.assertTrue(IsNameExempt(RepoPath))
+        self.assertFalse(IsNameExempt("Source/settings.json"))
+        self.assertFalse(IsNameExempt("Source/SKILL.md"))
+        self.assertFalse(
             IsNameExempt(".github/CodeQL/extensions/OtherPython/codeql-pack.yml")
         )
-        CaseSelf.assertFalse(
+        self.assertFalse(
             IsNameExempt(".github/CodeQL/extensions/KitPython/codeql-config.yml")
         )
 
     # bundled skills and native identities stay loadable without exempting adjacent project metadata
-    def CheckBundles(CaseSelf) -> None:
-        CaseSelf.assertTrue(IsNameExempt(".kiro/skills/vendor/random_2.json"))
-        CaseSelf.assertTrue(IsNameExempt("re/binaries/sldmfcu.dll"))
-        CaseSelf.assertFalse(IsNameExempt("re/binaries/manifest.json"))
-        CaseSelf.assertFalse(IsNameExempt("Source/sldmfcu.dll"))
+    def CheckBundles(self) -> None:
+        self.assertTrue(IsNameExempt(".kiro/skills/vendor/random_2.json"))
+        self.assertTrue(IsNameExempt("re/binaries/sldmfcu.dll"))
+        self.assertFalse(IsNameExempt("re/binaries/manifest.json"))
+        self.assertFalse(IsNameExempt("Source/sldmfcu.dll"))
 
     # the exact ascii predicate rejects separators digits lowercase starts and empty stems
-    def CheckStemRule(CaseSelf) -> None:
+    def CheckStemRule(self) -> None:
         for StemText in ("Alpha", "HTTPServer", "ValueName"):
-            CaseSelf.assertTrue(IsValidStem(StemText))
+            self.assertTrue(IsValidStem(StemText))
         for StemText in ("alpha", "Alpha_Name", "Alpha2", ""):
-            CaseSelf.assertFalse(IsValidStem(StemText))
+            self.assertFalse(IsValidStem(StemText))

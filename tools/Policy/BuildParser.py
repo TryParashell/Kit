@@ -17,19 +17,19 @@ def BuildParser() -> ArgParse.ArgumentParser:
     ParserInfo = ArgParse.ArgumentParser(
         description="Validate tracked repository paths and direct directory file counts."
     )
-    ParserInfo.add_argument(
+    _ = ParserInfo.add_argument(
         "--root",
         dest="RootPath",
         type=FilePath,
         default=FilePath.cwd(),
         help="repository working tree path",
     )
-    ParserInfo.add_argument(
+    _ = ParserInfo.add_argument(
         "--base",
         dest="BaseRef",
         help="base revision for changed destination mode",
     )
-    ParserInfo.add_argument(
+    _ = ParserInfo.add_argument(
         "--head",
         dest="HeadRef",
         help="head revision for changed destination mode",

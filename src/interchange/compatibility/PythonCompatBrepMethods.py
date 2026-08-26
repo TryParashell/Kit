@@ -26,7 +26,7 @@ def BindBrepMut(ModelType: type) -> None:
                 MakeParam("self"),
                 MakeParam(
                     "design_body_ids",
-                    DefaultValue=frozenset(),
+                    DefaultValue=frozenset[str](),
                     AnnotValue="frozenset[str]",
                 ),
             ),

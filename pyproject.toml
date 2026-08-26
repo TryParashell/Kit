@@ -19,17 +19,22 @@ requires-python = ">=3.11"
 license = "LicenseRef-PolyForm-Strict-1.0.0"
 license-files = ["LICENSE"]
 authors = [
-    { name = "Parashell, Inc." },
+    { name = "Parashell" },
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 maintainers = [
     { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
-keywords = ["cad"]
-classifiers = [
-    "Private :: Do Not Upload",
+keywords = [
+    "cad",
+    "interchange",
+    "translation",
+    "geometry",
+    "brep",
+    "mesh",
+    "assembly",
+    "sdk",
 ]
-dependencies = []
 
 [project.urls]
 Repository = "https://github.com/TryParashell/Kit"
@@ -66,8 +71,100 @@ collect_imported_tests = false
 [tool.black]
 line-length = 88
 target-version = ["py311"]
+force-exclude = "(examples|Parashell|modules|re|src/convert/adapters/solidworks/programs)/"
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.4",
     "black==26.3.1",
+    "checkov>=3.3.11",
+    "cyclonedx-bom>=4.6.1",
+    "defusedxml>=0.7.1",
+    "detect-secrets>=1.5.0",
+    "dlint>=0.16.0",
+    "mypy>=2.3.1",
+    "numpy<2.5",
+    "pip-audit>=2.9.0",
+    "pyright==1.1.411",
+    "ruff>=0.16.3",
+    "safety>=3.8.1",
+    "semgrep>=1.136.0",
+    "setuptools==80.9.0",
+    "typing-extensions>=4.12",
+    "types-pywin32>=312.0.0.20260724",
+    "zizmor>=1.29.0",
+]
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["src", "tests", "tools"]
+exclude = [".venv", "examples", "Parashell", "modules", "re", ".github/scripts"]
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+ignore = ["F401", "F402", "F811", "F821", "F823"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "examples", "Parashell", "modules", "re", "tests"]
+skips = ["B101", "B105", "B314", "B404", "B405", "B603", "B607"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+disallow_any_explicit = true
+warn_unreachable = true
+extra_checks = true
+enable_error_code = [
+    "explicit-override",
+    "ignore-without-code",
+    "mutable-override",
+    "possibly-undefined",
+    "redundant-expr",
+    "unimported-reveal",
+    "unused-awaitable",
+]
+explicit_package_bases = true
+files = ["src", "tests", "tools"]
+exclude = '^(\.venv|examples|Parashell|modules)/'
+mypy_path = ["src", "typings", ".", "re/tooling/ghidra/Generation"]
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+
+[tool.pyright]
+include = ["src", "tests", "tools"]
+exclude = [".venv", "examples", "Parashell", "modules", "tests/oracle"]
+typeCheckingMode = "strict"
+pythonVersion = "3.11"
+reportAssertTypeFailure = "error"
+reportCallInDefaultInitializer = "error"
+reportDeprecated = "error"
+reportImplicitAbstractClass = "error"
+reportImplicitOverride = "error"
+reportImplicitStringConcatenation = "error"
+reportIncompleteStubValue = "error"
+reportInvalidStubStatement = "error"
+reportMatchNotExhaustive = "error"
+reportMissingSuperCall = "error"
+reportPrivateUsage = "error"
+reportSelfClsParameterName = "error"
+reportTypeCommentUsage = "error"
+reportUninitializedInstanceVariable = "error"
+reportUnnecessaryCast = "error"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnsafeMultipleInheritance = "error"
+reportUnsupportedDunderAll = "error"
+reportUnusedCallResult = "error"
+reportUnusedExpression = "error"
+reportUnusedImport = "error"
+reportUnusedVariable = "error"
+
+[tool.uv]
+exclude-newer = "7 days"
+override-dependencies = [
+    "click>=8.3.3,<8.5",
+    "protobuf>=5.29.6,<6",
 ]

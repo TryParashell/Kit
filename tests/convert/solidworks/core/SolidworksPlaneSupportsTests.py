@@ -18,6 +18,7 @@ from convert.adapters.solidworks.core.Native import (
     REFERENCE_SUPPORT_SOURCE as Source,
     STREAM_ORDER_SUPPORT_SOURCE as SourceA,
     UNRESOLVED_SUPPORT_SOURCE as SourceB,
+    NativeModel,
     decode_native_model as DecodeNativeModel,
 )
 
@@ -43,7 +44,7 @@ KVendorCorpus = PytestLib.mark.skipif(
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def Model(NameText: str):
+def Model(NameText: str) -> NativeModel:
     Archive = SldprtArchive.open(KCorpus / NameText)
     return DecodeNativeModel(Archive.require(Stream), Archive.require(StreamA))
 

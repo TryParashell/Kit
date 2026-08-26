@@ -10,58 +10,75 @@ from math import isfinite as IsFiniteNum
 
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
+# one identity tuple keeps placement defaults free of repeated constructor calls
+KIdentityValues: tuple[float, ...] = (
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+)
+
 
 # homogeneous matrices preserve assembly placement without assuming vendor conventions
-@ModelDataMut(
-    DefaultMap={
-        "Values": (
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        )
-    }
-)
+@ModelDataMut
 class TransformMatrix(ModelBase):
-    Values: tuple[float, ...]
+    values: tuple[float, ...] = KIdentityValues
+
+    # flat row major values keep matrices cheap to serialize and compare
+    @property
+    def Values(self) -> tuple[float, ...]:
+        return self.values
 
     # matrix consumers need validated rows before indexing the homogeneous layout
-    def GetRows(SelfValue) -> tuple[tuple[float, float, float, float], ...]:
-        if len(SelfValue.Values) != 16:
+    def GetRows(self) -> tuple[tuple[float, float, float, float], ...]:
+        if len(self.values) != 16:
             raise ValueError("matrix does not contain 16 values")
-        return tuple(
-            tuple(SelfValue.Values[OffsetValue : OffsetValue + 4])
-            for OffsetValue in range(0, 16, 4)
+        return (
+            (self.values[0], self.values[1], self.values[2], self.values[3]),
+            (self.values[4], self.values[5], self.values[6], self.values[7]),
+            (self.values[8], self.values[9], self.values[10], self.values[11]),
+            (self.values[12], self.values[13], self.values[14], self.values[15]),
         )
 
     # invalid placement numbers must be rejected before geometry reaches targets
-    def IsFinite(SelfValue) -> bool:
-        return len(SelfValue.Values) == 16 and all(
-            IsFiniteNum(NumberValue) for NumberValue in SelfValue.Values
+    def IsFinite(self) -> bool:
+        return len(self.values) == 16 and all(
+            IsFiniteNum(NumberValue) for NumberValue in self.values
         )
 
     # point transformation centralizes the canonical row major placement convention
     def TransformPoint(
-        SelfValue, PointValue: tuple[float, float, float]
+        self, PointValue: tuple[float, float, float]
     ) -> tuple[float, float, float]:
-        MatrixRows = SelfValue.GetRows()
+        MatrixRows = self.GetRows()
         XCoord, YCoord, ZCoord = PointValue
-        return tuple(
-            MatrixRow[0] * XCoord
-            + MatrixRow[1] * YCoord
-            + MatrixRow[2] * ZCoord
-            + MatrixRow[3]
-            for MatrixRow in MatrixRows[:3]
+        return (
+            MatrixRows[0][0] * XCoord
+            + MatrixRows[0][1] * YCoord
+            + MatrixRows[0][2] * ZCoord
+            + MatrixRows[0][3],
+            MatrixRows[1][0] * XCoord
+            + MatrixRows[1][1] * YCoord
+            + MatrixRows[1][2] * ZCoord
+            + MatrixRows[1][3],
+            MatrixRows[2][0] * XCoord
+            + MatrixRows[2][1] * YCoord
+            + MatrixRows[2][2] * ZCoord
+            + MatrixRows[2][3],
         )
+
+
+# one identity matrix keeps placement defaults free of repeated constructor calls
+KIdentityMatrix: TransformMatrix = TransformMatrix()

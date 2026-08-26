@@ -8,29 +8,58 @@
 
 from __future__ import annotations
 
-from typing import Any as AnyValue
+from dataclasses import dataclass as MakeDataClass
+from dataclasses import field as MakeDataField
 from typing import Mapping as TypeMap
 
 from interchange.core.Common import FreezeMapping
-from interchange.core.ModelBase import ModelBase, ModelDataMut
+from interchange.core.ModelBase import ModelBase
 from interchange.records.RecordProvenance import Provenance
 from interchange.records.RecordTopology import TopologyCounts
 
 
 # design bodies connect feature results with topology material and source evidence
-@ModelDataMut(
-    DefaultMap={
-        "Topology": TopologyCounts(),
-        "MaterialId": None,
-        "Provenance": None,
-    },
-    FactoryMap={"Attributes": FreezeMapping},
-)
+@MakeDataClass(frozen=True, slots=True)
 class DesignBody(ModelBase):
-    EntityId: str
-    EntityName: str
-    FinalFeatureId: str
-    Topology: TopologyCounts
-    MaterialId: str | None
-    Provenance: Provenance | None
-    Attributes: TypeMap[str, AnyValue]
+    id: str
+    name: str
+    final_feature_id: str
+    topology: TopologyCounts = TopologyCounts()
+    material_id: str | None = None
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # stable identity lets records reference each other without holding full objects
+    @property
+    def EntityId(self) -> str:
+        return self.id
+
+    # human readable label keeps diagnostics and diffs meaningful for reviewers
+    @property
+    def EntityName(self) -> str:
+        return self.name
+
+    # resolved feature id keeps downstream steps referencing stable results
+    @property
+    def FinalFeatureId(self) -> str:
+        return self.final_feature_id
+
+    # counted topology keeps mass property claims checkable quickly
+    @property
+    def Topology(self) -> TopologyCounts:
+        return self.topology
+
+    # optional material link keeps appearance data joinable later
+    @property
+    def MaterialId(self) -> str | None:
+        return self.material_id
+
+    # origin details stay optional so synthesized records can omit source facts safely
+    @property
+    def Provenance(self) -> Provenance | None:
+        return self.provenance
+
+    # open attribute bag preserves vendor extras that typed fields cannot express yet
+    @property
+    def Attributes(self) -> TypeMap[str, object]:
+        return self.attributes

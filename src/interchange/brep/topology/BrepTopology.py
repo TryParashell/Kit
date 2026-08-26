@@ -8,102 +8,264 @@
 
 from __future__ import annotations
 
+from dataclasses import field as MakeDataField
+
 from interchange.brep.curves.BrepCurves import BrepEntity
+from interchange.brep.topology.EdgeView import EdgeView
+from interchange.records.RecordProvenance import Provenance
+from typing import Mapping as TypeMap
+from interchange.core.Common import FreezeMapping
 from interchange.core.ModelBase import ModelDataMut
-from interchange.geometry.models.Transform import Transform
+from interchange.geometry.models.Transform import Transform, KTransformIdentity
 from interchange.geometry.models.VectorSpace import SpaceVector
 
 
 # vertices anchor topological incidence to precise spatial points
-@ModelDataMut(DefaultMap={"Tolerance": 0.0})
+@ModelDataMut
 class BrepVertex(BrepEntity):
-    Point: SpaceVector
-    Tolerance: float
+    id: str
+    point: SpaceVector
+    tolerance: float = 0.0
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # stored position keeps vertices self contained without coordinate lookups
+    @property
+    def Point(self) -> SpaceVector:
+        return self.point
+
+    # tolerance bounds approximation error so consumers can trust comparisons
+    @property
+    def Tolerance(self) -> float:
+        return self.tolerance
 
 
 # edges connect vertices through exact curve parameter intervals
-@ModelDataMut(DefaultMap={"Tolerance": 0.0, "IsDegenerate": False})
-class BrepEdge(BrepEntity):
-    StartVertexId: str
-    EndVertexId: str
-    CurveId: str
-    StartParameter: float
-    EndParameter: float
-    Tolerance: float
-    IsDegenerate: bool
+@ModelDataMut
+class BrepEdge(EdgeView, BrepEntity):
+    id: str
+    start_vertex_id: str
+    end_vertex_id: str
+    curve_id: str
+    start_parameter: float
+    end_parameter: float
+    tolerance: float = 0.0
+    degenerate: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
 
 
 # coedges preserve oriented edge use and optional parameter curve bindings
-@ModelDataMut(DefaultMap={"PcurveId": "", "IsReversed": False})
+@ModelDataMut
 class BrepCoedge(BrepEntity):
-    EdgeId: str
-    PcurveId: str
-    IsReversed: bool
+    id: str
+    edge_id: str
+    pcurve_id: str = ""
+    reversed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # owning edge keeps pcurves attached to their carrier topology
+    @property
+    def EdgeId(self) -> str:
+        return self.edge_id
+
+    # pcurve link ties each surface side to its own parametric curve
+    @property
+    def PcurveId(self) -> str:
+        return self.pcurve_id
+
+    # orientation flag preserves which side of the topology is used
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
 
 
 # loops exist because face trimming boundaries require ordered connected coedges
-@ModelDataMut(DefaultMap={"IsOuter": False})
+@ModelDataMut
 class BrepLoop(BrepEntity):
-    CoedgeIds: tuple[str, ...]
-    IsOuter: bool
+    id: str
+    coedge_ids: tuple[str, ...]
+    outer: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # coedge ordering keeps loop traversal deterministic for validation passes
+    @property
+    def CoedgeIds(self) -> tuple[str, ...]:
+        return self.coedge_ids
+
+    # outer flag distinguishes material boundaries from holes during face classification
+    @property
+    def IsOuter(self) -> bool:
+        return self.outer
 
 
 # some boundaries have no owning face so standalone coedge groups preserve them
-@ModelDataMut(DefaultMap={"IsClosed": False})
+@ModelDataMut
 class BrepWire(BrepEntity):
-    CoedgeIds: tuple[str, ...]
-    IsClosed: bool
+    id: str
+    coedge_ids: tuple[str, ...]
+    closed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # coedge ordering keeps loop traversal deterministic for validation passes
+    @property
+    def CoedgeIds(self) -> tuple[str, ...]:
+        return self.coedge_ids
+
+    # closure flag tells solids apart from open shells without searching
+    @property
+    def IsClosed(self) -> bool:
+        return self.closed
 
 
 # faces bind analytic surfaces to ordered trimming loops
-@ModelDataMut(DefaultMap={"HasSameSense": True, "Tolerance": 0.0})
+@ModelDataMut
 class BrepFace(BrepEntity):
-    SurfaceId: str
-    LoopIds: tuple[str, ...]
-    HasSameSense: bool
-    Tolerance: float
+    id: str
+    surface_id: str
+    loop_ids: tuple[str, ...]
+    same_sense: bool = True
+    tolerance: float = 0.0
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # surface link attaches faces to their geometry without duplication
+    @property
+    def SurfaceId(self) -> str:
+        return self.surface_id
+
+    # loop list keeps face boundaries enumerable in stable order
+    @property
+    def LoopIds(self) -> tuple[str, ...]:
+        return self.loop_ids
+
+    # sense agreement keeps normal orientation consistent between face and surface
+    @property
+    def HasSameSense(self) -> bool:
+        return self.same_sense
+
+    # tolerance bounds approximation error so consumers can trust comparisons
+    @property
+    def Tolerance(self) -> float:
+        return self.tolerance
 
 
 # face uses preserve orientation when shells reuse face definitions
-@ModelDataMut(DefaultMap={"IsReversed": False})
+@ModelDataMut
 class BrepFaceUse(BrepEntity):
-    FaceId: str
-    IsReversed: bool
+    id: str
+    face_id: str
+    reversed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # face link anchors shell uses to concrete boundary elements
+    @property
+    def FaceId(self) -> str:
+        return self.face_id
+
+    # orientation flag preserves which side of the topology is used
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
 
 
 # shells collect oriented faces and preserve closure state
-@ModelDataMut(DefaultMap={"IsClosed": False})
+@ModelDataMut
 class BrepShell(BrepEntity):
-    FaceUseIds: tuple[str, ...]
-    IsClosed: bool
+    id: str
+    face_use_ids: tuple[str, ...]
+    closed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # face use list keeps shell composition explicit and ordered
+    @property
+    def FaceUseIds(self) -> tuple[str, ...]:
+        return self.face_use_ids
+
+    # closure flag tells solids apart from open shells without searching
+    @property
+    def IsClosed(self) -> bool:
+        return self.closed
 
 
 # shell uses preserve orientation when regions reuse shell definitions
-@ModelDataMut(DefaultMap={"IsReversed": False})
+@ModelDataMut
 class BrepShellUse(BrepEntity):
-    ShellId: str
-    IsReversed: bool
+    id: str
+    shell_id: str
+    reversed: bool = False
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # shell link keeps lump composition explicit for solid classification
+    @property
+    def ShellId(self) -> str:
+        return self.shell_id
+
+    # orientation flag preserves which side of the topology is used
+    @property
+    def IsReversed(self) -> bool:
+        return self.reversed
 
 
 # regions collect oriented shells and preserve solid classification
-@ModelDataMut(DefaultMap={"IsSolid": True})
+@ModelDataMut
 class BrepRegion(BrepEntity):
-    ShellUseIds: tuple[str, ...]
-    IsSolid: bool
+    id: str
+    shell_use_ids: tuple[str, ...]
+    solid: bool = True
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # shell use list keeps region composition explicit and ordered
+    @property
+    def ShellUseIds(self) -> tuple[str, ...]:
+        return self.shell_use_ids
+
+    # solidity flag separates watertight lumps from open shells quickly
+    @property
+    def IsSolid(self) -> bool:
+        return self.solid
 
 
 # bodies connect region wire and vertex topology to document design bodies
-@ModelDataMut(
-    DefaultMap={
-        "Transform": Transform(),
-        "DesignBodyId": "",
-        "WireIds": (),
-        "VertexIds": (),
-    }
-)
+@ModelDataMut
 class BrepBody(BrepEntity):
-    RegionIds: tuple[str, ...]
-    Transform: Transform
-    DesignBodyId: str
-    WireIds: tuple[str, ...]
-    VertexIds: tuple[str, ...]
+    id: str
+    region_ids: tuple[str, ...]
+    transform: Transform = KTransformIdentity
+    design_body_id: str = ""
+    wire_ids: tuple[str, ...] = ()
+    vertex_ids: tuple[str, ...] = ()
+    provenance: Provenance | None = None
+    attributes: TypeMap[str, object] = MakeDataField(default_factory=FreezeMapping)
+
+    # region list keeps disjoint lumps enumerable within one body
+    @property
+    def RegionIds(self) -> tuple[str, ...]:
+        return self.region_ids
+
+    # local transform keeps world placement composable through parent chains
+    @property
+    def Transform(self) -> Transform:
+        return self.transform
+
+    # design body link connects analytic brep back to consumer models
+    @property
+    def DesignBodyId(self) -> str:
+        return self.design_body_id
+
+    # wire list keeps free edges visible outside face boundaries
+    @property
+    def WireIds(self) -> tuple[str, ...]:
+        return self.wire_ids
+
+    # vertex list keeps isolated points addressable inside bodies
+    @property
+    def VertexIds(self) -> tuple[str, ...]:
+        return self.vertex_ids

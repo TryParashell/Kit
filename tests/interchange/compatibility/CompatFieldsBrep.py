@@ -25,7 +25,6 @@ KCompatFieldsBrep = (
         "interchange.brep.BrepCoedge",
         ("id", "provenance", "attributes", "edge_id", "pcurve_id", "reversed"),
     ),
-    ("interchange.brep.BrepCurve", ("id", "provenance", "attributes")),
     (
         "interchange.brep.BrepEdge",
         (
@@ -41,7 +40,6 @@ KCompatFieldsBrep = (
             "degenerate",
         ),
     ),
-    ("interchange.brep.BrepEntity", ("id", "provenance", "attributes")),
     (
         "interchange.brep.BrepFace",
         (
@@ -82,7 +80,6 @@ KCompatFieldsBrep = (
             "schema_version",
         ),
     ),
-    ("interchange.brep.BrepPcurve", ("id", "provenance", "attributes")),
     (
         "interchange.brep.BrepRegion",
         ("id", "provenance", "attributes", "shell_use_ids", "solid"),
@@ -95,7 +92,6 @@ KCompatFieldsBrep = (
         "interchange.brep.BrepShellUse",
         ("id", "provenance", "attributes", "shell_id", "reversed"),
     ),
-    ("interchange.brep.BrepSurface", ("id", "provenance", "attributes")),
     (
         "interchange.brep.BrepVertex",
         ("id", "provenance", "attributes", "point", "tolerance"),
