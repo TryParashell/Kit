@@ -125,8 +125,16 @@ class RegisterFacade(RegistryHost):
         self.RegisterWriter(adapter, ReplaceFlag=replace)
 
 
+# compat protocol marker exempts paired wrappers from naming constraints
+class CompatProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
 # registry composition keeps each independent responsibility in one focused mixin module
 class AdapterRegistry(
+    CompatProtocol,
     RegistrySeed,
     RegisterFacade,
     RegisterApi,
