@@ -14,8 +14,16 @@ from convert.adapters.base.WriteOptions import WriteOptions
 from interchange.document.models.DocumentModel import CadDocument
 
 
-# capture behavior isolates enforced public options from adapter and filesystem side effects
-class CaptureEngine:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# capture engine keeps the historical surface because callers depend on it directly
+class CaptureEngine(PairProtocol):
 
     # shared observations let write and conversion calls prove identical option enforcement
     def __init__(

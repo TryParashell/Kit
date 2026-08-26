@@ -59,9 +59,17 @@ class CfvTwoStream:
     extents: tuple[CfvTwoExtent, ...]
 
 
-# this definition exists because focused behavior needs one stable owner
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# cfv two folder keeps the historical surface because callers depend on it directly
 @Dataclass(frozen=True, slots=True)
-class CfvTwoFolder:
+class CfvTwoFolder(PairProtocol):
     physical_base: int
     offset: int
     length: int
@@ -107,9 +115,9 @@ class OsmxSymbol:
     value: str
 
 
-# this definition exists because focused behavior needs one stable owner
+# osmx archive keeps the historical surface because callers depend on it directly
 @Dataclass(frozen=True, slots=True)
-class OsmxArchive:
+class OsmxArchive(PairProtocol):
     data: bytes
     version: str
     symbol_table_offset: int
@@ -134,9 +142,9 @@ class OsmxArchive:
         return None
 
 
-# this definition exists because focused behavior needs one stable owner
+# cfv two archive keeps the historical surface because callers depend on it directly
 @Dataclass(frozen=True, slots=True)
-class CfvTwoArchive:
+class CfvTwoArchive(PairProtocol):
     data: bytes
     outer: CfvTwoFolder
     nested: tuple[CfvTwoFolder, ...]

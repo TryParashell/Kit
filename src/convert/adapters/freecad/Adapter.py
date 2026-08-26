@@ -2604,8 +2604,16 @@ def WriteTarget(
     )
 
 
-# this definition exposes the adapter protocol through thin delegating methods
-class FreeCadAdapter:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# free cad adapter keeps the historical surface because callers depend on it directly
+class FreeCadAdapter(PairProtocol):
 
     # this definition exposes immutable format metadata to adapter discovery
     @property

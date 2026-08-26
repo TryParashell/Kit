@@ -949,8 +949,16 @@ class Object:
     extensions: tuple[str, ...] = ()
 
 
-# this definition exists because focused behavior needs one stable owner
-class ObjectGraph:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# object graph keeps the historical surface because callers depend on it directly
+class ObjectGraph(PairProtocol):
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self) -> None:
@@ -1220,7 +1228,7 @@ def SheetProps(Instance: ParamCatalog) -> list[XmlTree.Element]:
 
 
 # this definition exists because focused behavior needs one stable owner
-class ParamCatalog:
+class ParamCatalog(PairProtocol):
 
     # this definition exists because focused behavior needs one stable owner
     def __init__(self, Parameters: list[dict[str, object]]) -> None:

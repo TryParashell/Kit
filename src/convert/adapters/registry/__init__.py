@@ -132,6 +132,7 @@ class CompatProtocol:
 
     locals()["__slots__"] = KSlotsValue
 
+
 # registry composition keeps each independent responsibility in one focused mixin module
 class AdapterRegistry(
     CompatProtocol,

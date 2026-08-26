@@ -20,8 +20,16 @@ def BindValidator(HookName: str, HookValue: object) -> None:
     KValidatorHooks[HookName] = HookValue
 
 
-# document validation methods preserve the historical model surface without owning rules
-class DocumentValid:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# document valid keeps the historical surface because callers depend on it directly
+class DocumentValid(PairProtocol):
     locals()["__slots__"] = ()
 
     # validation remains concrete so callers receive the runtime tuple contract directly

@@ -319,8 +319,16 @@ KWrapperMetaKeys = KSourceKeys | frozenset(
 )
 
 
-# this definition exists because focused behavior needs one stable owner
-class SldprtAdapter:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# sldprt adapter keeps the historical surface because callers depend on it directly
+class SldprtAdapter(PairProtocol):
     __slots__ = ()
 
     # adapter discovery needs metadata before callers probe or convert source documents

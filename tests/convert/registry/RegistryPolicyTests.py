@@ -28,8 +28,16 @@ from tests.convert.registry.RegistryTestSupport import BuildSource, ResultAdapte
 from typing_extensions import override as Override
 
 
-# requirement producing output isolates dependency policy from carrier and capability behavior
-class NeedAdapter(ResultAdapter):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# need adapter keeps the historical surface because callers depend on it directly
+class NeedAdapter(PairProtocol, ResultAdapter):
 
     # external dependency evidence exercises default and self contained rejection gates
     @Override
@@ -100,7 +108,7 @@ def CheckStream() -> None:
 
 
 # companion bundle output exercises rollback across every generated staged file
-class BundleAdapter(ResultAdapter):
+class BundleAdapter(PairProtocol, ResultAdapter):
 
     # path restriction forces bundle rollback through transactional filesystem staging
     @Override

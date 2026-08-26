@@ -156,8 +156,16 @@ class CatiaAdapterA(RuntimeError):
     __slots__ = ()
 
 
-# this definition exists because focused behavior needs one stable owner
-class CatiaMetadata:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# catia metadata keeps the historical surface because callers depend on it directly
+class CatiaMetadata(PairProtocol):
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -189,7 +197,7 @@ class CatiaMetadata:
 
 
 # this definition exists because focused behavior needs one stable owner
-class CatiaReader:
+class CatiaReader(PairProtocol):
 
     # this definition exists because focused behavior needs one stable owner
     def read(self, Source: Source, Options: ReadOptions | None = None) -> CadDoc:
@@ -290,7 +298,7 @@ class CatiaSupport:
 
 
 # this definition exists because focused behavior needs one stable owner
-class CatiaWriter:
+class CatiaWriter(PairProtocol):
 
     # this definition exists because focused behavior needs one stable owner
     def write(

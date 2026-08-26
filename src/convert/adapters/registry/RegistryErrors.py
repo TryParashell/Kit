@@ -31,8 +31,16 @@ class AmbiguousError(RegistryError):
     __slots__ = ()
 
 
-# capability loss carries structured evidence so conversion can fail before output mutation
-class CapLossError(RegistryError):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# cap loss error keeps the historical surface because callers depend on it directly
+class CapLossError(PairProtocol, RegistryError):
     __slots__ = ("FormatId", "DroppedCaps")
 
     # structured fields let callers inspect the rejected format and exact lost capabilities

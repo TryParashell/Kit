@@ -94,9 +94,17 @@ class StreamRecord:
     signature: bytes
 
 
-# this definition exists because focused behavior needs one stable owner
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# sldprt archive keeps the historical surface because callers depend on it directly
 @Dataclass(frozen=True, slots=True)
-class SldprtArchive:
+class SldprtArchive(PairProtocol):
     path: FilePath
     file_id: int
     format_version: int

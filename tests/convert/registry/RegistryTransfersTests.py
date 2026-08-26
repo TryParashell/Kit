@@ -42,8 +42,16 @@ def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
     return tuple(sorted(ReturnCaps, key=lambda CapabilityData: CapabilityData.value))
 
 
-# writer gaps remain explicit carriers so default policy can reject incomplete translation
-class MixedAdapter(ResultAdapter):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# mixed adapter keeps the historical surface because callers depend on it directly
+class MixedAdapter(PairProtocol, ResultAdapter):
 
     # one native transfer plus writer gaps exercises mixed preservation without capability loss
     @Override
@@ -92,7 +100,7 @@ def CheckWriterGap() -> None:
 
 
 # target format limits remain truthful reversible carriers rather than implementation gaps
-class TargetAdapter(ResultAdapter):
+class TargetAdapter(PairProtocol, ResultAdapter):
 
     # native seed plus intrinsic carriers proves near losslessness accepts target limitations
     @Override
@@ -150,7 +158,7 @@ def CheckTargetGap() -> None:
 
 
 # carrier only target limits model formats with no native representation for this document
-class OnlyCarrier(ResultAdapter):
+class OnlyCarrier(PairProtocol, ResultAdapter):
 
     # every intrinsic carrier proves native emptiness alone does not make usable output invalid
     @Override

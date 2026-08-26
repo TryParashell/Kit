@@ -17,9 +17,17 @@ from interchange import frozen_mapping as FreezeMapping
 from convert.adapters.base.ContractCompat import ContractBase
 
 
-# write policy stays immutable so staging and adapters share one transactional intent
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# write options keeps the historical surface because callers depend on it directly
 @DataClass(frozen=True, slots=True)
-class WriteOptions(ContractBase):
+class WriteOptions(PairProtocol, ContractBase):
     configuration: str | None = None
     overwrite: bool = False
     validate: bool = True

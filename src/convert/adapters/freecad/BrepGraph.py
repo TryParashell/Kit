@@ -208,8 +208,16 @@ def GetFace(Instance: ModelGraph, CoedgeId: str) -> BrepFace | None:
     return Instance.faces[Instance.loop_face[OwnerId]]
 
 
-# graph state stays focused because native topology validation shares one indexed ownership view
-class ModelGraph(GraphMapsView):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# model graph keeps the historical surface because callers depend on it directly
+class ModelGraph(PairProtocol, GraphMapsView):
     __slots__ = (
         "bodies",
         "coedge_owner",

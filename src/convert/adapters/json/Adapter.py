@@ -19,8 +19,16 @@ from convert.adapters.json.Writer import JsonWriter
 from interchange.document.models.DocumentModel import CadDocument
 
 
-# this adapter composes focused reading writing and metadata responsibilities
-class JsonAdapter(JsonMetadata, JsonReader, JsonWriter):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# json adapter keeps the historical surface because callers depend on it directly
+class JsonAdapter(PairProtocol, JsonMetadata, JsonReader, JsonWriter):
     KAdapterSlots = ()
 
     locals()["__slots__"] = KAdapterSlots

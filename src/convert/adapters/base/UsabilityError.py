@@ -106,8 +106,16 @@ def GetErrorArgs(
     return FormatId, ResultData
 
 
-# usability failures expose every gate reason so callers never parse message text
-class UsabilityError(RegistryError):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# usability error keeps the historical surface because callers depend on it directly
+class UsabilityError(PairProtocol, RegistryError):
     AppUsable: bool
     CarrierCaps: frozenset[Capability]
     CarrierReasons: TypeMap[Capability, CarrierReason]

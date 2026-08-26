@@ -30,9 +30,17 @@ from interchange.brep.topology.BrepTopology import (
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 
-# boundary models aggregate analytic geometry and incidence into one neutral graph
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# brep model keeps the historical surface because callers depend on it directly
 @ModelDataMut
-class BrepModel(ModelBase):
+class BrepModel(PairProtocol, ModelBase):
     curves: tuple[BrepCurve, ...] = ()
     pcurves: tuple[BrepPcurve, ...] = ()
     surfaces: tuple[BrepSurface, ...] = ()

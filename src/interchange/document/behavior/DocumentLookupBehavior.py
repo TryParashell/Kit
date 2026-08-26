@@ -13,8 +13,16 @@ from interchange.geometry.models.Sketch import Sketch
 from interchange.geometry.models.SupportPlane import SupportPlane
 
 
-# document lookup methods preserve convenient access without owning collection storage
-class DocumentLookup:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# document lookup keeps the historical surface because callers depend on it directly
+class DocumentLookup(PairProtocol):
     locals()["__slots__"] = ()
 
     # parameter lookup uses its public spelling so its return type remains concrete

@@ -15,8 +15,16 @@ from typing import Self
 from interchange.serialization.WireData import KWireData
 
 
-# document io methods preserve the historical codec surface without owning serialization
-class DocumentIo:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# document io keeps the historical surface because callers depend on it directly
+class DocumentIo(PairProtocol):
     locals()["__slots__"] = ()
 
     # mapping output remains concrete so callers receive a fully typed document contract

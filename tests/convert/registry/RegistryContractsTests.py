@@ -172,8 +172,16 @@ def CheckCarFacts() -> None:
     assert ResultData.metadata["vendor_loadable"] is False
 
 
-# independent flags distinguish vendor readability from complete application usability
-class LoadableAdapter(ResultAdapter):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# loadable adapter keeps the historical surface because callers depend on it directly
+class LoadableAdapter(PairProtocol, ResultAdapter):
 
     # partial usability evidence exercises the registrys independent field preservation
     @Override

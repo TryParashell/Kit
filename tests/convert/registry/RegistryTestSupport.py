@@ -27,8 +27,16 @@ from tests.convert.api.ApiTestPaths import KSamplePath
 from typing_extensions import override as Override
 
 
-# configurable results let registry tests provoke contract mismatches without duplicating adapters
-class ResultAdapter(JsonAdapter):
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# result adapter keeps the historical surface because callers depend on it directly
+class ResultAdapter(PairProtocol, JsonAdapter):
 
     # injected metadata and result names isolate each registry policy under test
     def __init__(

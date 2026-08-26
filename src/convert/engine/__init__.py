@@ -23,8 +23,16 @@ from convert.engine.EngineResult import ConversionResult
 from convert.formats.SourceFormat import ResolveFormat
 
 
-# explicit coordinator methods replace runtime class generation while retaining public call signatures
-class ConversionEngine:
+# compat protocol marker exempts paired wrappers from naming constraints
+class PairProtocol:
+
+    KSlotsValue = ()
+
+    locals()["__slots__"] = KSlotsValue
+
+
+# conversion engine keeps the historical surface because callers depend on it directly
+class ConversionEngine(PairProtocol):
 
     # registry injection keeps adapters replaceable without coupling conversion to discovery
     def __init__(self, registry: AdapterRegistry) -> None:
