@@ -29,10 +29,7 @@ from typing_extensions import override as Override
 
 # compat protocol marker exempts paired wrappers from naming constraints
 class PairProtocol:
-
-    KSlotsValue = ()
-
-    locals()["__slots__"] = KSlotsValue
+    pass
 
 
 # result adapter keeps the historical surface because callers depend on it directly

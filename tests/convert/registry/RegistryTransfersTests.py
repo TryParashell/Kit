@@ -44,10 +44,7 @@ def GetCapabilities(DocumentData: CadDocument) -> tuple[Capability, ...]:
 
 # compat protocol marker exempts paired wrappers from naming constraints
 class PairProtocol:
-
-    KSlotsValue = ()
-
-    locals()["__slots__"] = KSlotsValue
+    pass
 
 
 # mixed adapter keeps the historical surface because callers depend on it directly
